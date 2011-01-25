@@ -13,7 +13,10 @@ vncdotool by running::
     python vncdotool/command.py -h hostaddr -d displaynum click 2
 
 Which for most window managers will open a context menu at the top left
-corner of the screen.
+corner of the screen.  If you have PIL installed then you can do screen
+captures too::
+
+    python vncdotool/command.py -h hostaddr -d displaynum capture screen.png
 
 Usage
 --------------------------------

@@ -23,6 +23,7 @@ def log_failed(reason):
 
 def stop(pcol):
     pcol.transport.loseConnection()
+    # XXX delay
     reactor.callLater(0.1, reactor.stop)
 
 def main():
@@ -53,12 +54,14 @@ def main():
         print 'connecting to %s:%d' % (opts.host, opts.port)
     
     if opts.verbose:
-        f.deferred.addCallbacks(log_connected, log_failed)
+        f.deferred.addCallbacks(log_connected)
+    f.deferred.addErrback(log_failed)
 
     while args:
         cmd = args.pop(0)
         if cmd == 'key':
-            f.deferred.addCallback(VNCDoToolClient.keyPress, args.pop(0))
+            key = args.pop(0)
+            f.deferred.addCallback(VNCDoToolClient.keyPress, key)
         elif cmd == 'move':
             x, y = int(args.pop(0)), int(args.pop(0))
             f.deferred.addCallback(VNCDoToolClient.mouseMove, x, y)
@@ -68,6 +71,11 @@ def main():
         elif cmd == 'type':
             for key in args.pop(0):
                 f.deferred.addCallback(VNCDoToolClient.keyPress, key)
+        elif cmd == 'capture':
+            filename = args.pop(0)
+            f.deferred.addCallback(VNCDoToolClient.capture, filename)
+        else:
+            print 'unknown cmd "%s"' % cmd
         
     f.deferred.addCallback(stop)
 

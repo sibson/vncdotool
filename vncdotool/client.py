@@ -120,7 +120,28 @@ class VNCDoToolClient(rfb.RFBClient):
         self.pointerEvent(self.x, self.y, buttonmask=0)
 
         return self
-        
+
+    def captureScreen(self, filename):
+        """ Save the current display to filename
+        """
+        # request initial screen update
+        self.framebufferUpdateRequest()
+
+        self.capture = defer.Deferred()
+        self.capture.addCallback(self._captureSave, filename)
+
+        return self.capture
+
+    def _captureSave(self, data, filename):
+        # lazy PIL import, allows other commands to work even if PIL
+        # isn't installed
+        from PIL import Image
+
+        size = (self.width, self.height)
+        image = Image.fromstring('RGB', size, data, 'raw', 'RGBX')
+        image.save(filename)
+
+        return self
 
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
@@ -150,6 +171,13 @@ class VNCDoToolClient(rfb.RFBClient):
         self.clientCutText(message)
         return self
 
+    def updateRectangle(self, x, y, width, height, data):
+        assert (width, height) == (self.width, self.height)
+        assert (x, y) == (0, 0)
+
+        self.capture.callback(data)
+        self.capture = None
+
 
 class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
@@ -160,8 +188,5 @@ class VNCDoToolFactory(rfb.RFBFactory):
         self.deferred = Deferred()
 
     def clientConnectionFailed(self, connector, reason):
-        print 'connection failed', reason
         reactor.callLater(0, self.deferred.errback, reason)
         self.deferred = None
-        
-
