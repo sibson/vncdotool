@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """
+Command line interface to interact with a VNC Server
 
 (c) 2010 Marc Sibson
 
