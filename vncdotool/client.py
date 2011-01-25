@@ -10,6 +10,9 @@ import rfb
 from twisted.internet import reactor, defer
 from twisted.internet.defer import Deferred
 
+import math
+import operator
+
 KEYMAP = {
     'bsp': rfb.KEY_BackSpace,
     'tab':  rfb.KEY_Tab,
@@ -89,6 +92,8 @@ KEYMAP = {
 class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
+    screen = None
+    image = None
 
     def keyPress(self, key):
         """ Send a key press to the server
@@ -127,19 +132,47 @@ class VNCDoToolClient(rfb.RFBClient):
         # request initial screen update
         self.framebufferUpdateRequest()
 
-        self.capture = defer.Deferred()
-        self.capture.addCallback(self._captureSave, filename)
+        self.deferred = defer.Deferred()
+        self.deferred.addCallback(self._captureSave, filename)
 
-        return self.capture
+        return self.deferred
 
     def _captureSave(self, data, filename):
-        # lazy PIL import, allows other commands to work even if PIL
-        # isn't installed
-        from PIL import Image
+        self.screen.save(filename)
 
-        size = (self.width, self.height)
-        image = Image.fromstring('RGB', size, data, 'raw', 'RGBX')
-        image.save(filename)
+        return self
+
+    def expectScreen(self, filename, maxrms=0):
+        """ Wait until the display matches a target image
+
+            filename: an image file to read and compare against
+            maxrms: the maximum root mean square between histograms of the
+                    screen and target image
+        """
+        self.framebufferUpdateRequest()
+
+        # lazy PIL, avoids breaking others
+        from PIL import Image
+        self.expected = Image.open(filename).histogram()
+
+        self.deferred = defer.Deferred()
+        self.deferred.addCallback(self._expectCompare, maxrms)
+
+        return self.deferred
+
+    def _expectCompare(self, data, maxrms):
+        hist = self.screen.histogram()
+
+        rms = math.sqrt(
+            reduce(operator.add,
+                map(lambda a,b: (a-b)**2, hist, self.expected)) / len(hist))
+
+        self.log('rms %d', rms)
+
+        if rms > maxrms:
+            self.deferred = defer.Deferred()
+            self.deferred.addCallback(self._expectCompare, maxrms)
+            return self.deferred
 
         return self
 
@@ -172,17 +205,31 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def updateRectangle(self, x, y, width, height, data):
-        assert (width, height) == (self.width, self.height)
-        assert (x, y) == (0, 0)
+        # lazy PIL import, allows other commands to work even if PIL
+        # isn't installed
+        if not self.image:
+            from PIL import Image
+            self.image = Image
 
-        self.capture.callback(data)
-        self.capture = None
+
+        size = (width, height)
+        update = self.image.fromstring('RGB', size, data, 'raw', 'RGBX')
+        if not self.screen:
+            self.screen = update
+        else:
+            self.screen.paste(update, (x, y))
+
+        if self.deferred:
+            d = self.deferred
+            self.deferred = None
+            d.callback(data)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     password = None
     shared = 1
+    logger = None
 
     def __init__(self):
         self.deferred = Deferred()

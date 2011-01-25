@@ -11,17 +11,27 @@ import optparse
 from twisted.internet import reactor
 
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
+import sys
+
+def logger(fmt, *args):
+    print fmt % args
 
 def log_connected(pcol):
     print 'connected to', pcol.name
     return pcol
 
+def error(reason):
+    try:
+        reason = reason.getErrorMessage()
+    except AttributeError:
+        pass
 
-def log_failed(reason):
-    print 'connection failed', reason.getErrorMesssage()
-
+    print reason
+    reactor.exit_status = 10
+    reactor.stop()
 
 def stop(pcol):
+    reactor.exit_status = 0
     pcol.transport.loseConnection()
     # XXX delay
     reactor.callLater(0.1, reactor.stop)
@@ -52,10 +62,10 @@ def main():
     f = VNCDoToolFactory()
     if opts.verbose:
         print 'connecting to %s:%d' % (opts.host, opts.port)
+        f.logger = logger
     
     if opts.verbose:
         f.deferred.addCallbacks(log_connected)
-    f.deferred.addErrback(log_failed)
 
     while args:
         cmd = args.pop(0)
@@ -73,14 +83,24 @@ def main():
                 f.deferred.addCallback(VNCDoToolClient.keyPress, key)
         elif cmd == 'capture':
             filename = args.pop(0)
-            f.deferred.addCallback(VNCDoToolClient.capture, filename)
+            f.deferred.addCallback(VNCDoToolClient.captureScreen, filename)
+        elif cmd == 'expect':
+            filename = args.pop(0)
+            rms = int(args.pop(0))
+            f.deferred.addCallback(VNCDoToolClient.expectScreen, filename, rms)
         else:
             print 'unknown cmd "%s"' % cmd
         
     f.deferred.addCallback(stop)
+    f.deferred.addErrback(error)
 
-    reactor.connectTCP(opts.host, opts.port, f)
+    d = reactor.connectTCP(opts.host, opts.port, f)
+
+    reactor.exit_status = 1
+
     reactor.run()
+
+    sys.exit(reactor.exit_status)
 
 if __name__ == '__main__':
     main()
