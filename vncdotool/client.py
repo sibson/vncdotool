@@ -211,10 +211,12 @@ class VNCDoToolClient(rfb.RFBClient):
             from PIL import Image
             self.image = Image
 
-
         size = (width, height)
         update = self.image.fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
+            self.screen = update
+        # track screen upward screen resizes, often occur during os boot
+        elif self.screen.size[0] < width or self.screen.size[1] < height:
             self.screen = update
         else:
             self.screen.paste(update, (x, y))
