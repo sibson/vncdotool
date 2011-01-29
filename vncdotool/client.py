@@ -8,7 +8,7 @@ MIT License
 
 import rfb
 from twisted.internet import reactor, defer
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, DeferredQueue
 
 import math
 import operator
@@ -132,10 +132,10 @@ class VNCDoToolClient(rfb.RFBClient):
         # request initial screen update
         self.framebufferUpdateRequest()
 
-        self.deferred = defer.Deferred()
-        self.deferred.addCallback(self._captureSave, filename)
+        d = self.updates.get()
+        d.addCallback(self._captureSave, filename)
 
-        return self.deferred
+        return d
 
     def _captureSave(self, data, filename):
         self.screen.save(filename)
@@ -155,13 +155,14 @@ class VNCDoToolClient(rfb.RFBClient):
         from PIL import Image
         self.expected = Image.open(filename).histogram()
 
-        self.deferred = defer.Deferred()
-        self.deferred.addCallback(self._expectCompare, maxrms)
+        self.deferred = Deferred()
+        d = self.updates.get()
+        d.addCallback(self._expectCompare, maxrms)
 
         return self.deferred
 
-    def _expectCompare(self, data, maxrms):
-        hist = self.screen.histogram()
+    def _expectCompare(self, image, maxrms):
+        hist = image.histogram()
 
         rms = math.sqrt(
             reduce(operator.add,
@@ -169,12 +170,14 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.log('rms %d', rms)
 
-        if rms > maxrms:
-            self.deferred = defer.Deferred()
-            self.deferred.addCallback(self._expectCompare, maxrms)
-            return self.deferred
+        if rms < maxrms:
+            self.deferred.callback(self)
+            self.deferred = None
+            return
 
-        return self
+        d = self.updates.get()
+        d.addCallback(self._expectCompare, maxrms)
+
 
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
@@ -193,6 +196,10 @@ class VNCDoToolClient(rfb.RFBClient):
     def vncConnectionMade(self):
         self.setPixelFormat()
         self.factory.deferred.callback(self)
+
+    def framebufferUpdateRequest(self):
+        self.updates = DeferredQueue()
+        rfb.RFBClient.framebufferUpdateRequest(self)
 
     def bell(self):
         print 'ding'
@@ -221,10 +228,7 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
-        if self.deferred:
-            d = self.deferred
-            self.deferred = None
-            d.callback(data)
+        self.updates.put(self.screen)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
