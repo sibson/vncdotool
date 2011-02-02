@@ -93,7 +93,6 @@ class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     screen = None
-    image = None
 
     def keyPress(self, key):
         """ Send a key press to the server
@@ -131,7 +130,6 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         # request initial screen update
         self.framebufferUpdateRequest()
-
         d = self.updates.get()
         d.addCallback(self._captureSave, filename)
 
@@ -150,11 +148,7 @@ class VNCDoToolClient(rfb.RFBClient):
                     screen and target image
         """
         self.framebufferUpdateRequest()
-
-        # lazy PIL, avoids breaking others
-        from PIL import Image
-        self.expected = Image.open(filename).histogram()
-
+        self.expected = self.image().open(filename).histogram()
         self.deferred = Deferred()
         d = self.updates.get()
         d.addCallback(self._expectCompare, maxrms)
@@ -190,16 +184,22 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.factory.logger:
             self.factory.logger(fmt, *args)
 
+    def image(self):
+        """ Wrap importing PIL.Image so vncdotool can be used without
+        PIL being installed.  Of course capture and expect won't work
+        but at least we can still offer key, type, press and move.
+        """
+        from PIL import Image
+        return Image
+
+
     #
     # base customizations
     #
     def vncConnectionMade(self):
         self.setPixelFormat()
-        self.factory.deferred.callback(self)
-
-    def framebufferUpdateRequest(self):
         self.updates = DeferredQueue()
-        rfb.RFBClient.framebufferUpdateRequest(self)
+        self.factory.clientConnectionMade(self)
 
     def bell(self):
         print 'ding'
@@ -212,14 +212,8 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def updateRectangle(self, x, y, width, height, data):
-        # lazy PIL import, allows other commands to work even if PIL
-        # isn't installed
-        if not self.image:
-            from PIL import Image
-            self.image = Image
-
         size = (width, height)
-        update = self.image.fromstring('RGB', size, data, 'raw', 'RGBX')
+        update = self.image().fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
             self.screen = update
         # track screen upward screen resizes, often occur during os boot
@@ -232,14 +226,19 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
-    protocol = VNCDoToolClient
-    password = None
-    shared = 1
     logger = None
+    password = None
+
+    protocol = VNCDoToolClient
+    shared = 1
 
     def __init__(self):
         self.deferred = Deferred()
 
     def clientConnectionFailed(self, connector, reason):
-        reactor.callLater(0, self.deferred.errback, reason)
+        self.deferred.errback(reason)
+        self.deferred = None
+
+    def clientConnectionMade(self, protocol):
+        self.deferred.callback(protocol)
         self.deferred = None
