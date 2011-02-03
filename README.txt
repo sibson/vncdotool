@@ -2,8 +2,7 @@ vncdotool
 ********************************
 With vncdotool you can interact with VNC servers from the command line
 
-Currently under developement and altogether not ready for general use. It
-does threaten to be useful one day.
+Currently under developement, so use at your own peril.
 
 Quick Start
 --------------------------------
@@ -18,8 +17,54 @@ captures too::
 
     python vncdotool/command.py -h hostaddr -d displaynum capture screen.png
 
+Install
+--------------------------------
+You will need to have Twisted installed, http://twistedmatrix.com.
+Optionally, you will also need the Python Imaging Library,
+http://www.pythonware.com/products/pil/.  Once you have the
+dependencies installed you can install vncdotool from source with::
+
+    python setup.py install
+
 Usage
 --------------------------------
+Once installed you can use the vncdotool command to send keys, for
+alphanumeric you just specify the character.  For other keys names are
+used::
+
+    vncdotool key a
+    vncdotool key 5
+    vncdotool key .
+    vncdotool key enter
+    vncdotool key shift-a
+    vncdotool key ctrl-C
+    vncdotool key ctrl-alt-del
+
+To enter data you can use the type command, which only supports
+alphanumeric::
+
+    vncdotool type hello
+
+You can also control the mouse pointer with move and click::
+
+    vncdotool move 100 100
+    vncdotool click 1
+
+If you have the Python Imaging Library (PIL) installed you can also
+make screen captures of the session::
+
+    vncdotool capture screenshot.png
+
+Again if you have PIL, you can wait for the screen to match a
+known image.  This is useful for waiting for the server to be in a
+known state::
+
+    vncdotool expect somescreen.png 0
+
+Finally, you may specify multiple actions on a single command line::
+
+    vncdotool type username key enter expect password_prompt.png
+    vncdotool type password move 100 150 click 1 expect welcome_screen.png
 
 Acknowledgements
 --------------------------------

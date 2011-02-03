@@ -36,8 +36,27 @@ def stop(pcol):
     # XXX delay
     reactor.callLater(0.1, reactor.stop)
 
+class VNCDoToolOptionParser(optparse.OptionParser):
+    def format_help(self, **kwargs):
+        result = optparse.OptionParser.format_help(self, **kwargs)
+        result += '\n'.join(['',
+            'Commands (CMD):',
+            '  key KEY:\tsend KEY to server',
+            '\t\tKEY is alphanumeric or a keysym, e.g. ctrl-c, del',
+            '  type TEXT:\tsend alphanumeric string of TEXT',
+            '  move X Y:\tmove the mouse cursor to position X,Y',
+            '  click BUTTON:\tsend a mouse BUTTON click',
+            '  capture FILE:\tsave current screen as FILE',
+            '  expect FILE FUZZ:  Wait until the screen matches FILE',
+            '\t\tFUZZ amount of error tolerance (RMSE) in match'
+        ])
+        return result
+
+
 def main():
-    op = optparse.OptionParser(usage='%prog [options] cmd', 
+    usage = '%prog [options] CMD CMDARGS'
+    description='Command line interaction with a VNC server'
+    op = VNCDoToolOptionParser(usage=usage, description=description,
                                 add_help_option=False)
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
