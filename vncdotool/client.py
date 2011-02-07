@@ -7,7 +7,6 @@ MIT License
 """
 
 import rfb
-from twisted.internet import reactor, defer
 from twisted.internet.defer import Deferred, DeferredQueue
 
 import math
