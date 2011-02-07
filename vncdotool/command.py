@@ -13,12 +13,15 @@ from twisted.internet import reactor
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 import sys
 
+
 def logger(fmt, *args):
     print fmt % args
+
 
 def log_connected(pcol):
     print 'connected to', pcol.name
     return pcol
+
 
 def error(reason):
     try:
@@ -30,11 +33,13 @@ def error(reason):
     reactor.exit_status = 10
     reactor.stop()
 
+
 def stop(pcol):
     reactor.exit_status = 0
     pcol.transport.loseConnection()
     # XXX delay
     reactor.callLater(0.1, reactor.stop)
+
 
 class VNCDoToolOptionParser(optparse.OptionParser):
     def format_help(self, **kwargs):
@@ -54,43 +59,42 @@ class VNCDoToolOptionParser(optparse.OptionParser):
 
 
 def build_command_list(factory, args):
-    f = factory
     client = VNCDoToolClient
 
     while args:
         cmd = args.pop(0)
         if cmd == 'key':
             key = args.pop(0)
-            f.deferred.addCallback(client.keyPress, key)
+            factory.deferred.addCallback(client.keyPress, key)
         elif cmd == 'move':
             x, y = int(args.pop(0)), int(args.pop(0))
-            f.deferred.addCallback(client.mouseMove, x, y)
+            factory.deferred.addCallback(client.mouseMove, x, y)
         elif cmd == 'click':
             button = int(args.pop(0))
-            f.deferred.addCallback(client.mousePress, button)
+            factory.deferred.addCallback(client.mousePress, button)
         elif cmd == 'type':
             for key in args.pop(0):
-                f.deferred.addCallback(client.keyPress, key)
+                factory.deferred.addCallback(client.keyPress, key)
         elif cmd == 'capture':
             filename = args.pop(0)
-            f.deferred.addCallback(client.captureScreen, filename)
+            factory.deferred.addCallback(client.captureScreen, filename)
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))
-            f.deferred.addCallback(client.expectScreen, filename, rms)
+            factory.deferred.addCallback(client.expectScreen, filename, rms)
         else:
             print 'unknown cmd "%s"' % cmd
 
 
 def main():
     usage = '%prog [options] CMD CMDARGS'
-    description='Command line interaction with a VNC server'
+    description = 'Command line interaction with a VNC server'
     op = VNCDoToolOptionParser(usage=usage, description=description,
                                 add_help_option=False)
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
         help='connect to vnc server on DISPLAY [%default]')
-    op.add_option('--help', action='help', 
+    op.add_option('--help', action='help',
         help='show this help message')
     op.add_option('-h', '--host', action='store', metavar='HOST',
         default='127.0.0.1',
@@ -103,25 +107,24 @@ def main():
     opts, args = op.parse_args()
     if opts.port is None:
         opts.port = opts.display + 5900
-        
+
     if not len(args):
         op.error('no command provided')
 
-    f = VNCDoToolFactory()
+    factory = VNCDoToolFactory()
     if opts.verbose:
         print 'connecting to %s:%d' % (opts.host, opts.port)
-        f.logger = logger
-    
+        factory.logger = logger
+
     if opts.verbose:
-        f.deferred.addCallbacks(log_connected)
+        factory.deferred.addCallbacks(log_connected)
 
-    build_command_list(f, args)
+    build_command_list(factory, args)
 
-    f.deferred.addCallback(stop)
-    f.deferred.addErrback(error)
+    factory.deferred.addCallback(stop)
+    factory.deferred.addErrback(error)
 
-    d = reactor.connectTCP(opts.host, opts.port, f)
-
+    reactor.connectTCP(opts.host, opts.port, factory)
     reactor.exit_status = 1
 
     reactor.run()

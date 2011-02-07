@@ -2,6 +2,7 @@
 from vncdotool import command
 import mock
 
+ 
 @mock.isolate(command.build_command_list)
 class TestBuildCommandList(object):
     def setUp(self):

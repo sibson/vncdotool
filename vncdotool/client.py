@@ -89,6 +89,7 @@ KEYMAP = {
     'kpenter': rfb.KEY_KP_Enter,
 }
 
+
 class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
@@ -159,8 +160,8 @@ class VNCDoToolClient(rfb.RFBClient):
         hist = image.histogram()
 
         rms = math.sqrt(
-            reduce(operator.add,
-                map(lambda a,b: (a-b)**2, hist, self.expected)) / len(hist))
+            reduce(operator.add, map(
+               lambda a, b: (a - b) ** 2, hist, self.expected)) / len(hist))
 
         self.log('rms %d', rms)
 
@@ -171,7 +172,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
         d = self.updates.get()
         d.addCallback(self._expectCompare, maxrms)
-
 
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
@@ -191,7 +191,6 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         from PIL import Image
         return Image
-
 
     #
     # base customizations

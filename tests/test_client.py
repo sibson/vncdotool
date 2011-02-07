@@ -4,6 +4,7 @@ from nose.plugins.skip import SkipTest
 from vncdotool.client import VNCDoToolClient, VNCDoToolFactory
 from vncdotool import rfb
 
+
 class TestVNCDoToolClient(object):
     def setUp(self):
         self.client = VNCDoToolClient()
@@ -85,9 +86,9 @@ class TestVNCDoToolClient(object):
     def test_expectCompareSuccess(self):
         client = self.client
         d = client.deferred = mock.Mock()
-        client.expected = [ 2, 2, 2 ]
+        client.expected = [2, 2, 2]
         image = mock.Mock()
-        image.histogram.return_value = [ 1, 2, 3 ]
+        image.histogram.return_value = [1, 2, 3]
         client._expectCompare(image, 5)
 
         d.callback.assert_called_once_with(client)
@@ -96,10 +97,10 @@ class TestVNCDoToolClient(object):
     def test_expectCompareFails(self):
         client = self.client
         client.deferred = mock.Mock()
-        client.expected = [ 2, 2, 2 ]
+        client.expected = [2, 2, 2]
         client.updates = mock.Mock()
         image = mock.Mock()
-        image.histogram.return_value = [ 1, 2, 3 ]
+        image.histogram.return_value = [1, 2, 3]
 
         client._expectCompare(image, 0)
 
