@@ -53,6 +53,35 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
+def build_command_list(factory, args):
+    f = factory
+    client = VNCDoToolClient
+
+    while args:
+        cmd = args.pop(0)
+        if cmd == 'key':
+            key = args.pop(0)
+            f.deferred.addCallback(client.keyPress, key)
+        elif cmd == 'move':
+            x, y = int(args.pop(0)), int(args.pop(0))
+            f.deferred.addCallback(client.mouseMove, x, y)
+        elif cmd == 'click':
+            button = int(args.pop(0))
+            f.deferred.addCallback(client.mousePress, button)
+        elif cmd == 'type':
+            for key in args.pop(0):
+                f.deferred.addCallback(client.keyPress, key)
+        elif cmd == 'capture':
+            filename = args.pop(0)
+            f.deferred.addCallback(client.captureScreen, filename)
+        elif cmd == 'expect':
+            filename = args.pop(0)
+            rms = int(args.pop(0))
+            f.deferred.addCallback(client.expectScreen, filename, rms)
+        else:
+            print 'unknown cmd "%s"' % cmd
+
+
 def main():
     usage = '%prog [options] CMD CMDARGS'
     description='Command line interaction with a VNC server'
@@ -86,30 +115,8 @@ def main():
     if opts.verbose:
         f.deferred.addCallbacks(log_connected)
 
-    while args:
-        cmd = args.pop(0)
-        if cmd == 'key':
-            key = args.pop(0)
-            f.deferred.addCallback(VNCDoToolClient.keyPress, key)
-        elif cmd == 'move':
-            x, y = int(args.pop(0)), int(args.pop(0))
-            f.deferred.addCallback(VNCDoToolClient.mouseMove, x, y)
-        elif cmd == 'click':
-            button = int(args.pop(0))
-            f.deferred.addCallback(VNCDoToolClient.mousePress, button)
-        elif cmd == 'type':
-            for key in args.pop(0):
-                f.deferred.addCallback(VNCDoToolClient.keyPress, key)
-        elif cmd == 'capture':
-            filename = args.pop(0)
-            f.deferred.addCallback(VNCDoToolClient.captureScreen, filename)
-        elif cmd == 'expect':
-            filename = args.pop(0)
-            rms = int(args.pop(0))
-            f.deferred.addCallback(VNCDoToolClient.expectScreen, filename, rms)
-        else:
-            print 'unknown cmd "%s"' % cmd
-        
+    build_command_list(f, args)
+
     f.deferred.addCallback(stop)
     f.deferred.addErrback(error)
 
