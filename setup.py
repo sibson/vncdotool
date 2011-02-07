@@ -6,10 +6,12 @@ setup(
     name='vncdotool',
     version='0.1.0dev',
     description='Send keyboard and mouse events to a VNC server from the command line',
-    requires=[
+    install_requires=[
         'Twisted',
     ],
-
+    test_requires=[
+        'nose',
+    ],
     url='http://github.com/sibson/vncdotool',
     author='Marc Sibson',
     author_email='sibson+vncdotool@gmail.com',
