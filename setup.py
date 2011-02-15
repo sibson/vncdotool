@@ -11,8 +11,9 @@ setup(
     install_requires=[
         'Twisted',
     ],
-    test_requires=[
+    tests_require=[
         'nose',
+        'pexpect',
     ],
     url='http://github.com/sibson/vncdotool',
     author='Marc Sibson',
