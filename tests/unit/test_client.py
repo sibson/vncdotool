@@ -94,13 +94,24 @@ class TestVNCDoToolClient(object):
         d.callback.assert_called_once_with(client)
         assert client.deferred is None
 
+    def test_expectCompareExactSuccess(self):
+        client = self.client
+        d = client.deferred = mock.Mock()
+        client.expected = [2, 2, 2]
+        image = mock.Mock()
+        image.histogram.return_value = [2, 2, 2]
+        client._expectCompare(image, 0)
+
+        d.callback.assert_called_once_with(client)
+        assert client.deferred is None
+
     def test_expectCompareFails(self):
         client = self.client
         client.deferred = mock.Mock()
         client.expected = [2, 2, 2]
         client.updates = mock.Mock()
         image = mock.Mock()
-        image.histogram.return_value = [1, 2, 3]
+        image.histogram.return_value = [1, 1, 1]
 
         client._expectCompare(image, 0)
 

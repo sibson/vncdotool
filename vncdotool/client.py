@@ -164,7 +164,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.log('rms %d', rms)
 
-        if rms < maxrms:
+        if rms <= maxrms:
             self.deferred.callback(self)
             self.deferred = None
             return
