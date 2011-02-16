@@ -1,5 +1,3 @@
-# Copyright 07-Feb-2011 Evertz Microsystems Ltd. All rights reserved.
-
 import pexpect
 import unittest
 import sys

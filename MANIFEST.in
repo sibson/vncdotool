@@ -2,4 +2,4 @@ include *.txt README.rst
 include setup.py setup.cfg
 include scripts/vncdotool
 include vncdotool/*.py
-include tests/*.py
+recursive-include tests *.py *.png
