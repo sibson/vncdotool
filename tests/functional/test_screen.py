@@ -14,7 +14,7 @@ class TestVNCCapture(object):
         cmd = '%s -rfbport 5910 -rfbwait 1000' % server
         self.server = pexpect.spawn(cmd, timeout=2)
         self.server.logfile_read = sys.stdout
-        
+
     def run_vncdotool(self, commands, exitcode=0):
         cmd = 'vncdotool -d 10 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
@@ -22,7 +22,7 @@ class TestVNCCapture(object):
         vnc.expect(pexpect.EOF)
         if vnc.isalive():
             vnc.wait()
-            
+
         assert vnc.exitstatus == exitcode, vnc.exitstatus
 
     def assertFilesEqual(self, filename, othername):
@@ -52,4 +52,6 @@ class TestVNCCapture(object):
         try:
             self.run_vncdotool('expect %s 0' % simple, exitcode=10)
         except pexpect.TIMEOUT:
-            pas:), exitcode=10)), exitcode=10)
+            pass
+        else:
+            raise AssertionError('should timeout')
