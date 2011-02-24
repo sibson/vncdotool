@@ -9,17 +9,13 @@ MIT License
 import optparse
 
 from twisted.internet import reactor
-
+from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 import sys
 
 
-def logger(fmt, *args):
-    print fmt % args
-
-
 def log_connected(pcol):
-    print 'connected to', pcol.name
+    log.msg('connected to %s' % pcol.name)
     return pcol
 
 
@@ -115,8 +111,9 @@ def main():
         factory.password = opts.password
 
     if opts.verbose:
-        print 'connecting to %s:%d' % (opts.host, opts.port)
-        factory.logger = logger
+        log.msg('connecting to %s:%s' % (host, port))
+        factory.logger = log.msg
+        log.startLogging(sys.stdout)
 
     if opts.verbose:
         factory.deferred.addCallbacks(log_connected)
