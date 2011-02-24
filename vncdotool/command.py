@@ -89,29 +89,31 @@ def build_command_list(factory, args):
 def main():
     usage = '%prog [options] CMD CMDARGS'
     description = 'Command line interaction with a VNC server'
-    op = VNCDoToolOptionParser(usage=usage, description=description,
-                                add_help_option=False)
+    op = VNCDoToolOptionParser(usage=usage, description=description)
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
-        help='connect to vnc server on DISPLAY [%default]')
-    op.add_option('--help', action='help',
-        help='show this help message')
-    op.add_option('-h', '--host', action='store', metavar='HOST',
+        help='connect to vnc server display :DISPLAY [%default]')
+    op.add_option('-p', '--password', action='store', metavar='PASSwORD',
+        help='use password to access server')
+    op.add_option('-s', '--server', action='store', metavar='ADDRESS',
         default='127.0.0.1',
-        help='connect to vnc server at HOST [%default]')
-    op.add_option('-p', '--port', action='store', metavar='PORT',
-        type='int',
-        help='connect to vnc server on PORT')
+        help='connect to vnc server at ADDRESS[:PORT] [%default]')
     op.add_option('-v', '--verbose', action='store_true')
 
     opts, args = op.parse_args()
-    if opts.port is None:
-        opts.port = opts.display + 5900
-
     if not len(args):
         op.error('no command provided')
 
     factory = VNCDoToolFactory()
+    try:
+        host, port = opts.server.split(':')
+    except ValueError:
+        host = opts.server
+        port = opts.display + 5900
+
+    if opts.password:
+        factory.password = opts.password
+
     if opts.verbose:
         print 'connecting to %s:%d' % (opts.host, opts.port)
         factory.logger = logger
@@ -124,7 +126,7 @@ def main():
     factory.deferred.addCallback(stop)
     factory.deferred.addErrback(error)
 
-    reactor.connectTCP(opts.host, opts.port, factory)
+    reactor.connectTCP(host, int(port), factory)
     reactor.exit_status = 1
 
     reactor.run()

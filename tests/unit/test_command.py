@@ -15,14 +15,15 @@ class TestBuildCommandList(object):
 
     def call_build_commands_list(self, commands):
         command.build_command_list(self.factory, commands.split()) 
+
     def test_alphanum_key(self):
         self.call_build_commands_list('key a')
         self.assertCalled(self.client.keyPress, 'a')
-        
+
     def test_control_key(self):
         self.call_build_commands_list('key ctrl-c')
         self.assertCalled(self.client.keyPress, 'ctrl-c')
-        
+
     def test_key_missing(self):
         pass
 
@@ -83,3 +84,47 @@ class TestBuildCommandList(object):
             call.assert_calls_exist_with(self.client.keyPress, key)
 
         call.assert_calls_exist_with(self.client.expectScreen, 'password.png', 0)
+
+
+
+@mock.isolate(command.main)
+class TestMain(object):
+    def setUp(self):
+        self.factory = command.VNCDoToolFactory.return_value
+        self.options = mock.Mock()
+        self.options.display = 0
+        self.options.server = '127.0.0.1'
+        parse_args = command.VNCDoToolOptionParser.return_value.parse_args
+        parse_args.return_value = (self.options, [])
+
+    def test_single_host_name(self):
+        self.options.server = '10.11.12.13'
+        command.main()
+        connectTCP = command.reactor.connectTCP
+        connectTCP.assert_called_once_with('10.11.12.13', 5900, self.factory)
+    def test_host_port(self):
+        self.options.server = '10.11.12.13:4444'
+        command.main()
+        connectTCP = command.reactor.connectTCP
+        connectTCP.assert_called_once_with('10.11.12.13', 4444, self.factory)
+    def test_localhost_display(self):
+        self.options.display = 10
+        command.main()
+        connectTCP = command.reactor.connectTCP
+        connectTCP.assert_called_once_with('127.0.0.1', 5910, self.factory)
+
+    def test_host_display(self):
+        self.options.server = '10.11.12.13'
+        self.options.display = 10
+        command.main()
+        connectTCP = command.reactor.connectTCP
+        connectTCP.assert_called_once_with('10.11.12.13', 5910, self.factory)
+    def test_host_default(self):
+        command.main()
+        connectTCP = command.reactor.connectTCP
+        connectTCP.assert_called_once_with('127.0.0.1', 5900, self.factory)
+
+    def test_password(self):
+        self.options.password = 'openseseame'
+        command.main()
+        assert self.factory.password == 'openseseame'

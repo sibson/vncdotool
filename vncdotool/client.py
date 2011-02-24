@@ -9,6 +9,7 @@ MIT License
 import rfb
 from twisted.internet.defer import Deferred, DeferredQueue
 
+import getpass
 import math
 import operator
 
@@ -221,6 +222,12 @@ class VNCDoToolClient(rfb.RFBClient):
             self.screen.paste(update, (x, y))
 
         self.updates.put(self.screen)
+
+    def vncRequestPassword(self):
+        if self.factory.password is None:
+            self.factory.password = getpass.getpass()
+
+        self.sendPassword(self.factory.password)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):

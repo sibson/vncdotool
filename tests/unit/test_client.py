@@ -1,13 +1,15 @@
 import mock
 from nose.plugins.skip import SkipTest
 
-from vncdotool.client import VNCDoToolClient, VNCDoToolFactory
+from vncdotool import client
 from vncdotool import rfb
 
 
+@mock.isolate(client.VNCDoToolClient,
+                excludes='math.sqrt,operator.add,client.KEYMAP')
 class TestVNCDoToolClient(object):
     def setUp(self):
-        self.client = VNCDoToolClient()
+        self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
 
@@ -23,140 +25,157 @@ class TestVNCDoToolClient(object):
             raise SkipTest
 
     def test_vncConnectionMade(self):
-        client = self.client
-        client.vncConnectionMade()
-        factory = client.factory
-        factory.clientConnectionMade.assert_called_once_with(client)
+        cli = self.client
+        cli.vncConnectionMade()
+        factory = cli.factory
+        factory.clientConnectionMade.assert_called_once_with(cli)
 
     def test_keyPress_single_alpha(self):
-        client = self.client
-        client.keyPress('a')
-        client.keyEvent.assert_a_call_exists_with(ord('a'), down=1)
-        client.keyEvent.assert_a_call_exists_with(ord('a'), down=0)
+        cli = self.client
+        cli.keyPress('a')
+        cli.keyEvent.assert_a_call_exists_with(ord('a'), down=1)
+        cli.keyEvent.assert_a_call_exists_with(ord('a'), down=0)
 
     def test_keyPress_multiple(self):
-        client = self.client
-        client.keyPress('ctrl-alt-del')
+        cli = self.client
+        cli.keyPress('ctrl-alt-del')
 
         # XXX doesn't ensure correct order
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=1)
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=1)
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=1)
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=0)
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=0)
-        client.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=0)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=1)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=1)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=1)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=0)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=0)
+        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=0)
 
     def test_captureScreen(self):
-        client = self.client
-        client.vncConnectionMade()
-        client.updates = mock.Mock()
+        cli = self.client
+        cli.vncConnectionMade()
+        cli.updates = mock.Mock()
         fname = 'foo.png'
 
-        d = client.captureScreen(fname)
-        d.addCallback.assert_called_once_with(client._captureSave, fname)
-        assert client.framebufferUpdateRequest.called
+        d = cli.captureScreen(fname)
+        d.addCallback.assert_called_once_with(cli._captureSave, fname)
+        assert cli.framebufferUpdateRequest.called
 
     def test_captureSave(self):
-        client = self.client
-        client.screen = mock.Mock()
+        cli = self.client
+        cli.screen = mock.Mock()
         fname = 'foo.png'
-        r = client._captureSave(client.screen, fname)
-        client.screen.save.assert_called_once_with(fname)
-        assert r == client
+        r = cli._captureSave(cli.screen, fname)
+        cli.screen.save.assert_called_once_with(fname)
+        assert r == cli
 
     def test_expectScreen(self):
         self._tryPIL()
 
-        client = self.client
-        client.vncConnectionMade()
-        client.updates = mock.Mock()
-        client.image = mock.Mock()
+        cli = self.client
+        cli.vncConnectionMade()
+        cli.updates = mock.Mock()
+        cli.image = mock.Mock()
         fname = 'something.png'
 
-        d = client.expectScreen(fname, 5)
-        assert client.framebufferUpdateRequest.called
-        client.image.return_value.open.assert_called_once_with(fname)
-        assert client.expected == client.image.return_value.open.return_value.histogram.return_value
-        assert client.updates.get.called
-        update = client.updates.get.return_value
-        update.addCallback.assert_called_once_with(client._expectCompare, 5)
+        d = cli.expectScreen(fname, 5)
+        assert cli.framebufferUpdateRequest.called
+        cli.image.return_value.open.assert_called_once_with(fname)
+        assert cli.expected == cli.image.return_value.open.return_value.histogram.return_value
+        assert cli.updates.get.called
+        update = cli.updates.get.return_value
+        update.addCallback.assert_called_once_with(cli._expectCompare, 5)
 
         assert d != update
 
     def test_expectCompareSuccess(self):
-        client = self.client
-        d = client.deferred = mock.Mock()
-        client.expected = [2, 2, 2]
+        cli = self.client
+        d = cli.deferred = mock.Mock()
+        cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [1, 2, 3]
-        client._expectCompare(image, 5)
+        cli._expectCompare(image, 5)
 
-        d.callback.assert_called_once_with(client)
-        assert client.deferred is None
+        d.callback.assert_called_once_with(cli)
+        assert cli.deferred is None
 
     def test_expectCompareExactSuccess(self):
-        client = self.client
-        d = client.deferred = mock.Mock()
-        client.expected = [2, 2, 2]
+        cli = self.client
+        d = cli.deferred = mock.Mock()
+        cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [2, 2, 2]
-        client._expectCompare(image, 0)
+        cli._expectCompare(image, 0)
 
-        d.callback.assert_called_once_with(client)
-        assert client.deferred is None
+        d.callback.assert_called_once_with(cli)
+        assert cli.deferred is None
 
     def test_expectCompareFails(self):
-        client = self.client
-        client.deferred = mock.Mock()
-        client.expected = [2, 2, 2]
-        client.updates = mock.Mock()
+        cli = self.client
+        cli.deferred = mock.Mock()
+        cli.expected = [2, 2, 2]
+        cli.updates = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
-        client._expectCompare(image, 0)
+        cli._expectCompare(image, 0)
 
-        assert not client.deferred.callback.called
-        assert client.updates.get.called
-        update = client.updates.get.return_value
-        update.addCallback.assert_called_once_with(client._expectCompare, 0)
-
+        assert not cli.deferred.callback.called
+        assert cli.updates.get.called
+        update = cli.updates.get.return_value
+        update.addCallback.assert_called_once_with(cli._expectCompare, 0)
 
     def test_updateRectangeFirst(self):
-        client = self.client
-        client.updates = mock.Mock()
-        client.image = mock.Mock()
+        cli = self.client
+        cli.updates = mock.Mock()
+        cli.image = mock.Mock()
         data = mock.Mock()
 
-        client.updateRectangle(0, 0, 100, 200, data)
+        cli.updateRectangle(0, 0, 100, 200, data)
 
-        image = client.image.return_value
+        image = cli.image.return_value
         image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert client.updates.put(client.screen)
-        assert client.screen == image.fromstring.return_value
+        assert cli.updates.put(cli.screen)
+        assert cli.screen == image.fromstring.return_value
 
     def test_updateRectangeRegion(self):
-        client = self.client
-        client.updates = mock.Mock()
-        client.image = mock.Mock()
-        client.screen = mock.Mock()
-        client.screen.size = (100, 100)
+        cli = self.client
+        cli.updates = mock.Mock()
+        cli.image = mock.Mock()
+        cli.screen = mock.Mock()
+        cli.screen.size = (100, 100)
         data = mock.Mock()
 
-        client.updateRectangle(20, 10, 50, 40, data)
+        cli.updateRectangle(20, 10, 50, 40, data)
 
-        image = client.image.return_value
+        image = cli.image.return_value
         image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
-        assert client.updates.put(client.screen)
-        paste = client.screen.paste
+        assert cli.updates.put(cli.screen)
+        paste = cli.screen.paste
         paste.assert_called_once_with(image.fromstring.return_value, (20, 10))
+
+    def test_vncRequestPassword_prompt(self):
+        cli = self.client
+        cli.factory.password = None
+        cli.sendPassword = mock.Mock()
+        cli.vncRequestPassword()
+
+        password = client.getpass.getpass.return_value
+        assert client.getpass.getpass.called
+        assert cli.factory.password == password
+        cli.sendPassword.assert_called_once_with(password)
+
+    def test_vncRequestPassword_attribute(self):
+        cli = self.client
+        cli.sendPassword = mock.Mock()
+        cli.factory.password = 'mushroommushroom'
+        cli.vncRequestPassword()
+        cli.sendPassword.assert_called_once_with(cli.factory.password)
 
 
 class TestVNCDoToolFactory(object):
 
     def setUp(self):
-        self.factory = VNCDoToolFactory()
+        self.factory = client.VNCDoToolFactory()
 
     def test_init(self):
         assert self.factory.deferred
