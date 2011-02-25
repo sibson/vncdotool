@@ -49,7 +49,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  click BUTTON:\tsend a mouse BUTTON click',
             '  capture FILE:\tsave current screen as FILE',
             '  expect FILE FUZZ:  Wait until the screen matches FILE',
-            '\t\tFUZZ amount of error tolerance (RMSE) in match'
+            '\t\tFUZZ amount of error tolerance (RMSE) in match',
+            '',
         ])
         return result
 
