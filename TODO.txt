@@ -1,0 +1,26 @@
+0.1.0
+----------------
+  - verify client on OSX, MSWin, linux
+  - release to pypi
+
+0.2.0
+----------------
+  - record/proxy
+    - log to file
+    - readback file
+
+Future
+----------------
+  - robust command line
+
+Wishlist
+----------------
+  - pexpect/twisted intergration
+  - copy to/from clipboard
+  - support more encodings
+  - strings, tesseract OCR
+  - debian package
+  - drop twisted dependency
+
+Rejected
+----------------
