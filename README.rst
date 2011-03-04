@@ -2,7 +2,8 @@ vncdotool
 ********************************
 With vncdotool you can interact with VNC servers from the command line
 
-Currently under developement, so use at your own peril.
+Currently under developement, so use at your own peril but what is the
+worst that could happen?
 
 Quick Start
 --------------------------------
@@ -65,6 +66,12 @@ Finally, you may specify multiple actions on a single command line::
 
     vncdotool type username key enter expect password_prompt.png
     vncdotool type password move 100 150 click 1 expect welcome_screen.png
+
+Feedback
+--------------------------------
+Comments, suggestions and patches are welcome and appreciated.  They can
+be sent to sibson+vncdotool@gmail.com or via
+http://github.com/sibson/vncdotool.
 
 Acknowledgements
 --------------------------------

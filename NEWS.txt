@@ -1,4 +1,4 @@
-vncdotool - 0.1.0 2011-XX-XX
+vncdotool - 0.1.0 (2011-03-03)
 --------------------------------
     - first release
     - commands: press, type, move, click, capture, expect
