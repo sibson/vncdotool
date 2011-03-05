@@ -1,37 +1,39 @@
 vncdotool
 ********************************
-With vncdotool you can interact with VNC servers from the command line
+vncdotool is a command line VNC client.
 
-Currently under developement, so use at your own peril but what is the
+It comes in handy when automating interactions with virtual machines or
+some hardware devices that are otherwise difficult to control.
+
+Currently under development, so use at your own peril but what is the
 worst that could happen?
 
 Quick Start
 --------------------------------
-If you have a VNC server running you can quickly try out
-vncdotool by running::
+To see vncdotool in action you can run it against an existing VNC server
+or start one locally with x11vnc. Then you can run::
 
-    python vncdotool/command.py -h hostaddr -d displaynum click 2
+    pip install twisted # if you don't already have it
+    python vncdotool/command.py -s hostaddr type "hello world"
 
-Which for most window managers will open a context menu at the top left
-corner of the screen.  If you have PIL installed then you can do screen
-captures too::
+If you have PIL installed then you can do a screen captures with::
 
-    python vncdotool/command.py -h hostaddr -d displaynum capture screen.png
+    python vncdotool/command.py -s hostaddr capture screen.png
 
-Install
+Installation
 --------------------------------
-You will need to have Twisted installed, http://twistedmatrix.com.
-Optionally, you will also need the Python Imaging Library,
-http://www.pythonware.com/products/pil/.  Once you have the
-dependencies installed you can install vncdotool from source with::
+vncdotool depends on Twisted. Additionally, for capture and expect commands
+to work you will need the Python Image Library. You can use your
+favourite package manager to grab them.  Once you have the dependencies
+installed you install from the unpacked source tree.
 
     python setup.py install
 
 Usage
 --------------------------------
-Once installed you can use the vncdotool command to send keys, for
-alphanumeric you just specify the character.  For other keys names are
-used::
+Once installed you can use the vncdotool command to send key-presses.
+Alphanumerics are straightforward just specify the character.  For other
+keys longer names are used::
 
     vncdotool key a
     vncdotool key 5
@@ -41,12 +43,12 @@ used::
     vncdotool key ctrl-C
     vncdotool key ctrl-alt-del
 
-To enter data you can use the type command, which only supports
-alphanumeric::
+To type longer strings when entering data or commands you can use the type c
+command, which does not support special characters::
 
-    vncdotool type hello
+    vncdotool type "hello world"
 
-You can also control the mouse pointer with move and click::
+You can control the mouse pointer with move and click commands::
 
     vncdotool move 100 100
     vncdotool click 1
@@ -56,9 +58,7 @@ make screen captures of the session::
 
     vncdotool capture screenshot.png
 
-Again if you have PIL, you can wait for the screen to match a
-known image.  This is useful for waiting for the server to be in a
-known state::
+Again if you have PIL, you can wait for the screen to match a known image.::
 
     vncdotool expect somescreen.png 0
 
@@ -75,5 +75,9 @@ http://github.com/sibson/vncdotool.
 
 Acknowledgements
 --------------------------------
-Thanks to chris, techtonik and Todd Whiteman for developing the RFB and
-DES impementations used by vncdotool.
+Thanks to Chris Liechti, techtonik and Todd Whiteman for developing the RFB and
+DES implementations used by vncdotool.
+
+_python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
+_Twisted: http://twistedmatrix.com
+_PIL: http://www.pythonware.com/products/pil

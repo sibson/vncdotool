@@ -1,13 +1,10 @@
-0.1.0
-----------------
-  - verify client on OSX, MSWin, linux
-  - release to pypi
-
 0.2.0
 ----------------
   - record/proxy
     - log to file
     - readback file
+
+  - type "Hello World" -> hello world
 
 Future
 ----------------
