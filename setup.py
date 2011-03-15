@@ -10,6 +10,7 @@ setup(
     description='Command line VNC client',
     install_requires=[
         'Twisted',
+        "PIL",
     ],
     tests_require=[
         'nose',
