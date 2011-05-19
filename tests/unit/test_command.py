@@ -85,6 +85,9 @@ class TestBuildCommandList(object):
 
         call.assert_calls_exist_with(self.client.expectScreen, 'password.png', 0)
 
+    def test_pause(self):
+        self.call_build_commands_list('pause 0.3')
+        self.factory.deferred.addCallback.assert_called_with(command.pause, 0.3)
 
 
 @mock.isolate(command.main)

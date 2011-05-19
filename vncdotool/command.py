@@ -12,7 +12,7 @@ from twisted.internet import reactor
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 import sys
-
+import time
 
 def log_connected(pcol):
     log.msg('connected to %s' % pcol.name)
@@ -50,10 +50,15 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  capture FILE:\tsave current screen as FILE',
             '  expect FILE FUZZ:  Wait until the screen matches FILE',
             '\t\tFUZZ amount of error tolerance (RMSE) in match',
+            '  pause DURATION:\twait DURATION seconds before sending next',
             '',
         ])
         return result
 
+
+def pause(client, duration):
+    time.sleep(duration)
+    return client
 
 def build_command_list(factory, args):
     client = VNCDoToolClient
@@ -79,6 +84,9 @@ def build_command_list(factory, args):
             filename = args.pop(0)
             rms = int(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
+        elif cmd == 'pause':
+            duration = float(args.pop(0))
+            factory.deferred.addCallback(pause, duration)
         else:
             print 'unknown cmd "%s"' % cmd
 
