@@ -1,6 +1,11 @@
 vncdotool - 0.2.0 (unreleased)
 --------------------------------
 
+vncdotool - 0.1.1 (2011-05-18)
+--------------------------------
+    - add PIL to requires
+    - fix bug where incorrect mouse button is sent
+
 vncdotool - 0.1.0 (2011-03-03)
 --------------------------------
     - first release
