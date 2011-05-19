@@ -66,5 +66,5 @@ class TestSendEvents(object):
 
     def test_mouse_button_two(self):
         self.run_vncdotool('click 2')
-        self.assertMouse(0, 0, 0x4)
+        self.assertMouse(0, 0, 0x2)
         self.assertDisconnect()

@@ -120,7 +120,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        buttons = 1 << button
+        buttons = 1 << (button - 1)
         self.pointerEvent(self.x, self.y, buttonmask=buttons)
         self.pointerEvent(self.x, self.y, buttonmask=0)
 
