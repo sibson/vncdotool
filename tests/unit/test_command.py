@@ -88,6 +88,21 @@ class TestBuildCommandList(object):
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
         self.factory.deferred.addCallback.assert_called_with(command.pause, 0.3)
+    def test_mousedown(self):
+        self.call_build_commands_list('mousedown 1')
+        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDown, 1)
+
+        self.call_build_commands_list('mdown 2')
+        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDown, 2)
+
+    def test_mouseup(self):
+        self.call_build_commands_list('mouseup 1')
+        self.factory.deferred.addCallback.assert_called_with(self.client.mouseUp, 1)
+
+        self.call_build_commands_list('mup 2')
+        self.factory.deferred.addCallback.assert_called_with(self.client.mouseUp, 2)
+
+
 
 
 @mock.isolate(command.main)

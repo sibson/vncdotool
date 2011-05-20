@@ -50,6 +50,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  capture FILE:\tsave current screen as FILE',
             '  expect FILE FUZZ:  Wait until the screen matches FILE',
             '\t\tFUZZ amount of error tolerance (RMSE) in match',
+            '  mousedown BUTTON:\tsend BUTTON down',
+            '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
             '',
         ])
@@ -74,6 +76,12 @@ def build_command_list(factory, args):
         elif cmd == 'click':
             button = int(args.pop(0))
             factory.deferred.addCallback(client.mousePress, button)
+        elif cmd in ('mdown', 'mousedown'):
+            button = int(args.pop(0))
+            factory.deferred.addCallback(client.mouseDown, button)
+        elif cmd in ('mup', 'mouseup'):
+            button = int(args.pop(0))
+            factory.deferred.addCallback(client.mouseUp, button)
         elif cmd == 'type':
             for key in args.pop(0):
                 factory.deferred.addCallback(client.keyPress, key)

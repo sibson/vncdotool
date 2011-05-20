@@ -93,6 +93,7 @@ KEYMAP = {
 class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
+    buttons = 0
     screen = None
 
     def keyPress(self, key):
@@ -120,11 +121,34 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        buttons = 1 << (button - 1)
+        buttons = self.buttons | (1 << (button - 1))
         self.pointerEvent(self.x, self.y, buttonmask=buttons)
-        self.pointerEvent(self.x, self.y, buttonmask=0)
+        self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
 
         return self
+
+    def mouseDown(self, button):
+        """ Send a mouse button down at the last set position
+
+            button: int: [1-n]
+
+        """
+        self.buttons |= 1 << (button - 1)
+        self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
+
+        return self
+
+    def mouseUp(self, button):
+        """ Send mouse button released at the last set position
+
+            button: int: [1-n]
+
+        """
+        self.buttons &= ~(1 << (button - 1))
+        self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
+
+        return self
+
 
     def captureScreen(self, filename):
         """ Save the current display to filename
@@ -177,7 +201,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """ Move the mouse pointer to position (x, y)
         """
         self.x, self.y = x, y
-        self.pointerEvent(x, y)
+        self.pointerEvent(x, y, self.buttons)
         return self
 
     def log(self, fmt, *args):

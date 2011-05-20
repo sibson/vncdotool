@@ -1,6 +1,6 @@
 vncdotool - 0.2.0 (unreleased)
 --------------------------------
-    - add pause command
+    - add pause, mouseup, mousedown commands
 
 vncdotool - 0.1.1 (2011-05-18)
 --------------------------------
