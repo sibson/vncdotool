@@ -58,6 +58,7 @@ class TestSendEvents(object):
         self.assertDisconnect()
 
     def test_mouse_move(self):
+        # XXX return "vncev doesn't seem to support move"
         return "vncev doesn't seem to support move"
         self.run_vncdotool('move 10 20')
         self.assertMouse(10, 20, 0)
