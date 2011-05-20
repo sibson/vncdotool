@@ -12,6 +12,7 @@ from twisted.internet.defer import Deferred, DeferredQueue
 import getpass
 import math
 import operator
+import time
 
 KEYMAP = {
     'bsp': rfb.KEY_BackSpace,
@@ -202,6 +203,31 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         self.x, self.y = x, y
         self.pointerEvent(x, y, self.buttons)
+        return self
+
+    def mouseDrag(self, x, y, step=1):
+        """ Move the mouse point to position (x, y) in increments of step
+        """
+        if x < self.x:
+            xsteps = [self.x - i for i in xrange(step, self.x - x + 1, step)]
+        else:
+            xsteps = xrange(self.x, x, step)
+
+        if y < self.y:
+            ysteps = [self.y - i for i in xrange(step, self.y - y + 1, step)]
+        else:
+            ysteps = xrange(self.y, y, step)
+
+        for ypos in ysteps:
+            time.sleep(.2)
+            self.mouseMove(self.x, ypos)
+
+        for xpos in xsteps:
+            time.sleep(.2)
+            self.mouseMove(xpos, self.y)
+
+
+        self.mouseMove(x, y)
         return self
 
     def log(self, fmt, *args):

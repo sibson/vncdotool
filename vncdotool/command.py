@@ -53,6 +53,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  mousedown BUTTON:\tsend BUTTON down',
             '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
+            '  drag X Y:\tmove the mouse to X,Y in small steps',
             '',
         ])
         return result
@@ -95,6 +96,9 @@ def build_command_list(factory, args):
         elif cmd == 'pause':
             duration = float(args.pop(0))
             factory.deferred.addCallback(pause, duration)
+        elif cmd in 'drag':
+            x, y = int(args.pop(0)), int(args.pop(0))
+            factory.deferred.addCallback(client.mouseDrag, x, y)
         else:
             print 'unknown cmd "%s"' % cmd
 

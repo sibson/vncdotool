@@ -102,7 +102,9 @@ class TestBuildCommandList(object):
         self.call_build_commands_list('mup 2')
         self.factory.deferred.addCallback.assert_called_with(self.client.mouseUp, 2)
 
-
+    def test_drag(self):
+        self.call_build_commands_list('drag 100 200')
+        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDrag, 100, 200)
 
 
 @mock.isolate(command.main)
