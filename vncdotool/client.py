@@ -16,7 +16,7 @@ import time
 
 KEYMAP = {
     'bsp': rfb.KEY_BackSpace,
-    'tab':  rfb.KEY_Tab,
+    'tab': rfb.KEY_Tab,
     'return': rfb.KEY_Return,
     'enter': rfb.KEY_Return,
     'esc': rfb.KEY_Escape,
@@ -150,7 +150,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-
     def captureScreen(self, filename):
         """ Save the current display to filename
         """
@@ -226,8 +225,8 @@ class VNCDoToolClient(rfb.RFBClient):
             time.sleep(.2)
             self.mouseMove(xpos, self.y)
 
-
         self.mouseMove(x, y)
+
         return self
 
     def log(self, fmt, *args):

@@ -2,19 +2,20 @@
 from vncdotool import command
 import mock
 
- 
+
 @mock.isolate(command.build_command_list)
 class TestBuildCommandList(object):
+
     def setUp(self):
         self.factory = mock.Mock()
         self.client = command.VNCDoToolClient
         self.deferred = self.factory.deferred
 
     def assertCalled(self, fn, *args):
-        self.deferred.addCallback.assert_called_once_with(fn, *args)
+        self.deferred.addCallback.assert_called_with(fn, *args)
 
     def call_build_commands_list(self, commands):
-        command.build_command_list(self.factory, commands.split()) 
+        command.build_command_list(self.factory, commands.split())
 
     def test_alphanum_key(self):
         self.call_build_commands_list('key a')
@@ -87,28 +88,30 @@ class TestBuildCommandList(object):
 
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
-        self.factory.deferred.addCallback.assert_called_with(command.pause, 0.3)
+        self.assertCalled(command.pause, 0.3)
+
     def test_mousedown(self):
         self.call_build_commands_list('mousedown 1')
-        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDown, 1)
+        self.assertCalled(self.client.mouseDown, 1)
 
         self.call_build_commands_list('mdown 2')
-        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDown, 2)
+        self.assertCalled(self.client.mouseDown, 2)
 
     def test_mouseup(self):
         self.call_build_commands_list('mouseup 1')
-        self.factory.deferred.addCallback.assert_called_with(self.client.mouseUp, 1)
+        self.assertCalled(self.client.mouseUp, 1)
 
         self.call_build_commands_list('mup 2')
-        self.factory.deferred.addCallback.assert_called_with(self.client.mouseUp, 2)
+        self.assertCalled(self.client.mouseUp, 2)
 
     def test_drag(self):
         self.call_build_commands_list('drag 100 200')
-        self.factory.deferred.addCallback.assert_called_with(self.client.mouseDrag, 100, 200)
+        self.assertCalled(self.client.mouseDrag, 100, 200)
 
 
 @mock.isolate(command.main)
 class TestMain(object):
+
     def setUp(self):
         self.factory = command.VNCDoToolFactory.return_value
         self.options = mock.Mock()
@@ -122,11 +125,13 @@ class TestMain(object):
         command.main()
         connectTCP = command.reactor.connectTCP
         connectTCP.assert_called_once_with('10.11.12.13', 5900, self.factory)
+
     def test_host_port(self):
         self.options.server = '10.11.12.13:4444'
         command.main()
         connectTCP = command.reactor.connectTCP
         connectTCP.assert_called_once_with('10.11.12.13', 4444, self.factory)
+
     def test_localhost_display(self):
         self.options.display = 10
         command.main()
@@ -139,6 +144,7 @@ class TestMain(object):
         command.main()
         connectTCP = command.reactor.connectTCP
         connectTCP.assert_called_once_with('10.11.12.13', 5910, self.factory)
+
     def test_host_default(self):
         command.main()
         connectTCP = command.reactor.connectTCP

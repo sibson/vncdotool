@@ -8,6 +8,7 @@ from vncdotool import rfb
 @mock.isolate(client.VNCDoToolClient,
                 excludes='math.sqrt,operator.add,client.KEYMAP')
 class TestVNCDoToolClient(object):
+
     def setUp(self):
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()

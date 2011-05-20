@@ -18,7 +18,7 @@ class TestSendEvents(object):
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = '^.*up:\s+\(%s\)\r'  % hex(key)
+        up = '^.*up:\s+\(%s\)\r' % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):
@@ -35,13 +35,12 @@ class TestSendEvents(object):
         retval = vnc.wait()
         assert retval == 0, retval
 
-        
     def test_key_alpha(self):
         self.run_vncdotool('key z')
         self.assertKeyDown(ord('z'))
         self.assertKeyUp(ord('z'))
         self.assertDisconnect()
-    
+
     def test_key_ctrl_a(self):
         self.run_vncdotool('key ctrl-a')
         self.assertKeyDown(int(0xffe3))
@@ -64,7 +63,7 @@ class TestSendEvents(object):
         self.assertMouse(10, 20, 0)
         self.assertDisconnect()
 
-    def test_mouse_button_two(self):
+    def test_mouse_click_button_two(self):
         self.run_vncdotool('click 2')
         self.assertMouse(0, 0, 0x2)
         self.assertDisconnect()
