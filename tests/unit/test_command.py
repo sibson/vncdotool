@@ -123,34 +123,29 @@ class TestMain(object):
     def test_single_host_name(self):
         self.options.server = '10.11.12.13'
         command.main()
-        connectTCP = command.reactor.connectTCP
-        connectTCP.assert_called_once_with('10.11.12.13', 5900, self.factory)
+        assert self.options.server == '10.11.12.13'
+        assert self.options.port == 5900
 
     def test_host_port(self):
         self.options.server = '10.11.12.13:4444'
         command.main()
-        connectTCP = command.reactor.connectTCP
-        connectTCP.assert_called_once_with('10.11.12.13', 4444, self.factory)
+        assert self.options.host == '10.11.12.13'
+        assert self.options.port == 4444
 
     def test_localhost_display(self):
         self.options.display = 10
         command.main()
-        connectTCP = command.reactor.connectTCP
-        connectTCP.assert_called_once_with('127.0.0.1', 5910, self.factory)
+        assert self.options.host == '127.0.0.1'
+        assert self.options.port == 5910
 
     def test_host_display(self):
         self.options.server = '10.11.12.13'
         self.options.display = 10
         command.main()
-        connectTCP = command.reactor.connectTCP
-        connectTCP.assert_called_once_with('10.11.12.13', 5910, self.factory)
+        assert self.options.host == '10.11.12.13'
+        assert self.options.port == 5910
 
     def test_host_default(self):
         command.main()
-        connectTCP = command.reactor.connectTCP
-        connectTCP.assert_called_once_with('127.0.0.1', 5900, self.factory)
-
-    def test_password(self):
-        self.options.password = 'openseseame'
-        command.main()
-        assert self.factory.password == 'openseseame'
+        assert self.options.host == '127.0.0.1'
+        assert self.options.port == 5900

@@ -103,6 +103,22 @@ def build_command_list(factory, args):
             print 'unknown cmd "%s"' % cmd
 
 
+def build_tool(options, args):
+    factory = VNCDoToolFactory()
+    if options.verbose:
+        factory.deferred.addCallbacks(log_connected)
+
+    build_command_list(factory, args)
+
+    factory.deferred.addCallback(stop)
+    factory.deferred.addErrback(error)
+
+    reactor.connectTCP(options.host, int(options.port), factory)
+    reactor.exit_status = 1
+
+    return factory
+
+
 def main():
     usage = '%prog [options] CMD CMDARGS'
     description = 'Command line interaction with a VNC server'
@@ -117,39 +133,30 @@ def main():
         help='connect to vnc server at ADDRESS[:PORT] [%default]')
     op.add_option('-v', '--verbose', action='store_true')
 
-    opts, args = op.parse_args()
+    options, args = op.parse_args()
     if not len(args):
         op.error('no command provided')
 
-    factory = VNCDoToolFactory()
     try:
-        host, port = opts.server.split(':')
+        options.host, options.port = options.server.split(':')
     except ValueError:
-        host = opts.server
-        port = opts.display + 5900
+        options.host = options.server
+        options.port = options.display + 5900
+    options.port = int(options.port)
 
-    if opts.password:
-        factory.password = opts.password
+    factory = build_tool(options, args)
 
-    if opts.verbose:
-        log.msg('connecting to %s:%s' % (host, port))
+    if options.password:
+        factory.password = options.password
+
+    if options.verbose:
+        log.msg('connecting to %s:%s' % (options.host, options.port))
         factory.logger = log.msg
         log.startLogging(sys.stdout)
 
-    if opts.verbose:
-        factory.deferred.addCallbacks(log_connected)
-
-    build_command_list(factory, args)
-
-    factory.deferred.addCallback(stop)
-    factory.deferred.addErrback(error)
-
-    reactor.connectTCP(host, int(port), factory)
-    reactor.exit_status = 1
-
     reactor.run()
-
     sys.exit(reactor.exit_status)
+
 
 if __name__ == '__main__':
     main()

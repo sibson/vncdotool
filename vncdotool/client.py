@@ -187,7 +187,7 @@ class VNCDoToolClient(rfb.RFBClient):
             reduce(operator.add, map(
                lambda a, b: (a - b) ** 2, hist, self.expected)) / len(hist))
 
-        self.log('rms %d', rms)
+        self.log('rms', int(rms))
 
         if rms <= maxrms:
             self.deferred.callback(self)
@@ -244,9 +244,12 @@ class VNCDoToolClient(rfb.RFBClient):
     #
     # base customizations
     #
+    def connectionMade(self):
+        rfb.RFBClient.connectionMade(self)
+        self.updates = DeferredQueue()
+
     def vncConnectionMade(self):
         self.setPixelFormat()
-        self.updates = DeferredQueue()
         self.factory.clientConnectionMade(self)
 
     def bell(self):
