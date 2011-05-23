@@ -11,6 +11,7 @@ import optparse
 from twisted.internet import reactor
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
+from vncdotool.loggingproxy import VNCLoggingServerFactory
 import sys
 import time
 
@@ -54,6 +55,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
             '  drag X Y:\tmove the mouse to X,Y in small steps',
+            '  proxy PORT:\tlog and forward activity on PORT',
             '',
         ])
         return result
@@ -119,6 +121,15 @@ def build_tool(options, args):
     return factory
 
 
+def build_proxy(options, port):
+    factory = VNCLoggingServerFactory(options.host, int(options.port))
+    reactor.listenTCP(port, factory)
+    reactor.exit_status = 0
+
+    return factory
+
+
+
 def main():
     usage = '%prog [options] CMD CMDARGS'
     description = 'Command line interaction with a VNC server'
@@ -144,7 +155,12 @@ def main():
         options.port = options.display + 5900
     options.port = int(options.port)
 
-    factory = build_tool(options, args)
+    if 'proxy' in args:
+        args.pop(0)
+        port = int(args.pop(0))
+        factory = build_proxy(options, port)
+    else:
+        factory = build_tool(options, args)
 
     if options.password:
         factory.password = options.password
