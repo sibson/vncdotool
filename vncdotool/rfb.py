@@ -149,7 +149,7 @@ class RFBClient(Protocol):
         else:
             log.msg("unknown auth response (%d)\n" % auth)
 
-    def _handleConnFailed(self):
+    def _handleConnFailed(self, block):
         (waitfor,) = unpack("!I", block)
         self.expect(self._handleConnMessage, waitfor)
 
@@ -178,7 +178,7 @@ class RFBClient(Protocol):
             self.vncAuthFailed("autenthication failed")
             self.transport.loseConnection()
         elif result == 2:   #too many
-            slef.vncAuthFailed("too many tries to log in")
+            self.vncAuthFailed("too many tries to log in")
             self.transport.loseConnection()
         else:
             log.msg("unknown auth response (%d)\n" % auth)
