@@ -3,7 +3,7 @@ from vncdotool import command
 import mock
 
 
-@mock.isolate(command.build_command_list)
+@mock.isolate.object(command.build_command_list)
 class TestBuildCommandList(object):
 
     def setUp(self):
@@ -109,7 +109,7 @@ class TestBuildCommandList(object):
         self.assertCalled(self.client.mouseDrag, 100, 200)
 
 
-@mock.isolate(command.main)
+@mock.isolate.object(command.main)
 class TestMain(object):
 
     def setUp(self):

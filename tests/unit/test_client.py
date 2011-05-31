@@ -5,7 +5,7 @@ from vncdotool import client
 from vncdotool import rfb
 
 
-@mock.isolate(client.VNCDoToolClient,
+@mock.isolate.object(client.VNCDoToolClient,
                 excludes='math.sqrt,operator.add,client.KEYMAP')
 class TestVNCDoToolClient(object):
 
