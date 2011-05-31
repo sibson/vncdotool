@@ -15,24 +15,32 @@ TYPE_LEN = {
 
 
 class RFBServer(Protocol):
+    _handler = None
 
     def connectionMade(self):
         self.buffer = ''
         self.nbytes = 0
         # XXX send version message
-        self._handler = self._handle_version
+        self._handler = self._handle_version, 12
 
     def dataReceived(self, data):
         self.buffer += data
-        while self.buffer and self.nbytes != len(self.buffer):
-            self.nbytes = len(self.buffer)
-            self._handler()
+        while len(self.buffer) >= self._handler[1]:
+            self._handler[0]()
 
     def _handle_version(self):
+        msg = self.buffer[:12]
         self.buffer = self.buffer[12:]
-        self._handler = self._handle_security
-        # XXX handle version request
-        # XXX send security
+        if not msg.startswith('RFB 003.') and msg.endswith('\n'):
+            self.transport.loseConnection()
+
+        version = msg[8:11]
+        if version in ('003', '005'):
+            self._handler = self._handle_clientInit, 1
+            # XXX send security v3.3
+        elif version in ('007', '008'):
+            # XXX send security v3.7+
+            self._handler = self._handle_security,  1
 
     def _handle_security(self):
         sectype = self.buffer[0]
@@ -40,19 +48,20 @@ class RFBServer(Protocol):
         # XXX send security data
         # XXX send security result
         self.buffer = self.buffer[1:]
-        self._handler = self._handle_clientInit
+        self._handler = self._handle_clientInit, 1
 
     def _handle_clientInit(self):
         shared = self.buffer[0]
         self.buffer = self.buffer[1:]
         # XXX react to shared
         # XXX send serverInit
-        self._handler = self._handle_protocol
+        self._handler = self._handle_protocol, 1
 
     def _handle_protocol(self):
         ptype = unpack('!B', self.buffer[0])[0]
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
+            self._handler = self._handle_protocol, nbytes + 1
             return
 
         block = self.buffer[1:nbytes]
@@ -116,7 +125,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.client.factory = self.peer.factory
         self.client.connectionMade()
         self.client._handler = self.client._handleExpected
-        self.client.expect(self.client._handleVNCAuthResult, 4)
+        self.client.expect(self.client._handleServerInit, 24)
 
         d = self.client.updates.get()
         d.addCallback(self.saveScreen)
@@ -153,8 +162,8 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         RFBServer.dataReceived(self, data)
         portforward.ProxyServer.dataReceived(self, data)
 
-    def _handle_security(self):
-        RFBServer._handle_security(self)
+    def _handle_clientInit(self):
+        RFBServer._handle_clientInit(self)
         self.peer.startLogging()
 
     def handle_keyEvent(self, key, down):
