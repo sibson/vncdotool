@@ -58,14 +58,24 @@ make screen captures of the session::
 
     vncdotool capture screenshot.png
 
-Again if you have PIL, you can wait for the screen to match a known image.::
+With PIL, you can wait for the screen to match a known image.::
 
     vncdotool expect somescreen.png 0
 
-Finally, you may specify multiple actions on a single command line::
+Putting it all together you can specify multiple actions on a single
+command line.  You could automate a login with the following::
 
     vncdotool type username key enter expect password_prompt.png
     vncdotool type password move 100 150 click 1 expect welcome_screen.png
+
+Creating long lists of commands can be time consuming so vncdotool provides
+a proxy mode that logs messages and screen captures.  The log can then be
+edited and played back.::
+
+    vncdotool proxy 6000 > vnc.log
+    vncviewer localhost:6000
+    sed -i s/click 1/click 2/ vnc.log
+    vncdotool < vnc.log
 
 Feedback
 --------------------------------
@@ -75,8 +85,8 @@ http://github.com/sibson/vncdotool.
 
 Acknowledgements
 --------------------------------
-Thanks to Chris Liechti, techtonik and Todd Whiteman for developing the RFB and
-DES implementations used by vncdotool.
+Thanks to Chris Liechti, techtonik and Todd Whiteman for developing the RFB
+and DES implementations used by vncdotool.
 
 _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
 _Twisted: http://twistedmatrix.com
