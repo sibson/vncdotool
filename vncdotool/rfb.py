@@ -181,7 +181,7 @@ class RFBClient(Protocol):
             self.vncAuthFailed("too many tries to log in")
             self.transport.loseConnection()
         else:
-            log.msg("unknown auth response (%d)\n" % auth)
+            log.msg("unknown auth response (%d)\n" % result)
 
     def _doClientInitialization(self):
         self.transport.write(pack("!B", self.factory.shared))
