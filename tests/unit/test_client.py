@@ -78,8 +78,9 @@ class TestVNCDoToolClient(object):
 
         d = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
-        cli.image.return_value.open.assert_called_once_with(fname)
-        assert cli.expected == cli.image.return_value.open.return_value.histogram.return_value
+        image = client.ImageFactory.return_value
+        image.open.assert_called_once_with(fname)
+        assert cli.expected == image.open.return_value.histogram.return_value
         assert cli.updates.get.called
         update = cli.updates.get.return_value
         update.addCallback.assert_called_once_with(cli._expectCompare, 5)
@@ -131,7 +132,7 @@ class TestVNCDoToolClient(object):
 
         cli.updateRectangle(0, 0, 100, 200, data)
 
-        image = cli.image.return_value
+        image = client.ImageFactory.return_value
         image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
         assert cli.updates.put(cli.screen)
@@ -147,7 +148,7 @@ class TestVNCDoToolClient(object):
 
         cli.updateRectangle(20, 10, 50, 40, data)
 
-        image = cli.image.return_value
+        image = client.ImageFactory.return_value
         image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
         assert cli.updates.put(cli.screen)

@@ -91,6 +91,14 @@ KEYMAP = {
 }
 
 
+def ImageFactory():
+    """ Wrap importing PIL.Image so vncdotool can be used without
+    PIL being installed.  Of course capture and expect won't work
+    but at least we can still offer key, type, press and move.
+    """
+    from PIL import Image
+    return Image
+
 class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
@@ -173,7 +181,7 @@ class VNCDoToolClient(rfb.RFBClient):
                     screen and target image
         """
         self.framebufferUpdateRequest()
-        self.expected = self.image().open(filename).histogram()
+        self.expected = ImageFactory().open(filename).histogram()
         self.deferred = Deferred()
         d = self.updates.get()
         d.addCallback(self._expectCompare, maxrms)
@@ -233,14 +241,6 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.factory.logger:
             self.factory.logger(fmt, *args)
 
-    def image(self):
-        """ Wrap importing PIL.Image so vncdotool can be used without
-        PIL being installed.  Of course capture and expect won't work
-        but at least we can still offer key, type, press and move.
-        """
-        from PIL import Image
-        return Image
-
     #
     # base customizations
     #
@@ -264,7 +264,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def updateRectangle(self, x, y, width, height, data):
         size = (width, height)
-        update = self.image().fromstring('RGB', size, data, 'raw', 'RGBX')
+        update = ImageFactory().fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
             self.screen = update
         # track screen upward screen resizes, often occur during os boot
