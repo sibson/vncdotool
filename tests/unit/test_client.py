@@ -114,6 +114,7 @@ class TestVNCDoToolClient(object):
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
         cli.updates = mock.Mock()
+        cli.framebufferUpdateRequest = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
@@ -121,6 +122,7 @@ class TestVNCDoToolClient(object):
 
         assert not cli.deferred.callback.called
         assert cli.updates.get.called
+        cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
         update = cli.updates.get.return_value
         update.addCallback.assert_called_once_with(cli._expectCompare, 0)
 

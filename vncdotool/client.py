@@ -190,7 +190,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _expectCompare(self, image, maxrms):
         hist = image.histogram()
-
         rms = math.sqrt(
             reduce(operator.add, map(
                lambda a, b: (a - b) ** 2, hist, self.expected)) / len(hist))
@@ -204,6 +203,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         d = self.updates.get()
         d.addCallback(self._expectCompare, maxrms)
+        self.framebufferUpdateRequest(incremental=1)
 
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
