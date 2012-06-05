@@ -5,11 +5,12 @@ from vncdotool import client
 from vncdotool import rfb
 
 
-@mock.isolate.object(client.VNCDoToolClient,
-                excludes='math.sqrt,operator.add,client.KEYMAP')
 class TestVNCDoToolClient(object):
 
     def setUp(self):
+        self.isolation = mock.isolate.object(client.VNCDoToolClient,
+                excludes='math.sqrt,operator.add,client.KEYMAP')
+        self.isolation.start()
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
@@ -18,6 +19,11 @@ class TestVNCDoToolClient(object):
         self.client.framebufferUpdateRequest = mock.Mock()
         self.client.pointerEvent = mock.Mock()
         self.client.keyEvent = mock.Mock()
+
+    def tearDown(self):
+        if self.isolation:
+            self.isolation.stop()
+            self.isolation = None
 
     def _tryPIL(self):
         try:

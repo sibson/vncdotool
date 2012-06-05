@@ -3,13 +3,20 @@ from vncdotool import command
 import mock
 
 
-@mock.isolate.object(command.build_command_list)
 class TestBuildCommandList(object):
 
     def setUp(self):
+        self.isolation = mock.isolate.object(command.build_command_list)
+        self.isolation.start()
         self.factory = mock.Mock()
         self.client = command.VNCDoToolClient
         self.deferred = self.factory.deferred
+
+    def tearDown(self):
+        if self.isolation:
+            self.isolation.stop()
+            self.isolation = None
+
 
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
@@ -109,16 +116,22 @@ class TestBuildCommandList(object):
         self.assertCalled(self.client.mouseDrag, 100, 200)
 
 
-@mock.isolate.object(command.main)
 class TestMain(object):
 
     def setUp(self):
+        self.isolation = mock.isolate.object(command.main)
+        self.isolation.start()
         self.factory = command.VNCDoToolFactory.return_value
         self.options = mock.Mock()
         self.options.display = 0
         self.options.server = '127.0.0.1'
         parse_args = command.VNCDoToolOptionParser.return_value.parse_args
         parse_args.return_value = (self.options, [])
+
+    def tearDown(self):
+        if self.isolation:
+            self.isolation.stop()
+            self.isolation = None
 
     def test_single_host_name(self):
         self.options.server = '10.11.12.13'
