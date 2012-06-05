@@ -190,16 +190,16 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _expectCompare(self, image, maxrms):
         hist = image.histogram()
-        rms = math.sqrt(
-            reduce(operator.add, map(
-               lambda a, b: (a - b) ** 2, hist, self.expected)) / len(hist))
+        if len(hist) == len(self.expected):
+            rms = math.sqrt(
+                        reduce(operator.add, map(lambda a, b: (a - b) ** 2,
+                            hist, self.expected)) / len(hist))
 
-        self.log('rms', int(rms))
-
-        if rms <= maxrms:
-            self.deferred.callback(self)
-            self.deferred = None
-            return
+            self.log('rms', int(rms))
+            if rms <= maxrms:
+                self.deferred.callback(self)
+                self.deferred = None
+                return
 
         d = self.updates.get()
         d.addCallback(self._expectCompare, maxrms)
