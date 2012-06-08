@@ -13,7 +13,7 @@ import traceback
 import os
 
 
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
@@ -64,8 +64,9 @@ class VNCDoToolOptionParser(optparse.OptionParser):
 
 
 def pause(client, duration):
-    time.sleep(duration)
-    return client
+    d = defer.Deferred()
+    reactor.callLater(duration, d.callback, client)
+    return d
 
 def build_command_list(factory, args):
     client = VNCDoToolClient
