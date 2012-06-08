@@ -7,13 +7,16 @@ Command line interface to interact with a VNC Server
 MIT License
 """
 import optparse
+import sys
+import time
+import traceback
+import os
+
 
 from twisted.internet import reactor
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
-import sys
-import time
 
 def log_connected(pcol):
     log.msg('connected to %s' % pcol.name)
@@ -21,12 +24,8 @@ def log_connected(pcol):
 
 
 def error(reason):
-    try:
-        reason = reason.getErrorMessage()
-    except AttributeError:
-        pass
+    reason.printTraceback()
 
-    print reason
     reactor.exit_status = 10
     reactor.stop()
 
