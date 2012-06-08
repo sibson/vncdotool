@@ -134,6 +134,7 @@ def main():
     usage = '%prog [options] CMD CMDARGS'
     description = 'Command line interaction with a VNC server'
     op = VNCDoToolOptionParser(usage=usage, description=description)
+    op.disable_interspersed_args()
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
         help='connect to vnc server display :DISPLAY [%default]')
