@@ -18,6 +18,9 @@ from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
 
+
+SUPPORTED_FORMATS = ('png', 'jpg', 'jpeg', 'gif', 'bmp')
+
 def log_connected(pcol):
     log.msg('connected to %s' % pcol.name)
     return pcol
@@ -89,7 +92,12 @@ def build_command_list(factory, args):
                 factory.deferred.addCallback(client.keyPress, key)
         elif cmd == 'capture':
             filename = args.pop(0)
-            factory.deferred.addCallback(client.captureScreen, filename)
+            imgformat = os.path.splitext(filename)[1][1:]
+            if imgformat not in SUPPORTED_FORMATS:
+                print 'unsupported image format "%s", choose one of %s' % (
+                        imgformat, SUPPORTED_FORMATS)
+            else:
+                factory.deferred.addCallback(client.captureScreen, filename)
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))

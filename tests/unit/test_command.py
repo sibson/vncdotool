@@ -59,13 +59,18 @@ class TestBuildCommandList(object):
         pass
 
     def test_capture(self):
+        command.SUPPORTED_FORMATS = ('png',)
+        command.os.path.splitext.return_value = 'capture', '.png'
         self.call_build_commands_list('capture foo.png')
         self.assertCalled(self.client.captureScreen, 'foo.png')
 
-    def test_capture_not_png(self):
-        pass
+    def test_capture_not_supported(self):
+        command.SUPPORTED_FORMATS = ('png',)
+        command.os.path.splitext.return_value = 'capture', '.mpeg'
+        self.call_build_commands_list('capture foo.mpeg')
+        assert not self.deferred.addCallback.called
 
-    def test_capture_missing(self):
+    def test_capture_missing_filename(self):
         pass
 
     def test_expect(self):
