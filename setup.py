@@ -6,7 +6,7 @@ README = open('README.rst', 'rt').read()
 
 setup(
     name='vncdotool',
-    version='0.2.0dev',
+    version='0.2.0',
     description='Command line VNC client',
     install_requires=[
         'Twisted',
