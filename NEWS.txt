@@ -1,6 +1,10 @@
 vncdotool - 0.2.0 (unreleased)
 --------------------------------
     - add pause, mouseup, mousedown, drag commands
+    - only require TWisted 11.1.0, so we can have py2.4 support
+    - bugfixes, thanks Christopher Holm for reporting
+       - vncdotool type -something now works
+       - no longer silently fail for unsupported image formats
 
 vncdotool - 0.1.1 (2011-05-18)
 --------------------------------

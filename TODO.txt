@@ -1,10 +1,13 @@
-0.2.0
+0.3.0
 ----------------
   - record/proxy
     - log to file
     - readback file
-
+  - launch vncviewer for easy proxy/record setup
+  -
   - type "Hello World" -> hello world
+  - mousemove, sleep aliases, to match xdotool
+  - playback scriptfile
 
 Future
 ----------------
