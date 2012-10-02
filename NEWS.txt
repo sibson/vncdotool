@@ -1,4 +1,8 @@
-vncdotool - 0.2.0 (unreleased)
+vncdotool - 0.3.0 (unreleased)
+------------------------------------
+    - read commands from stdin or file
+
+vncdotool - 0.2.0 (2012-08-07)
 --------------------------------
     - add pause, mouseup, mousedown, drag commands
     - only require TWisted 11.1.0, so we can have py2.4 support

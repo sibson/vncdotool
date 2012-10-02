@@ -11,7 +11,7 @@ import sys
 import time
 import traceback
 import os
-
+import shlex
 
 from twisted.internet import reactor, defer
 from twisted.python import log
@@ -118,6 +118,10 @@ def build_tool(options, args):
     if options.verbose:
         factory.deferred.addCallbacks(log_connected)
 
+    if args == ['-']:
+        args = list(shlex.shlex())
+    elif os.path.isfile(args[0]):
+        args = list(shlex.shlex(open(args[0])))
     build_command_list(factory, args)
 
     factory.deferred.addCallback(stop)
@@ -139,18 +143,23 @@ def build_proxy(options, port):
 
 
 def main():
-    usage = '%prog [options] CMD CMDARGS'
+    usage = '%prog [options] (CMD CMDARGS|-|filename)'
     description = 'Command line interaction with a VNC server'
+
     op = VNCDoToolOptionParser(usage=usage, description=description)
     op.disable_interspersed_args()
+
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
         help='connect to vnc server display :DISPLAY [%default]')
+
     op.add_option('-p', '--password', action='store', metavar='PASSwORD',
         help='use password to access server')
+
     op.add_option('-s', '--server', action='store', metavar='ADDRESS',
         default='127.0.0.1',
         help='connect to vnc server at ADDRESS[:PORT] [%default]')
+
     op.add_option('-v', '--verbose', action='store_true')
 
     options, args = op.parse_args()

@@ -4,10 +4,8 @@
     - log to file
     - readback file
   - launch vncviewer for easy proxy/record setup
-  -
   - type "Hello World" -> hello world
   - mousemove, sleep aliases, to match xdotool
-  - playback scriptfile
 
 Future
 ----------------
@@ -21,6 +19,8 @@ Wishlist
   - support more encodings
   - strings, tesseract OCR
   - debian package
+  - PPA
+  - submit to debian/ubuntu
   - drop twisted dependency
   - windows exe
 

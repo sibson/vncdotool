@@ -1,5 +1,5 @@
 vncdotool
-********************************
+=================
 vncdotool is a command line VNC client.
 
 It comes in handy when automating interactions with virtual machines or
@@ -35,47 +35,62 @@ Once installed you can use the vncdotool command to send key-presses.
 Alphanumerics are straightforward just specify the character.  For other
 keys longer names are used::
 
-    vncdotool key a
-    vncdotool key 5
-    vncdotool key .
-    vncdotool key enter
-    vncdotool key shift-a
-    vncdotool key ctrl-C
-    vncdotool key ctrl-alt-del
+    > vncdotool key a
+    > vncdotool key 5
+    > vncdotool key .
+    > vncdotool key enter
+    > vncdotool key shift-a
+    > vncdotool key ctrl-C
+    > vncdotool key ctrl-alt-del
 
 To type longer strings when entering data or commands you can use the type c
 command, which does not support special characters::
 
-    vncdotool type "hello world"
+    > vncdotool type "hello world"
 
 You can control the mouse pointer with move and click commands::
 
-    vncdotool move 100 100
-    vncdotool click 1
+    > vncdotool move 100 100
+    > vncdotool click 1
 
 If you have the Python Imaging Library (PIL) installed you can also
 make screen captures of the session::
 
-    vncdotool capture screenshot.png
+    > vncdotool capture screenshot.png
 
-With PIL, you can wait for the screen to match a known image.::
+With PIL installed, you can wait for the screen to match a known image.::
 
-    vncdotool expect somescreen.png 0
+    > vncdotool expect somescreen.png 0
 
 Putting it all together you can specify multiple actions on a single
 command line.  You could automate a login with the following::
 
-    vncdotool type username key enter expect password_prompt.png
-    vncdotool type password move 100 150 click 1 expect welcome_screen.png
+    > vncdotool type username key enter expect password_prompt.png
+    > vncdotool type password move 100 150 click 1 expect welcome_screen.png
+
+For more complex automation you can read commands from stdin or a file.
+The file format is simply a collection of actions::
+
+    > echo "type hello" | vncdotool -
+
+    > cat some_file.vdo
+    # select the name text box, enter your name and submit
+    move 100 100 click 1 type "my name" key tab key enter
+
+    # grab the result
+    capture screenshot.png
+
+    > vncdotool some_file.vdo
 
 Creating long lists of commands can be time consuming so vncdotool provides
-a proxy mode that logs messages and screen captures.  The log can then be
-edited and played back.::
+a proxy mode that logs messages and screen captures.
+As the log is a text file you can edit it to tweak the behaviour.::
 
-    vncdotool proxy 6000 > vnc.log
-    vncviewer localhost:6000
-    sed -i s/click 1/click 2/ vnc.log
-    vncdotool < vnc.log
+    > vncdotool proxy 6000 > vnc.vdo
+    > vncviewer localhost:6000
+    > sed -i s/click 1/click 2/ vnc.vdo
+    > vncdotool vnc.vdo
+
 
 Feedback
 --------------------------------
