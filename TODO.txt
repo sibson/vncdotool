@@ -1,10 +1,6 @@
 0.3.0
 ----------------
-  - record/proxy
-    - log to file
-    - readback file
-  - launch vncviewer for easy proxy/record setup
-  - type "Hello World" -> hello world
+  - only make screen caps from proxy when user hits Print Screen
 
 Future
 ----------------
@@ -13,6 +9,7 @@ Future
 
 Wishlist
 ----------------
+  - zipped vdo files, containing script and screen caps
   - pexpect/twisted intergration
   - copy to/from clipboard
   - support more encodings

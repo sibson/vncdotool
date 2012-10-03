@@ -12,8 +12,10 @@ import time
 import traceback
 import os
 import shlex
+import random
+import subprocess
 
-from twisted.internet import reactor, defer
+from twisted.internet import reactor, defer, protocol
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
@@ -40,6 +42,15 @@ def stop(pcol):
     reactor.callLater(0.1, reactor.stop)
 
 
+class ExitingProcess(protocol.ProcessProtocol):
+
+    def processExited(self, reason):
+        reactor.callLater(0.1, reactor.stop)
+
+    def errReceived(self, data):
+        print data
+
+
 class VNCDoToolOptionParser(optparse.OptionParser):
     def format_help(self, **kwargs):
         result = optparse.OptionParser.format_help(self, **kwargs)
@@ -57,7 +68,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
             '  drag X Y:\tmove the mouse to X,Y in small steps',
-            '  proxy PORT:\tlog and forward activity on PORT',
+            '  record PORT FILE:\tforward connections on PORT to server and log activity to FILE',
+            '  session FILE:\tLike record but will launch a vncviewer connected via our proxy',
             '',
         ])
         return result
@@ -67,6 +79,7 @@ def pause(client, duration):
     d = defer.Deferred()
     reactor.callLater(duration, d.callback, client)
     return d
+
 
 def build_command_list(factory, args, delay=None):
     client = VNCDoToolClient
@@ -144,6 +157,10 @@ def build_proxy(options, port):
     return factory
 
 
+def find_free_port():
+    # XXX we need to check the port is actually usable
+    return random.randint(10000, 20000)
+
 
 def main():
     usage = '%prog [options] (CMD CMDARGS|-|filename)'
@@ -169,6 +186,10 @@ def main():
 
     op.add_option('-v', '--verbose', action='store_true')
 
+    op.add_option('--viewer', action='store', metavar='CMD',
+        default='/usr/bin/vncviewer',
+        help='Use CMD to launch viewer in session mode [%default]')
+
     options, args = op.parse_args()
     if not len(args):
         op.error('no command provided')
@@ -180,10 +201,22 @@ def main():
         options.port = options.display + 5900
     options.port = int(options.port)
 
-    if 'proxy' in args:
+    if 'record' in args:
         args.pop(0)
         port = int(args.pop(0))
+        output = args.pop(0)
         factory = build_proxy(options, port)
+        factory.logger = open(output, 'w').write
+    elif 'session' in args:
+        args.pop(0)
+        output = args.pop(0)
+        port = find_free_port()
+        factory = build_proxy(options, port)
+        factory.logger = open(output, 'w').write
+        cmd = '%s localhost::%s' % (options.viewer, port)
+        proc = reactor.spawnProcess(ExitingProcess(),
+                                    options.viewer, cmd.split(),
+                                    env=os.environ)
     else:
         factory = build_tool(options, args)
 
