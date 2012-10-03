@@ -48,7 +48,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  key KEY:\tsend KEY to server',
             '\t\tKEY is alphanumeric or a keysym, e.g. ctrl-c, del',
             '  type TEXT:\tsend alphanumeric string of TEXT',
-            '  move X Y:\tmove the mouse cursor to position X,Y',
+            '  move|mousemove X Y:\tmove the mouse cursor to position X,Y',
             '  click BUTTON:\tsend a mouse BUTTON click',
             '  capture FILE:\tsave current screen as FILE',
             '  expect FILE FUZZ:  Wait until the screen matches FILE',
@@ -76,7 +76,7 @@ def build_command_list(factory, args, delay=None):
         if cmd == 'key':
             key = args.pop(0)
             factory.deferred.addCallback(client.keyPress, key)
-        elif cmd == 'move':
+        elif cmd in ('move', 'mousemove'):
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseMove, x, y)
         elif cmd == 'click':
@@ -103,7 +103,7 @@ def build_command_list(factory, args, delay=None):
             filename = args.pop(0)
             rms = int(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
-        elif cmd == 'pause':
+        elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0))
             factory.deferred.addCallback(pause, duration)
         elif cmd in 'drag':

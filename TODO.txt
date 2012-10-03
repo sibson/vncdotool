@@ -5,7 +5,6 @@
     - readback file
   - launch vncviewer for easy proxy/record setup
   - type "Hello World" -> hello world
-  - mousemove, sleep aliases, to match xdotool
 
 Future
 ----------------

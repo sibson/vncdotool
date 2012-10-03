@@ -43,6 +43,10 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('move 100 200')
         self.assertCalled(self.client.mouseMove, 100, 200)
 
+    def test_move(self):
+        self.call_build_commands_list('mousemove 100 200')
+        self.assertCalled(self.client.mouseMove, 100, 200)
+
     def test_move_missing(self):
         pass
 
@@ -105,6 +109,10 @@ class TestBuildCommandList(unittest.TestCase):
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
         self.assertCalled(command.pause, 0.3)
+
+    def test_sleep(self):
+        self.call_build_commands_list('sleep 1')
+        self.assertCalled(command.pause, 1)
 
     def test_mousedown(self):
         self.call_build_commands_list('mousedown 1')
