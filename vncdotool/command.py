@@ -68,7 +68,7 @@ def pause(client, duration):
     reactor.callLater(duration, d.callback, client)
     return d
 
-def build_command_list(factory, args, delay=100):
+def build_command_list(factory, args, delay=None):
     client = VNCDoToolClient
 
     while args:
@@ -111,7 +111,9 @@ def build_command_list(factory, args, delay=100):
             factory.deferred.addCallback(client.mouseDrag, x, y)
         else:
             print 'unknown cmd "%s"' % cmd
-        factory.deferred.addCallback(pause, float(delay) / 1000)
+
+        if delay and args:
+            factory.deferred.addCallback(pause, float(delay) / 1000)
 
 
 def build_tool(options, args):
@@ -162,8 +164,8 @@ def main():
         help='connect to vnc server at ADDRESS[:PORT] [%default]')
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
-        default='400', type='int',
-        help='delay MILLISECONDS between actions [%default]ms')
+        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
+        help='delay MILLISECONDS between actions [%defaultms]')
 
     op.add_option('-v', '--verbose', action='store_true')
 

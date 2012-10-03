@@ -1,11 +1,15 @@
 
 from vncdotool import command
+
+import unittest
+
 import mock
 
 
-class TestBuildCommandList(object):
+class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
+        super(TestBuildCommandList, self).setUp()
         self.isolation = mock.isolate.object(command.build_command_list)
         self.isolation.start()
         self.factory = mock.Mock()
@@ -21,8 +25,8 @@ class TestBuildCommandList(object):
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
 
-    def call_build_commands_list(self, commands):
-        command.build_command_list(self.factory, commands.split())
+    def call_build_commands_list(self, commands, delay=None):
+        command.build_command_list(self.factory, commands.split(), delay)
 
     def test_alphanum_key(self):
         self.call_build_commands_list('key a')
@@ -119,6 +123,15 @@ class TestBuildCommandList(object):
     def test_drag(self):
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
+
+
+    def test_insert_delay(self):
+        self.call_build_commands_list('click 1 key a', 100)
+        expected = [ mock.call(self.client.mousePress, 1),
+                     mock.call(command.pause, 0.1),
+                     mock.call(self.client.keyPress, 'a')]
+
+        self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 
 
 class TestMain(object):
