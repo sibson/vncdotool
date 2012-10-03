@@ -1,0 +1,16 @@
+Source: vncdotool
+Maintainer: Marc Sibson <sibson+vncdotool@gmail.com>
+Section: python
+Priority: optional
+Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
+Standards-Version: 3.8.4
+XS-Python-Version: current
+
+Package: python-vncdotool
+Architecture: all
+Depends: ${misc:Depends}, ${python:Depends}, python-twisted-core, python-imaging
+XB-Python-Version: ${python:Versions}
+Provides: ${python:Provides}
+Description: Command line VNC client
+ It comes in handy when automating interactions with virtual machines or
+ some hardware devices that are otherwise difficult to control.
