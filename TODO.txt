@@ -18,7 +18,6 @@ Wishlist
   - copy to/from clipboard
   - support more encodings
   - strings, tesseract OCR
-  - debian package
   - PPA
   - submit to debian/ubuntu
   - drop twisted dependency

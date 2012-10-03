@@ -1,6 +1,8 @@
 vncdotool - 0.3.0 (unreleased)
 ------------------------------------
     - read commands from stdin or file
+    - debian packaging
+    - add default delay between all commands
 
 vncdotool - 0.2.0 (2012-08-07)
 --------------------------------
