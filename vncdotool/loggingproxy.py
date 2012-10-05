@@ -1,6 +1,6 @@
 from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
-from vncdotool.client import VNCDoToolClient
+from vncdotool.client import VNCDoToolClient, KEYMAP
 
 from struct import unpack
 import sys
@@ -13,6 +13,8 @@ TYPE_LEN = {
     5: 6,
 }
 
+
+REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.iteritems())
 
 class RFBServer(Protocol):
     _handler = None
@@ -128,7 +130,6 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.client.expect(self.client._handleServerInit, 24)
 
         d = self.client.updates.get()
-        d.addCallback(self.saveScreen)
 
     def dataReceived(self, data):
         portforward.ProxyClient.dataReceived(self, data)
@@ -167,6 +168,11 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         self.peer.startLogging()
 
     def handle_keyEvent(self, key, down):
+        if key in REVERSE_MAP:
+            key = REVERSE_MAP[key]
+        else:
+            key = chr(key)
+
         if down:
             self.factory.logger('key %c\n' % key)
 
