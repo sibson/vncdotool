@@ -1,3 +1,9 @@
+vncdotool (0.3.0dev-2) unstable; urgency=low
+
+  * upstream update
+
+ -- Marc Sibson <sibson+vncdotool@gmail.com>  Tue, 02 Oct 2012 15:27:25 -0700
+
 vncdotool (0.3.0dev-1) unstable; urgency=low
 
   * source package automatically created by stdeb 0.6.0

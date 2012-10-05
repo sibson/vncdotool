@@ -1,0 +1,21 @@
+# vncdotoold - Run vncdotool in service mode
+#
+# In service mode vncdotool logs all activity to a single file per connection
+
+
+start on started networking
+stop on runlevel[06]
+
+env DEFAULTFILE=/etc/default/vncdotool
+env SERVER=localhost
+env PORT=5922
+
+respawn
+
+script
+    if [ -f "$DEFAULTFILE"]; then
+        . $DEFAULTFILE
+    fi
+
+    /usr/bin/vncdotool -s $SERVER service $PORT
+end script
