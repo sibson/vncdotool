@@ -263,6 +263,10 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def updateRectangle(self, x, y, width, height, data):
+        # ignore empty updates
+        if not data:
+            return
+
         size = (width, height)
         update = ImageFactory().fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
