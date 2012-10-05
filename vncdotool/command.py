@@ -69,7 +69,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  pause DURATION:\twait DURATION seconds before sending next',
             '  drag X Y:\tmove the mouse to X,Y in small steps',
             '  record PORT FILE:\tforward connections on PORT to server and log activity to FILE',
-            '  session FILE:\tLike record but will launch a vncviewer connected via our proxy',
+            '  viewer FILE:\tLaunch a VNC viewer and record actions to FILE',
+            '  service PORT:\tRecord activity to a new file for every connection',
             '',
         ])
         return result
@@ -207,12 +208,18 @@ def main():
         output = args.pop(0)
         factory = build_proxy(options, port)
         factory.logger = open(output, 'w').write
-    elif 'session' in args:
+    elif 'service' in args:
+        args.pop(0)
+        port = int(args.pop(0))
+        factory = build_proxy(options, port)
+        factory.logger = None
+    elif 'viewer' in args:
         args.pop(0)
         output = args.pop(0)
         port = find_free_port()
         factory = build_proxy(options, port)
         factory.logger = open(output, 'w').write
+
         cmd = '%s localhost::%s' % (options.viewer, port)
         proc = reactor.spawnProcess(ExitingProcess(),
                                     options.viewer, cmd.split(),
@@ -229,6 +236,7 @@ def main():
         log.startLogging(sys.stdout)
 
     reactor.run()
+
     sys.exit(reactor.exit_status)
 
 

@@ -89,13 +89,17 @@ The file format is simply a collection of actions::
     > vncdotool some_file.vdo
 
 Creating long lists of commands can be time consuming so vncdotool provides
-a proxy mode that logs messages and screen captures.
+a record mode that logs messages and screen captures.
 As the log is a text file you can edit it to tweak the behaviour.::
 
-    > vncdotool proxy 6000 > vnc.vdo
+    > vncdotool record 6000 vnc.vdo
     > vncviewer localhost:6000
     > sed -i s/click 1/click 2/ vnc.vdo
     > vncdotool vnc.vdo
+
+For convience you can launch a VNCViewer connected to a vncdotool in record mode with::
+
+    > vncdotool viewer somefile.vdo
 
 
 Feedback
