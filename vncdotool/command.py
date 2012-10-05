@@ -90,6 +90,12 @@ def build_command_list(factory, args, delay=None):
         if cmd == 'key':
             key = args.pop(0)
             factory.deferred.addCallback(client.keyPress, key)
+        elif cmd in ('kdown', 'keydown'):
+            key = args.pop(0)
+            factory.deferred.addCallback(client.keyDown, key)
+        elif cmd in ('kup', 'keyup'):
+            key = args.pop(0)
+            factory.deferred.addCallback(client.keyUp, key)
         elif cmd in ('move', 'mousemove'):
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseMove, x, y)

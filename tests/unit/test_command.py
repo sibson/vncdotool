@@ -36,6 +36,14 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('key ctrl-c')
         self.assertCalled(self.client.keyPress, 'ctrl-c')
 
+    def test_keyup(self):
+        self.call_build_commands_list('keyup a')
+        self.assertCalled(self.client.keyUp, 'a')
+
+    def test_keydown(self):
+        self.call_build_commands_list('keydown a')
+        self.assertCalled(self.client.keyDown, 'a')
+
     def test_key_missing(self):
         pass
 

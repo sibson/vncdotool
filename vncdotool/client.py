@@ -105,20 +105,35 @@ class VNCDoToolClient(rfb.RFBClient):
     buttons = 0
     screen = None
 
-    def keyPress(self, key):
-        """ Send a key press to the server
-
-            key: string: either [a-z] or a from KEYMAP
-        """
+    def _decodeKey(self, key):
         if len(key) == 1:
             keys = [key]
         else:
             keys = key.split('-')
 
         keys = [KEYMAP.get(k) or ord(k) for k in keys]
+
+        return keys
+
+    def keyPress(self, key):
+        """ Send a key press to the server
+
+            key: string: either [a-z] or a from KEYMAP
+        """
+        self.keyDown(key)
+        self.keyUp(key)
+
+        return self
+
+    def keyDown(self, key):
+        keys = self._decodeKey(key)
         for k in keys:
             self.keyEvent(k, down=1)
 
+        return self
+
+    def keyUp(self, key):
+        keys = self._decodeKey(key)
         for k in keys:
             self.keyEvent(k, down=0)
 
