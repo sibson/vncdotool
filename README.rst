@@ -48,7 +48,13 @@ command, which does not support special characters::
 
     > vncdotool type "hello world"
 
-You can control the mouse pointer with move and click commands::
+You can control the mouse pointer with move and click commands.
+NOTE, you should almost always issue a move before a click, as in::
+
+    > vncdotool move 100 100 click 1
+
+Whereas, the following would seem to be equivalent but would actually click at -8, 0.
+This behaviour is due to how click events are sent::
 
     > vncdotool move 100 100
     > vncdotool click 1
