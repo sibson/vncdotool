@@ -1,15 +1,18 @@
 0.3.0
 ----------------
-  - only make screen caps from proxy when user hits Print Screen
+  - ensure find_free_port actually works
 
 Future
 ----------------
+  - only make screen caps from proxy when user hits Print Screen
   - more robust command line
   - log mode better key captures (CTRL-A) and "Hello World"
+  - better control over file creation in service mode
 
 Wishlist
 ----------------
   - zipped vdo files, containing script and screen caps
+  - custom capture file name in service mode
   - pexpect/twisted intergration
   - copy to/from clipboard
   - support more encodings
@@ -18,6 +21,7 @@ Wishlist
   - submit to debian/ubuntu
   - drop twisted dependency
   - windows exe
+  - intergrate with https://wiki.ubuntu.com/Xpresser, http://blog.labix.org/2010/05/18/xpresser-python-library-for-gui-automation-with-image-matching
 
 Rejected
 ----------------

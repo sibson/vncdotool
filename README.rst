@@ -101,6 +101,12 @@ For convience you can launch a VNCViewer connected to a vncdotool in record mode
 
     > vncdotool viewer somefile.vdo
 
+By running in service mode vncdotool will create a new file for every client connection and record each clients activity.
+This can be useful for quickly recording a number of testcases.::
+
+    > vncdotool service 6000
+    > vncviewer localhost:6000
+    > vncviewer localhost:6000
 
 Feedback
 --------------------------------

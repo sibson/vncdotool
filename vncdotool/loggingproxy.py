@@ -4,6 +4,9 @@ from vncdotool.client import VNCDoToolClient, KEYMAP
 
 from struct import unpack
 import sys
+import time
+import os.path
+import tempfile
 
 TYPE_LEN = {
     0: 20,
@@ -140,7 +143,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.ncaptures += 1
         filename = 'vncproxy%d.png' % self.ncaptures
         image.save(filename)
-        self.peer.factory.logger('expect %s\n' % filename)
+        self.peer.logger('expect %s\n' % filename)
         d = self.client.updates.get()
         d.addCallback(self.saveScreen)
 
@@ -155,6 +158,13 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     buttons = 0
 
     def connectionMade(self):
+        if self.factory.logger:
+            self.logger = self.factory.logger
+        else:
+            now = time.strftime('%y%m%d%H%M%S')
+            logfile = os.path.join(tempfile.gettempdir(), '%s.vdo' % now)
+            self.logger = open(logfile, 'w').write
+
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
         self.mouse = (None, None)
@@ -174,16 +184,18 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
             key = chr(key)
 
         if down:
-            self.factory.logger('key %c\n' % key)
+            self.logger('keydown %s\n' % key)
+        else:
+            self.logger('keyup %s\n' % key)
 
     def handle_pointerEvent(self, x, y, buttonmask):
         if self.mouse != (x, y):
-            self.factory.logger('move %d %d\n' % (x, y))
+            self.logger('move %d %d\n' % (x, y))
             self.mouse = x, y
 
         for button in range(1, 9):
             if buttonmask & (1 << (button - 1)):
-                self.factory.logger('click %d\n' % button)
+                self.logger('click %d\n' % button)
 
 
 class VNCLoggingServerFactory(portforward.ProxyFactory):
@@ -193,4 +205,4 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     password = None
 
     def clientConnectionMade(self, client):
-        self.client = client
+        pass
