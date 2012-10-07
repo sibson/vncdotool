@@ -16,8 +16,8 @@ TYPE_LEN = {
     5: 6,
 }
 
-
 REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.iteritems())
+
 
 class RFBServer(Protocol):
     _handler = None
@@ -168,6 +168,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
         self.mouse = (None, None)
+        self.last_event = time.time()
 
     def dataReceived(self, data):
         RFBServer.dataReceived(self, data)
@@ -178,17 +179,25 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         self.peer.startLogging()
 
     def handle_keyEvent(self, key, down):
+        now = time.time()
+
         if key in REVERSE_MAP:
             key = REVERSE_MAP[key]
         else:
             key = chr(key)
 
+        self.logger('pause %f\n' % (now - self.last_event))
+        self.last_event = now
         if down:
             self.logger('keydown %s\n' % key)
         else:
             self.logger('keyup %s\n' % key)
 
     def handle_pointerEvent(self, x, y, buttonmask):
+        now = time.time()
+
+        self.logger('pause %f\n' % (now - self.last_event))
+        self.last_event = now
         if self.mouse != (x, y):
             self.logger('move %d %d\n' % (x, y))
             self.mouse = x, y
