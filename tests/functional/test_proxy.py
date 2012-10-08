@@ -7,7 +7,8 @@ class TestLogEvents(object):
         cmd = 'vncev -rfbport 5910 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, timeout=2)
         self.server.logfile_read = sys.stdout
-        cmd = 'vncdotool -d 10 proxy 6000'
+
+        cmd = 'vncdotool -d 10 record 6000 -'
         self.logger = pexpect.spawn(cmd, timeout=2)
         self.logger.logfile_read = sys.stdout
 
@@ -36,8 +37,12 @@ class TestLogEvents(object):
 
     def test_key_alpha(self):
         self.run_vncdotool('key z')
+
         self.assertKeyDown(ord('z'))
-        self.logger.expect('key z')
+        self.assertKeyUp(ord('z'))
+
+        self.logger.expect('keydown z')
+        self.logger.expect('keyup z')
 
     def test_key_ctrl_a(self):
         # XXX not supported

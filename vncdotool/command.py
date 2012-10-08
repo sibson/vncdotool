@@ -213,7 +213,10 @@ def main():
         port = int(args.pop(0))
         output = args.pop(0)
         factory = build_proxy(options, port)
-        factory.logger = open(output, 'w').write
+        if output == '-':
+            factory.logger = sys.stdout.write
+        else:
+            factory.logger = open(output, 'w').write
     elif 'service' in args:
         args.pop(0)
         port = int(args.pop(0))
@@ -224,7 +227,10 @@ def main():
         output = args.pop(0)
         port = find_free_port()
         factory = build_proxy(options, port)
-        factory.logger = open(output, 'w').write
+        if output == '-':
+            factory.logger = sys.stdout.write
+        else:
+            factory.logger = open(output, 'w').write
 
         cmd = '%s localhost::%s' % (options.viewer, port)
         proc = reactor.spawnProcess(ExitingProcess(),
