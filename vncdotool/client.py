@@ -265,6 +265,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncConnectionMade(self):
         self.setPixelFormat()
+        self.setEncodings([rfb.RAW_ENCODING])
         self.factory.clientConnectionMade(self)
 
     def bell(self):

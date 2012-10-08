@@ -11,6 +11,7 @@ class TestVNCDoToolClient(object):
         self.isolation = mock.isolate.object(client.VNCDoToolClient,
                 excludes='math.sqrt,operator.add,client.KEYMAP')
         self.isolation.start()
+
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
@@ -19,6 +20,7 @@ class TestVNCDoToolClient(object):
         self.client.framebufferUpdateRequest = mock.Mock()
         self.client.pointerEvent = mock.Mock()
         self.client.keyEvent = mock.Mock()
+        self.client.setEncodings = mock.Mock()
 
     def tearDown(self):
         if self.isolation:
@@ -36,6 +38,7 @@ class TestVNCDoToolClient(object):
         cli.vncConnectionMade()
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
+        self.client.setEncodings.assert_called_once_with([client.rfb.RAW_ENCODING])
 
     def test_keyPress_single_alpha(self):
         cli = self.client

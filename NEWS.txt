@@ -3,6 +3,7 @@ vncdotool - 0.3.0 (unreleased)
     - read commands from stdin or file
     - debian packaging
     - add default delay between all commands
+    - send SetEncodings on connect, thanks Matias Suarez for fix
 
 vncdotool - 0.2.0 (2012-08-07)
 --------------------------------
