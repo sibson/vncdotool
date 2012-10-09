@@ -156,19 +156,27 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     clientProtocolFactory = VNCLoggingClientFactory
     server = None
     buttons = 0
+    logfile = None
 
     def connectionMade(self):
         if self.factory.logger:
             self.logger = self.factory.logger
         else:
             now = time.strftime('%y%m%d-%H%M%S')
-            logfile = os.path.join(tempfile.gettempdir(), '%s.vdo' % now)
-            self.logger = open(logfile, 'w').write
+            self.logfile = os.path.join(tempfile.gettempdir(), '%s.vdo' % now)
+            self.logger = open(self.logfile, 'w').write
 
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
         self.mouse = (None, None)
         self.last_event = time.time()
+
+    def connectionLost(self, reason):
+        portforward.ProxyServer.connectionLost(self, reason)
+        if self.logfile:
+            self.logger = None
+            self.logfile.close()
+            self.logfile = None
 
     def dataReceived(self, data):
         RFBServer.dataReceived(self, data)
