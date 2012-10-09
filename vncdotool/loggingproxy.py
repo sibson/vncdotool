@@ -161,7 +161,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         if self.factory.logger:
             self.logger = self.factory.logger
         else:
-            now = time.strftime('%y%m%d%H%M%S')
+            now = time.strftime('%y%m%d-%H%M%S')
             logfile = os.path.join(tempfile.gettempdir(), '%s.vdo' % now)
             self.logger = open(logfile, 'w').write
 
