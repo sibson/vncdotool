@@ -142,9 +142,13 @@ def build_tool(options, args):
         factory.deferred.addCallbacks(log_connected)
 
     if args == ['-']:
-        args = list(shlex.shlex())
+        lex = shlex.shlex(posix=True)
+        lex.whitespace_split = True
+        args = list(lex)
     elif os.path.isfile(args[0]):
-        args = list(shlex.shlex(open(args[0])))
+        lex = shlex.shlex(open(args[0]), posix=True)
+        lex.whitespace_split = True
+        args = list(lex)
     build_command_list(factory, args, options.delay)
 
     factory.deferred.addCallback(stop)
