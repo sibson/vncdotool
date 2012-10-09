@@ -32,6 +32,13 @@ KEYMAP = {
     'right': rfb.KEY_Right,
     'down': rfb.KEY_Down,
 
+    'slash': rfb.KEY_BackSlash,
+    'bslash': rfb.KEY_BackSlash,
+    'fslash': rfb.KEY_ForwardSlash,
+    'spacebar': rfb.KEY_SpaceBar,
+    'space': rfb.KEY_SpaceBar,
+    'sb': rfb.KEY_SpaceBar,
+
     'f1': rfb.KEY_F1,
     'f2': rfb.KEY_F2,
     'f3': rfb.KEY_F3,
