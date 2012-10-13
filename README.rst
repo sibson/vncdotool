@@ -53,8 +53,8 @@ NOTE, you should almost always issue a move before a click, as in::
 
     > vncdotool move 100 100 click 1
 
-Whereas, the following would seem to be equivalent but would actually click at -8, 0.
-This behaviour is due to how click events are sent::
+The following would seem to be equivalent but would actually click at (0, 0).
+This occurs due to how click events are encoded by VNC, meaning you need to initialise the position of the mouse.
 
     > vncdotool move 100 100
     > vncdotool click 1
