@@ -61,7 +61,6 @@ class TestVNCDoToolClient(object):
     def test_captureScreen(self):
         cli = self.client
         cli.vncConnectionMade()
-        cli.updates = mock.Mock()
         fname = 'foo.png'
 
         d = cli.captureScreen(fname)
@@ -81,20 +80,17 @@ class TestVNCDoToolClient(object):
 
         cli = self.client
         cli.vncConnectionMade()
-        cli.updates = mock.Mock()
         cli.image = mock.Mock()
         fname = 'something.png'
 
         d = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
+
         image = client.ImageFactory.return_value
         image.open.assert_called_once_with(fname)
-        assert cli.expected == image.open.return_value.histogram.return_value
-        assert cli.updates.get.called
-        update = cli.updates.get.return_value
-        update.addCallback.assert_called_once_with(cli._expectCompare, 5)
 
-        assert d != update
+        assert cli.expected == image.open.return_value.histogram.return_value
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 5)
 
     def test_expectCompareSuccess(self):
         cli = self.client
@@ -102,9 +98,8 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [1, 2, 3]
-        cli._expectCompare(image, 5)
-
-        d.callback.assert_called_once_with(cli)
+        result = cli._expectCompare(image, 5)
+        assert result == cli
         assert cli.deferred is None
 
     def test_expectCompareExactSuccess(self):
@@ -113,49 +108,47 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [2, 2, 2]
-        cli._expectCompare(image, 0)
-
-        d.callback.assert_called_once_with(cli)
+        result = cli._expectCompare(image, 0)
+        assert result == cli
         assert cli.deferred is None
+
 
     def test_expectCompareFails(self):
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
-        cli.updates = mock.Mock()
         cli.framebufferUpdateRequest = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
-        cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, 0)
 
+        assert result != cli
+        assert result == cli.deferred
         assert not cli.deferred.callback.called
-        assert cli.updates.get.called
+
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        update = cli.updates.get.return_value
-        update.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
 
     def test_expectCompareMismatch(self):
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2]
-        cli.updates = mock.Mock()
         cli.framebufferUpdateRequest = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
-        cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, 0)
 
+        assert result != cli
+        assert result == cli.deferred
         assert not cli.deferred.callback.called
-        assert cli.updates.get.called
+
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        update = cli.updates.get.return_value
-        update.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
 
-
-    def test_updateRectangeFirst(self):
+    def test_updateRectangeFullScreen(self):
         cli = self.client
-        cli.updates = mock.Mock()
         cli.image = mock.Mock()
         data = mock.Mock()
 
@@ -164,12 +157,10 @@ class TestVNCDoToolClient(object):
         image = client.ImageFactory.return_value
         image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert cli.updates.put(cli.screen)
         assert cli.screen == image.fromstring.return_value
 
     def test_updateRectangeRegion(self):
         cli = self.client
-        cli.updates = mock.Mock()
         cli.image = mock.Mock()
         cli.screen = mock.Mock()
         cli.screen.size = (100, 100)
@@ -180,9 +171,15 @@ class TestVNCDoToolClient(object):
         image = client.ImageFactory.return_value
         image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
-        assert cli.updates.put(cli.screen)
         paste = cli.screen.paste
         paste.assert_called_once_with(image.fromstring.return_value, (20, 10))
+
+    def test_commitUpdate(self):
+        rects = mock.Mock()
+        self.client.deferred = mock.Mock()
+        self.client.commitUpdate(rects)
+
+        self.client.deferred.callback.assert_called_once_with(self.client.screen)
 
     def test_vncRequestPassword_prompt(self):
         cli = self.client

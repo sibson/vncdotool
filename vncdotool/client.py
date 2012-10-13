@@ -106,11 +106,13 @@ def ImageFactory():
     from PIL import Image
     return Image
 
+
 class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     buttons = 0
     screen = None
+    deferred = None
 
     def _decodeKey(self, key):
         if len(key) == 1:
@@ -183,12 +185,12 @@ class VNCDoToolClient(rfb.RFBClient):
     def captureScreen(self, filename):
         """ Save the current display to filename
         """
-        # request initial screen update
+        # request screen update
         self.framebufferUpdateRequest()
-        d = self.updates.get()
-        d.addCallback(self._captureSave, filename)
+        self.deferred = Deferred()
+        self.deferred.addCallback(self._captureSave, filename)
 
-        return d
+        return self.deferred
 
     def _captureSave(self, data, filename):
         self.screen.save(filename)
@@ -205,8 +207,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest()
         self.expected = ImageFactory().open(filename).histogram()
         self.deferred = Deferred()
-        d = self.updates.get()
-        d.addCallback(self._expectCompare, maxrms)
+        self.deferred.addCallback(self._expectCompare, maxrms)
 
         return self.deferred
 
@@ -219,13 +220,14 @@ class VNCDoToolClient(rfb.RFBClient):
 
             self.log('rms', int(rms))
             if rms <= maxrms:
-                self.deferred.callback(self)
                 self.deferred = None
-                return
+                return self
 
-        d = self.updates.get()
-        d.addCallback(self._expectCompare, maxrms)
+        self.deferred = Deferred()
+        self.deferred.addCallback(self._expectCompare, maxrms)
         self.framebufferUpdateRequest(incremental=1)
+
+        return self.deferred
 
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
@@ -300,7 +302,9 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
-        self.updates.put(self.screen)
+
+    def commitUpdate(self, rectangles):
+        self.deferred.callback(self.screen)
 
     def vncRequestPassword(self):
         if self.factory.password is None:
