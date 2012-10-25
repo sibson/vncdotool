@@ -14,6 +14,7 @@ import os
 import shlex
 import random
 import subprocess
+import tempfile
 
 from twisted.internet import reactor, defer, protocol
 from twisted.python import log
@@ -22,6 +23,7 @@ from vncdotool.loggingproxy import VNCLoggingServerFactory
 
 
 SUPPORTED_FORMATS = ('png', 'jpg', 'jpeg', 'gif', 'bmp')
+
 
 def log_connected(pcol):
     log.msg('connected to %s' % pcol.name)
@@ -180,9 +182,17 @@ def main():
     op = VNCDoToolOptionParser(usage=usage, description=description)
     op.disable_interspersed_args()
 
+    op.add_option('--delay', action='store', metavar='MILLISECONDS',
+        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
+        help='delay MILLISECONDS between actions [%defaultms]')
+
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
         help='connect to vnc server display :DISPLAY [%default]')
+
+    op.add_option('-o', '--output', metavar='PATH',
+        default=tempfile.gettempdir(),
+        help='store all output at PATH [%default]')
 
     op.add_option('-p', '--password', action='store', metavar='PASSwORD',
         help='use password to access server')
@@ -191,14 +201,10 @@ def main():
         default='127.0.0.1',
         help='connect to vnc server at ADDRESS[:PORT] [%default]')
 
-    op.add_option('--delay', action='store', metavar='MILLISECONDS',
-        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
-        help='delay MILLISECONDS between actions [%defaultms]')
-
     op.add_option('-v', '--verbose', action='store_true')
 
     op.add_option('--viewer', action='store', metavar='CMD',
-        default='/usr/bin/vncviewer',
+        default='vncviewer',
         help='Use CMD to launch viewer in session mode [%default]')
 
     options, args = op.parse_args()
@@ -217,24 +223,22 @@ def main():
         port = int(args.pop(0))
         output = args.pop(0)
         factory = build_proxy(options, port)
-        if output == '-':
-            factory.logger = sys.stdout.write
-        else:
-            factory.logger = open(output, 'w').write
+        if output != '-':
+            factory.output = open(output, 'w')
     elif 'service' in args:
         args.pop(0)
         port = int(args.pop(0))
         factory = build_proxy(options, port)
-        factory.logger = None
+        factory.output = options.output
     elif 'viewer' in args:
         args.pop(0)
         output = args.pop(0)
         port = find_free_port()
         factory = build_proxy(options, port)
         if output == '-':
-            factory.logger = sys.stdout.write
+            factory.output = sys.stdout
         else:
-            factory.logger = open(output, 'w').write
+            factory.output = open(output, 'w')
 
         cmd = '%s localhost::%s' % (options.viewer, port)
         proc = reactor.spawnProcess(ExitingProcess(),

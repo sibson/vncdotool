@@ -121,6 +121,9 @@ class NullTransport(object):
 
 
 class VNCLoggingClientProxy(portforward.ProxyClient):
+    """ A fake client to handle messages from the real VNC server and
+    track the client-side state.
+    """
     client = None
     ncaptures = 0
 
@@ -143,7 +146,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.ncaptures += 1
         filename = 'vncproxy%d.png' % self.ncaptures
         image.save(filename)
-        self.peer.logger('expect %s\n' % filename)
+        self.peer.recorder('expect %s\n' % filename)
         d = self.client.updates.get()
         d.addCallback(self.saveScreen)
 
@@ -153,30 +156,24 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
+    """ Forward messages between the real VNC server and a client while
+    also interpreting them to record meanful actions.
+    """
     clientProtocolFactory = VNCLoggingClientFactory
     server = None
     buttons = 0
-    logfile = None
+    recorder = None
 
     def connectionMade(self):
-        if self.factory.logger:
-            self.logger = self.factory.logger
-        else:
-            now = time.strftime('%y%m%d-%H%M%S')
-            self.logfile = os.path.join(tempfile.gettempdir(), '%s.vdo' % now)
-            self.logger = open(self.logfile, 'w').write
-
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
         self.mouse = (None, None)
         self.last_event = time.time()
+        self.recorder = self.factory.getRecorder()
 
     def connectionLost(self, reason):
         portforward.ProxyServer.connectionLost(self, reason)
-        if self.logfile:
-            self.logger = None
-            self.logfile.close()
-            self.logfile = None
+        self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data):
         RFBServer.dataReceived(self, data)
@@ -188,38 +185,58 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 
     def handle_keyEvent(self, key, down):
         now = time.time()
+        cmds = ['pause', '%.4f' % (now - self.last_event)]
+        self.last_event = now
 
         if key in REVERSE_MAP:
             key = REVERSE_MAP[key]
         else:
             key = chr(key)
 
-        self.logger('pause %f\n' % (now - self.last_event))
-        self.last_event = now
         if down:
-            self.logger('keydown %s\n' % key)
+            cmds += 'keydown', key
         else:
-            self.logger('keyup %s\n' % key)
+            cmds += 'keyup', key
+        cmds.append('\n')
+        self.recorder(' '.join(cmds))
 
     def handle_pointerEvent(self, x, y, buttonmask):
         now = time.time()
-
-        self.logger('pause %f\n' % (now - self.last_event))
+        cmds = ['pause', '%.4f' % (now - self.last_event)]
         self.last_event = now
+
         if self.mouse != (x, y):
-            self.logger('move %d %d\n' % (x, y))
+            cmds += 'move', str(x), str(y)
             self.mouse = x, y
 
         for button in range(1, 9):
             if buttonmask & (1 << (button - 1)):
-                self.logger('click %d\n' % button)
+                cmds += ['click', button]
+        cmds.append('\n')
+        self.recorder(' '.join(cmds))
 
 
 class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
-    logger = sys.stdout.write
     shared = True
     password = None
 
+    output = sys.stdout
+    _out = None
+
+    def getRecorder(self):
+        try:
+            return self.output.write
+        except AttributeError:
+            now = time.strftime('%y%m%d-%H%M%S')
+            outfile = os.path.join(self.output, '%s.vdo' % now)
+            self._out = open(outfile, 'w')
+            return self._out.write
+
     def clientConnectionMade(self, client):
         pass
+
+    def clientConnectionLost(self, client):
+        if self._out:
+            self._out.close()
+            self._out = None
