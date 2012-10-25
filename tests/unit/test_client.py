@@ -100,7 +100,6 @@ class TestVNCDoToolClient(object):
         image.histogram.return_value = [1, 2, 3]
         result = cli._expectCompare(image, 5)
         assert result == cli
-        assert cli.deferred is None
 
     def test_expectCompareExactSuccess(self):
         cli = self.client
@@ -110,8 +109,6 @@ class TestVNCDoToolClient(object):
         image.histogram.return_value = [2, 2, 2]
         result = cli._expectCompare(image, 0)
         assert result == cli
-        assert cli.deferred is None
-
 
     def test_expectCompareFails(self):
         cli = self.client
@@ -176,10 +173,12 @@ class TestVNCDoToolClient(object):
 
     def test_commitUpdate(self):
         rects = mock.Mock()
-        self.client.deferred = mock.Mock()
+        self.deferred = mock.Mock()
+        self.client.deferred = self.deferred
         self.client.commitUpdate(rects)
 
-        self.client.deferred.callback.assert_called_once_with(self.client.screen)
+        self.deferred.callback.assert_called_once_with(self.client.screen)
+
 
     def test_vncRequestPassword_prompt(self):
         cli = self.client
