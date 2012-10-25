@@ -220,7 +220,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
             self.log('rms', int(rms))
             if rms <= maxrms:
-                self.deferred = None
                 return self
 
         self.deferred = Deferred()
@@ -302,9 +301,12 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
-
     def commitUpdate(self, rectangles):
-        self.deferred.callback(self.screen)
+        if self.deferred:
+            d  = self.deferred
+            self.deferred = None
+            d.callback(self.screen)
+
 
     def vncRequestPassword(self):
         if self.factory.password is None:
