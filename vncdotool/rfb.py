@@ -13,6 +13,7 @@ MIT License
 """
 
 import sys
+import math
 from struct import pack, unpack
 import pyDes
 from twisted.python import usage, log
@@ -35,6 +36,7 @@ TIGHT_ENCODING =                7
 ZLIBHEX_ENCODING =              8
 ZRLE_ENCODING =                 16
 #0xffffff00 to 0xffffffff tight options
+PSEUDO_CURSOR_ENCODING =        -239
 
 #keycodes
 #for KeyEvent()
@@ -237,7 +239,7 @@ class RFBClient(Protocol):
             self.expect(self._handleConnection, 1)
 
     def _handleRectangle(self, block):
-        (x, y, width, height, encoding) = unpack("!HHHHI", block)
+        (x, y, width, height, encoding) = unpack("!HHHHi", block)
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append( (x, y, width, height) )
@@ -253,6 +255,10 @@ class RFBClient(Protocol):
                 self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
             #~ elif encoding == ZRLE_ENCODING:
                 #~ self.expect(self._handleDecodeZRLE, )
+            elif encoding == PSEUDO_CURSOR_ENCODING:
+                length = width * height * self.bypp
+                length += int(math.floor((width + 7.0) / 8)) * height
+                self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             else:
                 log.msg("unknown encoding received (encoding %d)\n" % encoding)
                 self._doConnection()
@@ -433,6 +439,14 @@ class RFBClient(Protocol):
     def _handleDecodeZRLE(self, block):
         raise NotImplementedError
 
+    # --- Pseudo Cursor Encoding
+    def _handleDecodePsuedoCursor(self, block, x, y, width, height):
+        split = width * height * self.bypp
+        image = block[:split]
+        mask = block[split:]
+        self.updateCursor(x, y, width, height, image, mask)
+        self._doConnection()
+
     # ---  other server messages
 
     def _handleServerCutText(self, block):
@@ -491,7 +505,7 @@ class RFBClient(Protocol):
     def setEncodings(self, list_of_encodings):
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
-            self.transport.write(pack("!I", encoding))
+            self.transport.write(pack("!i", encoding))
 
     def framebufferUpdateRequest(self, x=0, y=0, width=None, height=None, incremental=0):
         if width  is None: width  = self.width - x
@@ -564,6 +578,10 @@ class RFBClient(Protocol):
         #fallback variant, use update recatngle
         #override with specialized function for better performance
         self.updateRectangle(x, y, width, height, color*width*height)
+
+    def updateCursor(self, x, y, width, height, image, mask):
+        """ New cursor, focuses at (x, y)
+        """
 
     def bell(self):
         """bell"""
