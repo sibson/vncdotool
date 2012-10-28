@@ -1,6 +1,6 @@
 from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
-from vncdotool.client import VNCDoToolClient, KEYMAP
+from vncdotool.client import VNCDoToolClient, VNCDoToolFactory, KEYMAP
 
 from struct import unpack
 import sys
@@ -219,7 +219,8 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
-    password = None
+    pseudocusor = False
+    nocursor = False
 
     output = sys.stdout
     _out = None

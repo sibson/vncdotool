@@ -114,6 +114,9 @@ class VNCDoToolClient(rfb.RFBClient):
     screen = None
     deferred = None
 
+    cursor = None
+    cmask = None
+
     def _decodeKey(self, key):
         if len(key) == 1:
             keys = [key]
@@ -277,20 +280,19 @@ class VNCDoToolClient(rfb.RFBClient):
     #
     # base customizations
     #
-    def connectionMade(self):
-        rfb.RFBClient.connectionMade(self)
-        self.updates = DeferredQueue()
-
     def vncConnectionMade(self):
         self.setPixelFormat()
-        self.setEncodings([rfb.RAW_ENCODING])
+        encodings = [rfb.RAW_ENCODING]
+        if self.factory.pseudocusor or self.factory.nocursor:
+            encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
+        self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
     def bell(self):
         print 'ding'
 
     def copy_text(self, text):
-        print 'clip', repr(text)
+        print 'clipboard copy', repr(text)
 
     def paste(self, message):
         self.clientCutText(message)
@@ -311,12 +313,36 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
+        self.drawCursor()
+
     def commitUpdate(self, rectangles):
         if self.deferred:
             d  = self.deferred
             self.deferred = None
             d.callback(self.screen)
 
+    def updateCursor(self, x, y, width, height, image, mask):
+        if self.factory.nocursor:
+            return
+
+        if not width or not height:
+            self.cursor = None
+
+        self.cursor = ImageFactory().fromstring('RGBX', (width, height), image)
+        self.cmask = ImageFactory().fromstring('1', (width, height), mask)
+        self.cfocus = x, y
+        self.drawCursor()
+
+    def drawCursor(self):
+        if not self.cursor:
+            return
+
+        if not self.screen:
+            return
+
+        x = self.x - self.cfocus[0]
+        y = self.y - self.cfocus[1]
+        self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def vncRequestPassword(self):
         if self.factory.password is None:
@@ -330,7 +356,10 @@ class VNCDoToolFactory(rfb.RFBFactory):
     password = None
 
     protocol = VNCDoToolClient
-    shared = 1
+    shared = True
+
+    pseudocusor = False
+    nocursor = False
 
     def __init__(self):
         self.deferred = Deferred()

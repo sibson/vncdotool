@@ -34,23 +34,33 @@ class TestVNCCapture(object):
     def testCaptureExample(self):
         fname = 'test_capture_example.png'
         self.run_server('example')
-        self.run_vncdotool('capture %s' % fname)
-        self.assertFilesEqual(fname, os.path.join(DATADIR, 'example.png'))
+        self.run_vncdotool('move 150 100 capture %s' % fname)
+        self.assertFilesEqual(fname, EXAMPLE_PNG)
+
+    def testCaptureNoCursor(self):
+        fname = 'test_capture_no_cursor.png'
+        self.run_server('example')
+        self.run_vncdotool('--nocursor move 150 100 pause 0.1 capture %s' % fname)
+        self.assertFilesEqual(fname, EXAMPLE_NOCURSOR_PNG)
+
+    def testCaptureLocalCursor(self):
+        fname = 'test_capture_localcursor.png'
+        self.run_server('example')
+        self.run_vncdotool('--localcursor move 150 100 pause 0.1 capture %s' % fname)
+        self.assertFilesEqual(fname, EXAMPLE_PNG)
 
     def testExpectExampleExactly(self):
         self.run_server('example')
-        self.run_vncdotool('expect %s 0' % os.path.join(DATADIR, 'example.png'))
+        self.run_vncdotool('move 150 100 pause 0.1 expect %s 0' % EXAMPLE_PNG)
 
     def testExpectExampleSloppy(self):
         self.run_server('example')
-        example = os.path.join(DATADIR, 'example.png')
-        self.run_vncdotool('move 30 20 expect %s 20' % example)
+        self.run_vncdotool('move 200 100 expect %s 25' % EXAMPLE_PNG)
 
     def testExpectFailsExample(self):
         self.run_server('example')
-        simple = os.path.join(DATADIR, 'simple.png')
         try:
-            self.run_vncdotool('expect %s 0' % simple, exitcode=10)
+            self.run_vncdotool('expect %s 0' % SIMPLE_PNG, exitcode=10)
         except pexpect.TIMEOUT:
             pass
         else:

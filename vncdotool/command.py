@@ -190,6 +190,12 @@ def main():
         type='int', default=0,
         help='connect to vnc server display :DISPLAY [%default]')
 
+    op.add_option('--nocursor', action='store_true',
+        help='no mouse pointer in screen captures')
+
+    op.add_option('--localcursor', action='store_true',
+        help='mouse pointer drawn client-side, useful when server does not include cursor')
+
     op.add_option('-o', '--output', metavar='PATH',
         default=tempfile.gettempdir(),
         help='store all output at PATH [%default]')
@@ -249,6 +255,12 @@ def main():
 
     if options.password:
         factory.password = options.password
+
+    if options.nocursor:
+        factory.nocursor = True
+
+    if options.localcursor:
+        factory.pseudocusor = True
 
     if options.verbose:
         log.msg('connecting to %s:%s' % (options.host, options.port))

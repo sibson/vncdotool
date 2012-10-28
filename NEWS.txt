@@ -1,9 +1,10 @@
 vncdotool - 0.3.0 (unreleased)
 ------------------------------------
+    - better control over mouse in screen captures with --nocursor and --localcursor
+    - send SetEncodings on connect, thanks Matias Suarez for fix
     - read commands from stdin or file
     - debian packaging
-    - add default delay between all commands
-    - send SetEncodings on connect, thanks Matias Suarez for fix
+    - allow default delay between all commands
 
 vncdotool - 0.2.0 (2012-08-07)
 --------------------------------

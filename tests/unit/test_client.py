@@ -38,7 +38,7 @@ class TestVNCDoToolClient(object):
         cli.vncConnectionMade()
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
-        self.client.setEncodings.assert_called_once_with([client.rfb.RAW_ENCODING])
+        self.client.setEncodings.assert_called_once_with([client.rfb.RAW_ENCODING, client.rfb.PSEUDO_CURSOR_ENCODING])
 
     def test_keyPress_single_alpha(self):
         cli = self.client

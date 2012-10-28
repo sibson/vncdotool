@@ -17,6 +17,7 @@ Wishlist
   - pexpect/twisted intergration
   - copy to/from clipboard
   - support more encodings
+    - psedo cursor needs to handle updating damaged areas on move
   - strings, tesseract OCR
   - PPA
   - submit to debian/ubuntu
