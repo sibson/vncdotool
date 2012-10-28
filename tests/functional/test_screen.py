@@ -3,6 +3,9 @@ import sys
 import os.path
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
+SIMPLE_PNG  = os.path.join(DATADIR, 'simple.png')
+EXAMPLE_PNG = os.path.join(DATADIR, 'example.png')
+EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
 
 
 class TestVNCCapture(object):
@@ -26,7 +29,7 @@ class TestVNCCapture(object):
         assert vnc.exitstatus == exitcode, vnc.exitstatus
 
     def assertFilesEqual(self, filename, othername):
-        content = open(filename, 'rb').read() 
+        content = open(filename, 'rb').read()
         othercontent = open(othername, 'rb').read()
 
         assert content == othercontent

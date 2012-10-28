@@ -120,35 +120,37 @@ class NullTransport(object):
         return
 
 
-class VNCLoggingClientProxy(portforward.ProxyClient):
-    """ A fake client to handle messages from the real VNC server and
-    track the client-side state.
+class VNCLoggingClient(VNCDoToolClient):
+    """ Specialization of a VNCDoToolClient that will save screen captures
     """
-    client = None
     ncaptures = 0
 
-    def startLogging(self):
-        self.client = VNCDoToolClient()
-        self.client.transport = NullTransport()
-        self.client.factory = self.peer.factory
-        self.client.connectionMade()
-        self.client._handler = self.client._handleExpected
-        self.client.expect(self.client._handleServerInit, 24)
+    def commitUpdate(self, rectangles):
+        self.ncaptures += 1
+        filename = 'vncproxy%d.png' % self.ncaptures
+        self.screen.save(filename)
+        self.recorder('expect %s\n' % filename)
 
-        d = self.client.updates.get()
+
+class VNCLoggingClientProxy(portforward.ProxyClient):
+    """ Interrpret messages from the Server
+    """
+    vncdoclient = None
+    ncaptures = 0
+
+    def startLogging(self, peer):
+        self.vncdoclient = VNCLoggingClient()
+        self.vncdoclient.transport = NullTransport()
+        self.vncdoclient.factory = self.peer.factory
+        self.vncdoclient.recorder = peer.recorder
+        self.vncdoclient.connectionMade()
+        self.vncdoclient._handler = self.vncdoclient._handleExpected
+        self.vncdoclient.expect(self.vncdoclient._handleServerInit, 24)
 
     def dataReceived(self, data):
         portforward.ProxyClient.dataReceived(self, data)
-        if self.client:
-            self.client.dataReceived(data)
-
-    def saveScreen(self, image):
-        self.ncaptures += 1
-        filename = 'vncproxy%d.png' % self.ncaptures
-        image.save(filename)
-        self.peer.recorder('expect %s\n' % filename)
-        d = self.client.updates.get()
-        d.addCallback(self.saveScreen)
+        if self.vncdoclient:
+            self.vncdoclient.dataReceived(data)
 
 
 class VNCLoggingClientFactory(portforward.ProxyClientFactory):
@@ -156,8 +158,7 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
-    """ Forward messages between the real VNC server and a client while
-    also interpreting them to record meanful actions.
+    """ Interpret messages from the client
     """
     clientProtocolFactory = VNCLoggingClientFactory
     server = None
@@ -181,18 +182,18 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 
     def _handle_clientInit(self):
         RFBServer._handle_clientInit(self)
-        self.peer.startLogging()
+        self.peer.startLogging(self)
 
     def handle_keyEvent(self, key, down):
         now = time.time()
-        cmds = ['pause', '%.4f' % (now - self.last_event)]
-        self.last_event = now
 
         if key in REVERSE_MAP:
             key = REVERSE_MAP[key]
         else:
             key = chr(key)
 
+        cmds = ['pause', '%.4f' % (now - self.last_event)]
+        self.last_event = now
         if down:
             cmds += 'keydown', key
         else:
@@ -202,16 +203,16 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 
     def handle_pointerEvent(self, x, y, buttonmask):
         now = time.time()
+
         cmds = ['pause', '%.4f' % (now - self.last_event)]
         self.last_event = now
-
         if self.mouse != (x, y):
-            cmds += 'move', str(x), str(y)
+            cmds.append('move %d %d' % (x, y))
             self.mouse = x, y
 
         for button in range(1, 9):
             if buttonmask & (1 << (button - 1)):
-                cmds += ['click', button]
+                cmds.append('click %d' % button)
         cmds.append('\n')
         self.recorder(' '.join(cmds))
 

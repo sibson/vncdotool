@@ -6,7 +6,7 @@ import sys
 class TestSendEvents(object):
 
     def setUp(self):
-        cmd = 'vncev -rfbport 5910 -rfbwait 1000'
+        cmd = 'vncev -rfbport 5933 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, timeout=2)
         self.server.logfile_read = sys.stdout
 
@@ -30,7 +30,7 @@ class TestSendEvents(object):
         self.server.expect(disco)
 
     def run_vncdotool(self, commands):
-        cmd = 'vncdotool -d 10 ' + commands
+        cmd = 'vncdotool -d 33 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
         retval = vnc.wait()
         assert retval == 0, retval
