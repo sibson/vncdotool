@@ -6,16 +6,17 @@
 start on started networking
 stop on runlevel[06]
 
-env DEFAULTFILE=/etc/default/vncdotool
+env DEFAULTFILE=/etc/default/vncdotoold
 env SERVER=localhost
 env PORT=5922
+env OUTPUT_DIR=/tmp
 
 respawn
 
 script
-    if [ -f "$DEFAULTFILE"]; then
+    if [ -f $DEFAULTFILE ]; then
         . $DEFAULTFILE
     fi
 
-    /usr/bin/vncdotool -s $SERVER service $PORT
+    /usr/bin/vncdotool -o $OUTPUT_DIR -s $SERVER service $PORT
 end script
