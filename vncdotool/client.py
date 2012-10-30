@@ -8,6 +8,7 @@ MIT License
 
 import rfb
 from twisted.internet.defer import Deferred, DeferredQueue
+from twisted.internet import reactor
 
 import getpass
 import math
@@ -126,6 +127,11 @@ class VNCDoToolClient(rfb.RFBClient):
         keys = [KEYMAP.get(k) or ord(k) for k in keys]
 
         return keys
+
+    def pause(self, duration):
+        d = Deferred()
+        reactor.callLater(duration, d.callback, self)
+        return d
 
     def keyPress(self, key):
         """ Send a key press to the server

@@ -25,8 +25,8 @@ class TestBuildCommandList(unittest.TestCase):
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
 
-    def call_build_commands_list(self, commands, delay=None):
-        command.build_command_list(self.factory, commands.split(), delay)
+    def call_build_commands_list(self, commands, **kwargs):
+        command.build_command_list(self.factory, commands.split(), **kwargs)
 
     def test_alphanum_key(self):
         self.call_build_commands_list('key a')
@@ -116,11 +116,15 @@ class TestBuildCommandList(unittest.TestCase):
 
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
-        self.assertCalled(command.pause, 0.3)
+        self.assertCalled(self.client.pause, 0.3)
 
     def test_sleep(self):
         self.call_build_commands_list('sleep 1')
-        self.assertCalled(command.pause, 1)
+        self.assertCalled(self.client.pause, 1)
+
+    def test_pause_warp(self):
+        self.call_build_commands_list('pause 10', warp=5)
+        self.assertCalled(self.client.pause, 2.0)
 
     def test_mousedown(self):
         self.call_build_commands_list('mousedown 1')
@@ -142,9 +146,9 @@ class TestBuildCommandList(unittest.TestCase):
 
 
     def test_insert_delay(self):
-        self.call_build_commands_list('click 1 key a', 100)
+        self.call_build_commands_list('click 1 key a', delay=100)
         expected = [ mock.call(self.client.mousePress, 1),
-                     mock.call(command.pause, 0.1),
+                     mock.call(self.client.pause, 0.1),
                      mock.call(self.client.keyPress, 'a')]
 
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)

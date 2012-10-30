@@ -78,13 +78,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
-def pause(client, duration):
-    d = defer.Deferred()
-    reactor.callLater(duration, d.callback, client)
-    return d
 
-
-def build_command_list(factory, args, delay=None):
+def build_command_list(factory, args, delay=None, warp=1.0):
     client = VNCDoToolClient
 
     while args:
@@ -126,8 +121,8 @@ def build_command_list(factory, args, delay=None):
             rms = int(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
         elif cmd in ('pause', 'sleep'):
-            duration = float(args.pop(0))
-            factory.deferred.addCallback(pause, duration)
+            duration = float(args.pop(0)) / warp
+            factory.deferred.addCallback(client.pause, duration)
         elif cmd in 'drag':
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseDrag, x, y)
@@ -135,7 +130,7 @@ def build_command_list(factory, args, delay=None):
             print 'unknown cmd "%s"' % cmd
 
         if delay and args:
-            factory.deferred.addCallback(pause, float(delay) / 1000)
+            factory.deferred.addCallback(client.pause, float(delay) / 1000)
 
 
 def build_tool(options, args):
@@ -151,7 +146,9 @@ def build_tool(options, args):
         lex = shlex.shlex(open(args[0]), posix=True)
         lex.whitespace_split = True
         args = list(lex)
-    build_command_list(factory, args, options.delay)
+
+
+    build_command_list(factory, args, options.delay, options.warp)
 
     factory.deferred.addCallback(stop)
     factory.deferred.addErrback(error)
@@ -212,6 +209,10 @@ def main():
     op.add_option('--viewer', action='store', metavar='CMD',
         default='vncviewer',
         help='Use CMD to launch viewer in session mode [%default]')
+
+    op.add_option('-w', '--warp', action='store', type='float',
+        metavar='FACTOR', default=1.0,
+        help='pause time is accelerated by FACTOR [x%default]')
 
     options, args = op.parse_args()
     if not len(args):
