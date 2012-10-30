@@ -13,8 +13,7 @@ Description: Command line VNC client
  It comes in handy when automating interactions with virtual machines or
  some hardware devices that are otherwise difficult to control.
 
-Package: vncdotoold
+Package: vncrecordd
 Architecture: all
 Depends: python-vncdotool
-Description: Daemon for vncdotool service
-  Run vncdotool service mode to records all activity from client connections.
+Description: Daemon to record VNC sessions for playback with vncdotool

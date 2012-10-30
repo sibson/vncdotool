@@ -1,8 +1,8 @@
 # Relay client messages to downstream SERVER
-# SERVER=localhost:5900
+#SERVER=localhost:5900
 
 # Record VNC activity from client connecting to PORT
-# PORT=5922
+#PORT=5922
 
 # Output recorded sessions to OUTPUT_DIR
-OUTPUT_DIR=/clips/tmp
+#OUTPUT_DIR=/clips/tmp

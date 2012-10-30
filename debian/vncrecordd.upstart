@@ -1,12 +1,12 @@
-# vncdotoold - Run vncdotool in service mode
+# vncrecordd - Record a VNC session for playback with vncdotool
 #
-# In service mode vncdotool logs all activity to a single file per connection
+# Logs all activity to a single file per connection
 
 
 start on started networking
 stop on runlevel[06]
 
-env DEFAULTFILE=/etc/default/vncdotoold
+env DEFAULTFILE=/etc/default/vncrecordd
 env SERVER=localhost
 env PORT=5922
 env OUTPUT_DIR=/tmp
