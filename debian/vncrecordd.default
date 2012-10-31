@@ -5,4 +5,10 @@
 #PORT=5922
 
 # Output recorded sessions to OUTPUT_DIR
-#OUTPUT_DIR=/clips/tmp
+#OUTPUT_DIR=/tmp
+
+# Log messages to
+#LOGFILE=/var/log/vncrecordd.log
+
+# Extra flags to pass to vncdotool
+#VNCDOTOOL_FLAGS=-v

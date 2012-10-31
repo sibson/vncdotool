@@ -134,7 +134,6 @@ class RFBClient(Protocol):
                     self.transport.loseConnection()
             buffer = buffer[12:]
             self.transport.write('RFB 003.003\n')
-            log.msg("connected\n")
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected

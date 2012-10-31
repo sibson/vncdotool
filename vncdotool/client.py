@@ -7,13 +7,17 @@ MIT License
 """
 
 import rfb
-from twisted.internet.defer import Deferred, DeferredQueue
+from twisted.internet.defer import Deferred
 from twisted.internet import reactor
 
 import getpass
 import math
 import operator
 import time
+import logging
+
+log = logging.getLogger('client')
+
 
 KEYMAP = {
     'bsp': rfb.KEY_BackSpace,
@@ -138,14 +142,14 @@ class VNCDoToolClient(rfb.RFBClient):
 
             key: string: either [a-z] or a from KEYMAP
         """
-        self.log('keyPress %s', key)
+        log.debug('keyPress %s', key)
         self.keyDown(key)
         self.keyUp(key)
 
         return self
 
     def keyDown(self, key):
-        self.log('keyDown %s', key)
+        log.debug('keyDown %s', key)
         keys = self._decodeKey(key)
         for k in keys:
             self.keyEvent(k, down=1)
@@ -153,7 +157,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def keyUp(self, key):
-        self.log('keyUp %s', key)
+        log.debug('keyUp %s', key)
         keys = self._decodeKey(key)
         for k in keys:
             self.keyEvent(k, down=0)
@@ -166,7 +170,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        self.log('mousePress', button)
+        log.debug('mousePress', button)
         buttons = self.buttons | (1 << (button - 1))
         self.pointerEvent(self.x, self.y, buttonmask=buttons)
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
@@ -179,7 +183,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        self.log('mouseDown', button)
+        log.debug('mouseDown', button)
         self.buttons |= 1 << (button - 1)
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
 
@@ -191,7 +195,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        self.log('mouseUp', button)
+        log.debug('mouseUp', button)
         self.buttons &= ~(1 << (button - 1))
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
 
@@ -201,14 +205,14 @@ class VNCDoToolClient(rfb.RFBClient):
         """ Save the current display to filename
         """
         # request screen update
-        self.log('captureScreen', filename)
+        log.debug('captureScreen', filename)
         self.framebufferUpdateRequest()
         self.deferred = Deferred()
         self.deferred.addCallback(self._captureSave, filename)
         return self.deferred
 
     def _captureSave(self, data, filename):
-        self.log('captureDone', filename)
+        log.debug('captureDone', filename)
         self.screen.save(filename)
 
         return self
@@ -220,7 +224,7 @@ class VNCDoToolClient(rfb.RFBClient):
             maxrms: the maximum root mean square between histograms of the
                     screen and target image
         """
-        self.log('expectScreen', filename)
+        log.debug('expectScreen', filename)
         self.framebufferUpdateRequest()
         self.expected = ImageFactory().open(filename).histogram()
         self.deferred = Deferred()
@@ -235,7 +239,7 @@ class VNCDoToolClient(rfb.RFBClient):
                         reduce(operator.add, map(lambda a, b: (a - b) ** 2,
                             hist, self.expected)) / len(hist))
 
-            self.log('rms', int(rms))
+            log.debug('rms', int(rms))
             if rms <= maxrms:
                 return self
 
@@ -248,7 +252,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
         """
-        self.log('mouseMove', x, y)
+        log.debug('mouseMove', x, y)
         self.x, self.y = x, y
         self.pointerEvent(x, y, self.buttons)
         return self
@@ -256,7 +260,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseDrag(self, x, y, step=1):
         """ Move the mouse point to position (x, y) in increments of step
         """
-        self.log('mouseDrag', x, y)
+        log.debug('mouseDrag', x, y)
         if x < self.x:
             xsteps = [self.x - i for i in xrange(step, self.x - x + 1, step)]
         else:
@@ -278,10 +282,6 @@ class VNCDoToolClient(rfb.RFBClient):
         self.mouseMove(x, y)
 
         return self
-
-    def log(self, fmt, *args):
-        if self.factory.logger:
-            self.factory.logger(fmt, *args)
 
     #
     # base customizations
@@ -323,7 +323,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def commitUpdate(self, rectangles):
         if self.deferred:
-            d  = self.deferred
+            d = self.deferred
             self.deferred = None
             d.callback(self.screen)
 
@@ -358,7 +358,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
-    logger = None
     password = None
 
     protocol = VNCDoToolClient

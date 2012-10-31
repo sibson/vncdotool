@@ -10,6 +10,8 @@ env DEFAULTFILE=/etc/default/vncrecordd
 env SERVER=localhost
 env PORT=5922
 env OUTPUT_DIR=/tmp
+env LOGFILE=/var/log/vncrecordd.log
+env VNCDOTOOL_FLAGS=-v
 
 respawn
 
@@ -18,5 +20,5 @@ script
         . $DEFAULTFILE
     fi
 
-    /usr/bin/vncdotool -o $OUTPUT_DIR -s $SERVER service $PORT
+    /usr/bin/vncdotool --logfile $LOGFILE -o $OUTPUT_DIR -s $SERVER $VNCDOTOOL_FLAGS service $PORT
 end script

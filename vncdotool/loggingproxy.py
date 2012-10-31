@@ -1,12 +1,17 @@
-from twisted.protocols import portforward
-from twisted.internet.protocol import Protocol
-from vncdotool.client import VNCDoToolClient, VNCDoToolFactory, KEYMAP
-
 from struct import unpack
 import sys
 import time
 import os.path
-import tempfile
+import logging
+
+
+from twisted.protocols import portforward
+from twisted.internet.protocol import Protocol
+
+from vncdotool.client import VNCDoToolClient, KEYMAP
+
+
+log = logging.getLogger('proxy')
 
 TYPE_LEN = {
     0: 20,
@@ -143,6 +148,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.vncdoclient.transport = NullTransport()
         self.vncdoclient.factory = self.peer.factory
         self.vncdoclient.recorder = peer.recorder
+        # XXX double call to connectionMade?
         self.vncdoclient.connectionMade()
         self.vncdoclient._handler = self.vncdoclient._handleExpected
         self.vncdoclient.expect(self.vncdoclient._handleServerInit, 24)
@@ -166,6 +172,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     recorder = None
 
     def connectionMade(self):
+        log.info('new connection from %s', self.transport.getPeer().host)
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
         self.mouse = (None, None)

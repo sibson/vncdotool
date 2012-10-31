@@ -8,25 +8,30 @@ MIT License
 """
 import optparse
 import sys
-import time
-import traceback
 import os
 import shlex
 import random
-import subprocess
 import tempfile
+import logging
+import logging.handlers
 
-from twisted.internet import reactor, defer, protocol
+from twisted.python.log import PythonLoggingObserver
+from twisted.internet import reactor, protocol
 from twisted.python import log
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
 
+log = logging.getLogger()
 
 SUPPORTED_FORMATS = ('png', 'jpg', 'jpeg', 'gif', 'bmp')
 
 
+def log_exceptions(type_, value, tb):
+    log.critical('Unhandled exception:', exc_info=(type_, value, tb))
+
+
 def log_connected(pcol):
-    log.msg('connected to %s' % pcol.name)
+    log.info('connected to %s' % pcol.name)
     return pcol
 
 
@@ -56,7 +61,8 @@ class ExitingProcess(protocol.ProcessProtocol):
 class VNCDoToolOptionParser(optparse.OptionParser):
     def format_help(self, **kwargs):
         result = optparse.OptionParser.format_help(self, **kwargs)
-        result += '\n'.join(['',
+        result += '\n'.join(
+           ['',
             'Commands (CMD):',
             '  key KEY:\tsend KEY to server',
             '\t\tKEY is alphanumeric or a keysym, e.g. ctrl-c, del',
@@ -76,7 +82,6 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '',
         ])
         return result
-
 
 
 def build_command_list(factory, args, delay=None, warp=1.0):
@@ -147,7 +152,6 @@ def build_tool(options, args):
         lex.whitespace_split = True
         args = list(lex)
 
-
     build_command_list(factory, args, options.delay, options.warp)
 
     factory.deferred.addCallback(stop)
@@ -204,7 +208,10 @@ def main():
         default='127.0.0.1',
         help='connect to vnc server at ADDRESS[:PORT] [%default]')
 
-    op.add_option('-v', '--verbose', action='store_true')
+    op.add_option('--logfile', action='store', metavar='FILE',
+        help='output logging information to FILE')
+
+    op.add_option('-v', '--verbose', action='count')
 
     op.add_option('--viewer', action='store', metavar='CMD',
         default='vncviewer',
@@ -218,12 +225,29 @@ def main():
     if not len(args):
         op.error('no command provided')
 
+    # route Twisted log messages via stdlib logging
+    if options.logfile:
+        handler = logging.handlers.RotatingFileHandler(options.logfile,
+                                      maxBytes=5*1024*1024, backupCount=5)
+        logging.getLogger().addHandler(handler)
+        sys.excepthook = log_exceptions
+
+    logging.basicConfig()
+    if options.verbose > 1:
+        logging.getLogger().setLevel(logging.DEBUG)
+    elif options.verbose:
+        logging.getLogger().setLevel(logging.INFO)
+
+    PythonLoggingObserver().start()
+
     try:
         options.host, options.port = options.server.split(':')
     except ValueError:
         options.host = options.server
         options.port = options.display + 5900
     options.port = int(options.port)
+
+    log.info('connecting to %s:%s', options.host, options.port)
 
     if 'record' in args:
         args.pop(0)
@@ -262,11 +286,6 @@ def main():
 
     if options.localcursor:
         factory.pseudocusor = True
-
-    if options.verbose:
-        log.msg('connecting to %s:%s' % (options.host, options.port))
-        factory.logger = log.msg
-        log.startLogging(sys.stdout)
 
     reactor.run()
 

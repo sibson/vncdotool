@@ -9,6 +9,7 @@ Future
   - log mode better key captures (CTRL-A) and "Hello World"
   - better control over file creation in service mode
   - read/create vncpasswd files for better security
+  - -via /usr/bin/ssh -f -L 5595:target:5900 proxy sleep 20
 
 Wishlist
 ----------------
