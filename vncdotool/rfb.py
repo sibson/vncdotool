@@ -153,14 +153,14 @@ class RFBClient(Protocol):
         elif auth == 2:
             self.expect(self._handleVNCAuth, 16)
         else:
-            log.msg("unknown auth response (%d)\n" % auth)
+            log.msg("unknown auth response (%d)" % auth)
 
     def _handleConnFailed(self, block):
         (waitfor,) = unpack("!I", block)
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block):
-        log.msg("Connection refused: %r\n" % block)
+        log.msg("Connection refused: %r" % block)
 
     def _handleVNCAuth(self, block):
         self._challenge = block
@@ -187,7 +187,7 @@ class RFBClient(Protocol):
             self.vncAuthFailed("too many tries to log in")
             self.transport.loseConnection()
         else:
-            log.msg("unknown auth response (%d)\n" % result)
+            log.msg("unknown auth response (%d)" % result)
 
     def _doClientInitialization(self):
         self.transport.write(pack("!B", self.factory.shared))
@@ -221,7 +221,7 @@ class RFBClient(Protocol):
         elif msgid == 3:
             self.expect(self._handleServerCutText, 7)
         else:
-            log.msg("unknown message received (id %d)\n" % msgid)
+            log.msg("unknown message received (id %d)" % msgid)
             self.expect(self._handleConnection, 1)
 
     def _handleFramebufferUpdate(self, block):
@@ -259,7 +259,7 @@ class RFBClient(Protocol):
                 length += int(math.floor((width + 7.0) / 8)) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             else:
-                log.msg("unknown encoding received (encoding %d)\n" % encoding)
+                log.msg("unknown encoding received (encoding %d)" % encoding)
                 self._doConnection()
         else:
             self._doConnection()
@@ -541,7 +541,7 @@ class RFBClient(Protocol):
         """a password is needed to log on, use sendPassword() to
            send one."""
         if self.factory.password is None:
-            log.msg("need a password\n")
+            log.msg("need a password")
             self.transport.loseConnection()
             return
         self.sendPassword(self.factory.password)
@@ -549,7 +549,7 @@ class RFBClient(Protocol):
     def vncAuthFailed(self, reason):
         """called when the authentication failed.
            the connection is closed."""
-        log.msg("Cannot connect: %s\n" % reason)
+        log.msg("Cannot connect: %s" % reason)
 
     def beginUpdate(self):
         """called before a series of updateRectangle(),
