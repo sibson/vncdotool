@@ -128,13 +128,13 @@ class NullTransport(object):
 class VNCLoggingClient(VNCDoToolClient):
     """ Specialization of a VNCDoToolClient that will save screen captures
     """
-    ncaptures = 0
+    capture_file = None
 
     def commitUpdate(self, rectangles):
-        self.ncaptures += 1
-        filename = 'vncproxy%d.png' % self.ncaptures
-        self.screen.save(filename)
-        self.recorder('expect %s\n' % filename)
+        if self.capture_file:
+            self.screen.save(self.capture_file)
+            self.recorder('expect %s\n' % self.capture_file)
+            self.capture_file = None
 
 
 class VNCLoggingClientProxy(portforward.ProxyClient):
