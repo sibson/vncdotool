@@ -1,6 +1,8 @@
 import pexpect
 import sys
 import os.path
+import tempfile
+
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 SIMPLE_PNG  = os.path.join(DATADIR, 'simple.png')
@@ -9,9 +11,23 @@ EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
 
 
 class TestVNCCapture(object):
+    server = None
+
+    def setUp(self):
+        self.tempfiles = []
 
     def tearDown(self):
-        self.server.terminate(force=True)
+        if self.server:
+            self.server.terminate(force=True)
+
+        for f in self.tempfiles:
+            os.remove(f.name)
+
+    def mktemp(self):
+        f = tempfile.NamedTemporaryFile(suffix='.png')
+        self.tempfiles.append(f)
+        f.close()
+        return f.name
 
     def run_server(self, server):
         cmd = '%s -rfbport 5910 -rfbwait 1000' % server
@@ -35,19 +51,28 @@ class TestVNCCapture(object):
         assert content == othercontent
 
     def testCaptureExample(self):
-        fname = 'test_capture_example.png'
+        fname = self.mktemp()
         self.run_server('example')
         self.run_vncdotool('move 150 100 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_PNG)
 
+    def testCaptureCapture(self):
+        f1 = self.mktemp()
+        f2 = self.mktemp()
+
+        self.run_server('example')
+        self.run_vncdotool('move 150 100 capture %s capture %s' % (f1, f2))
+        self.assertFilesEqual(f1, EXAMPLE_PNG)
+        self.assertFilesEqual(f2, f1)
+
     def testCaptureNoCursor(self):
-        fname = 'test_capture_no_cursor.png'
+        fname = self.mktemp()
         self.run_server('example')
         self.run_vncdotool('--nocursor move 150 100 pause 0.1 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_NOCURSOR_PNG)
 
     def testCaptureLocalCursor(self):
-        fname = 'test_capture_localcursor.png'
+        fname = self.mktemp()
         self.run_server('example')
         self.run_vncdotool('--localcursor move 150 100 pause 0.1 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_PNG)
