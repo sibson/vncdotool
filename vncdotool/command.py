@@ -163,17 +163,13 @@ def build_tool(options, args):
     return factory
 
 
-def build_proxy(options, port):
+def build_proxy(options, port=0):
     factory = VNCLoggingServerFactory(options.host, int(options.port))
-    reactor.listenTCP(port, factory)
+    port = reactor.listenTCP(port, factory)
     reactor.exit_status = 0
+    factory.listening = port.getHost().port
 
     return factory
-
-
-def find_free_port():
-    # XXX we need to check the port is actually usable
-    return random.randint(10000, 20000)
 
 
 def main():
@@ -264,14 +260,13 @@ def main():
     elif 'viewer' in args:
         args.pop(0)
         output = args.pop(0)
-        port = find_free_port()
-        factory = build_proxy(options, port)
+        factory = build_proxy(options)
         if output == '-':
             factory.output = sys.stdout
         else:
             factory.output = open(output, 'w')
 
-        cmd = '%s localhost::%s' % (options.viewer, port)
+        cmd = '%s localhost::%s' % (options.viewer, factory.listening)
         proc = reactor.spawnProcess(ExitingProcess(),
                                     options.viewer, cmd.split(),
                                     env=os.environ)
