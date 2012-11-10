@@ -131,6 +131,10 @@ def build_command_list(factory, args, delay=None, warp=1.0):
         elif cmd in 'drag':
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseDrag, x, y)
+        elif os.path.isfile(cmd):
+            lex = shlex.shlex(open(cmd), posix=True)
+            lex.whitespace_split = True
+            args = list(lex) + args
         else:
             print 'unknown cmd "%s"' % cmd
 
@@ -145,10 +149,6 @@ def build_tool(options, args):
 
     if args == ['-']:
         lex = shlex.shlex(posix=True)
-        lex.whitespace_split = True
-        args = list(lex)
-    elif os.path.isfile(args[0]):
-        lex = shlex.shlex(open(args[0]), posix=True)
         lex.whitespace_split = True
         args = list(lex)
 

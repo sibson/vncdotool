@@ -1,6 +1,12 @@
 import pexpect
 import unittest
 import sys
+import os.path
+
+DATADIR = os.path.join(os.path.dirname(__file__), 'data')
+KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
+KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
+
 
 
 class TestSendEvents(object):
@@ -67,3 +73,9 @@ class TestSendEvents(object):
         self.run_vncdotool('click 2')
         self.assertMouse(0, 0, 0x2)
         self.assertDisconnect()
+
+    def test_read_files(self):
+        self.run_vncdotool('key x %s key y %s' % (KEYA_VDO, KEYB_VDO))
+        for key in 'xayb':
+            self.assertKeyDown(ord(key))
+            self.assertKeyUp(ord(key))
