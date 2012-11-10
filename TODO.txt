@@ -1,12 +1,10 @@
 0.3.0
 ----------------
-  - ensure find_free_port actually works
 
 Future
 ----------------
   - only make screen caps from proxy when user hits Print Screen
-  - more robust command line
-  - log mode better key captures (CTRL-A) and "Hello World"
+  - more robust command line, with help
   - better control over file creation in service mode
   - read/create vncpasswd files for better security
   - -via /usr/bin/ssh -f -L 5595:target:5900 proxy sleep 20
