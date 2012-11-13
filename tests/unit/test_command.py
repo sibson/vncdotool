@@ -154,14 +154,12 @@ class TestBuildCommandList(unittest.TestCase):
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 
 
-class TestMain(object):
+class TestParseHost(object):
 
     def setUp(self):
-        self.isolation = mock.isolate.object(command.main)
+        self.isolation = mock.isolate.object(command.parse_host)
         self.isolation.start()
-        self.factory = command.VNCDoToolFactory.return_value
         self.options = mock.Mock()
-        self.options.display = 0
         self.options.server = '127.0.0.1'
         parse_args = command.VNCDoToolOptionParser.return_value.parse_args
         parse_args.return_value = (self.options, [])
@@ -171,32 +169,37 @@ class TestMain(object):
             self.isolation.stop()
             self.isolation = None
 
-    def test_single_host_name(self):
-        self.options.server = '10.11.12.13'
-        command.main()
-        assert self.options.server == '10.11.12.13'
+    def test_default(self):
+        command.parse_host(self.options)
+        assert self.options.host == '127.0.0.1'
         assert self.options.port == 5900
 
+    def test_host_display(self):
+        self.options.server = '10.11.12.13:10'
+        command.parse_host(self.options)
+        assert self.options.host == '10.11.12.13'
+        assert self.options.port == 5910
+
     def test_host_port(self):
-        self.options.server = '10.11.12.13:4444'
-        command.main()
+        self.options.server = '10.11.12.13::4444'
+        command.parse_host(self.options)
         assert self.options.host == '10.11.12.13'
         assert self.options.port == 4444
 
-    def test_localhost_display(self):
-        self.options.display = 10
-        command.main()
-        assert self.options.host == '127.0.0.1'
-        assert self.options.port == 5910
-
-    def test_host_display(self):
+    def test_just_host(self):
         self.options.server = '10.11.12.13'
-        self.options.display = 10
-        command.main()
-        assert self.options.host == '10.11.12.13'
+        command.parse_host(self.options)
+        assert self.options.server == '10.11.12.13'
+        assert self.options.port == 5900
+
+    def test_just_display(self):
+        self.options.server = ':10'
+        command.parse_host(self.options)
+        assert self.options.host == '127.0.0.1'
         assert self.options.port == 5910
 
-    def test_host_default(self):
-        command.main()
+    def test_just_port(self):
+        self.options.server = '::1111'
+        command.parse_host(self.options)
         assert self.options.host == '127.0.0.1'
-        assert self.options.port == 5900
+        assert self.options.port == 1111

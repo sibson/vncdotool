@@ -35,7 +35,7 @@ class TestVNCCapture(object):
         self.server.logfile_read = sys.stdout
 
     def run_vncdo(self, commands, exitcode=0):
-        cmd = 'vncdo -d 10 ' + commands
+        cmd = 'vncdo -s :10 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
         vnc.logfile_read = sys.stdout
         vnc.expect(pexpect.EOF)

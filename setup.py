@@ -23,8 +23,9 @@ setup(
 
     entry_points={
         "console_scripts": [
-            'vncdo=vncdotool.command:main',
-            'vncdotool=vncdotool.command:main',
+            'vncdo=vncdotool.command:vncdo',
+            'vncdotool=vncdotool.command:vncdo',
+            'vnclog=vncdotool.command:vnclog',
         ],
     },
     packages=['vncdotool'],

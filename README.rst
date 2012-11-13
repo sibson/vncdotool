@@ -79,37 +79,38 @@ The file format is simply a collection of actions::
 
     > echo "type hello" | vncdo -
 
-    > cat some_file.vdo
+    > cat login.vdo
     # select the name text box, enter your name and submit
     move 100 100 click 1 type "my name" key tab key enter
 
     # grab the result
     capture screenshot.png
 
-    > vncdo some_file.vdo
+    > vncdo login.vdo
 
 Creating long lists of commands can be time consuming so vncdotool provides
-a record mode that logs messages and screen captures.
+a log mode that records a users interactions to a file, which you can then
+playback with vncdo.
 For best results set your client to use the RAW encoding.
-Others encoding may work but are not fully supported at this time.
+Others encoding may work but are not fully supported at this time.::
 
-As the log is a text file you can edit it to tweak the behaviour.::
+    > vnclog keylog.vdo
+    > vncviewer localhost:2  # do something and then exit viewer
+    > vncdo keylog.vdo
 
-    > vncdo record 6000 vnc.vdo
-    > vncviewer localhost:6000
-    > sed -i s/click 1/click 2/ vnc.vdo
-    > vncdo vnc.vdo
+If its too hard to remember which port to use you can tell vncdotool to 
+launch a client that will be connected to the vnclog session.::
 
-It may be more convient to automatically launch a VNC client connected to vncdotool in record mode with::
+    > vnclog --viewer vncviewer keylog.vdo
 
-    > vncdo viewer somefile.vdo
-
-By running in service mode vncdotool will create a new file for every client connection and record each clients activity.
+By running with --forever vncdotool will create a new file for every client 
+connection and record each clients activity.
 This can be useful for quickly recording a number of testcases.::
 
-    > vncdo service 6000
-    > vncviewer localhost:6000  # then exit and start new session
-    > vncviewer localhost:6000
+    > vnclog --forever --listen 6000 /tmp
+    > vncviewer localhost::6000  # then exit and start new session
+    > vncviewer localhost::6000
+    > ls /tmp/*.vdo
 
 Feedback
 --------------------------------

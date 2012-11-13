@@ -20,5 +20,5 @@ script
         . $DEFAULTFILE
     fi
 
-    /usr/bin/vncdotool --logfile $LOGFILE -o $OUTPUT_DIR -s $SERVER $VNCDOTOOL_FLAGS service $PORT
+    /usr/bin/vnclog --forever --logfile $LOGFILE -s $SERVER $VNCDOTOOL_FLAGS --listen $PORT $OUTPUT
 end script

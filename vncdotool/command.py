@@ -36,8 +36,7 @@ def log_connected(pcol):
 
 
 def error(reason):
-    reason.printTraceback()
-
+    log.critical(reason.getErrorMessage())
     reactor.exit_status = 10
     reactor.stop()
 
@@ -163,64 +162,39 @@ def build_tool(options, args):
     return factory
 
 
-def build_proxy(options, port=0):
+def build_proxy(options):
     factory = VNCLoggingServerFactory(options.host, int(options.port))
-    port = reactor.listenTCP(port, factory)
+    port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
-    factory.listening = port.getHost().port
+    factory.listen_port = port.getHost().port
 
     return factory
 
 
-def main():
-    usage = '%prog [options] (CMD CMDARGS|-|filename)'
-    description = 'Command line interaction with a VNC server'
-
+def build_optparser(usage, description):
     op = VNCDoToolOptionParser(usage=usage, description=description)
     op.disable_interspersed_args()
-
-    op.add_option('--delay', action='store', metavar='MILLISECONDS',
-        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
-        help='delay MILLISECONDS between actions [%defaultms]')
 
     op.add_option('-d', '--display', action='store', metavar='DISPLAY',
         type='int', default=0,
         help='connect to vnc server display :DISPLAY [%default]')
 
-    op.add_option('--nocursor', action='store_true',
-        help='no mouse pointer in screen captures')
-
-    op.add_option('--localcursor', action='store_true',
-        help='mouse pointer drawn client-side, useful when server does not include cursor')
-
-    op.add_option('-o', '--output', metavar='PATH',
-        default=tempfile.gettempdir(),
-        help='store all output at PATH [%default]')
-
-    op.add_option('-p', '--password', action='store', metavar='PASSwORD',
+    op.add_option('-p', '--password', action='store', metavar='PASSWORD',
         help='use password to access server')
 
-    op.add_option('-s', '--server', action='store', metavar='ADDRESS',
+    op.add_option('-s', '--server', action='store', metavar='SERVER',
         default='127.0.0.1',
-        help='connect to vnc server at ADDRESS[:PORT] [%default]')
+        help='connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%default]')
 
     op.add_option('--logfile', action='store', metavar='FILE',
         help='output logging information to FILE')
 
     op.add_option('-v', '--verbose', action='count')
 
-    op.add_option('--viewer', action='store', metavar='CMD',
-        default='vncviewer',
-        help='Use CMD to launch viewer in session mode [%default]')
+    return op
 
-    op.add_option('-w', '--warp', action='store', type='float',
-        metavar='FACTOR', default=1.0,
-        help='pause time is accelerated by FACTOR [x%default]')
 
-    options, args = op.parse_args()
-    if not len(args):
-        op.error('no command provided')
-
+def setup_logging(options):
     # route Twisted log messages via stdlib logging
     if options.logfile:
         handler = logging.handlers.RotatingFileHandler(options.logfile,
@@ -236,45 +210,110 @@ def main():
 
     PythonLoggingObserver().start()
 
-    try:
-        options.host, options.port = options.server.split(':')
-    except ValueError:
-        options.host = options.server
-        options.port = options.display + 5900
-    options.port = int(options.port)
+
+def parse_host(options):
+    split = options.server.split(':')
+
+    if not split[0]:
+        options.host = '127.0.0.1'
+    else:
+        options.host = split[0]
+
+    if len(split) == 3:  # ::port
+        options.port = int(split[2])
+    elif len(split) == 2:  # :display
+        options.port = int(split[1]) + 5900
+    else:
+        options.port = 5900
+
+    return options
+
+
+def vnclog():
+    usage = '%prog [options] OUTPUT'
+    description = 'Capture user interactions with a VNC Server'
+
+    op = build_optparser(usage, description)
+
+    op.add_option('--listen', metavar='PORT', type='int',
+        help='listen for client connections on PORT [%default]')
+    op.set_defaults(listen=5902)
+
+    op.add_option('--forever', action='store_true',
+        help='continually accept new connections')
+
+    op.add_option('--viewer', action='store', metavar='CMD',
+        help='launch an interactive client using CMD [%default]')
+
+    options, args = op.parse_args()
+
+    setup_logging(options)
+
+    parse_host(options)
+
+    if len(args) != 1:
+        op.error('incorrect number of arguments')
+    output = args[0]
+
+
+    factory = build_proxy(options)
+
+    if options.forever and os.path.isdir(output):
+        factory.output = output
+    elif options.forever:
+        op.error('--forever requires OUTPUT to be a directory')
+    elif output == '-':
+        factory.output = sys.stdout
+    else:
+        factory.output = open(output, 'w')
+
+    if options.listen == 0:
+        log.info('accepting connections on ::%d', factory.listen_port)
+
+    factory.password = options.password
+
+    if options.viewer:
+        cmdline = '%s localhost::%s' % (options.viewer, factory.listen_port)
+        proc = reactor.spawnProcess(ExitingProcess(),
+                                    options.viewer, cmdline.split(),
+                                    env=os.environ)
+
+    reactor.run()
+
+    sys.exit(reactor.exit_status)
+
+
+def vncdo():
+    usage = '%prog [options] (CMD CMDARGS|-|filename)'
+    description = 'Command line control of a VNC server'
+
+    op = build_optparser(usage, description)
+
+    op.add_option('--delay', action='store', metavar='MILLISECONDS',
+        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
+        help='delay MILLISECONDS between actions [%defaultms]')
+
+    op.add_option('--nocursor', action='store_true',
+        help='no mouse pointer in screen captures')
+
+    op.add_option('--localcursor', action='store_true',
+        help='mouse pointer drawn client-side, useful when server does not include cursor')
+
+    op.add_option('-w', '--warp', action='store', type='float',
+        metavar='FACTOR', default=1.0,
+        help='pause time is accelerated by FACTOR [x%default]')
+
+    options, args = op.parse_args()
+    if not len(args):
+        op.error('no command provided')
+
+    setup_logging(options)
+    parse_host(options)
 
     log.info('connecting to %s:%s', options.host, options.port)
 
-    if 'record' in args:
-        args.pop(0)
-        port = int(args.pop(0))
-        output = args.pop(0)
-        factory = build_proxy(options, port)
-        if output != '-':
-            factory.output = open(output, 'w')
-    elif 'service' in args:
-        args.pop(0)
-        port = int(args.pop(0))
-        factory = build_proxy(options, port)
-        factory.output = options.output
-    elif 'viewer' in args:
-        args.pop(0)
-        output = args.pop(0)
-        factory = build_proxy(options)
-        if output == '-':
-            factory.output = sys.stdout
-        else:
-            factory.output = open(output, 'w')
-
-        cmd = '%s localhost::%s' % (options.viewer, factory.listening)
-        proc = reactor.spawnProcess(ExitingProcess(),
-                                    options.viewer, cmd.split(),
-                                    env=os.environ)
-    else:
-        factory = build_tool(options, args)
-
-    if options.password:
-        factory.password = options.password
+    factory = build_tool(options, args)
+    factory.password = options.password
 
     if options.nocursor:
         factory.nocursor = True
@@ -288,4 +327,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    vncdo()
