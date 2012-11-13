@@ -21,7 +21,12 @@ setup(
     author_email='sibson+vncdotool@gmail.com',
     download_url='',
 
-    scripts=['scripts/vncdotool'],
+    entry_points={
+        "console_scripts": [
+            'vncdo=vncdotool.command:main',
+            'vncdotool=vncdotool.command:main',
+        ],
+    },
     packages=['vncdotool'],
 
     classifiers=[

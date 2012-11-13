@@ -1,14 +1,18 @@
 vncdotool - 0.3.0 (unreleased)
 ------------------------------------
+    - main program renamed to vncdo, vncdotool continues an alias for now
+    - read/play commands from stdin or file
+    - proxy/record modes to create scripts from interactive sessions
     - better control over mouse in screen captures with --nocursor
       and --localcursor
+    - mousemove, sleep command aliases to match xdotool
+    - keyup/keydown commands for more control over keypresses
     - send SetEncodings on connect, thanks Matias Suarez for fix
-    - read/play commands from stdin or file
     - debian packaging
     - allow default delay between all commands
-    - proxy/record modes to create scripts from interactive sessions
     - type "Hello World" now preserves capitalization
-    - mousemove, sleep command aliases to match xdotool
+    - don't immediately give up on VNC 4.0 servers
+    - improved frameUpdate handling
 
 vncdotool - 0.2.0 (2012-08-07)
 --------------------------------

@@ -10,7 +10,7 @@ class TestLogEvents(object):
         self.server = pexpect.spawn(cmd, timeout=2)
         self.server.logfile_read = sys.stdout
 
-        cmd = 'vncdotool -d 99 record 1842 -'
+        cmd = 'vncdo -d 99 record 1842 -'
         self.logger = pexpect.spawn(cmd, timeout=2)
         self.logger.logfile_read = sys.stdout
 
@@ -19,8 +19,8 @@ class TestLogEvents(object):
         if self.logger:
             self.logger.terminate(force=True)
 
-    def run_vncdotool(self, commands):
-        cmd = 'vncdotool -s localhost:1842 ' + commands
+    def run_vncdo(self, commands):
+        cmd = 'vncdo -s localhost:1842 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=2)
         retval = vnc.wait()
         assert retval == 0, (retval, str(vnc))
@@ -38,7 +38,7 @@ class TestLogEvents(object):
         self.server.expect(output)
 
     def test_key_alpha(self):
-        self.run_vncdotool('key z')
+        self.run_vncdo('key z')
 
         self.assertKeyDown(ord('z'))
         self.assertKeyUp(ord('z'))
@@ -47,14 +47,14 @@ class TestLogEvents(object):
         self.logger.expect('keyup z')
 
     def test_key_ctrl_a(self):
-        self.run_vncdotool('key ctrl-a')
+        self.run_vncdo('key ctrl-a')
         self.assertKeyDown(rfb.KEY_ControlLeft)
         self.assertKeyDown(ord('a'))
         self.assertKeyUp(rfb.KEY_ControlLeft)
         self.assertKeyUp(ord('a'))
 
     def test_mouse(self):
-        self.run_vncdotool('move 111 222 click 1')
+        self.run_vncdo('move 111 222 click 1')
         self.assertMouse(111, 222, 1)
         self.logger.expect('move 111 222')
         self.logger.expect('click 1')

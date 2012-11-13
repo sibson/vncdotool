@@ -35,49 +35,49 @@ Once installed you can use the vncdotool command to send key-presses.
 Alphanumerics are straightforward just specify the character.  For other
 keys longer names are used::
 
-    > vncdotool key a
-    > vncdotool key 5
-    > vncdotool key .
-    > vncdotool key enter
-    > vncdotool key shift-a
-    > vncdotool key ctrl-C
-    > vncdotool key ctrl-alt-del
+    > vncdo key a
+    > vncdo key 5
+    > vncdo key .
+    > vncdo key enter
+    > vncdo key shift-a
+    > vncdo key ctrl-C
+    > vncdo key ctrl-alt-del
 
 To type longer strings when entering data or commands you can use the type c
 command, which does not support special characters::
 
-    > vncdotool type "hello world"
+    > vncdo type "hello world"
 
 You can control the mouse pointer with move and click commands.
 NOTE, you should almost always issue a move before a click, as in::
 
-    > vncdotool move 100 100 click 1
+    > vncdo move 100 100 click 1
 
 The following would seem to be equivalent but would actually click at (0, 0).
 This occurs due to how click events are encoded by VNC, meaning you need to initialise the position of the mouse.
 
-    > vncdotool move 100 100
-    > vncdotool click 1
+    > vncdo move 100 100
+    > vncdo click 1
 
 If you have the Python Imaging Library (PIL) installed you can also
 make screen captures of the session::
 
-    > vncdotool capture screenshot.png
+    > vncdo capture screenshot.png
 
 With PIL installed, you can wait for the screen to match a known image.::
 
-    > vncdotool expect somescreen.png 0
+    > vncdo expect somescreen.png 0
 
 Putting it all together you can specify multiple actions on a single
 command line.  You could automate a login with the following::
 
-    > vncdotool type username key enter expect password_prompt.png
-    > vncdotool type password move 100 150 click 1 expect welcome_screen.png
+    > vncdo type username key enter expect password_prompt.png
+    > vncdo type password move 100 150 click 1 expect welcome_screen.png
 
 For more complex automation you can read commands from stdin or a file.
 The file format is simply a collection of actions::
 
-    > echo "type hello" | vncdotool -
+    > echo "type hello" | vncdo -
 
     > cat some_file.vdo
     # select the name text box, enter your name and submit
@@ -86,26 +86,29 @@ The file format is simply a collection of actions::
     # grab the result
     capture screenshot.png
 
-    > vncdotool some_file.vdo
+    > vncdo some_file.vdo
 
 Creating long lists of commands can be time consuming so vncdotool provides
 a record mode that logs messages and screen captures.
+For best results set your client to use the RAW encoding.
+Others encoding may work but are not fully supported at this time.
+
 As the log is a text file you can edit it to tweak the behaviour.::
 
-    > vncdotool record 6000 vnc.vdo
+    > vncdo record 6000 vnc.vdo
     > vncviewer localhost:6000
     > sed -i s/click 1/click 2/ vnc.vdo
-    > vncdotool vnc.vdo
+    > vncdo vnc.vdo
 
-For convience you can launch a VNCViewer connected to a vncdotool in record mode with::
+It may be more convient to automatically launch a VNC client connected to vncdotool in record mode with::
 
-    > vncdotool viewer somefile.vdo
+    > vncdo viewer somefile.vdo
 
 By running in service mode vncdotool will create a new file for every client connection and record each clients activity.
 This can be useful for quickly recording a number of testcases.::
 
-    > vncdotool service 6000
-    > vncviewer localhost:6000
+    > vncdo service 6000
+    > vncviewer localhost:6000  # then exit and start new session
     > vncviewer localhost:6000
 
 Feedback
