@@ -4,6 +4,9 @@ from setuptools import setup
 
 README = open('README.rst', 'rt').read()
 
+console_scripts = [
+                    "vncdotool = vncdotool.command:main",
+                    ]
 setup(
     name='vncdotool',
     version='0.3.0.dev0',
@@ -21,7 +24,10 @@ setup(
     author_email='sibson+vncdotool@gmail.com',
     download_url='',
 
-    scripts=['scripts/vncdotool'],
+##    scripts=['scripts/vncdotool'],
+    entry_points={
+        'console_scripts': console_scripts,
+    },
     packages=['vncdotool'],
 
     classifiers=[
