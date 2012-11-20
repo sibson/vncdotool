@@ -1,4 +1,4 @@
-# vncrecordd - Record a VNC session for playback with vncdotool
+# vnclogd - Record a VNC session for playback with vncdotool
 #
 # Logs all activity to a single file per connection
 
@@ -6,11 +6,11 @@
 start on started networking
 stop on runlevel[06]
 
-env DEFAULTFILE=/etc/default/vncrecordd
+env DEFAULTFILE=/etc/default/vnclogd
 env SERVER=localhost
 env PORT=5922
 env OUTPUT_DIR=/tmp
-env LOGFILE=/var/log/vncrecordd.log
+env LOGFILE=/var/log/vnclogd.log
 env VNCDOTOOL_FLAGS=-v
 
 respawn
@@ -20,5 +20,5 @@ script
         . $DEFAULTFILE
     fi
 
-    /usr/bin/vnclog --forever --logfile $LOGFILE -s $SERVER $VNCDOTOOL_FLAGS --listen $PORT $OUTPUT
+    /usr/bin/vnclog --forever --logfile $LOGFILE -s $SERVER $VNCDOTOOL_FLAGS --listen $PORT $OUTPUT_DIR
 end script
