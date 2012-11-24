@@ -175,10 +175,6 @@ def build_optparser(usage, description):
     op = VNCDoToolOptionParser(usage=usage, description=description)
     op.disable_interspersed_args()
 
-    op.add_option('-d', '--display', action='store', metavar='DISPLAY',
-        type='int', default=0,
-        help='connect to vnc server display :DISPLAY [%default]')
-
     op.add_option('-p', '--password', action='store', metavar='PASSWORD',
         help='use password to access server')
 
