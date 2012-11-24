@@ -16,13 +16,13 @@ or start one locally with x11vnc. Then you can run::
     pip install twisted # if you don't already have it
     python vncdotool/command.py -s hostaddr type "hello world"
 
-If you have PIL installed then you can do a screen captures with::
+If you have PIL_ installed then you can do a screen captures with::
 
     python vncdotool/command.py -s hostaddr capture screen.png
 
 Installation
 --------------------------------
-vncdotool depends on Twisted. Additionally, for capture and expect commands
+vncdotool depends on Twisted_. Additionally, for capture and expect commands
 to work you will need the Python Image Library. You can use your
 favourite package manager to grab them.  Once you have the dependencies
 installed you install from the unpacked source tree.
@@ -54,17 +54,17 @@ NOTE, you should almost always issue a move before a click, as in::
     > vncdo move 100 100 click 1
 
 The following would seem to be equivalent but would actually click at (0, 0).
-This occurs due to how click events are encoded by VNC, meaning you need to initialise the position of the mouse.
+This occurs due to how click events are encoded by VNC, meaning you need to initialise the position of the mouse.::
 
     > vncdo move 100 100
     > vncdo click 1
 
-If you have the Python Imaging Library (PIL) installed you can also
+If you have the Python Imaging Library (PIL_) installed you can also
 make screen captures of the session::
 
     > vncdo capture screenshot.png
 
-With PIL installed, you can wait for the screen to match a known image.::
+With PIL_ installed, you can wait for the screen to match a known image.::
 
     > vncdo expect somescreen.png 0
 
@@ -114,15 +114,17 @@ This can be useful for quickly recording a number of testcases.::
 
 Feedback
 --------------------------------
-Comments, suggestions and patches are welcome and appreciated.  They can
-be sent to sibson+vncdotool@gmail.com or via
-http://github.com/sibson/vncdotool.
+Comments, suggestions and patches are welcome and appreciated.
+They can be sent to sibson+vncdotool@gmail.com or via github_.
+If you are reporting a bug or issue please include the version of both vncdotool
+and the VNC server you are using it with.
 
 Acknowledgements
 --------------------------------
 Thanks to Chris Liechti, techtonik and Todd Whiteman for developing the RFB
 and DES implementations used by vncdotool.
 
-_python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
-_Twisted: http://twistedmatrix.com
-_PIL: http://www.pythonware.com/products/pil
+.. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
+.. _Twisted: http://twistedmatrix.com
+.. _PIL: http://www.pythonware.com/products/pil
+.. _github: http://github.com/sibson/vncdotool.
