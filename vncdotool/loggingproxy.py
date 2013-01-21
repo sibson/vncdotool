@@ -138,7 +138,7 @@ class VNCLoggingClient(VNCDoToolClient):
 
 
 class VNCLoggingClientProxy(portforward.ProxyClient):
-    """ Interrpret messages from the Server
+    """ Interpret messages from the Server
     """
     vncdoclient = None
     ncaptures = 0

@@ -170,7 +170,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        log.debug('mousePress', button)
+        log.debug('mousePress %s', button)
         buttons = self.buttons | (1 << (button - 1))
         self.pointerEvent(self.x, self.y, buttonmask=buttons)
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
@@ -313,7 +313,7 @@ class VNCDoToolClient(rfb.RFBClient):
         update = ImageFactory().fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
             self.screen = update
-        # track screen upward screen resizes, often occur during os boot
+        # track upward screen resizes, often occurs during os boot of VMs
         elif self.screen.size[0] < width or self.screen.size[1] < height:
             self.screen = update
         else:
