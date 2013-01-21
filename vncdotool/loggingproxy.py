@@ -130,6 +130,10 @@ class VNCLoggingClient(VNCDoToolClient):
     """
     capture_file = None
 
+    def vncConnectionMade(self):
+            VNCDoToolClient.vncConnectionMade(self)
+            self.recorder('scaleres %d %d\n' % (self.width, self.height))
+
     def commitUpdate(self, rectangles):
         if self.capture_file:
             self.screen.save(self.capture_file)

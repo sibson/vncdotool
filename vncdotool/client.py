@@ -116,11 +116,14 @@ class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     buttons = 0
+    scale = (1.0, 1.0)
+
     screen = None
     deferred = None
 
     cursor = None
     cmask = None
+
 
     def _decodeKey(self, key):
         if len(key) == 1:
@@ -252,15 +255,22 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
         """
-        log.debug('mouseMove', x, y)
-        self.x, self.y = x, y
-        self.pointerEvent(x, y, self.buttons)
+        log.debug('mouseMove %s %s', x, y)
+        self.x = self.scale[0] * x
+        self.y = self.scale[1] * y
+
+        self.pointerEvent(self.x, self.y, self.buttons)
+
         return self
 
     def mouseDrag(self, x, y, step=1):
         """ Move the mouse point to position (x, y) in increments of step
         """
         log.debug('mouseDrag', x, y)
+
+        x = self.scale[0] * x
+        y = self.scale[1] * y
+
         if x < self.x:
             xsteps = [self.x - i for i in xrange(step, self.x - x + 1, step)]
         else:
@@ -281,6 +291,11 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.mouseMove(x, y)
 
+        return self
+
+    def scaleFrom(self, width, height):
+        self.scale = (float(self.width) / width,
+                      float(self.height / height))
         return self
 
     #

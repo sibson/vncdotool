@@ -134,6 +134,9 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             lex = shlex.shlex(open(cmd), posix=True)
             lex.whitespace_split = True
             args = list(lex) + args
+        elif cmd == 'scaleres':
+            w, h = float(args.pop(0)), float(args.pop(0))
+            factory.deferred.addCallback(client.scaleFrom, w, h)
         else:
             print 'unknown cmd "%s"' % cmd
 
