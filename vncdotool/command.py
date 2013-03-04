@@ -75,9 +75,6 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
             '  drag X Y:\tmove the mouse to X,Y in small steps',
-            '  record PORT FILE:\tforward connections on PORT to server and log activity to FILE',
-            '  viewer FILE:\tLaunch a VNC viewer and record actions to FILE',
-            '  service PORT:\tRecord activity to a new file for every connection',
             '',
         ])
         return result
@@ -171,23 +168,22 @@ def build_proxy(options):
     return factory
 
 
-def build_optparser(usage, description):
-    op = VNCDoToolOptionParser(usage=usage, description=description)
-    op.disable_interspersed_args()
+def add_standard_options(parser):
+    parser.disable_interspersed_args()
 
-    op.add_option('-p', '--password', action='store', metavar='PASSWORD',
+    parser.add_option('-p', '--password', action='store', metavar='PASSWORD',
         help='use password to access server')
 
-    op.add_option('-s', '--server', action='store', metavar='SERVER',
+    parser.add_option('-s', '--server', action='store', metavar='SERVER',
         default='127.0.0.1',
         help='connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%default]')
 
-    op.add_option('--logfile', action='store', metavar='FILE',
+    parser.add_option('--logfile', action='store', metavar='FILE',
         help='output logging information to FILE')
 
-    op.add_option('-v', '--verbose', action='count')
+    parser.add_option('-v', '--verbose', action='count')
 
-    return op
+    return parser
 
 
 def setup_logging(options):
@@ -229,7 +225,8 @@ def vnclog():
     usage = '%prog [options] OUTPUT'
     description = 'Capture user interactions with a VNC Server'
 
-    op = build_optparser(usage, description)
+    op = optparse.OptionParser(usage=usage, description=description)
+    add_standard_options(op)
 
     op.add_option('--listen', metavar='PORT', type='int',
         help='listen for client connections on PORT [%default]')
@@ -250,7 +247,6 @@ def vnclog():
     if len(args) != 1:
         op.error('incorrect number of arguments')
     output = args[0]
-
 
     factory = build_proxy(options)
 
@@ -283,7 +279,8 @@ def vncdo():
     usage = '%prog [options] (CMD CMDARGS|-|filename)'
     description = 'Command line control of a VNC server'
 
-    op = build_optparser(usage, description)
+    op = VNCDoToolOptionParser(usage=usage, description=description)
+    add_standard_options(op)
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
         default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
