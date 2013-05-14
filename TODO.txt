@@ -1,13 +1,16 @@
-0.3.0
+0.4.0
 ----------------
 
 Future
 ----------------
+  - support embedding as a library
   - only make screen caps from proxy when user hits Print Screen
+  - better control over file creation in service mode (command mode)
+  - file transfers
   - more robust command line, with help
-  - better control over file creation in service mode
   - read/create vncpasswd files for better security
   - -via /usr/bin/ssh -f -L 5595:target:5900 proxy sleep 20
+  - image recognition
 
 Wishlist
 ----------------
