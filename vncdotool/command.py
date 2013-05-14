@@ -204,22 +204,22 @@ def setup_logging(options):
     PythonLoggingObserver().start()
 
 
-def parse_host(options):
-    split = options.server.split(':')
+def parse_host(server):
+    split = server.split(':')
 
     if not split[0]:
-        options.host = '127.0.0.1'
+        host = '127.0.0.1'
     else:
-        options.host = split[0]
+        host = split[0]
 
     if len(split) == 3:  # ::port
-        options.port = int(split[2])
+        port = int(split[2])
     elif len(split) == 2:  # :display
-        options.port = int(split[1]) + 5900
+        port = int(split[1]) + 5900
     else:
-        options.port = 5900
+        port = 5900
 
-    return options
+    return host, port
 
 
 def vnclog():
@@ -243,7 +243,7 @@ def vnclog():
 
     setup_logging(options)
 
-    parse_host(options)
+    options.host, options.port = parse_host(options.server)
 
     if len(args) != 1:
         op.error('incorrect number of arguments')
@@ -302,7 +302,7 @@ def vncdo():
         op.error('no command provided')
 
     setup_logging(options)
-    parse_host(options)
+    options.host, options.port = parse_host(options.server)
 
     log.info('connecting to %s:%s', options.host, options.port)
 
