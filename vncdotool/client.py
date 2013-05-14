@@ -239,7 +239,7 @@ class VNCDoToolClient(rfb.RFBClient):
                         reduce(operator.add, map(lambda a, b: (a - b) ** 2,
                             hist, self.expected)) / len(hist))
 
-            log.debug('rms', int(rms))
+            log.debug('rms %s', int(rms))
             if rms <= maxrms:
                 return self
 
