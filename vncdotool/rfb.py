@@ -129,8 +129,8 @@ class RFBClient(Protocol):
                 #~ print "rfb"
                 maj, min = [int(x) for x in buffer[3:-1].split('.')]
                 #~ print maj, min
-                if (maj, min) not in [(3,3), (3,7), (3,8), (4,0)]:
-                    log.msg("wrong protocol version\n")
+                if (maj, min) not in [(3,3), (3,7), (3,8), (3,889), (4,0)]:
+                    log.msg("wrong protocol version, %s.%s\n", maj, min)
                     self.transport.loseConnection()
             buffer = buffer[12:]
             self.transport.write('RFB 003.003\n')

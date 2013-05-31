@@ -183,7 +183,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        log.debug('mouseDown', button)
+        log.debug('mouseDown %s', button)
         self.buttons |= 1 << (button - 1)
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
 
@@ -195,7 +195,7 @@ class VNCDoToolClient(rfb.RFBClient):
             button: int: [1-n]
 
         """
-        log.debug('mouseUp', button)
+        log.debug('mouseUp %s', button)
         self.buttons &= ~(1 << (button - 1))
         self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
 
@@ -205,14 +205,14 @@ class VNCDoToolClient(rfb.RFBClient):
         """ Save the current display to filename
         """
         # request screen update
-        log.debug('captureScreen', filename)
+        log.debug('captureScreen %s', filename)
         self.framebufferUpdateRequest()
         self.deferred = Deferred()
         self.deferred.addCallback(self._captureSave, filename)
         return self.deferred
 
     def _captureSave(self, data, filename):
-        log.debug('captureDone', filename)
+        log.debug('captureDone %s', filename)
         self.screen.save(filename)
 
         return self
@@ -224,7 +224,7 @@ class VNCDoToolClient(rfb.RFBClient):
             maxrms: the maximum root mean square between histograms of the
                     screen and target image
         """
-        log.debug('expectScreen', filename)
+        log.debug('expectScreen %s', filename)
         self.framebufferUpdateRequest()
         self.expected = ImageFactory().open(filename).histogram()
         self.deferred = Deferred()
@@ -252,7 +252,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseMove(self, x, y):
         """ Move the mouse pointer to position (x, y)
         """
-        log.debug('mouseMove', x, y)
+        log.debug('mouseMove %d,%d', x, y)
         self.x, self.y = x, y
         self.pointerEvent(x, y, self.buttons)
         return self
@@ -260,7 +260,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseDrag(self, x, y, step=1):
         """ Move the mouse point to position (x, y) in increments of step
         """
-        log.debug('mouseDrag', x, y)
+        log.debug('mouseDrag %d,%d', x, y)
         if x < self.x:
             xsteps = [self.x - i for i in xrange(step, self.x - x + 1, step)]
         else:
