@@ -123,6 +123,9 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask = None
 
     def _decodeKey(self, key):
+        if self.factory.force_caps and key.isupper():
+            key = 'shift-%c' % key
+
         if len(key) == 1:
             keys = [key]
         else:
@@ -365,6 +368,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     pseudocusor = False
     nocursor = False
+    force_caps = False
 
     def __init__(self):
         self.deferred = Deferred()

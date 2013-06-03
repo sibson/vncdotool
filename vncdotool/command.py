@@ -287,6 +287,9 @@ def vncdo():
         default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
+    op.add_option('--force-caps', action='store_true',
+        help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
+
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')
 
@@ -314,6 +317,9 @@ def vncdo():
 
     if options.localcursor:
         factory.pseudocusor = True
+
+    if options.force_caps:
+        factory.force_caps = True
 
     reactor.run()
 
