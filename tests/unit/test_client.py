@@ -90,7 +90,7 @@ class TestVNCDoToolClient(object):
         image.open.assert_called_once_with(fname)
 
         assert cli.expected == image.open.return_value.histogram.return_value
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 5)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 5, None)
 
     def test_expectCompareSuccess(self):
         cli = self.client
@@ -98,7 +98,7 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [1, 2, 3]
-        result = cli._expectCompare(image, 5)
+        result = cli._expectCompare(image, 5, None)
         assert result == cli
 
     def test_expectCompareExactSuccess(self):
@@ -107,7 +107,7 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [2, 2, 2]
-        result = cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, 0, None)
         assert result == cli
 
     def test_expectCompareFails(self):
@@ -118,14 +118,14 @@ class TestVNCDoToolClient(object):
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
-        result = cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, 0, None)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0, None)
 
     def test_expectCompareMismatch(self):
         cli = self.client
@@ -135,14 +135,14 @@ class TestVNCDoToolClient(object):
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
 
-        result = cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, 0, None)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0, None)
 
     def test_updateRectangeFullScreen(self):
         cli = self.client

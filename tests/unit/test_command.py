@@ -91,7 +91,7 @@ class TestBuildCommandList(unittest.TestCase):
 
     def test_expect(self):
         self.call_build_commands_list('expect foo.png 10')
-        self.assertCalled(self.client.expectScreen, 'foo.png', 10)
+        self.assertCalled(self.client.expectScreen, 'foo.png', 10, None)
 
     def test_expect_not_png(self):
         pass
@@ -112,7 +112,7 @@ class TestBuildCommandList(unittest.TestCase):
         for key in 'username':
             call.assert_calls_exist_with(self.client.keyPress, key)
 
-        call.assert_calls_exist_with(self.client.expectScreen, 'password.png', 0)
+        call.assert_calls_exist_with(self.client.expectScreen, 'password.png', 0, None)
 
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
