@@ -80,7 +80,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
-def build_command_list(factory, args, delay=None, warp=1.0):
+def build_command_list(factory, args, delay=None, warp=1.0, maxtries=None):
     client = VNCDoToolClient
 
     while args:
@@ -120,7 +120,7 @@ def build_command_list(factory, args, delay=None, warp=1.0):
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))
-            factory.deferred.addCallback(client.expectScreen, filename, rms)
+            factory.deferred.addCallback(client.expectScreen, filename, rms, maxtries)
         elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
@@ -148,7 +148,7 @@ def build_tool(options, args):
         lex.whitespace_split = True
         args = list(lex)
 
-    build_command_list(factory, args, options.delay, options.warp)
+    build_command_list(factory, args, options.delay, options.warp, options.max_tries)
 
     factory.deferred.addCallback(stop)
     factory.deferred.addErrback(error)
@@ -289,6 +289,9 @@ def vncdo():
 
     op.add_option('--force-caps', action='store_true',
         help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
+
+    op.add_option('--max-tries', type='int', metavar='COUNT',
+        help='wait at most COUNT screen updates for an expect match [infinate]')
 
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')

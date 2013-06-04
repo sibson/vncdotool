@@ -220,7 +220,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def expectScreen(self, filename, maxrms=0):
+    def expectScreen(self, filename, maxrms=0, maxtries=None):
         """ Wait until the display matches a target image
 
             filename: an image file to read and compare against
@@ -231,12 +231,13 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest()
         self.expected = ImageFactory().open(filename).histogram()
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, maxrms)
+        self.deferred.addCallback(self._expectCompare, maxrms, maxtries)
 
         return self.deferred
 
-    def _expectCompare(self, image, maxrms):
+    def _expectCompare(self, image, maxrms, maxtries):
         hist = image.histogram()
+        rms = None
         if len(hist) == len(self.expected):
             rms = math.sqrt(
                         reduce(operator.add, map(lambda a, b: (a - b) ** 2,
@@ -246,8 +247,19 @@ class VNCDoToolClient(rfb.RFBClient):
             if rms <= maxrms:
                 return self
 
+        if maxtries is not None:
+            maxtries -= 1
+            if maxrms == 0:
+                print image.__dict__
+                if rms is None:
+                    msg = 'giving up, incorrect image size %s' % image.size
+                else:
+                    msg = 'giving up, last rms was %s' % rms
+
+                raise Exception(msg)
+
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, maxrms)
+        self.deferred.addCallback(self._expectCompare, maxrms, maxtries)
         self.framebufferUpdateRequest(incremental=1)
 
         return self.deferred
