@@ -249,8 +249,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         if maxtries is not None:
             maxtries -= 1
-            if maxrms == 0:
-                print image.__dict__
+            if maxtries == 0:
                 if rms is None:
                     msg = 'giving up, incorrect image size %s' % image.size
                 else:
