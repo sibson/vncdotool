@@ -18,6 +18,8 @@ import logging.handlers
 from twisted.python.log import PythonLoggingObserver
 from twisted.internet import reactor, protocol
 from twisted.python import log
+from twisted.python.failure import Failure
+
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
 
@@ -38,7 +40,7 @@ def log_connected(pcol):
 def error(reason):
     log.critical(reason.getErrorMessage())
     reactor.exit_status = 10
-    reactor.stop()
+    reactor.callLater(0.1, reactor.stop)
 
 
 def stop(pcol):
@@ -287,11 +289,14 @@ def vncdo():
         default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
+    op.add_option('--localcursor', action='store_true',
+        help='mouse pointer drawn client-side, useful when server does not include cursor')
+
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')
 
-    op.add_option('--localcursor', action='store_true',
-        help='mouse pointer drawn client-side, useful when server does not include cursor')
+    op.add_option('-t', '--timeout', action='store', type='int', metavar='TIMEOUT',
+        help='abort if unable to complete all actions within TIMEOUT seconds')
 
     op.add_option('-w', '--warp', action='store', type='float',
         metavar='FACTOR', default=1.0,
@@ -314,6 +319,9 @@ def vncdo():
 
     if options.localcursor:
         factory.pseudocusor = True
+
+    if options.timeout:
+        reactor.callLater(options.timeout, error, Failure('TIMEOUT Exceeded'))
 
     reactor.run()
 

@@ -170,36 +170,31 @@ class TestParseHost(object):
             self.isolation = None
 
     def test_default(self):
-        command.parse_host(self.options)
-        assert self.options.host == '127.0.0.1'
-        assert self.options.port == 5900
+        host, port = command.parse_host('')
+        assert host == '127.0.0.1'
+        assert port == 5900
 
     def test_host_display(self):
-        self.options.server = '10.11.12.13:10'
-        command.parse_host(self.options)
-        assert self.options.host == '10.11.12.13'
-        assert self.options.port == 5910
+        host, port = command.parse_host('10.11.12.13:10')
+        assert host == '10.11.12.13'
+        assert port == 5910
 
     def test_host_port(self):
-        self.options.server = '10.11.12.13::4444'
-        command.parse_host(self.options)
-        assert self.options.host == '10.11.12.13'
-        assert self.options.port == 4444
+        host, port = command.parse_host('10.11.12.13::4444')
+        assert host == '10.11.12.13'
+        assert port == 4444
 
     def test_just_host(self):
-        self.options.server = '10.11.12.13'
-        command.parse_host(self.options)
-        assert self.options.server == '10.11.12.13'
-        assert self.options.port == 5900
+        host, port = command.parse_host('10.11.12.13')
+        assert host == '10.11.12.13'
+        assert port == 5900
 
     def test_just_display(self):
-        self.options.server = ':10'
-        command.parse_host(self.options)
-        assert self.options.host == '127.0.0.1'
-        assert self.options.port == 5910
+        host, port = command.parse_host(':10')
+        assert host == '127.0.0.1'
+        assert port == 5910
 
     def test_just_port(self):
-        self.options.server = '::1111'
-        command.parse_host(self.options)
-        assert self.options.host == '127.0.0.1'
-        assert self.options.port == 1111
+        host, port = command.parse_host('::1111')
+        assert host == '127.0.0.1'
+        assert port == 1111

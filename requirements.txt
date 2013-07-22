@@ -2,7 +2,5 @@ zope.interface==3.7.0
 Twisted==11.1.0
 argparse==1.2.1
 distribute==0.6.24
-nose==1.1.2
-pexpect==2.4
 wsgiref==0.1.2
 pil==1.1.7
