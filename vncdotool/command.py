@@ -123,6 +123,24 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             filename = args.pop(0)
             rms = int(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
+        elif cmd == 'rcapture':
+            filename = args.pop(0)
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            w = int(args.pop(0))
+            h = int(args.pop(0))
+            imgformat = os.path.splitext(filename)[1][1:]
+            if imgformat not in SUPPORTED_FORMATS:
+                print 'unsupported image format "%s", choose one of %s' % (
+                        imgformat, SUPPORTED_FORMATS)
+            else:
+                factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
+        elif cmd == 'rexpect':
+            filename = args.pop(0)
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            rms = int(args.pop(0))
+            factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
         elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
