@@ -289,6 +289,9 @@ def vncdo():
         default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
+    op.add_option('--force-caps', action='store_true',
+        help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
+
     op.add_option('--localcursor', action='store_true',
         help='mouse pointer drawn client-side, useful when server does not include cursor')
 
@@ -314,11 +317,14 @@ def vncdo():
     factory = build_tool(options, args)
     factory.password = options.password
 
+    if options.localcursor:
+        factory.pseudocusor = True
+
     if options.nocursor:
         factory.nocursor = True
 
-    if options.localcursor:
-        factory.pseudocusor = True
+    if options.force_caps:
+        factory.force_caps = True
 
     if options.timeout:
         reactor.callLater(options.timeout, error, Failure('TIMEOUT Exceeded'))
