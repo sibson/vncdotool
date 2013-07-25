@@ -28,6 +28,10 @@ log = logging.getLogger()
 SUPPORTED_FORMATS = ('png', 'jpg', 'jpeg', 'gif', 'bmp')
 
 
+class TimeoutError(RuntimeError):
+    pass
+
+
 def log_exceptions(type_, value, tb):
     log.critical('Unhandled exception:', exc_info=(type_, value, tb))
 
@@ -345,7 +349,9 @@ def vncdo():
         factory.force_caps = True
 
     if options.timeout:
-        reactor.callLater(options.timeout, error, Failure('TIMEOUT Exceeded'))
+        message = 'TIMEOUT Exceeded (%ss)' % options.timeout
+        failure = Failure(TimeoutError(message))
+        reactor.callLater(options.timeout, error, failure)
 
     reactor.run()
 
