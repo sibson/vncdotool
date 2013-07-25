@@ -5,31 +5,45 @@ to debug possible issues.
 """
 
 import threading
+import Queue
 import logging
 
 from twisted.internet import reactor
+from twisted.internet.defer import maybeDeferred
+from twisted.python.log import PythonLoggingObserver
+from twisted.python.failure import Failure
 
 from vncdotool import command
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 
-log = logging.getLogger('vncdo.thread')
+log = logging.getLogger('vncdotool.thread')
+
+
+class VNCDoThreadError(Exception):
+    pass
 
 
 def connect(server):
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
+    >>> from vncdotool import threaded
     >>> client = threaded.connect('host')
     >>> client.keyPress('c')
     >>> client.join()
+
+    You may then call any regular VNCDoToolClient method on client from your
+    application code.
 
     If you are using a GUI toolkit or other major async library please read
     http://twistedmatrix.com/documents/13.0.0/core/howto/choosing-reactor.html
     for a better method of intergrating vncdotool.
     """
+    observer = PythonLoggingObserver()
+    observer.start()
+
     factory = VNCDoToolFactory()
-    client = ThreadedVNCClient(factory)
-    factory.deferred.addCallback(client._connected)
+    client = ThreadedVNCClientProxy(factory)
 
     host, port = command.parse_host(server)
     client.connect(host, port)
@@ -38,11 +52,11 @@ def connect(server):
     return client
 
 
-class ThreadedVNCClient(object):
+class ThreadedVNCClientProxy(object):
 
     def __init__(self, factory):
         self.factory = factory
-        self.client = None
+        self.queue = Queue.Queue()
 
     def connect(self, host, port=5900):
         reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
@@ -56,36 +70,48 @@ class ThreadedVNCClient(object):
         return self.thread
 
     def join(self):
-        log.debug('waiting for thread to finish')
-        reactor.callFromThread(self.factory.deferred.addCallback, self._stop)
-        self.thread.join()
+        def _stop(result):
+            reactor.stop()
 
-    def _connected(self, client):
-        self.client = client
-        log.debug('connected %s', client)
-        return client
+        reactor.callFromThread(self.factory.deferred.addBoth, _stop)
+        self.thread.join()
 
     def __getattr__(self, attr):
         method = getattr(VNCDoToolClient, attr)
 
-        def wrapped(*args, **kwargs):
-            log.debug('adding Callback %s %s %s', method, args, kwargs)
-            reactor.callFromThread(self.factory.deferred.addCallback, method,
-                                   *args, **kwargs)
-        return wrapped
+        def _releaser(result):
+            self.queue.put(result)
+            return result
 
-    def _stop(self, client):
-        reactor.stop()
+        def _callback(protocol, *args, **kwargs):
+            d = maybeDeferred(method, protocol, *args, **kwargs)
+            d.addBoth(_releaser)
+            return d
 
+        def proxy_call(*args, **kwargs):
+            reactor.callFromThread(self.factory.deferred.addCallback,
+                                   _callback, *args, **kwargs)
+            result = self.queue.get()
+            if isinstance(result, Failure):
+                raise VNCDoThreadError(result)
 
+        return proxy_call
 
 
 if __name__ == '__main__':
+    import sys
+
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG)
 
-    server = 'vncdobox.local'
+    server = sys.argv[1]
     client = connect(server)
 
-    r = client.keyPress('t')
+    # make a screen capture
+    #client.captureScreen('threaded.png')
+
+    # type a password
+    for key in 'passw0rd':
+        client.keyPress(key)
+
     client.join()

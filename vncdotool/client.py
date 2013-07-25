@@ -16,7 +16,7 @@ import operator
 import time
 import logging
 
-log = logging.getLogger('client')
+log = logging.getLogger('vncdotool.client')
 
 
 KEYMAP = {
@@ -403,8 +403,6 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionFailed(self, connector, reason):
         self.deferred.errback(reason)
-        self.deferred = None
 
     def clientConnectionMade(self, protocol):
         self.deferred.callback(protocol)
-        self.deferred = None
