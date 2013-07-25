@@ -28,6 +28,10 @@ log = logging.getLogger()
 SUPPORTED_FORMATS = ('png', 'jpg', 'jpeg', 'gif', 'bmp')
 
 
+class TimeoutError(RuntimeError):
+    pass
+
+
 def log_exceptions(type_, value, tb):
     log.critical('Unhandled exception:', exc_info=(type_, value, tb))
 
@@ -123,6 +127,24 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             filename = args.pop(0)
             rms = int(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
+        elif cmd == 'rcapture':
+            filename = args.pop(0)
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            w = int(args.pop(0))
+            h = int(args.pop(0))
+            imgformat = os.path.splitext(filename)[1][1:]
+            if imgformat not in SUPPORTED_FORMATS:
+                print 'unsupported image format "%s", choose one of %s' % (
+                        imgformat, SUPPORTED_FORMATS)
+            else:
+                factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
+        elif cmd == 'rexpect':
+            filename = args.pop(0)
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            rms = int(args.pop(0))
+            factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
         elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
@@ -289,6 +311,9 @@ def vncdo():
         default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
+    op.add_option('--force-caps', action='store_true',
+        help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
+
     op.add_option('--localcursor', action='store_true',
         help='mouse pointer drawn client-side, useful when server does not include cursor')
 
@@ -314,14 +339,19 @@ def vncdo():
     factory = build_tool(options, args)
     factory.password = options.password
 
-    if options.nocursor:
-        factory.nocursor = True
-
     if options.localcursor:
         factory.pseudocusor = True
 
+    if options.nocursor:
+        factory.nocursor = True
+
+    if options.force_caps:
+        factory.force_caps = True
+
     if options.timeout:
-        reactor.callLater(options.timeout, error, Failure('TIMEOUT Exceeded'))
+        message = 'TIMEOUT Exceeded (%ss)' % options.timeout
+        failure = Failure(TimeoutError(message))
+        reactor.callLater(options.timeout, error, failure)
 
     reactor.run()
 

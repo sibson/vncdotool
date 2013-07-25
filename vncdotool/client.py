@@ -123,6 +123,9 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask = None
 
     def _decodeKey(self, key):
+        if self.factory.force_caps and key.isupper():
+            key = 'shift-%c' % key
+
         if len(key) == 1:
             keys = [key]
         else:
@@ -204,16 +207,28 @@ class VNCDoToolClient(rfb.RFBClient):
     def captureScreen(self, filename):
         """ Save the current display to filename
         """
-        # request screen update
         log.debug('captureScreen %s', filename)
+        return self._capture(filename)
+
+    def captureRegion(self, filename, x, y, w, h):
+        """ Save a region of the current display to filename
+        """
+        log.debug('captureRegion %s', filename)
+        return self._capture(filename, x, y, x+w, y+h)
+
+    def _capture(self, filename, *args):
         self.framebufferUpdateRequest()
         self.deferred = Deferred()
-        self.deferred.addCallback(self._captureSave, filename)
+        self.deferred.addCallback(self._captureSave, filename, *args)
         return self.deferred
 
-    def _captureSave(self, data, filename):
-        log.debug('captureDone %s', filename)
-        self.screen.save(filename)
+    def _captureSave(self, data, filename, *args):
+        log.debug('captureSave %s', filename)
+        if args:
+            capture = self.screen.crop(args)
+        else:
+            capture = self.screen
+        capture.save(filename)
 
         return self
 
@@ -225,26 +240,42 @@ class VNCDoToolClient(rfb.RFBClient):
                     screen and target image
         """
         log.debug('expectScreen %s', filename)
+        return self._expectFramebuffer(filename, 0, 0, maxrms)
+
+    def expectRegion(self, filename, x, y, maxrms=0):
+        """ Wait until a portion of the screen matches the target image
+
+            The region compared is defined by the box
+            (x, y), (x + image.width, y + image.height)
+        """
+        log.debug('expectRegion %s (%s, %s)', filename, x, y)
+        return self._expectFramebuffer(filename, x, y, maxrms)
+
+    def _expectFramebuffer(self, filename, x, y, maxrms):
         self.framebufferUpdateRequest()
-        self.expected = ImageFactory().open(filename).histogram()
+        image = ImageFactory().open(filename)
+        w, h = image.size
+        self.expected = image.histogram()
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, maxrms)
+        self.deferred.addCallback(self._expectCompare, (x, y, x+w, y+h), maxrms)
 
         return self.deferred
 
-    def _expectCompare(self, image, maxrms):
+    def _expectCompare(self, image, box, maxrms):
+        image = image.crop(box)
+
         hist = image.histogram()
         if len(hist) == len(self.expected):
-            rms = math.sqrt(
-                        reduce(operator.add, map(lambda a, b: (a - b) ** 2,
-                            hist, self.expected)) / len(hist))
+            rms = math.sqrt(reduce(operator.add,
+                                   map(lambda a, b: (a - b) ** 2,
+                                   hist, self.expected)) / len(hist))
 
             log.debug('rms %s', int(rms))
             if rms <= maxrms:
                 return self
 
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, maxrms)
+        self.deferred.addCallback(self._expectCompare, box, maxrms)
         self.framebufferUpdateRequest(incremental=1)
 
         return self.deferred
@@ -365,6 +396,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     pseudocusor = False
     nocursor = False
+    force_caps = False
 
     def __init__(self):
         self.deferred = Deferred()
