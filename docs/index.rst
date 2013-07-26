@@ -13,9 +13,8 @@ vncdotool Documentation
    install
    usage
    history
+   modules
 
-.. automodule:: vncdotool.client
-   :undoc-members:
 
 Indices and tables
 ==================
