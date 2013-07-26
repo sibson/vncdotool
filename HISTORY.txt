@@ -22,7 +22,7 @@
     - --warp to replay script faster than real-time
     - --delay, insert a delay between sending commands
 
-vncdotool - 0.2.0 (2012-08-07)
+0.2.0 (2012-08-07)
 --------------------------------
     - add pause, mouseup, mousedown, drag commands
     - only require TWisted 11.1.0, so we can have py2.4 support
@@ -30,12 +30,12 @@ vncdotool - 0.2.0 (2012-08-07)
        - vncdotool type -something now works
        - no longer silently fail for unsupported image formats
 
-vncdotool - 0.1.1 (2011-05-18)
+0.1.1 (2011-05-18)
 --------------------------------
     - add PIL to requires
     - fix bug where incorrect mouse button is sent
 
-vncdotool - 0.1.0 (2011-03-03)
+0.1.0 (2011-03-03)
 --------------------------------
     - first release
     - commands: press, type, move, click, capture, expect

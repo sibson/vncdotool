@@ -2,7 +2,6 @@
 ================
 The RFB Protocol
 ================
-This is copied from the tigervnc project for local reference.
 
 This document is based on "The RFB Protocol" by Tristan Richardson of
 RealVNC Ltd (formerly of Olivetti Research Ltd / AT&T Labs Cambridge).
@@ -3324,3 +3323,5 @@ The values for this pseudo-encoding are defined as follows:
 
 This pseudo-encoding was originally intended for use with JPEG-encoded
 subrectangles, but it could be used with other types of image encoding as well.
+
+_TigerVNC: http://tigervnc.svn.sourceforge.net/viewvc/tigervnc/rfbproto/
