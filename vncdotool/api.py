@@ -1,7 +1,7 @@
 """ Helpers to allow vncdotool to be intergrated into other applications.
 
-This is developemental feature and should only be used if you are willing
-to debug possible issues.
+This feature is under developemental, you're help testing and
+debugging is appreciated.
 """
 
 import threading
@@ -16,7 +16,9 @@ from twisted.python.failure import Failure
 from vncdotool import command
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 
-log = logging.getLogger('vncdotool.thread')
+__all__ = ['connect']
+
+log = logging.getLogger('vncdotool.api')
 
 
 class VNCDoThreadError(Exception):
@@ -108,7 +110,7 @@ if __name__ == '__main__':
     client = connect(server)
 
     # make a screen capture
-    #client.captureScreen('threaded.png')
+    client.captureScreen('screenshot.png')
 
     # type a password
     for key in 'passw0rd':
