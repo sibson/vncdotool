@@ -9,7 +9,8 @@ To use the syncronous API you can do the following::
     from vncdotool import api
     client = api.connect('vnchost:display')
 
-You can then call any of the methods available on client.VNCDoToolClient and they will block until completion.
+You can then call any of the methods available on 
+:class:`vncdotool.client.VNCDoToolClient` and they will block until completion.
 For example::
 
     client.captureScreen('screenshot.png')
@@ -30,3 +31,6 @@ This can be used to automate the starting of an Virtual Machine or other applica
     client.expectScreen('loggedin.png')
 
     # continue with your testing session or other work
+
+
+.. _Twisted: http://twistedmatrix.com/

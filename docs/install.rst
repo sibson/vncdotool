@@ -18,6 +18,7 @@ and if you aren't already using it, and you should be, use a virtualenv_.::
     pip install -e .
 
 
-.. _virtualenv: http://www.virtualenv.org/
+.. _PyPI: https://pypi.python.org/pypi
 .. _PIL: http://www.pythonware.com/products/pil/
 .. _Twisted: http://twistedmatrix.com/
+.. _virtualenv: http://www.virtualenv.org/
