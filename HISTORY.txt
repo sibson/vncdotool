@@ -1,9 +1,10 @@
-0.4.0 (unreleased)
+0.8.0 (unreleased)
 ------------------
     - improved documentation using sphinx
     - regional capture and expect that operate on a portion of the display
     - --force-caps, better compatibility when sending UPPERCASE to servers
     - --timeout, exit with an error after a given number of seconds
+    - experimental syncronous API for easier intergration with non-Twisted apps
 
 0.3.0 (2012-12-22)
 ------------------
