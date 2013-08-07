@@ -1,4 +1,4 @@
-0.8.0 (unreleased)
+0.8.0 (2013-08-06)
 ------------------
     - improved documentation using sphinx
     - regional capture and expect that operate on a portion of the display
