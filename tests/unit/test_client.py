@@ -1,11 +1,13 @@
-import mock
+from unittest import TestCase
+
 from nose.plugins.skip import SkipTest
+import mock
 
 from vncdotool import client
 from vncdotool import rfb
 
 
-class TestVNCDoToolClient(object):
+class TestVNCDoToolClient(TestCase):
 
     def setUp(self):
         self.isolation = mock.isolate.object(client.VNCDoToolClient,
@@ -84,6 +86,9 @@ class TestVNCDoToolClient(object):
         cli.screen.size = (1024, 768)
         fname = 'something.png'
 
+        region = (0 ,0, 11, 22)
+        client.ImageFactory.return_value.open.return_value.size = region[2:]
+
         d = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
 
@@ -91,7 +96,7 @@ class TestVNCDoToolClient(object):
         image.open.assert_called_once_with(fname)
 
         assert cli.expected == image.open.return_value.histogram.return_value
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 5)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
 
     def test_expectCompareSuccess(self):
         cli = self.client
@@ -220,7 +225,6 @@ class TestVNCDoToolFactory(object):
         self.factory.clientConnectionMade(protocol)
 
         deferred.callback.assert_called_once_with(protocol)
-        assert self.factory.deferred is None
 
     def test_clientConnectionFailed(self):
         deferred = mock.Mock()
@@ -231,4 +235,3 @@ class TestVNCDoToolFactory(object):
         self.factory.clientConnectionFailed(connector, reason)
 
         deferred.errback.assert_called_once_with(reason)
-        assert self.factory.deferred is None
