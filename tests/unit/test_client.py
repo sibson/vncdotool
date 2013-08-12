@@ -80,7 +80,8 @@ class TestVNCDoToolClient(object):
 
         cli = self.client
         cli.vncConnectionMade()
-        cli.image = mock.Mock()
+        cli.screen = mock.Mock()
+        cli.screen.size = (1024, 768)
         fname = 'something.png'
 
         d = cli.expectScreen(fname, 5)
@@ -98,7 +99,8 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [1, 2, 3]
-        result = cli._expectCompare(image, 5)
+        image.crop.return_value = image
+        result = cli._expectCompare(image, None, 5)
         assert result == cli
 
     def test_expectCompareExactSuccess(self):
@@ -107,7 +109,8 @@ class TestVNCDoToolClient(object):
         cli.expected = [2, 2, 2]
         image = mock.Mock()
         image.histogram.return_value = [2, 2, 2]
-        result = cli._expectCompare(image, 0)
+        image.crop.return_value = image
+        result = cli._expectCompare(image, None, 0)
         assert result == cli
 
     def test_expectCompareFails(self):
@@ -117,15 +120,16 @@ class TestVNCDoToolClient(object):
         cli.framebufferUpdateRequest = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
+        image.crop.return_value = image
 
-        result = cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, None, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
 
     def test_expectCompareMismatch(self):
         cli = self.client
@@ -134,15 +138,16 @@ class TestVNCDoToolClient(object):
         cli.framebufferUpdateRequest = mock.Mock()
         image = mock.Mock()
         image.histogram.return_value = [1, 1, 1]
+        image.crop.return_value = image
 
-        result = cli._expectCompare(image, 0)
+        result = cli._expectCompare(image, None, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
 
     def test_updateRectangeFullScreen(self):
         cli = self.client
