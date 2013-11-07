@@ -102,14 +102,22 @@ KEYMAP = {
     'kpenter': rfb.KEY_KP_Enter,
 }
 
-
-def ImageFactory():
-    """ Wrap importing PIL.Image so vncdotool can be used without
-    PIL being installed.  Of course capture and expect won't work
-    but at least we can still offer key, type, press and move.
-    """
+# Enable using vncdotool without PIL. Of course capture and expect
+# won't work but at least we can still offer key, type, press and
+# move.
+try:
     from PIL import Image
-    return Image
+    # Init PIL to make sure it will not try to import plugin libraries
+    # in a thread.
+    Image.preinit()
+    Image.init()
+except ImportError, e:
+    # If there is no PIL, raise ImportError where someone tries to use
+    # it.
+    class _Image(object):
+        def __getattr__(self, _):
+            raise ImportError(e)
+    Image = _Image()
 
 
 class VNCDoToolClient(rfb.RFBClient):
@@ -253,7 +261,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _expectFramebuffer(self, filename, x, y, maxrms):
         self.framebufferUpdateRequest()
-        image = ImageFactory().open(filename)
+        image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()
         self.deferred = Deferred()
@@ -341,7 +349,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = ImageFactory().fromstring('RGB', size, data, 'raw', 'RGBX')
+        update = Image.fromstring('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
@@ -365,8 +373,8 @@ class VNCDoToolClient(rfb.RFBClient):
         if not width or not height:
             self.cursor = None
 
-        self.cursor = ImageFactory().fromstring('RGBX', (width, height), image)
-        self.cmask = ImageFactory().fromstring('1', (width, height), mask)
+        self.cursor = Image.fromstring('RGBX', (width, height), image)
+        self.cmask = Image.fromstring('1', (width, height), mask)
         self.cfocus = x, y
         self.drawCursor()
 

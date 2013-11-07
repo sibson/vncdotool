@@ -25,7 +25,7 @@ class VNCDoThreadError(Exception):
     pass
 
 
-def connect(server):
+def connect(server, password=None):
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
@@ -45,6 +45,8 @@ def connect(server):
     observer.start()
 
     factory = VNCDoToolFactory()
+    if password != None:
+        factory.password = password
     client = ThreadedVNCClientProxy(factory)
 
     host, port = command.parse_host(server)
