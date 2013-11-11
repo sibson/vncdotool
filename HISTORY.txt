@@ -1,8 +1,7 @@
-0.9.0 (unreleased)
+0.8.1 (unreleased)
 ------------------
-
-- Nothing changed yet.
-
+    - API, fix deadlocks due to threaded init of PIL, thanks Antti Kervinen
+    - API, support password protected server, thanks Antti Kervinen
 
 0.8.0 (2013-08-06)
 ------------------

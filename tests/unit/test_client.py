@@ -87,15 +87,14 @@ class TestVNCDoToolClient(TestCase):
         fname = 'something.png'
 
         region = (0 ,0, 11, 22)
-        client.ImageFactory.return_value.open.return_value.size = region[2:]
+        client.Image.open.return_value.size = region[2:]
 
         d = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
 
-        image = client.ImageFactory.return_value
-        image.open.assert_called_once_with(fname)
+        client.Image.open.assert_called_once_with(fname)
 
-        assert cli.expected == image.open.return_value.histogram.return_value
+        assert cli.expected == client.Image.open.return_value.histogram.return_value
         cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
 
     def test_expectCompareSuccess(self):
@@ -161,10 +160,9 @@ class TestVNCDoToolClient(TestCase):
 
         cli.updateRectangle(0, 0, 100, 200, data)
 
-        image = client.ImageFactory.return_value
-        image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
+        client.Image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert cli.screen == image.fromstring.return_value
+        assert cli.screen == client.Image.fromstring.return_value
 
     def test_updateRectangeRegion(self):
         cli = self.client
@@ -175,11 +173,10 @@ class TestVNCDoToolClient(TestCase):
 
         cli.updateRectangle(20, 10, 50, 40, data)
 
-        image = client.ImageFactory.return_value
-        image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
+        client.Image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
         paste = cli.screen.paste
-        paste.assert_called_once_with(image.fromstring.return_value, (20, 10))
+        paste.assert_called_once_with(client.Image.fromstring.return_value, (20, 10))
 
     def test_commitUpdate(self):
         rects = mock.Mock()
