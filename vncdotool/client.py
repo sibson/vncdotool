@@ -391,7 +391,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncRequestPassword(self):
         if self.factory.password is None:
-            self.factory.password = getpass.getpass()
+            self.factory.password = getpass.getpass('VNC password:')
 
         self.sendPassword(self.factory.password)
 
