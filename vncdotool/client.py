@@ -353,8 +353,14 @@ class VNCDoToolClient(rfb.RFBClient):
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
-        elif self.screen.size[0] < width or self.screen.size[1] < height:
-            self.screen = update
+        # When the screen is sent in chunks (as observed on VMWare ESXi), the canvas
+        # needs to be resized to fit all existing contents and the update.
+        elif self.screen.size[0] < (x+width) or self.screen.size[1] < (y+height):
+            new_size = (max(x+width, self.screen.size[0]), max(y+height, self.screen.size[1]))
+            new_screen = Image.new("RGB", new_size, "black")
+            new_screen.paste(self.screen, (0, 0))
+            new_screen.paste(update, (x, y))
+            self.screen = new_screen
         else:
             self.screen.paste(update, (x, y))
 
