@@ -1,6 +1,4 @@
-zope.interface==3.7.0
-Twisted==11.1.0
-argparse==1.2.1
-distribute==0.6.24
+Pillow==2.6.1
+Twisted==14.0.2
 wsgiref==0.1.2
-pil==1.1.7
+zope.interface==4.1.1
