@@ -1,0 +1,6 @@
+dependencies:
+    pre:
+        - pip install -r requirements.develop
+test:
+    override:
+        - noseetests tests/unit
