@@ -1,6 +1,11 @@
-vncdotool
-------------
+.. image:: https://badge.fury.io/py/vncdotool.svg
+    :target: http://badge.fury.io/py/vncdotool
 
+.. image:: https://travis-ci.org/sibson/vncdotool.svg?branch=master
+    :target: https://travis-ci.org/sibson/vncdotool
+
+vncdotool
+===========
 vncdotool is a command line VNC client.
 It can be useful to automating interactions with virtual machines or
 hardware devices that are otherwise difficult to control.
