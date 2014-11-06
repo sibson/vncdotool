@@ -3,4 +3,4 @@ dependencies:
         - pip install -r requirements.develop
 test:
     override:
-        - noseetests tests/unit
+        - nosetests tests/unit
