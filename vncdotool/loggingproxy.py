@@ -227,7 +227,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
-    pseudocusor = False
+    pseudocursor = False
     nocursor = False
 
     output = sys.stdout

@@ -82,12 +82,15 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  pause DURATION:\twait DURATION seconds before sending next',
             '  drag X Y:\tmove the mouse to X,Y in small steps',
             '',
-        ])
+           ])
         return result
 
 
 def build_command_list(factory, args, delay=None, warp=1.0):
     client = VNCDoToolClient
+
+    if delay:
+        delay = float(delay) / 1000.0
 
     while args:
         cmd = args.pop(0)
@@ -115,6 +118,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
         elif cmd == 'type':
             for key in args.pop(0):
                 factory.deferred.addCallback(client.keyPress, key)
+                if delay:
+                    factory.deferred.addCallback(client.pause, delay)
         elif cmd == 'capture':
             filename = args.pop(0)
             imgformat = os.path.splitext(filename)[1][1:]
@@ -159,7 +164,7 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             print 'unknown cmd "%s"' % cmd
 
         if delay and args:
-            factory.deferred.addCallback(client.pause, float(delay) / 1000)
+            factory.deferred.addCallback(client.pause, delay)
 
 
 def build_tool(options, args):
@@ -308,7 +313,7 @@ def vncdo():
     add_standard_options(op)
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
-        default=os.environ.get('VNCDOTOOL_DELAY', 0), type='int',
+        default=os.environ.get('VNCDOTOOL_DELAY', 10), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
     op.add_option('--force-caps', action='store_true',
@@ -340,7 +345,7 @@ def vncdo():
     factory.password = options.password
 
     if options.localcursor:
-        factory.pseudocusor = True
+        factory.pseudocursor = True
 
     if options.nocursor:
         factory.nocursor = True

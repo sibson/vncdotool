@@ -328,7 +328,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def vncConnectionMade(self):
         self.setPixelFormat()
         encodings = [rfb.RAW_ENCODING]
-        if self.factory.pseudocusor or self.factory.nocursor:
+        if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
@@ -408,7 +408,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     shared = True
 
-    pseudocusor = False
+    pseudocursor = False
     nocursor = False
     force_caps = False
 
@@ -419,4 +419,5 @@ class VNCDoToolFactory(rfb.RFBFactory):
         self.deferred.errback(reason)
 
     def clientConnectionMade(self, protocol):
+        protocol.transport.setTcpNoDelay(True)
         self.deferred.callback(protocol)
