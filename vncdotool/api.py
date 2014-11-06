@@ -57,28 +57,40 @@ def connect(server, password=None):
 
 
 class ThreadedVNCClientProxy(object):
+    connection_count = 0
+    twisted_thread = None
 
     def __init__(self, factory):
         self.factory = factory
         self.queue = Queue.Queue()
 
     def connect(self, host, port=5900):
-        reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
+        def _connect(host, port, factory):
+            ThreadedVNCClientProxy.connection_count += 1
+            self.connection = reactor.connectTCP(host, port, factory)
+        reactor.callWhenRunning(_connect, host, port, self.factory)
 
     def start(self):
-        self.thread = threading.Thread(target=reactor.run, name='Twisted',
+        # Start a twisted Thread for the first client only
+        if ThreadedVNCClientProxy.twisted_thread is None:
+            thread = threading.Thread(target=reactor.run, name='Twisted',
                                        kwargs={'installSignalHandlers': False})
-        self.thread.daemon = True
-        self.thread.start()
-
-        return self.thread
+            thread.daemon = True
+            ThreadedVNCClientProxy.twisted_thread = thread
+            thread.start()
 
     def join(self):
-        def _stop(result):
-            reactor.stop()
+        def _stop(result, event):
+            # Disconnect the client and stop reactor if this was the last connection
+            self.connection.disconnect()
+            ThreadedVNCClientProxy.connection_count -= 1
+            if ThreadedVNCClientProxy.connection_count == 0:
+                reactor.stop()
+            event.set()
 
-        reactor.callFromThread(self.factory.deferred.addBoth, _stop)
-        self.thread.join()
+        event = threading.Event()
+        reactor.callFromThread(self.factory.deferred.addBoth, _stop, event)
+        event.wait()
 
     def __getattr__(self, attr):
         method = getattr(VNCDoToolClient, attr)
