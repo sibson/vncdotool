@@ -97,7 +97,7 @@ class ThreadedVNCClientProxy(object):
 
         def proxy_call(*args, **kwargs):
             reactor.callFromThread(self.factory.deferred.addCallbacks,
-                                   callback, errback, *args, **kwargs)
+                                   callback, errback, args, kwargs)
             result = self.queue.get(timeout=60 * 60)
             if isinstance(result, Failure):
                 raise VNCDoException(result)
@@ -115,6 +115,8 @@ if __name__ == '__main__':
     server = sys.argv[1]
     client1 = connect(server)
     client2 = connect(server)
+
+    client1.captureScreen('screenshot.png')
 
     for key in 'username':
         client2.keyPress(key)
