@@ -102,6 +102,8 @@ KEYMAP = {
     'kpenter': rfb.KEY_KP_Enter,
 }
 
+SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
+
 # Enable using vncdotool without PIL. Of course capture and expect
 # won't work but at least we can still offer key, type, press and
 # move.
@@ -133,7 +135,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def _decodeKey(self, key):
         if (self.factory.force_caps and key.isalpha() and key.islower()) \
                 or (key.isupper()) \
-                or (key in "~!@#$%^&*()_+{}|:\"<>?"):
+                or (key in SPECIAL_KEYS_US):
             key = 'shift-%c' % key
 
         if len(key) == 1:
