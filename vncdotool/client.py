@@ -131,7 +131,9 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask = None
 
     def _decodeKey(self, key):
-        if self.factory.force_caps and key.isupper():
+        if (self.factory.force_caps and key.isalpha() and key.islower()) \
+                or (key.isupper()) \
+                or (key in "~!@#$%^&*()_+{}|:\"<>?"):
             key = 'shift-%c' % key
 
         if len(key) == 1:
