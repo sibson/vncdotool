@@ -240,50 +240,52 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def expectScreen(self, filename, maxrms=0):
+    def expectScreen(self, filename, maxmse=0):
         """ Wait until the display matches a target image
 
             filename: an image file to read and compare against
-            maxrms: the maximum root mean square between histograms of the
-                    screen and target image
+            maxmse: the maximum mean square error between histograms of the
+                    screen and target image, negative to negate
         """
         log.debug('expectScreen %s', filename)
-        return self._expectFramebuffer(filename, 0, 0, maxrms)
+        return self._expectFramebuffer(filename, 0, 0, maxmse)
 
-    def expectRegion(self, filename, x, y, maxrms=0):
+    def expectRegion(self, filename, x, y, maxmse=0):
         """ Wait until a portion of the screen matches the target image
 
             The region compared is defined by the box
             (x, y), (x + image.width, y + image.height)
         """
         log.debug('expectRegion %s (%s, %s)', filename, x, y)
-        return self._expectFramebuffer(filename, x, y, maxrms)
+        return self._expectFramebuffer(filename, x, y, maxmse)
 
-    def _expectFramebuffer(self, filename, x, y, maxrms):
+    def _expectFramebuffer(self, filename, x, y, maxmse):
         self.framebufferUpdateRequest()
         image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, (x, y, x+w, y+h), maxrms)
+        self.deferred.addCallback(self._expectCompare, (x, y, x+w, y+h), maxmse)
 
         return self.deferred
 
-    def _expectCompare(self, image, box, maxrms):
+    def _expectCompare(self, image, box, maxmse):
         image = image.crop(box)
 
         hist = image.histogram()
         if len(hist) == len(self.expected):
-            rms = math.sqrt(reduce(operator.add,
-                                   map(lambda a, b: (a - b) ** 2,
-                                   hist, self.expected)) / len(hist))
+            mse = reduce(operator.add,
+                         map(lambda a, b: (a - b) ** 2,
+                         hist, self.expected)) / float(len(hist))
 
-            log.debug('rms %s', int(rms))
-            if rms <= maxrms:
+            log.debug('mse %f', mse)
+            if maxmse >= 0 and mse <= maxmse:
+                return self
+            if maxmse < 0 and mse > -maxmse:  # negate comparison if maxmse negative
                 return self
 
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, box, maxrms)
+        self.deferred.addCallback(self._expectCompare, box, maxmse)
         self.framebufferUpdateRequest(incremental=1)
 
         return self.deferred

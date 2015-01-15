@@ -76,7 +76,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  click BUTTON:\tsend a mouse BUTTON click',
             '  capture FILE:\tsave current screen as FILE',
             '  expect FILE FUZZ:  Wait until the screen matches FILE',
-            '\t\tFUZZ amount of error tolerance (RMSE) in match',
+            '\t\tFUZZ amount of error tolerance (MSE) in match, negative to negate',
             '  mousedown BUTTON:\tsend BUTTON down',
             '  mouseup BUTTON:\tsend BUTTON up',
             '  pause DURATION:\twait DURATION seconds before sending next',
@@ -130,8 +130,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
                 factory.deferred.addCallback(client.captureScreen, filename)
         elif cmd == 'expect':
             filename = args.pop(0)
-            rms = int(args.pop(0))
-            factory.deferred.addCallback(client.expectScreen, filename, rms)
+            mse = float(args.pop(0))
+            factory.deferred.addCallback(client.expectScreen, filename, mse)
         elif cmd == 'rcapture':
             filename = args.pop(0)
             x = int(args.pop(0))
@@ -148,8 +148,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             filename = args.pop(0)
             x = int(args.pop(0))
             y = int(args.pop(0))
-            rms = int(args.pop(0))
-            factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
+            mse = float(args.pop(0))
+            factory.deferred.addCallback(client.expectRegion, filename, x, y, mse)
         elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
