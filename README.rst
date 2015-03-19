@@ -30,12 +30,12 @@ You can also take a screen capture with::
     vncdo -s vncservername capture screen.png
 
 
-More documentation can be found on `Read the Docs<http://vncdotool.rtfd.org/>`_.
+More documentation can be found on ReadtheDocs_.
 
 Feedback
 --------------------------------
 Comments, suggestions and patches are welcome and appreciated.
-They can be sent to sibson+vncdotool@gmail.com or via `GitHub<https://github.com/sibson/vncdotool`_.
+They can be sent to sibson+vncdotool@gmail.com or via GitHub_.
 If you are reporting a bug or issue please include the version of both vncdotool
 and the VNC server you are using it with.
 
@@ -43,8 +43,11 @@ Acknowledgements
 --------------------------------
 Thanks to Chris Liechti, techtonik and Todd Whiteman for developing the RFB
 and DES implementations used by vncdotool.
-Also, to the `TigerVNC<http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page>`_
-project for creating a community focus RFB specification document
+Also, to the TigerVNC_ project for creating a community focus RFB specification document
 
 
+
+.. _ReadTheDocs: http://vncdotool.readthedocs.org
+.. _GitHub: http://github.com/sibson/vncdotool
+.. _TigerVNC: http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page
 .. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
