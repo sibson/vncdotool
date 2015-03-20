@@ -130,6 +130,10 @@ class VNCDoToolClient(rfb.RFBClient):
     cursor = None
     cmask = None
 
+    def connectionMade(self):
+        super(VNCDoToolClient, self).connectionMade()
+        self.transport.setTcpNoDelay(True)
+
     def _decodeKey(self, key):
         if self.factory.force_caps and key.isupper():
             key = 'shift-%c' % key
@@ -419,5 +423,4 @@ class VNCDoToolFactory(rfb.RFBFactory):
         self.deferred.errback(reason)
 
     def clientConnectionMade(self, protocol):
-        protocol.transport.setTcpNoDelay(True)
         self.deferred.callback(protocol)

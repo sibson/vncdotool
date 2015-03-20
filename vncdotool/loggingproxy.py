@@ -28,6 +28,9 @@ class RFBServer(Protocol):
     _handler = None
 
     def connectionMade(self):
+        super(RFBServer, self).connectionMade()
+        self.transport.setTcpNoDelay(True)
+
         self.buffer = ''
         self.nbytes = 0
         # XXX send version message

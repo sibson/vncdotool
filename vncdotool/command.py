@@ -10,8 +10,6 @@ import optparse
 import sys
 import os
 import shlex
-import random
-import tempfile
 import logging
 import logging.handlers
 
