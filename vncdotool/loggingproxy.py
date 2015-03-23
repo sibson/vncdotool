@@ -28,7 +28,7 @@ class RFBServer(Protocol):
     _handler = None
 
     def connectionMade(self):
-        super(RFBServer, self).connectionMade()
+        Protocol.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
         self.buffer = ''

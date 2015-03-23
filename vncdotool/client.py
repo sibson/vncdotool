@@ -131,7 +131,7 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask = None
 
     def connectionMade(self):
-        super(VNCDoToolClient, self).connectionMade()
+        rfb.RFBClient.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
     def _decodeKey(self, key):
