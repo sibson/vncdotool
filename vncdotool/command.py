@@ -6,12 +6,11 @@ Command line interface to interact with a VNC Server
 
 MIT License
 """
+import getpass
 import optparse
 import sys
 import os
 import shlex
-import random
-import tempfile
 import logging
 import logging.handlers
 
@@ -54,6 +53,14 @@ def stop(pcol):
     reactor.callLater(0.1, reactor.stop)
 
 
+class VNCDoCLIClient(VNCDoToolClient):
+    def vncRequestPassword(self):
+        if self.factory.password is None:
+            self.factory.password = getpass.getpass('VNC password:')
+
+        self.sendPassword(self.factory.password)
+
+
 class ExitingProcess(protocol.ProcessProtocol):
 
     def processExited(self, reason):
@@ -87,7 +94,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
 
 
 def build_command_list(factory, args, delay=None, warp=1.0):
-    client = VNCDoToolClient
+    client = VNCDoCLIClient
 
     if delay:
         delay = float(delay) / 1000.0
@@ -169,6 +176,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
 
 def build_tool(options, args):
     factory = VNCDoToolFactory()
+    factory.protocol = VNCDoCLIClient
+
     if options.verbose:
         factory.deferred.addCallbacks(log_connected)
 
