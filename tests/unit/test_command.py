@@ -13,14 +13,13 @@ class TestBuildCommandList(unittest.TestCase):
         self.isolation = mock.isolate.object(command.build_command_list)
         self.isolation.start()
         self.factory = mock.Mock()
-        self.client = command.VNCDoToolClient
+        self.client = command.VNCDoCLIClient
         self.deferred = self.factory.deferred
 
     def tearDown(self):
         if self.isolation:
             self.isolation.stop()
             self.isolation = None
-
 
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
@@ -198,3 +197,29 @@ class TestParseHost(object):
         host, port = command.parse_host('::1111')
         assert host == '127.0.0.1'
         assert port == 1111
+
+
+
+class TestVNCDoCLIClient(unittest.TestCase):
+
+    def setUp(self):
+        self.isolation = mock.isolate.object(command.VNCDoCLIClient)
+        self.isolation.start()
+        self.client = command.VNCDoCLIClient()
+        self.client.factory = mock.Mock()
+
+    def tearDown(self):
+        if self.isolation:
+            self.isolation.stop()
+            self.isolation = None
+
+    def test_vncRequestPassword_prompt(self):
+        cli = self.client
+        cli.factory.password = None
+        cli.sendPassword = mock.Mock()
+        cli.vncRequestPassword()
+
+        password = command.getpass.getpass.return_value
+        assert command.getpass.getpass.called
+        assert cli.factory.password == password
+        cli.sendPassword.assert_called_once_with(password)
