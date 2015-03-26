@@ -186,18 +186,6 @@ class TestVNCDoToolClient(TestCase):
 
         self.deferred.callback.assert_called_once_with(self.client.screen)
 
-
-    def test_vncRequestPassword_prompt(self):
-        cli = self.client
-        cli.factory.password = None
-        cli.sendPassword = mock.Mock()
-        cli.vncRequestPassword()
-
-        password = client.getpass.getpass.return_value
-        assert client.getpass.getpass.called
-        assert cli.factory.password == password
-        cli.sendPassword.assert_called_once_with(password)
-
     def test_vncRequestPassword_attribute(self):
         cli = self.client
         cli.sendPassword = mock.Mock()

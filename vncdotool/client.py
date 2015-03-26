@@ -10,7 +10,6 @@ import rfb
 from twisted.internet.defer import Deferred
 from twisted.internet import reactor
 
-import getpass
 import math
 import operator
 import time
@@ -118,6 +117,10 @@ except ImportError, e:
         def __getattr__(self, _):
             raise ImportError(e)
     Image = _Image()
+
+
+class AuthenticationError(Exception):
+    """ VNC Server requires Authentication """
 
 
 class VNCDoToolClient(rfb.RFBClient):
@@ -325,6 +328,13 @@ class VNCDoToolClient(rfb.RFBClient):
     #
     # base customizations
     #
+    def vncRequestPassword(self):
+        if self.factory.password is None:
+            self.transport.loseConnection()
+            self.factory.clientConnectionFailed(self, AuthenticationError('password required, but none provided'))
+            return
+        self.sendPassword(self.factory.password)
+
     def vncConnectionMade(self):
         self.setPixelFormat()
         encodings = [rfb.RAW_ENCODING]
@@ -394,12 +404,6 @@ class VNCDoToolClient(rfb.RFBClient):
         x = self.x - self.cfocus[0]
         y = self.y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
-
-    def vncRequestPassword(self):
-        if self.factory.password is None:
-            self.factory.password = getpass.getpass('VNC password:')
-
-        self.sendPassword(self.factory.password)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
