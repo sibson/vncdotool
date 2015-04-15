@@ -133,13 +133,16 @@ class VNCDoToolClient(rfb.RFBClient):
     cursor = None
     cmask = None
 
+    SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
+
     def connectionMade(self):
         rfb.RFBClient.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
     def _decodeKey(self, key):
-        if self.factory.force_caps and key.isupper():
-            key = 'shift-%c' % key
+        if self.factory.force_caps:
+            if key.isupper() or key in self.SPECIAL_KEYS_US:
+                key = 'shift-%c' % key
 
         if len(key) == 1:
             keys = [key]
