@@ -127,6 +127,9 @@ class NullTransport(object):
     def writeSequence(self, data):
         return
 
+    def setTcpNoDelay(self, enabled):
+        return
+
 
 class VNCLoggingClient(VNCDoToolClient):
     """ Specialization of a VNCDoToolClient that will save screen captures
