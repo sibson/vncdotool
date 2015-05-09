@@ -35,7 +35,8 @@ More documentation can be found on ReadtheDocs_.
 Feedback
 --------------------------------
 Comments, suggestions and patches are welcome and appreciated.
-They can be sent to sibson+vncdotool@gmail.com or via GitHub_.
+They can be sent to via GitHub_, vncdotool@googlegroups.com or sibson+vncdotool@gmail.com.
+
 If you are reporting a bug or issue please include the version of both vncdotool
 and the VNC server you are using it with.
 

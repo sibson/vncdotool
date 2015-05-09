@@ -1,7 +1,16 @@
-0.8.1 (unreleased)
+0.9.0 (2015-05-08)
 ------------------
+    - add special keys [~!@#$%^&*()_+{}|:\"<>?] to --force-caps, for servers that don't handle them, Tyler Oderkirk, Aragats Amirkhanyan
+    - improve vnclog performance with TCP_NODELAY, Ian Britten
+    - by default pause 10ms between sending commands, better compatability with servers
+    - better handle screen resizing, Daniel Stelter-Gliese
     - API, fix deadlocks due to threaded init of PIL, thanks Antti Kervinen
     - API, support password protected server, thanks Antti Kervinen
+    - API, able to connect to multiple servers, Daniel Stelter-Gliese
+    - drop official support for py2.4 and py2.5
+    - use Pillow rather than PIL
+
+Thanks to Jan Sedlák, Daniel Stelter-Gliese, Antti Kervinen, Anatoly Techtonik, Tyler Oderkirk and Aragats Amirkhanyan for helping make this release possible
 
 0.8.0 (2013-08-06)
 ------------------
