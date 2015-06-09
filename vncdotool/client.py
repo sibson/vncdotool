@@ -366,7 +366,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = Image.fromstring('RGB', size, data, 'raw', 'RGBX')
+        update = Image.fromstring('RGB', size, data, 'raw', 'BGRX')
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
