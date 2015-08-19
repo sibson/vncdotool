@@ -12,8 +12,10 @@ vncdotool Documentation
    intro
    install
    usage
+   commands
    library
    history
+   contributing
    modules
 
 

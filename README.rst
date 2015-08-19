@@ -30,7 +30,7 @@ You can also take a screen capture with::
     vncdo -s vncservername capture screen.png
 
 
-More documentation can be found on ReadtheDocs_.
+More documentation can be found on `Read the Docs`_.
 
 Feedback
 --------------------------------
@@ -48,7 +48,7 @@ Also, to the TigerVNC_ project for creating a community focus RFB specification 
 
 
 
-.. _ReadTheDocs: http://vncdotool.readthedocs.org
+.. _Read The Docs: http://vncdotool.readthedocs.org
 .. _GitHub: http://github.com/sibson/vncdotool
 .. _TigerVNC: http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page
 .. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer

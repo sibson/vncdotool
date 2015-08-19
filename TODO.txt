@@ -3,21 +3,20 @@
 
 Future
 ----------------
-  - support embedding as a library
+  - read/create vncpasswd files for better security
+  - file transfers
   - only make screen caps from proxy when user hits Print Screen
   - better control over file creation in service mode (command mode)
-  - file transfers
   - more robust command line, with help
-  - read/create vncpasswd files for better security
   - -via /usr/bin/ssh -f -L 5595:target:5900 proxy sleep 20
   - image recognition
+  - copy to/from clipboard
 
 Wishlist
 ----------------
   - zipped vdo files, containing script and screen caps
   - custom capture file name in service mode
   - pexpect/twisted intergration
-  - copy to/from clipboard
   - support more encodings
     - psedo cursor needs to handle updating damaged areas on move
   - strings, tesseract OCR

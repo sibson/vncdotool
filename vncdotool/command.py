@@ -75,19 +75,26 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         result = optparse.OptionParser.format_help(self, **kwargs)
         result += '\n'.join(
            ['',
-            'Commands (CMD):',
-            '  key KEY:\tsend KEY to server',
-            '\t\tKEY is alphanumeric or a keysym, e.g. ctrl-c, del',
-            '  type TEXT:\tsend alphanumeric string of TEXT',
-            '  move|mousemove X Y:\tmove the mouse cursor to position X,Y',
-            '  click BUTTON:\tsend a mouse BUTTON click',
-            '  capture FILE:\tsave current screen as FILE',
-            '  expect FILE FUZZ:  Wait until the screen matches FILE',
-            '\t\tFUZZ amount of error tolerance (RMSE) in match',
-            '  mousedown BUTTON:\tsend BUTTON down',
-            '  mouseup BUTTON:\tsend BUTTON up',
-            '  pause DURATION:\twait DURATION seconds before sending next',
-            '  drag X Y:\tmove the mouse to X,Y in small steps',
+            'Common Commands (CMD):',
+            '  key KEY\t\tsend KEY to server, alphanumeric or keysym: ctrl-c, del',
+            '  type TEXT\t\tsend alphanumeric string of TEXT',
+            '  move X Y\t\tmove the mouse cursor to position X,Y',
+            '  click BUTTON\t\tsend a mouse BUTTON click',
+            '  capture FILE\t\tsave current screen as FILE',
+            '  expect FILE FUZZ\twait until screen matches FILE',
+            '  pause SECONDS\t\twait SECONDS before sending next command',
+            '',
+            'Other Commands (CMD):',
+            '  keyup KEY\t\tsend KEY released',
+            '  keydown KEY\t\tsend KEY pressed',
+            '  mousedown BUTTON\tsend BUTTON down',
+            '  mousemove X Y\t\talias for move',
+            '  mouseup BUTTON\tsend BUTTON up',
+            '  drag X Y\t\tmove the mouse to X,Y in small steps',
+            '  rcapture FILE X Y W H\tcapture a region of the screen',
+            '  rexpect FILE X Y\texpect that matches a region of the screen',
+            '',
+            'If a filename is given commands will be read from it, or stdin `-`',
             '',
            ])
         return result
@@ -315,7 +322,7 @@ def vnclog():
 
 
 def vncdo():
-    usage = '%prog [options] (CMD CMDARGS|-|filename)'
+    usage = '%prog [options] CMD CMDARGS|-|filename'
     description = 'Command line control of a VNC server'
 
     op = VNCDoToolOptionParser(usage=usage, description=description)
