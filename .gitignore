@@ -6,3 +6,4 @@ vncdotool.egg-info
 .coverage
 .noseids
 .tox
+docs/_build
