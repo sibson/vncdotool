@@ -86,7 +86,7 @@ will have your vnclog connect to your server and your viewer connect to vnclog
     vncviewer ---> vnclog ---> vncserver
 
 For best results be sure to set your vncviewer client to use the RAW encoding.
-Others encoding may work but are not fully supported at this time.::
+Others encoding may work but are not fully supported at this time.
 
 The quickest way to get started is to run::
 
