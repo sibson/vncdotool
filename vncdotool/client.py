@@ -270,12 +270,12 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, x, y, maxrms)
 
     def _expectFramebuffer(self, filename, x, y, maxrms):
-        self.framebufferUpdateRequest()
+        self.framebufferUpdateRequest(incremental=1)
         image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, (x, y, x+w, y+h), maxrms)
+        self.deferred.addCallback(self._expectCompare, (x, y, x + w, y + h), maxrms)
 
         return self.deferred
 
@@ -294,7 +294,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, maxrms)
-        self.framebufferUpdateRequest(incremental=1)
+        self.framebufferUpdateRequest(incremental=1)  # use box ~(x, y, w - x, h - y)?
 
         return self.deferred
 
