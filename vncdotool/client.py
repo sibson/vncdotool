@@ -426,6 +426,9 @@ class VNCDoToolFactory(rfb.RFBFactory):
     def __init__(self):
         self.deferred = Deferred()
 
+    def clientConnectionLost(self, connector, reason):
+        pass
+
     def clientConnectionFailed(self, connector, reason):
         self.deferred.errback(reason)
 
