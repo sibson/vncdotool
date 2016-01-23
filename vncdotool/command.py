@@ -41,7 +41,6 @@ def log_connected(pcol):
     return pcol
 
 
-
 class VNCDoCLIClient(VNCDoToolClient):
     def vncRequestPassword(self):
         if self.factory.password is None:
@@ -216,6 +215,7 @@ def build_tool(options, args):
 
 def build_proxy(options):
     factory = VNCLoggingServerFactory(options.host, int(options.port))
+    factory.password_required = options.password_required
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -294,6 +294,10 @@ def vnclog():
     op.add_option('--viewer', action='store', metavar='CMD',
         help='launch an interactive client using CMD [%default]')
 
+    # ideally we wouldn't need this, VNCLoggingClient should sniff and set this properly
+    op.add_option('--password-required', action='store_true', default=False,
+        help='a VNC password is required to connect to the server')
+
     options, args = op.parse_args()
 
     setup_logging(options)
@@ -325,9 +329,7 @@ def vnclog():
         proc = reactor.spawnProcess(ExitingProcess(),
                                     options.viewer, cmdline.split(),
                                     env=os.environ)
-
     reactor.run()
-
     sys.exit(reactor.exit_status)
 
 

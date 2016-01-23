@@ -188,7 +188,7 @@ class RFBClient(Protocol):
             self._doClientInitialization()
             return
         elif result == 1:   #failed
-            self.vncAuthFailed("autenthication failed")
+            self.vncAuthFailed("authentication failed")
             self.transport.loseConnection()
         elif result == 2:   #too many
             self.vncAuthFailed("too many tries to log in")
@@ -556,7 +556,7 @@ class RFBClient(Protocol):
     def vncAuthFailed(self, reason):
         """called when the authentication failed.
            the connection is closed."""
-        log.msg("Cannot connect: %s" % reason)
+        log.msg("Cannot connect %s" % reason)
 
     def beginUpdate(self):
         """called before a series of updateRectangle(),
