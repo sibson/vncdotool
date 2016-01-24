@@ -1,0 +1,7 @@
+#
+# requirements known to work with python2.6
+#
+Pillow==2.6.1
+Twisted==14.0.2
+wsgiref==0.1.2
+zope.interface==4.1.1
