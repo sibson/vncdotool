@@ -366,7 +366,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = Image.fromstring('RGB', size, data, 'raw', 'RGBX')
+        update = Image.frombytes('RGB', size, data, 'raw', 'RGBX')
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
@@ -396,8 +396,8 @@ class VNCDoToolClient(rfb.RFBClient):
         if not width or not height:
             self.cursor = None
 
-        self.cursor = Image.fromstring('RGBX', (width, height), image)
-        self.cmask = Image.fromstring('1', (width, height), mask)
+        self.cursor = Image.frombytes('RGBX', (width, height), image)
+        self.cmask = Image.frombytes('1', (width, height), mask)
         self.cfocus = x, y
         self.drawCursor()
 

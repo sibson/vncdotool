@@ -160,9 +160,9 @@ class TestVNCDoToolClient(TestCase):
 
         cli.updateRectangle(0, 0, 100, 200, data)
 
-        client.Image.fromstring.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
+        client.Image.frombytes.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert cli.screen == client.Image.fromstring.return_value
+        assert cli.screen == client.Image.frombytes.return_value
 
     def test_updateRectangeRegion(self):
         cli = self.client
@@ -173,10 +173,10 @@ class TestVNCDoToolClient(TestCase):
 
         cli.updateRectangle(20, 10, 50, 40, data)
 
-        client.Image.fromstring.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
+        client.Image.frombytes.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
         paste = cli.screen.paste
-        paste.assert_called_once_with(client.Image.fromstring.return_value, (20, 10))
+        paste.assert_called_once_with(client.Image.frombytes.return_value, (20, 10))
 
     def test_commitUpdate(self):
         rects = mock.Mock()
@@ -194,7 +194,7 @@ class TestVNCDoToolClient(TestCase):
         cli.sendPassword.assert_called_once_with(cli.factory.password)
 
 
-class TestVNCDoToolFactory(object):
+class TestVNCDoToolFactory(TestCase):
 
     def setUp(self):
         self.factory = client.VNCDoToolFactory()
