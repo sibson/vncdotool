@@ -1,15 +1,15 @@
-import pexpect
-import unittest
+from unittest import TestCase
 import sys
 import os.path
+
+import pexpect
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 
 
-
-class TestSendEvents(object):
+class TestSendEvents(TestCase):
 
     def setUp(self):
         cmd = 'vncev -rfbport 5933 -rfbwait 1000'

@@ -1,7 +1,9 @@
-import pexpect
+from unittest import TestCase
 import sys
 import os.path
 import tempfile
+
+import pexpect
 
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
@@ -10,7 +12,7 @@ EXAMPLE_PNG = os.path.join(DATADIR, 'example.png')
 EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
 
 
-class TestVNCCapture(object):
+class TestVNCCapture(TestCase):
     server = None
 
     def setUp(self):

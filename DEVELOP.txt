@@ -1,5 +1,11 @@
 Tests
 -----------
-unit tests are run with 'nosetests tests/unit'
+
+unit tests are run with::
+
+    nosetests tests/unit
+
 The functional tests require libvncserver/examples to be on your path before
-running "nosetests tests/functional.
+running::
+
+    nosetests tests/functional

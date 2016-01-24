@@ -1,4 +1,4 @@
-import unittest
+from unittest import TestCase
 import sys
 
 import pexpect
@@ -6,7 +6,7 @@ import pexpect
 from vncdotool import rfb
 
 
-class TestLogEvents(object):
+class TestLogEvents(TestCase):
     def setUp(self):
         cmd = 'vncev -rfbport 5999 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, timeout=2)
