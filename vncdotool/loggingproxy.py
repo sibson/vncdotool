@@ -49,18 +49,19 @@ class RFBServer(Protocol):
 
         version = msg[8:11]
         if version in ('003', '005'):
-            self._handler = self._handle_clientInit, 1
-            # XXX send security v3.3
+            if self.factory.password_required:
+                self._handler = self._handle_VNCAuthResponse, 16
+            else:
+                self._handler = self._handle_clientInit, 1
         elif version in ('007', '008'):
             # XXX send security v3.7+
-            self._handler = self._handle_security,  1
+            self._handler = self._handle_security, 1
 
     def _handle_security(self):
         sectype = self.buffer[0]
-        # XXX do something with sectype
-        # XXX send security data
-        # XXX send security result
-        self.buffer = self.buffer[1:]
+
+    def _handle_VNCAuthResponse(self):
+        self.buffer = self.buffer[16:]
         self._handler = self._handle_clientInit, 1
 
     def _handle_clientInit(self):
@@ -144,25 +145,28 @@ class VNCLoggingClient(VNCDoToolClient):
 
 
 class VNCLoggingClientProxy(portforward.ProxyClient):
-    """ Interpret messages from the Server
+    """ Accept data from a server and forward to logger and downstream client
+
+    vnc server -> VNCLoggingClientProxy -> vnc client
+                                        -> VNCLoggingClient
     """
-    vncdoclient = None
+    vnclog = None
     ncaptures = 0
 
     def startLogging(self, peer):
-        self.vncdoclient = VNCLoggingClient()
-        self.vncdoclient.transport = NullTransport()
-        self.vncdoclient.factory = self.peer.factory
-        self.vncdoclient.recorder = peer.recorder
+        self.vnclog = VNCLoggingClient()
+        self.vnclog.transport = NullTransport()
+        self.vnclog.factory = self.peer.factory
+        self.vnclog.recorder = peer.recorder
         # XXX double call to connectionMade?
-        self.vncdoclient.connectionMade()
-        self.vncdoclient._handler = self.vncdoclient._handleExpected
-        self.vncdoclient.expect(self.vncdoclient._handleServerInit, 24)
+        self.vnclog.connectionMade()
+        self.vnclog._handler = self.vnclog._handleExpected
+        self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
     def dataReceived(self, data):
         portforward.ProxyClient.dataReceived(self, data)
-        if self.vncdoclient:
-            self.vncdoclient.dataReceived(data)
+        if self.vnclog:
+            self.vnclog.dataReceived(data)
 
 
 class VNCLoggingClientFactory(portforward.ProxyClientFactory):
@@ -170,9 +174,13 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
-    """ Interpret messages from the client
+    """ Proxy in the Middle, decodes and logs RFB messages before sending them upstream
+
+    vnc client -> VNCLoggingServerProxy -> vnc server
+                                        -> RFBServer
     """
     clientProtocolFactory = VNCLoggingClientFactory
+
     server = None
     buttons = 0
     recorder = None
@@ -235,6 +243,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     shared = True
     pseudocursor = False
     nocursor = False
+    password_required = False
 
     output = sys.stdout
     _out = None

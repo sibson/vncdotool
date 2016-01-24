@@ -125,15 +125,22 @@ class RFBClient(Protocol):
     def _handleInitial(self):
         buffer = ''.join(self._packet)
         if '\n' in buffer:
+            version = 3.3
             if buffer[:3] == 'RFB':
-                #~ print "rfb"
-                maj, min = [int(x) for x in buffer[3:-1].split('.')]
-                #~ print maj, min
-                if (maj, min) not in [(3,3), (3,7), (3,8), (3,889), (4,0)]:
-                    log.msg("wrong protocol version, %s.%s\n", maj, min)
-                    self.transport.loseConnection()
+                version_server = float(buffer[3:-1].replace('0', ''))
+                SUPPORTED_VERSIONS = (3.3,)
+                if version_server in SUPPORTED_VERSIONS:
+                    version = version_server
+                else:
+                    log.msg("Protocol version %.3f not supported"
+                            % version_server)
+                    version = max(filter(
+                        lambda x: x <= version_server, SUPPORTED_VERSIONS))
             buffer = buffer[12:]
-            self.transport.write('RFB 003.003\n')
+            log.msg("Using protocol version %.3f" % version)
+            parts = str(version).split('.')
+            self.transport.write(
+                "RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])))
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
@@ -181,7 +188,7 @@ class RFBClient(Protocol):
             self._doClientInitialization()
             return
         elif result == 1:   #failed
-            self.vncAuthFailed("autenthication failed")
+            self.vncAuthFailed("authentication failed")
             self.transport.loseConnection()
         elif result == 2:   #too many
             self.vncAuthFailed("too many tries to log in")
@@ -549,7 +556,7 @@ class RFBClient(Protocol):
     def vncAuthFailed(self, reason):
         """called when the authentication failed.
            the connection is closed."""
-        log.msg("Cannot connect: %s" % reason)
+        log.msg("Cannot connect %s" % reason)
 
     def beginUpdate(self):
         """called before a series of updateRectangle(),

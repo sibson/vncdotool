@@ -20,7 +20,7 @@ For example::
 This can be used to automate the starting of an Virtual Machine or other application::
 
     vmtool.start('myvirtualmachine.img')
-    client.connect('vmaddress:123')
+    client.connect('vmaddress::5950')
     client.expectScreen('booted.png')
     for k in 'username':
         client.keyPress(k)

@@ -193,8 +193,8 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug('mousePress %s', button)
         buttons = self.buttons | (1 << (button - 1))
-        self.pointerEvent(self.x, self.y, buttonmask=buttons)
-        self.pointerEvent(self.x, self.y, buttonmask=self.buttons)
+        self.mouseDown(button)
+        self.mouseUp(button)
 
         return self
 
@@ -425,6 +425,9 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def __init__(self):
         self.deferred = Deferred()
+
+    def clientConnectionLost(self, connector, reason):
+        pass
 
     def clientConnectionFailed(self, connector, reason):
         self.deferred.errback(reason)

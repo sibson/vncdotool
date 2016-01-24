@@ -16,11 +16,12 @@ import logging.handlers
 
 from twisted.python.log import PythonLoggingObserver
 from twisted.internet import reactor, protocol
-from twisted.python import log
+from twisted.internet.error import ConnectionDone
 from twisted.python.failure import Failure
 
 from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
 from vncdotool.loggingproxy import VNCLoggingServerFactory
+
 
 log = logging.getLogger()
 
@@ -40,25 +41,33 @@ def log_connected(pcol):
     return pcol
 
 
-def error(reason):
-    log.critical(reason.getErrorMessage())
-    reactor.exit_status = 10
-    reactor.callLater(0.1, reactor.stop)
-
-
-def stop(pcol):
-    reactor.exit_status = 0
-    pcol.transport.loseConnection()
-    # XXX delay
-    reactor.callLater(0.1, reactor.stop)
-
-
 class VNCDoCLIClient(VNCDoToolClient):
     def vncRequestPassword(self):
         if self.factory.password is None:
             self.factory.password = getpass.getpass('VNC password:')
 
         self.sendPassword(self.factory.password)
+
+
+class VNCDoCLIFactory(VNCDoToolFactory):
+    protocol = VNCDoCLIClient
+
+    def clientConnectionLost(self, connector, reason):
+        if reason.type == ConnectionDone:
+            self.done(0)
+        else:
+            self.error(reason)
+
+    def clientConnectionFailed(self, connector, reason):
+        self.error(reason)
+
+    def error(self, reason):
+        log.critical(reason.getErrorMessage())
+        self.done(10)
+
+    def done(self, exit_code):
+        reactor.exit_status = exit_code
+        reactor.callLater(0.1, reactor.stop)
 
 
 class ExitingProcess(protocol.ProcessProtocol):
@@ -182,8 +191,7 @@ def build_command_list(factory, args, delay=None, warp=1.0):
 
 
 def build_tool(options, args):
-    factory = VNCDoToolFactory()
-    factory.protocol = VNCDoCLIClient
+    factory = VNCDoCLIFactory()
 
     if options.verbose:
         factory.deferred.addCallbacks(log_connected)
@@ -195,17 +203,19 @@ def build_tool(options, args):
 
     build_command_list(factory, args, options.delay, options.warp)
 
-    factory.deferred.addCallback(stop)
-    factory.deferred.addErrback(error)
-
+    # connect
     reactor.connectTCP(options.host, int(options.port), factory)
     reactor.exit_status = 1
+
+    # close the connection when we're done
+    factory.deferred.addCallback(lambda client: client.transport.loseConnection())
 
     return factory
 
 
 def build_proxy(options):
     factory = VNCLoggingServerFactory(options.host, int(options.port))
+    factory.password_required = options.password_required
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -284,6 +294,10 @@ def vnclog():
     op.add_option('--viewer', action='store', metavar='CMD',
         help='launch an interactive client using CMD [%default]')
 
+    # ideally we wouldn't need this, VNCLoggingClient should sniff and set this properly
+    op.add_option('--password-required', action='store_true', default=False,
+        help='a VNC password is required to connect to the server')
+
     options, args = op.parse_args()
 
     setup_logging(options)
@@ -315,9 +329,7 @@ def vnclog():
         proc = reactor.spawnProcess(ExitingProcess(),
                                     options.viewer, cmdline.split(),
                                     env=os.environ)
-
     reactor.run()
-
     sys.exit(reactor.exit_status)
 
 
@@ -341,7 +353,7 @@ def vncdo():
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')
 
-    op.add_option('-t', '--timeout', action='store', type='int', metavar='TIMEOUT',
+    op.add_option('-t', '--timeout', action='store', type='float', metavar='TIMEOUT',
         help='abort if unable to complete all actions within TIMEOUT seconds')
 
     op.add_option('-w', '--warp', action='store', type='float',
@@ -372,7 +384,7 @@ def vncdo():
     if options.timeout:
         message = 'TIMEOUT Exceeded (%ss)' % options.timeout
         failure = Failure(TimeoutError(message))
-        reactor.callLater(options.timeout, error, failure)
+        reactor.callLater(options.timeout, factory.error, failure)
 
     reactor.run()
 
