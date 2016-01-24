@@ -1,6 +1,6 @@
 dependencies:
     pre:
-        - pip install -r requirements.develop
+        - pip install -r requirements-dev.txt
 test:
     override:
         - nosetests tests/unit
