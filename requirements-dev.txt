@@ -1,3 +1,4 @@
+-r requirements.txt
 pexpect==4.0.1
 pluggy==0.3.1
 ptyprocess==0.5
