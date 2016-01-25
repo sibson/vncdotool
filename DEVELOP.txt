@@ -1,7 +1,7 @@
 Tests
 -----------
 
-unit tests are run with::
+Unit tests are run with::
 
     nosetests tests/unit
 
