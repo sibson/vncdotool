@@ -4,9 +4,14 @@ python:
   - "2.6"
   - "2.7"
 
+before_script:
+    - wget https://github.com/LibVNC/libvncserver/archive/LibVNCServer-0.9.10.tar.gz
+    - tar -xvf LibVNCServer-0.9.10.tar.gz
+    - export PATH=$PATH:$PWD/libvncserver-LibVNCServer-0.9.10/examples/
+
 # command to install dependencies
 install:
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.6" ]]; then pip install -r requirements-2.6-dev.txt; else pip install -r requirements-dev.txt; fi
 
 # command to run tests
-script: nosetests tests/unit
+script: nosetests tests
