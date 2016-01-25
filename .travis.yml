@@ -4,7 +4,8 @@ python:
   - "2.7"
 
 # command to install dependencies
-install: pip install -r requirements.develop --use-mirrors
+install:
+    - if [[ "$TRAVIS_PYTHON_VERSION" == "2.6" ]]; then pip install -r requirements-2.6-dev.txt; else pip install -r requirements-dev.txt; fi
 
 # command to run tests
 script: nosetests tests/unit

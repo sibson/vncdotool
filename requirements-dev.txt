@@ -1,0 +1,8 @@
+-r requirements.txt
+pexpect==4.0.1
+pluggy==0.3.1
+ptyprocess==0.5
+py==1.4.31
+pytest==2.8.6
+tox==2.3.1
+virtualenv==14.0.1
