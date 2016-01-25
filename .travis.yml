@@ -7,7 +7,7 @@ python:
 before_script:
     - wget https://github.com/LibVNC/libvncserver/archive/LibVNCServer-0.9.10.tar.gz
     - tar -xvf LibVNCServer-0.9.10.tar.gz
-    - cd libvncserver-LibVNCServer-0.9.10 && ./autogen.sh && make -j8
+    - (cd libvncserver-LibVNCServer-0.9.10 && ./autogen.sh && make -j8)
     - export PATH=$PATH:$PWD/libvncserver-LibVNCServer-0.9.10/examples/
 
 # command to install dependencies
