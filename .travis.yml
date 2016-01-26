@@ -16,4 +16,6 @@ install:
 # command to run tests
 script:
     - export PATH=$PATH:$PWD/libvncserver-LibVNCServer-0.9.10/examples
+    - echo $PATH
+    - ls -R
     - nosetests tests/unit tests/functional
