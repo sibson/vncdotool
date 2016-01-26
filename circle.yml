@@ -4,4 +4,4 @@ dependencies:
 test:
     override:
 
-        - nosetests --with-xunit --xunit-file="$CIRCLE_TEST_REPORTS/nosetests/nosetests.xml" tests/unit
+        - nosetests --with-xunit --xunit-file="$CIRCLE_TEST_REPORTS/nosetests.xml" tests/unit
