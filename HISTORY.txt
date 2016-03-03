@@ -1,6 +1,11 @@
-0.9.1 (unreleased)
+0.10.0 (2016-03-03)
 ------------------
-    -
+    - drop offical 2.6 support, it'll probably work for a while still
+    - use frombytes rather than fromstring for compatibility with PIL
+    - vnclog works with password protected servers using --password-required
+    - exit more reliably after an error
+    - use increatmental frameBufferUpdateRequests, appears to be compatible with more servers
+    - include basic version negotiation with servers, thanks Ezra Bühler
 
 0.9.0 (2015-05-08)
 ------------------
