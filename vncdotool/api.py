@@ -56,9 +56,9 @@ def connect(server, password=None):
     factory = VNCDoToolFactory()
     if password is not None:
         factory.password = password
-    client = ThreadedVNCClientProxy(factory)
 
     host, port = command.parse_host(server)
+    client = ThreadedVNCClientProxy(factory)
     client.connect(host, port)
 
     return client
@@ -80,6 +80,11 @@ class ThreadedVNCClientProxy(object):
 
     def connect(self, host, port=5900):
         reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
+
+    def disconnect(self):
+        def disconnector(protocol):
+            protocol.transport.loseConnection()
+        reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
 
     def __getattr__(self, attr):
         method = getattr(VNCDoToolClient, attr)
@@ -113,8 +118,9 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)
 
     server = sys.argv[1]
-    client1 = connect(server)
-    client2 = connect(server)
+    password = sys.argv[2]
+    client1 = connect(server, password)
+    client2 = connect(server, password)
 
     client1.captureScreen('screenshot.png')
 
@@ -124,4 +130,6 @@ if __name__ == '__main__':
     for key in 'passw0rd':
         client1.keyPress(key)
 
+    client1.disconnect()
+    client2.disconnect()
     shutdown()

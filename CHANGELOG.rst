@@ -1,9 +1,10 @@
 0.10.1 (unreleased)
 --------------------
+  - add api.client.disconnect()
 
 0.10.0 (2016-03-03)
 ------------------
-  - drop offical 2.6 support, it'll probably work for a while still
+  - drop official 2.6 support, it'll probably work for a while still
   - use frombytes rather than fromstring for compatibility with PIL
   - vnclog works with password protected servers using --password-required
   - exit more reliably after an error
