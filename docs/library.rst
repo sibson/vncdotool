@@ -29,6 +29,7 @@ This can be used to automate the starting of an Virtual Machine or other applica
         client.keyPress(k)
     client.keyPress('enter')
     client.expectScreen('loggedin.png')
+    client.disconnect()
 
     # continue with your testing session or other work
 
