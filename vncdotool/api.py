@@ -5,7 +5,10 @@ debugging is appreciated.
 """
 
 import threading
-import Queue
+try:
+    import queue
+except ImportError:
+    import Queue as queue
 import logging
 
 from twisted.internet import reactor
@@ -13,8 +16,8 @@ from twisted.internet.defer import maybeDeferred
 from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
 
-from vncdotool import command
-from vncdotool.client import VNCDoToolFactory, VNCDoToolClient
+from . import command
+from .client import VNCDoToolFactory, VNCDoToolClient
 
 __all__ = ['connect']
 
@@ -76,7 +79,7 @@ class ThreadedVNCClientProxy(object):
 
     def __init__(self, factory):
         self.factory = factory
-        self.queue = Queue.Queue()
+        self.queue = queue.Queue()
 
     def connect(self, host, port=5900):
         reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)

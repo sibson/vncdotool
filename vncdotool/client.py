@@ -6,12 +6,11 @@ Twisted based VNC client protocol and factory
 MIT License
 """
 
-import rfb
+from . import rfb
 from twisted.internet.defer import Deferred
 from twisted.internet import reactor
 
 import math
-import operator
 import time
 import logging
 
@@ -110,12 +109,12 @@ try:
     # in a thread.
     Image.preinit()
     Image.init()
-except ImportError, e:
+except ImportError as error:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
     class _Image(object):
         def __getattr__(self, _):
-            raise ImportError(e)
+            raise ImportError(error)
     Image = _Image()
 
 
@@ -284,9 +283,10 @@ class VNCDoToolClient(rfb.RFBClient):
 
         hist = image.histogram()
         if len(hist) == len(self.expected):
-            rms = math.sqrt(reduce(operator.add,
-                                   map(lambda a, b: (a - b) ** 2,
-                                   hist, self.expected)) / len(hist))
+            sum_ = 0
+            for h, e in zip(hist, self.expected):
+                sum_ += (h - e) ** 2
+            rms = math.sqrt(sum_ / len(hist))
 
             log.debug('rms %s', int(rms))
             if rms <= maxrms:
@@ -311,14 +311,14 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug('mouseDrag %d,%d', x, y)
         if x < self.x:
-            xsteps = [self.x - i for i in xrange(step, self.x - x + 1, step)]
+            xsteps = [self.x - i for i in range(step, self.x - x + 1, step)]
         else:
-            xsteps = xrange(self.x, x, step)
+            xsteps = range(self.x, x, step)
 
         if y < self.y:
-            ysteps = [self.y - i for i in xrange(step, self.y - y + 1, step)]
+            ysteps = [self.y - i for i in range(step, self.y - y + 1, step)]
         else:
-            ysteps = xrange(self.y, y, step)
+            ysteps = range(self.y, y, step)
 
         for ypos in ysteps:
             time.sleep(.2)
@@ -351,10 +351,10 @@ class VNCDoToolClient(rfb.RFBClient):
         self.factory.clientConnectionMade(self)
 
     def bell(self):
-        print 'ding'
+        print('ding')
 
     def copy_text(self, text):
-        print 'clipboard copy', repr(text)
+        print('clipboard copy', repr(text))
 
     def paste(self, message):
         self.clientCutText(message)
