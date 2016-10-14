@@ -3,7 +3,7 @@ from vncdotool import command
 
 import unittest
 
-import mock
+from . import mock
 
 
 class TestBuildCommandList(unittest.TestCase):

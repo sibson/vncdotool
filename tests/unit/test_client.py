@@ -1,7 +1,7 @@
 from unittest import TestCase
 
 from nose.plugins.skip import SkipTest
-import mock
+from . import mock
 
 from vncdotool import client
 from vncdotool import rfb
