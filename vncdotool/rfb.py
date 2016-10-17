@@ -15,9 +15,9 @@ MIT License
 import sys
 import math
 from struct import pack, unpack
-import pyDes
+from . import pyDes
 from twisted.python import usage, log
-from twisted.internet.protocol import Factory, Protocol
+from twisted.internet.protocol import Protocol
 from twisted.internet import protocol
 from twisted.application import internet, service
 
@@ -123,11 +123,11 @@ class RFBClient(Protocol):
     #------------------------------------------------------
 
     def _handleInitial(self):
-        buffer = ''.join(self._packet)
-        if '\n' in buffer:
+        buffer = b''.join(self._packet)
+        if b'\n' in buffer:
             version = 3.3
-            if buffer[:3] == 'RFB':
-                version_server = float(buffer[3:-1].replace('0', ''))
+            if buffer[:3] == b'RFB':
+                version_server = float(buffer[3:-1].replace(b'0', b''))
                 SUPPORTED_VERSIONS = (3.3,)
                 if version_server in SUPPORTED_VERSIONS:
                     version = version_server
@@ -140,7 +140,7 @@ class RFBClient(Protocol):
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
             self.transport.write(
-                "RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])))
+                b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])))
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
@@ -475,7 +475,7 @@ class RFBClient(Protocol):
 
     def _handleExpected(self):
         if self._packet_len >= self._expected_len:
-            buffer = ''.join(self._packet)
+            buffer = b''.join(self._packet)
             while len(buffer) >= self._expected_len:
                 self._already_expecting = 1
                 block, buffer = buffer[:self._expected_len], buffer[self._expected_len:]
@@ -630,25 +630,25 @@ if __name__ == '__main__':
     class RFBTest(RFBClient):
         """dummy client"""
         def vncConnectionMade(self):
-            print "Screen format: depth=%d bytes_per_pixel=%r" % (self.depth, self.bpp)
-            print "Desktop name: %r" % self.name
+            print("Screen format: depth=%d bytes_per_pixel=%r" % (self.depth, self.bpp))
+            print("Desktop name: %r" % self.name)
             self.SetEncodings([RAW_ENCODING])
             self.FramebufferUpdateRequest()
 
         def updateRectangle(self, x, y, width, height, data):
-            print "%s " * 5 % (x, y, width, height, repr(data[:20]))
+            print("%s " * 5 % (x, y, width, height, repr(data[:20])))
 
     class RFBTestFactory(protocol.ClientFactory):
         """test factory"""
         protocol = RFBTest
         def clientConnectionLost(self, connector, reason):
-            print reason
+            print(reason)
             from twisted.internet import reactor
             reactor.stop()
             #~ connector.connect()
 
         def clientConnectionFailed(self, connector, reason):
-            print "connection failed:", reason
+            print("connection failed:", reason)
             from twisted.internet import reactor
             reactor.stop()
 
@@ -663,10 +663,10 @@ if __name__ == '__main__':
     o = Options()
     try:
         o.parseOptions()
-    except usage.UsageError, errortext:
-        print "%s: %s" % (sys.argv[0], errortext)
-        print "%s: Try --help for usage details." % (sys.argv[0])
-        raise SystemExit, 1
+    except usage.UsageError as errortext:
+        print("%s: %s" % (sys.argv[0], errortext))
+        print("%s: Try --help for usage details." % (sys.argv[0]))
+        raise SystemExit(1)
 
     logFile = sys.stdout
     if o.opts['outfile']:

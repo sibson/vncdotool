@@ -8,7 +8,7 @@ import logging
 from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
 
-from vncdotool.client import VNCDoToolClient, KEYMAP
+from .client import VNCDoToolClient, KEYMAP
 
 
 log = logging.getLogger('proxy')
@@ -21,7 +21,7 @@ TYPE_LEN = {
     5: 6,
 }
 
-REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.iteritems())
+REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.items())
 
 
 class RFBServer(Protocol):
