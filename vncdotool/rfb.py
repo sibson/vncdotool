@@ -206,7 +206,7 @@ class RFBClient(Protocol):
          self.redmax, self.greenmax, self.bluemax,
          self.redshift, self.greenshift, self.blueshift) = \
            unpack("!BBBBHHHBBBxxx", pixformat)
-        self.bypp = self.bpp / 8        #calc bytes per pixel
+        self.bypp = self.bpp // 8        #calc bytes per pixel
         self.expect(self._handleServerName, namelen)
 
     def _handleServerName(self, block):
