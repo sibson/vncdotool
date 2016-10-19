@@ -505,7 +505,7 @@ class RFBClient(Protocol):
         self.bpp, self.depth, self.bigendian, self.truecolor = bpp, depth, bigendian, truecolor
         self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
         self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
-        self.bypp = self.bpp / 8        #calc bytes per pixel
+        self.bypp = self.bpp // 8        #calc bytes per pixel
         #~ print self.bypp
 
     def setEncodings(self, list_of_encodings):
