@@ -250,7 +250,7 @@ def add_standard_options(parser):
     parser.add_option('--logfile', action='store', metavar='FILE',
         help='output logging information to FILE')
 
-    parser.add_option('-v', '--verbose', action='count',
+    parser.add_option('-v', '--verbose', action='count', default=0,
         help='increase verbosity, use multple times')
 
     return parser
