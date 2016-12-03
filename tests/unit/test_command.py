@@ -199,7 +199,6 @@ class TestParseHost(object):
         assert port == 1111
 
 
-
 class TestVNCDoCLIClient(unittest.TestCase):
 
     def setUp(self):
