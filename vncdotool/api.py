@@ -17,7 +17,7 @@ from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
 
 from . import command
-from .client import VNCDoToolFactory, VNCDoToolClient
+from .client import VNCDoToolFactory
 
 __all__ = ['connect']
 
@@ -90,7 +90,7 @@ class ThreadedVNCClientProxy(object):
         reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
 
     def __getattr__(self, attr):
-        method = getattr(VNCDoToolClient, attr)
+        method = getattr(self.factory.protocol, attr)
 
         def errback(reason, *args, **kwargs):
             self.queue.put(Failure(reason))
