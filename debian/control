@@ -2,7 +2,11 @@ Source: vncdotool
 Maintainer: Marc Sibson <sibson+vncdotool@gmail.com>
 Section: python
 Priority: optional
-Build-Depends: python-setuptools (>= 0.6b3), debhelper (>= 7), python-support (>= 0.8.4)
+Build-Depends:
+ python-setuptools (>= 0.6b3),
+ debhelper (>= 7),
+ python-support (>= 0.8.4),
+ python-sphinx
 Standards-Version: 3.8.4
 
 Package: python-vncdotool
