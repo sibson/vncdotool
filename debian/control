@@ -21,3 +21,8 @@ Package: vnclogd
 Architecture: all
 Depends: python-vncdotool
 Description: Daemon to record VNC sessions for playback with vncdotool
+
+Package: python-vncdotool-doc
+Architecture: all
+Description: Documentation for the vncdotool package
+
