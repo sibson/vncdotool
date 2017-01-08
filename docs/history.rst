@@ -1,4 +1,4 @@
 Release History
 ==================
 
-.. include:: ../HISTORY.txt
+.. include:: ../CHANGELOG.rst
