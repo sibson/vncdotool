@@ -4,12 +4,15 @@ import os.path
 
 import pexpect
 
+from .helpers import PExpectAssertMixin
+
+
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 
 
-class TestSendEvents(TestCase):
+class TestSendEvents(PExpectAssertMixin, TestCase):
 
     def setUp(self):
         cmd = u'vncev -rfbport 5933 -rfbwait 1000'
@@ -17,22 +20,6 @@ class TestSendEvents(TestCase):
 
     def tearDown(self):
         self.server.terminate(force=True)
-
-    def assertKeyDown(self, key):
-        down = u'^.*down:\s+\(%s\)\r' % hex(key)
-        self.server.expect(down)
-
-    def assertKeyUp(self, key):
-        up = u'^.*up:\s+\(%s\)\r' % hex(key)
-        self.server.expect(up)
-
-    def assertMouse(self, x, y, buttonmask):
-        output = u'^.*Ptr: mouse button mask %s at %d,%d' % (hex(buttonmask), x, y)
-        self.server.expect(output)
-
-    def assertDisconnect(self):
-        disco = u'Client 127.0.0.1 gone'
-        self.server.expect(disco)
 
     def run_vncdo(self, commands):
         cmd = u'vncdo -v -s :33 ' + commands
