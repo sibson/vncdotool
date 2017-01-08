@@ -12,30 +12,30 @@ KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 class TestSendEvents(TestCase):
 
     def setUp(self):
-        cmd = 'vncev -rfbport 5933 -rfbwait 1000'
+        cmd = u'vncev -rfbport 5933 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, logfile=sys.stdout, timeout=2)
 
     def tearDown(self):
         self.server.terminate(force=True)
 
     def assertKeyDown(self, key):
-        down = '^.*down:\s+\(%s\)\r' % hex(key)
+        down = u'^.*down:\s+\(%s\)\r' % hex(key)
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = '^.*up:\s+\(%s\)\r' % hex(key)
+        up = u'^.*up:\s+\(%s\)\r' % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):
-        output = '^.*Ptr: mouse button mask %s at %d,%d' % (hex(buttonmask), x, y)
+        output = u'^.*Ptr: mouse button mask %s at %d,%d' % (hex(buttonmask), x, y)
         self.server.expect(output)
 
     def assertDisconnect(self):
-        disco = 'Client 127.0.0.1 gone'
+        disco = u'Client 127.0.0.1 gone'
         self.server.expect(disco)
 
     def run_vncdo(self, commands):
-        cmd = 'vncdo -v -s :33 ' + commands
+        cmd = u'vncdo -v -s :33 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
         retval = vnc.wait()
         assert retval == 0, retval
