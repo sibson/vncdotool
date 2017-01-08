@@ -54,44 +54,44 @@ class TestVNCCapture(TestCase):
 
     def testCaptureExample(self):
         fname = self.mktemp()
-        self.run_server('example')
-        self.run_vncdo('move 150 100 capture %s' % fname)
+        self.run_server(u'example')
+        self.run_vncdo(u'move 150 100 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_PNG)
 
     def testCaptureCapture(self):
         f1 = self.mktemp()
         f2 = self.mktemp()
 
-        self.run_server('example')
-        self.run_vncdo('move 150 100 capture %s capture %s' % (f1, f2))
+        self.run_server(u'example')
+        self.run_vncdo(u'move 150 100 capture %s capture %s' % (f1, f2))
         self.assertFilesEqual(f1, EXAMPLE_PNG)
         self.assertFilesEqual(f2, f1)
 
     def testCaptureNoCursor(self):
         fname = self.mktemp()
-        self.run_server('example')
-        self.run_vncdo('--nocursor move 150 100 pause 0.1 capture %s' % fname)
+        self.run_server(u'example')
+        self.run_vncdo(u'--nocursor move 150 100 pause 0.1 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_NOCURSOR_PNG)
 
     def testCaptureLocalCursor(self):
         fname = self.mktemp()
-        self.run_server('example')
-        self.run_vncdo('--localcursor move 150 100 pause 0.1 capture %s' % fname)
+        self.run_server(u'example')
+        self.run_vncdo(u'--localcursor move 150 100 pause 0.1 capture %s' % fname)
         self.assertFilesEqual(fname, EXAMPLE_PNG)
 
     def testExpectExampleExactly(self):
-        self.run_server('example')
-        self.run_vncdo('move 150 100 pause 0.1 expect %s 0' % EXAMPLE_PNG)
+        self.run_server(u'example')
+        self.run_vncdo(u'move 150 100 pause 0.1 expect %s 0' % EXAMPLE_PNG)
 
     def testExpectExampleSloppy(self):
-        self.run_server('example')
-        self.run_vncdo('move 200 100 expect %s 25' % EXAMPLE_PNG)
+        self.run_server(u'example')
+        self.run_vncdo(u'move 200 100 expect %s 25' % EXAMPLE_PNG)
 
     def testExpectFailsExample(self):
-        self.run_server('example')
+        self.run_server(u'example')
         try:
-            self.run_vncdo('expect %s 0' % SIMPLE_PNG, exitcode=10)
+            self.run_vncdo(u'expect %s 0' % SIMPLE_PNG, exitcode=10)
         except pexpect.TIMEOUT:
             pass
         else:
-            raise AssertionError('should timeout')
+            raise AssertionError(u'should timeout')
