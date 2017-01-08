@@ -4,8 +4,7 @@ import os.path
 
 import pexpect
 
-from .helpers import PExpectAssertMixin
-
+from helpers import PExpectAssertMixin
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')

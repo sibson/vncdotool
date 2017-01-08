@@ -4,9 +4,9 @@ import sys
 import pexpect
 
 from vncdotool import rfb
-from .helpers import PExpectAssertMixin
+from helpers import PExpectAssertMixin
 
-class TestLogEvents(TestCase):
+class TestLogEvents(PExpectAssertMixin, TestCase):
     def setUp(self):
         cmd = u'vncev -rfbport 5999 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, timeout=2)
