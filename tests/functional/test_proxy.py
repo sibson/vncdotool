@@ -6,6 +6,7 @@ import pexpect
 from vncdotool import rfb
 from helpers import PExpectAssertMixin
 
+
 class TestLogEvents(PExpectAssertMixin, TestCase):
     def setUp(self):
         cmd = u'vncev -rfbport 5999 -rfbwait 1000'
@@ -29,23 +30,23 @@ class TestLogEvents(PExpectAssertMixin, TestCase):
         assert retval == 0, (retval, str(vnc))
 
     def test_key_alpha(self):
-        self.run_vncdo('key z')
+        self.run_vncdo(u'key z')
 
         self.assertKeyDown(ord('z'))
         self.assertKeyUp(ord('z'))
 
-        self.recorder.expect('keydown z')
-        self.recorder.expect('keyup z')
+        self.recorder.expect(u'keydown z')
+        self.recorder.expect(u'keyup z')
 
     def test_key_ctrl_a(self):
-        self.run_vncdo('key ctrl-a')
+        self.run_vncdo(u'key ctrl-a')
         self.assertKeyDown(rfb.KEY_ControlLeft)
         self.assertKeyDown(ord('a'))
         self.assertKeyUp(rfb.KEY_ControlLeft)
         self.assertKeyUp(ord('a'))
 
     def test_mouse(self):
-        self.run_vncdo('move 111 222 click 1')
+        self.run_vncdo(u'move 111 222 click 1')
         self.assertMouse(111, 222, 1)
-        self.recorder.expect('move 111 222')
-        self.recorder.expect('click 1')
+        self.recorder.expect(u'move 111 222')
+        self.recorder.expect(u'click 1')

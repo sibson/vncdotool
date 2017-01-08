@@ -27,13 +27,13 @@ class TestSendEvents(PExpectAssertMixin, TestCase):
         assert retval == 0, retval
 
     def test_key_alpha(self):
-        self.run_vncdo('key z')
+        self.run_vncdo(u'key z')
         self.assertKeyDown(ord('z'))
         self.assertKeyUp(ord('z'))
         self.assertDisconnect()
 
     def test_key_ctrl_a(self):
-        self.run_vncdo('key ctrl-a')
+        self.run_vncdo(u'key ctrl-a')
         self.assertKeyDown(int(0xffe3))
         self.assertKeyDown(ord('a'))
         self.assertKeyUp(int(0xffe3))
@@ -41,8 +41,8 @@ class TestSendEvents(PExpectAssertMixin, TestCase):
         self.assertDisconnect()
 
     def test_type(self):
-        string = 'abcdefghij'
-        self.run_vncdo('type %s' % string)
+        string = u'abcdefghij'
+        self.run_vncdo(u'type %s' % string)
         for key in string:
             self.assertKeyDown(ord(key))
             self.assertKeyUp(ord(key))
@@ -50,17 +50,17 @@ class TestSendEvents(PExpectAssertMixin, TestCase):
 
     def test_mouse_move(self):
         # vncev only prints click events, but will include the position
-        self.run_vncdo('move 10 20 click 1')
+        self.run_vncdo(u'move 10 20 click 1')
         self.assertMouse(10, 20, 0x1)
         self.assertDisconnect()
 
     def test_mouse_click_button_two(self):
-        self.run_vncdo('click 2')
+        self.run_vncdo(u'click 2')
         self.assertMouse(0, 0, 0x2)
         self.assertDisconnect()
 
     def test_read_files(self):
-        self.run_vncdo('key x %s key y %s' % (KEYA_VDO, KEYB_VDO))
+        self.run_vncdo(u'key x %s key y %s' % (KEYA_VDO, KEYB_VDO))
         for key in 'xayb':
             self.assertKeyDown(ord(key))
             self.assertKeyUp(ord(key))
