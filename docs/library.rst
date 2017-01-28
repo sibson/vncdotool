@@ -7,7 +7,7 @@ It uses a seperate thread to run the Twisted reactor and communitcates with the 
 To use the syncronous API you can do the following::
 
     from vncdotool import api
-    client = api.connect('vnchost:display')
+    client = api.connect('vnchost:display', password=None)
 
 You can then call any of the methods available on 
 :class:`vncdotool.client.VNCDoToolClient` and they will block until completion.
