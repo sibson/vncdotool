@@ -37,6 +37,7 @@ ZLIBHEX_ENCODING =              8
 ZRLE_ENCODING =                 16
 #0xffffff00 to 0xffffffff tight options
 PSEUDO_CURSOR_ENCODING =        -239
+PSEUDO_DESKTOP_SIZE_ENCODING =  -223
 
 #keycodes
 #for KeyEvent()
@@ -265,6 +266,8 @@ class RFBClient(Protocol):
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
+            elif encoding == PSEUDO_DESKTOP_SIZE_ENCODING:
+                self._handleDecodeDesktopSize(width, height)
             else:
                 log.msg("unknown encoding received (encoding %d)" % encoding)
                 self._doConnection()
@@ -453,6 +456,11 @@ class RFBClient(Protocol):
         self.updateCursor(x, y, width, height, image, mask)
         self._doConnection()
 
+    # --- Pseudo Desktop Size Encoding
+    def _handleDecodeDesktopSize(self, width, height):
+        self.updateDesktopSize(width, height)
+        self._doConnection()
+
     # ---  other server messages
 
     def _handleServerCutText(self, block):
@@ -588,6 +596,9 @@ class RFBClient(Protocol):
     def updateCursor(self, x, y, width, height, image, mask):
         """ New cursor, focuses at (x, y)
         """
+
+    def updateDesktopSize(width, height):
+        """ New desktop size of width*height. """
 
     def bell(self):
         """bell"""
