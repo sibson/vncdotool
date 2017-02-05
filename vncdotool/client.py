@@ -412,6 +412,11 @@ class VNCDoToolClient(rfb.RFBClient):
         y = self.y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
+    def updateDesktopSize(self, width, height):
+        new_screen = Image.new("RGB", (width, height), "black")
+        new_screen.paste(self.screen, (0, 0))
+        self.screen = new_screen
+
 
 class VNCDoToolFactory(rfb.RFBFactory):
     password = None
