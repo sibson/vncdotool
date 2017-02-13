@@ -344,7 +344,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncConnectionMade(self):
         self.setPixelFormat()
-        encodings = [rfb.RAW_ENCODING]
+        encodings = [rfb.RAW_ENCODING, rfb.PSEUDO_DESKTOP_SIZE_ENCODING]
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
         self.setEncodings(encodings)
