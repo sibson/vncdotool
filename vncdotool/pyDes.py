@@ -116,7 +116,8 @@ class _BaseDes(object):
         if pad and padmode == PAD_PKCS5:
             raise ValueError("Cannot use a pad character with PAD_PKCS5")
         if iv and len(iv) != self.block_size:
-            raise ValueError("Invalid Initial Value (iv), must be a multiple of " + str(self.block_size) + " bytes")
+            raise ValueError("Invalid Initial Value (iv), must be a multiple of "
+                             "{} bytes".format(self.block_size))
 
         # Set the passed in variables
         self._mode = mode
@@ -166,7 +167,8 @@ class _BaseDes(object):
     def set_iv(self, iv):
         """Will set the Initial Value, used in conjunction with CBC mode"""
         if not iv or len(iv) != self.block_size:
-            raise ValueError("Invalid Initial Value (iv), must be a multiple of " + str(self.block_size) + " bytes")
+            raise ValueError("Invalid Initial Value (iv), must be a multiple of "
+                             "{} bytes".format(self.block_size))
         iv = self._guard_against_unicode(iv)
         self._iv = iv
 
@@ -187,7 +189,9 @@ class _BaseDes(object):
                 # Get the default padding.
                 pad = self.get_padding()
             if not pad:
-                raise ValueError("Data must be a multiple of " + str(self.block_size) + " bytes in length. Use padmode=PAD_PKCS5 or set the pad character.")
+                raise ValueError("Data must be a multiple of {} bytes in length. "
+                                 "Use padmode=PAD_PKCS5 or "
+                                 "set the pad character.".format(self.block_size))
             data += (self.block_size - (len(data) % self.block_size)) * pad
 
         elif padmode == PAD_PKCS5:
@@ -507,7 +511,8 @@ class Des(_BaseDes):
 
             # Exclusive or R[i - 1] with K[i], create B[1] to B[8] whilst here
             self.R = list(map(lambda x, y: x ^ y, self.R, self.Kn[iteration]))
-            B = [self.R[:6], self.R[6:12], self.R[12:18], self.R[18:24], self.R[24:30], self.R[30:36], self.R[36:42], self.R[42:]]
+            B = [self.R[:6], self.R[6:12], self.R[12:18], self.R[18:24],
+                 self.R[24:30], self.R[30:36], self.R[36:42], self.R[42:]]
             # Optimization: Replaced below commented code with above
             # j = 0
             # B = []
@@ -568,9 +573,12 @@ class Des(_BaseDes):
             return ''
         if len(data) % self.block_size != 0:
             if crypt_type == Des.DECRYPT: # Decryption must work on 8 byte blocks
-                raise ValueError("Invalid data length, data must be a multiple of " + str(self.block_size) + " bytes\n.")
+                raise ValueError("Invalid data length, data must be a multiple of"
+                                 " {} bytes.".format(self.block_size))
             if not self.get_padding():
-                raise ValueError("Invalid data length, data must be a multiple of " + str(self.block_size) + " bytes\n. Try setting the optional padding character")
+                raise ValueError("Invalid data length, data must be a multiple of {} bytes\n."
+                                 " Try setting the optional padding character"
+                                 .format(self.block_size))
             else:
                 data += (self.block_size - (len(data) % self.block_size)) * self.get_padding()
             # print "Len of data: %f" % (len(data) / self.block_size)
@@ -579,7 +587,8 @@ class Des(_BaseDes):
             if self.get_iv():
                 iv = self.__string_to_bit_list(self.get_iv())
             else:
-                raise ValueError("For CBC mode, you must supply the Initial Value (iv) for ciphering")
+                raise ValueError("For CBC mode, you must supply "
+                                 "the Initial Value (iv) for ciphering")
 
         # Split the data into blocks, crypting each one seperately
         i = 0
@@ -713,7 +722,8 @@ class TripleDes(_BaseDes):
             if len(key) == 16: # Use DES-EDE2 mode
                 self.key_size = 16
             else:
-                raise ValueError("Invalid triple DES key size. Key must be either 16 or 24 bytes long")
+                raise ValueError("Invalid triple DES key size. "
+                                 "Key must be either 16 or 24 bytes long")
         if self.get_mode() == CBC:
             if not self.get_iv():
                 # Use the first 8 bytes of the key
