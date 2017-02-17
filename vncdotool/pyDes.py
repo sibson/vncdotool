@@ -230,7 +230,8 @@ class _BaseDes(object):
 
         return data
 
-    def _guard_against_unicode(self, data):
+    @staticmethod
+    def _guard_against_unicode(data):
         # Only accept byte strings or ascii unicode values, otherwise
         # there is no way to correctly decode the data into bytes.
         if _PY_MAJOR_VERSION < 3:
@@ -409,7 +410,8 @@ class Des(_BaseDes):
         _BaseDes.set_key(self, key)
         self.__create_sub_keys()
 
-    def __string_to_bit_list(self, data):
+    @staticmethod
+    def __string_to_bit_list(data):
         """Turn the string data, into a list of bits (1, 0)'s"""
         if _PY_MAJOR_VERSION < 3:
             # Turn the strings into integers. Python 3 uses a bytes
@@ -430,7 +432,8 @@ class Des(_BaseDes):
 
         return result
 
-    def __bit_list_to_string(self, data):
+    @staticmethod
+    def __bit_list_to_string(data):
         """Turn the list of bits -> data, into a string"""
         result = []
         pos = 0
@@ -447,7 +450,8 @@ class Des(_BaseDes):
         else:
             return bytes(result)
 
-    def __permutate(self, table, block):
+    @staticmethod
+    def __permutate(table, block):
         """Permutate this block with the specified table"""
         return list(map(lambda x: block[x], table))
 
