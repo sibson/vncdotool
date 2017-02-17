@@ -28,14 +28,14 @@
 
 Class initialization
 --------------------
-pyDes.Des(key, [mode], [IV], [pad], [padmode])
-pyDes.TripleDes(key, [mode], [IV], [pad], [padmode])
+pyDes.Des(key, [mode], [iv], [pad], [padmode])
+pyDes.TripleDes(key, [mode], [iv], [pad], [padmode])
 
 key     -> Bytes containing the encryption key. 8 bytes for DES, 16 or 24 bytes
        for Triple DES
 mode    -> Optional argument for encryption type, can be either
        pyDes.ECB (Electronic Code Book) or pyDes.CBC (Cypher Block Chaining)
-IV      -> Optional Initial Value bytes, must be supplied if using CBC mode.
+iv      -> Optional Initial Value bytes, must be supplied if using CBC mode.
        Length must be 8 bytes.
 pad     -> Optional argument, set the pad character (PAD_NORMAL) to use during
        all encrypt/decrpt operations done with this instance.
@@ -106,21 +106,21 @@ PAD_PKCS5 = 2
 
 # The base class shared by Des and triple Des.
 class _BaseDes(object):
-    def __init__(self, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
-        if IV:
-            IV = self._guard_against_unicode(IV)
+    def __init__(self, mode=ECB, iv=None, pad=None, padmode=PAD_NORMAL):
+        if iv:
+            iv = self._guard_against_unicode(iv)
         if pad:
             pad = self._guard_against_unicode(pad)
         self.block_size = 8
         # Sanity checking of arguments.
         if pad and padmode == PAD_PKCS5:
             raise ValueError("Cannot use a pad character with PAD_PKCS5")
-        if IV and len(IV) != self.block_size:
-            raise ValueError("Invalid Initial Value (IV), must be a multiple of " + str(self.block_size) + " bytes")
+        if iv and len(iv) != self.block_size:
+            raise ValueError("Invalid Initial Value (iv), must be a multiple of " + str(self.block_size) + " bytes")
 
         # Set the passed in variables
         self._mode = mode
-        self._iv = IV
+        self._iv = iv
         self._padding = pad
         self._padmode = padmode
 
@@ -163,12 +163,12 @@ class _BaseDes(object):
         """get_iv() -> bytes"""
         return self._iv
 
-    def set_iv(self, IV):
+    def set_iv(self, iv):
         """Will set the Initial Value, used in conjunction with CBC mode"""
-        if not IV or len(IV) != self.block_size:
-            raise ValueError("Invalid Initial Value (IV), must be a multiple of " + str(self.block_size) + " bytes")
-        IV = self._guard_against_unicode(IV)
-        self._iv = IV
+        if not iv or len(iv) != self.block_size:
+            raise ValueError("Invalid Initial Value (iv), must be a multiple of " + str(self.block_size) + " bytes")
+        iv = self._guard_against_unicode(iv)
+        self._iv = iv
 
     def _pad_data(self, data, pad, padmode):
         # Pad data depending on the mode
@@ -251,12 +251,12 @@ class Des(_BaseDes):
 
     Supports ECB (Electronic Code Book) and CBC (Cypher Block Chaining) modes.
 
-    pyDes.Des(key,[mode], [IV])
+    pyDes.Des(key,[mode], [iv])
 
     key  -> Bytes containing the encryption key, must be exactly 8 bytes
     mode -> Optional argument for encryption type, can be either pyDes.ECB
         (Electronic Code Book), pyDes.CBC (Cypher Block Chaining)
-    IV   -> Optional Initial Value bytes, must be supplied if using CBC mode.
+    iv   -> Optional Initial Value bytes, must be supplied if using CBC mode.
         Must be 8 bytes in length.
     pad  -> Optional argument, set the pad character (PAD_NORMAL) to use
         during all encrypt/decrpt operations done with this instance.
@@ -394,11 +394,11 @@ class Des(_BaseDes):
     DECRYPT =    0x01
 
     # Initialisation
-    def __init__(self, key, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
+    def __init__(self, key, mode=ECB, iv=None, pad=None, padmode=PAD_NORMAL):
         # Sanity checking of arguments.
         if len(key) != 8:
             raise ValueError("Invalid DES key size. Key must be exactly 8 bytes long.")
-        _BaseDes.__init__(self, mode, IV, pad, padmode)
+        _BaseDes.__init__(self, mode, iv, pad, padmode)
         self.key_size = 8
 
         self.L = []
@@ -579,7 +579,7 @@ class Des(_BaseDes):
             if self.get_iv():
                 iv = self.__String_to_BitList(self.get_iv())
             else:
-                raise ValueError("For CBC mode, you must supply the Initial Value (IV) for ciphering")
+                raise ValueError("For CBC mode, you must supply the Initial Value (iv) for ciphering")
 
         # Split the data into blocks, crypting each one seperately
         i = 0
@@ -599,7 +599,7 @@ class Des(_BaseDes):
 
             block = self.__String_to_BitList(data[i:i+8])
 
-            # Xor with IV if using CBC mode
+            # Xor with iv if using CBC mode
             if self.get_mode() == CBC:
                 if crypt_type == Des.ENCRYPT:
                     block = list(map(lambda x, y: x ^ y, block, iv))
@@ -688,13 +688,13 @@ class TripleDes(_BaseDes):
     the DES-EDE2 (when a 16 byte key is supplied) encryption methods.
     Supports ECB (Electronic Code Book) and CBC (Cypher Block Chaining) modes.
 
-    pyDes.Des(key, [mode], [IV])
+    pyDes.Des(key, [mode], [iv])
 
     key  -> Bytes containing the encryption key, must be either 16 or
             24 bytes long
     mode -> Optional argument for encryption type, can be either pyDes.ECB
         (Electronic Code Book), pyDes.CBC (Cypher Block Chaining)
-    IV   -> Optional Initial Value bytes, must be supplied if using CBC mode.
+    iv   -> Optional Initial Value bytes, must be supplied if using CBC mode.
         Must be 8 bytes in length.
     pad  -> Optional argument, set the pad character (PAD_NORMAL) to use
         during all encrypt/decrpt operations done with this instance.
@@ -702,8 +702,8 @@ class TripleDes(_BaseDes):
         PAD_PKCS5) to use during all encrypt/decrpt operations done
         with this instance.
     """
-    def __init__(self, key, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
-        _BaseDes.__init__(self, mode, IV, pad, padmode)
+    def __init__(self, key, mode=ECB, iv=None, pad=None, padmode=PAD_NORMAL):
+        _BaseDes.__init__(self, mode, iv, pad, padmode)
         self.set_key(key)
 
     def set_key(self, key):
@@ -719,7 +719,7 @@ class TripleDes(_BaseDes):
                 # Use the first 8 bytes of the key
                 self._iv = key[:self.block_size]
             if len(self.get_iv()) != self.block_size:
-                raise ValueError("Invalid IV, must be 8 bytes in length")
+                raise ValueError("Invalid iv, must be 8 bytes in length")
         self.__key1 = Des(key[:8], self._mode, self._iv,
                           self._padding, self._padmode)
         self.__key2 = Des(key[8:16], self._mode, self._iv,
@@ -751,11 +751,11 @@ class TripleDes(_BaseDes):
         for key in (self.__key1, self.__key2, self.__key3):
             key.set_pad_mode(mode)
 
-    def set_iv(self, IV):
+    def set_iv(self, iv):
         """Will set the Initial Value, used in conjunction with CBC mode"""
-        _BaseDes.set_iv(self, IV)
+        _BaseDes.set_iv(self, iv)
         for key in (self.__key1, self.__key2, self.__key3):
-            key.set_iv(IV)
+            key.set_iv(iv)
 
     def encrypt(self, data, pad=None, padmode=None):
         """encrypt(data, [pad], [padmode]) -> bytes
