@@ -619,7 +619,7 @@ class RFBFactory(protocol.ClientFactory):
         self.shared = shared
 
 class RFBDes(pyDes.Des):
-    def setKey(self, key):
+    def set_key(self, key):
         """RFB protocol for authentication requires client to encrypt
            challenge sent by server with password using DES method. However,
            bits in each byte of the password are put in reverse order before
@@ -632,7 +632,7 @@ class RFBDes(pyDes.Des):
                 if bsrc & (1 << i):
                     btgt = btgt | (1 << 7-i)
             newkey.append(chr(btgt))
-        super(RFBDes, self).setKey(newkey)
+        super(RFBDes, self).set_key(newkey)
 
 
 # --- test code only, see vncviewer.py
