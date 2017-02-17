@@ -413,7 +413,7 @@ class Des(_BaseDes):
         _BaseDes.set_key(self, key)
         self.__create_sub_keys()
 
-    def __String_to_BitList(self, data):
+    def __string_to_bit_list(self, data):
         """Turn the string data, into a list of bits (1, 0)'s"""
         if _pythonMajorVersion < 3:
             # Turn the strings into integers. Python 3 uses a bytes
@@ -434,7 +434,7 @@ class Des(_BaseDes):
 
         return result
 
-    def __BitList_to_String(self, data):
+    def __bit_list_to_string(self, data):
         """Turn the list of bits -> data, into a string"""
         result = []
         pos = 0
@@ -459,7 +459,7 @@ class Des(_BaseDes):
     # Create the 16 subkeys, K[1] - K[16]
     def __create_sub_keys(self):
         """Create the 16 subkeys K[1] to K[16] from the given key"""
-        key = self.__permutate(Des.__pc1, self.__String_to_BitList(self.get_key()))
+        key = self.__permutate(Des.__pc1, self.__string_to_bit_list(self.get_key()))
         i = 0
         # Split into Left and Right sections
         self.L = key[:28]
@@ -577,7 +577,7 @@ class Des(_BaseDes):
 
         if self.get_mode() == CBC:
             if self.get_iv():
-                iv = self.__String_to_BitList(self.get_iv())
+                iv = self.__string_to_bit_list(self.get_iv())
             else:
                 raise ValueError("For CBC mode, you must supply the Initial Value (iv) for ciphering")
 
@@ -597,7 +597,7 @@ class Des(_BaseDes):
             #     i += 8
             #     continue
 
-            block = self.__String_to_BitList(data[i:i+8])
+            block = self.__string_to_bit_list(data[i:i + 8])
 
             # Xor with iv if using CBC mode
             if self.get_mode() == CBC:
@@ -623,9 +623,9 @@ class Des(_BaseDes):
                 processed_block = self.__des_crypt(block, crypt_type)
 
             # Add the resulting crypted block to our list
-            # d = self.__BitList_to_String(processed_block)
+            # d = self.__bit_list_to_string(processed_block)
             # result.append(d)
-            result.append(self.__BitList_to_String(processed_block))
+            result.append(self.__bit_list_to_string(processed_block))
             # dict_[data[i:i+8]] = d
             i += 8
 
