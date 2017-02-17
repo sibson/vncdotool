@@ -618,7 +618,7 @@ class RFBFactory(protocol.ClientFactory):
         self.password = password
         self.shared = shared
 
-class RFBDes(pyDes.des):
+class RFBDes(pyDes.Des):
     def setKey(self, key):
         """RFB protocol for authentication requires client to encrypt
            challenge sent by server with password using DES method. However,
