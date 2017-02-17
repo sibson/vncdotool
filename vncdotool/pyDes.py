@@ -86,8 +86,8 @@ Note: This code was not written for high-end systems needing a fast
 
 import sys
 
-# _pythonMajorVersion is used to handle Python2 and Python3 differences.
-_pythonMajorVersion = sys.version_info[0]
+# _PY_MAJOR_VERSION is used to handle Python2 and Python3 differences.
+_PY_MAJOR_VERSION = sys.version_info[0]
 
 # Modes of crypting / cyphering
 ECB = 0
@@ -196,7 +196,7 @@ class _BaseDes(object):
 
         elif padmode == PAD_PKCS5:
             pad_len = 8 - (len(data) % self.block_size)
-            if _pythonMajorVersion < 3:
+            if _PY_MAJOR_VERSION < 3:
                 data += pad_len * chr(pad_len)
             else:
                 data += bytes([pad_len] * pad_len)
@@ -222,7 +222,7 @@ class _BaseDes(object):
                        data[-self.block_size:].rstrip(pad)
 
         elif padmode == PAD_PKCS5:
-            if _pythonMajorVersion < 3:
+            if _PY_MAJOR_VERSION < 3:
                 pad_len = ord(data[-1])
             else:
                 pad_len = data[-1]
@@ -233,7 +233,7 @@ class _BaseDes(object):
     def _guard_against_unicode(self, data):
         # Only accept byte strings or ascii unicode values, otherwise
         # there is no way to correctly decode the data into bytes.
-        if _pythonMajorVersion < 3:
+        if _PY_MAJOR_VERSION < 3:
             if isinstance(data, unicode):
                 raise ValueError("pyDes can only work with bytes, not Unicode strings.")
         else:
@@ -419,7 +419,7 @@ class Des(_BaseDes):
 
     def __string_to_bit_list(self, data):
         """Turn the string data, into a list of bits (1, 0)'s"""
-        if _pythonMajorVersion < 3:
+        if _PY_MAJOR_VERSION < 3:
             # Turn the strings into integers. Python 3 uses a bytes
             # class, which already has this behaviour.
             data = [ord(c) for c in data]
@@ -450,7 +450,7 @@ class Des(_BaseDes):
                 c = 0
             pos += 1
 
-        if _pythonMajorVersion < 3:
+        if _PY_MAJOR_VERSION < 3:
             return ''.join([chr(c) for c in result])
         else:
             return bytes(result)
@@ -641,7 +641,7 @@ class Des(_BaseDes):
         # print "Lines: %d, cached: %d" % (lines, cached)
 
         # Return the full crypted string
-        if _pythonMajorVersion < 3:
+        if _PY_MAJOR_VERSION < 3:
             return ''.join(result)
         else:
             return bytes.fromhex('').join(result)
@@ -802,7 +802,7 @@ class TripleDes(_BaseDes):
                 self.__key3.set_iv(block)
                 result.append(block)
                 i += 8
-            if _pythonMajorVersion < 3:
+            if _PY_MAJOR_VERSION < 3:
                 return ''.join(result)
             else:
                 return bytes.fromhex('').join(result)
@@ -848,7 +848,7 @@ class TripleDes(_BaseDes):
                 self.__key3.set_iv(iv)
                 result.append(block)
                 i += 8
-            if _pythonMajorVersion < 3:
+            if _PY_MAJOR_VERSION < 3:
                 data = ''.join(result)
             else:
                 data = bytes.fromhex('').join(result)
