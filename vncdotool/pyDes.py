@@ -90,8 +90,8 @@ import sys
 _pythonMajorVersion = sys.version_info[0]
 
 # Modes of crypting / cyphering
-ECB =    0
-CBC =    1
+ECB = 0
+CBC = 1
 
 # Modes of padding
 PAD_NORMAL = 1
@@ -403,7 +403,7 @@ class Des(_BaseDes):
 
         self.L = []
         self.R = []
-        self.Kn = [ [0] * 48 ] * 16    # 16 48-bit keys (K1 - K16)
+        self.Kn = [[0] * 48] * 16    # 16 48-bit keys (K1 - K16)
         self.final = []
 
         self.set_key(key)
@@ -447,7 +447,7 @@ class Des(_BaseDes):
             pos += 1
 
         if _pythonMajorVersion < 3:
-            return ''.join([ chr(c) for c in result ])
+            return ''.join([chr(c) for c in result])
         else:
             return bytes(result)
 
