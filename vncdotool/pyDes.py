@@ -390,8 +390,8 @@ class Des(_BaseDes):
     ]
 
     # Type of crypting being done
-    ENCRYPT =    0x00
-    DECRYPT =    0x01
+    ENCRYPT = 0x00
+    DECRYPT = 0x01
 
     # Initialisation
     def __init__(self, key, mode=ECB, iv=None, pad=None, padmode=PAD_NORMAL):
@@ -509,13 +509,13 @@ class Des(_BaseDes):
             self.R = list(map(lambda x, y: x ^ y, self.R, self.Kn[iteration]))
             B = [self.R[:6], self.R[6:12], self.R[12:18], self.R[18:24], self.R[24:30], self.R[30:36], self.R[36:42], self.R[42:]]
             # Optimization: Replaced below commented code with above
-            #j = 0
-            #B = []
-            #while j < len(self.R):
-            #    self.R[j] = self.R[j] ^ self.Kn[iteration][j]
-            #    j += 1
-            #    if j % 6 == 0:
-            #        B.append(self.R[j-6:j])
+            # j = 0
+            # B = []
+            # while j < len(self.R):
+            #     self.R[j] ^= self.Kn[iteration][j]
+            #     j += 1
+            #     if j % 6 == 0:
+            #         B.append(self.R[j-6:j])
 
             # Permutate B[1] to B[8] using the S-Boxes
             j = 0
@@ -544,10 +544,10 @@ class Des(_BaseDes):
             # Xor with L[i - 1]
             self.R = list(map(lambda x, y: x ^ y, self.R, self.L))
             # Optimization: This now replaces the below commented code
-            #j = 0
-            #while j < len(self.R):
-            #    self.R[j] = self.R[j] ^ self.L[j]
-            #    j += 1
+            # j = 0
+            # while j < len(self.R):
+            #     self.R[j] ^= self.L[j]
+            #     j += 1
 
             # L[i] becomes R[i - 1]
             self.L = tempR
@@ -583,19 +583,19 @@ class Des(_BaseDes):
 
         # Split the data into blocks, crypting each one seperately
         i = 0
-        dict = {}
+        # dict_ = {}
         result = []
-        #cached = 0
-        #lines = 0
+        # cached = 0
+        # lines = 0
         while i < len(data):
             # Test code for caching encryption results
-            #lines += 1
-            #if dict.has_key(data[i:i+8]):
-                #print "Cached result for: %s" % data[i:i+8]
-            #    cached += 1
-            #    result.append(dict[data[i:i+8]])
-            #    i += 8
-            #    continue
+            # lines += 1
+            # if dict_.has_key(data[i:i+8]):
+            #     print("Cached result for: %s" % data[i:i+8])
+            #     cached += 1
+            #     result.append(dict_[data[i:i+8]])
+            #     i += 8
+            #     continue
 
             block = self.__String_to_BitList(data[i:i+8])
 
@@ -603,19 +603,19 @@ class Des(_BaseDes):
             if self.get_mode() == CBC:
                 if crypt_type == Des.ENCRYPT:
                     block = list(map(lambda x, y: x ^ y, block, iv))
-                    #j = 0
-                    #while j < len(block):
-                    #    block[j] = block[j] ^ iv[j]
-                    #    j += 1
+                    # j = 0
+                    # while j < len(block):
+                    #     block[j] ^= iv[j]
+                    #     j += 1
 
                 processed_block = self.__des_crypt(block, crypt_type)
 
                 if crypt_type == Des.DECRYPT:
                     processed_block = list(map(lambda x, y: x ^ y, processed_block, iv))
-                    #j = 0
-                    #while j < len(processed_block):
-                    #    processed_block[j] = processed_block[j] ^ iv[j]
-                    #    j += 1
+                    # j = 0
+                    # while j < len(processed_block):
+                    #     processed_block[j] ^= iv[j]
+                    #     j += 1
                     iv = block
                 else:
                     iv = processed_block
@@ -623,10 +623,10 @@ class Des(_BaseDes):
                 processed_block = self.__des_crypt(block, crypt_type)
 
             # Add the resulting crypted block to our list
-            #d = self.__BitList_to_String(processed_block)
-            #result.append(d)
+            # d = self.__BitList_to_String(processed_block)
+            # result.append(d)
             result.append(self.__BitList_to_String(processed_block))
-            #dict[data[i:i+8]] = d
+            # dict_[data[i:i+8]] = d
             i += 8
 
         # print "Lines: %d, cached: %d" % (lines, cached)
