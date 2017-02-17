@@ -21,7 +21,7 @@ from twisted.internet.protocol import Protocol
 from twisted.internet import protocol
 from twisted.application import internet, service
 
-# ~ from twisted.internet import reactor
+# from twisted.internet import reactor
 
 
 # encoding-type
@@ -152,7 +152,7 @@ class RFBClient(Protocol):
 
     def _handleAuth(self, block):
         (auth,) = unpack("!I", block)
-        # ~ print "auth:", auth
+        # print("auth:", auth)
         if auth == 0:
             self.expect(self._handleConnFailed, 4)
         elif auth == 1:
@@ -184,7 +184,7 @@ class RFBClient(Protocol):
 
     def _handleVNCAuthResult(self, block):
         (result,) = unpack("!I", block)
-        # ~ print "auth:", auth
+        # print("auth:", auth)
         if result == 0:
             # OK
             self._doClientInitialization()
@@ -208,8 +208,7 @@ class RFBClient(Protocol):
         (self.width, self.height, pixformat, namelen) = unpack("!HH16sI", block)
         (self.bpp, self.depth, self.bigendian, self.truecolor,
          self.redmax, self.greenmax, self.bluemax,
-         self.redshift, self.greenshift, self.blueshift) = \
-           unpack("!BBBBHHHBBBxxx", pixformat)
+         self.redshift, self.greenshift, self.blueshift) = unpack("!BBBBHHHBBBxxx", pixformat)
         self.bypp = self.bpp // 8  # calc bytes per pixel
         self.expect(self._handleServerName, namelen)
 
@@ -263,8 +262,8 @@ class RFBClient(Protocol):
                 self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
             elif encoding == RRE_ENCODING:
                 self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
-            # ~ elif encoding == ZRLE_ENCODING:
-                # ~ self.expect(self._handleDecodeZRLE, )
+            # elif encoding == ZRLE_ENCODING:
+            #     self.expect(self._handleDecodeZRLE, )
             elif encoding == PSEUDO_CURSOR_ENCODING:
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
@@ -303,19 +302,18 @@ class RFBClient(Protocol):
             self._doConnection()
 
     def _handleRRESubRectangles(self, block, topx, topy):
-        # ~ print "_handleRRESubRectangle"
+        # print("_handleRRESubRectangle")
         pos = 0
         end = len(block)
         sz  = self.bypp + 8
-        format = "!%dsHHHH" % self.bypp
+        format_ = "!%dsHHHH" % self.bypp
         while pos < end:
-            (color, x, y, width, height) = unpack(format, block[pos:pos+sz])
+            (color, x, y, width, height) = unpack(format_, block[pos:pos+sz])
             self.fillRectangle(topx + x, topy + y, width, height, color)
             pos += sz
         self._doConnection()
 
     # ---  CoRRE Encoding
-
     def _handleDecodeCORRE(self, block, x, y, width, height):
         (subrects,) = unpack("!I", block[:4])
         color = block[4:]
@@ -326,7 +324,7 @@ class RFBClient(Protocol):
             self._doConnection()
 
     def _handleDecodeCORRERectangles(self, block, topx, topy):
-        # ~ print "_handleDecodeCORRERectangle"
+        # print("_handleDecodeCORRERectangle")
         pos = 0
         end = len(block)
         sz  = self.bypp + 4
@@ -338,14 +336,13 @@ class RFBClient(Protocol):
         self._doConnection()
 
     # ---  Hexile Encoding
-
     def _doNextHextileSubrect(self, bg, color, x, y, width, height, tx, ty):
-        # ~ print "_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty), )
+        # print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty), ))
         # coords of next tile
         # its line after line of tiles
         # finished when the last line is completly received
 
-        # dont inc the first time
+        # do not inc the first time
         if tx is not None:
             # calc next subrect pos
             tx += 16
@@ -365,12 +362,15 @@ class RFBClient(Protocol):
         (subencoding,) = unpack("!B", block)
         # calc tile size
         tw = th = 16
-        if x + width - tx < 16:   tw = x + width - tx
-        if y + height - ty < 16:  th = y + height- ty
+        if x + width - tx < 16:
+            tw = x + width - tx
+        if y + height - ty < 16:
+            th = y + height - ty
         # decode tile
         if subencoding & 1:
             # RAW
-            self.expect(self._handleDecodeHextileRAW, tw*th*self.bypp, bg, color, x, y, width, height, tx, ty, tw, th)
+            self.expect(self._handleDecodeHextileRAW, tw*th*self.bypp,
+                        bg, color, x, y, width, height, tx, ty, tw, th)
         else:
             numbytes = 0
             if subencoding & 2:
@@ -383,12 +383,14 @@ class RFBClient(Protocol):
                 # AnySubrects
                 numbytes += 1
             if numbytes:
-                self.expect(self._handleDecodeHextileSubrect, numbytes, subencoding, bg, color, x, y, width, height, tx, ty, tw, th)
+                self.expect(self._handleDecodeHextileSubrect, numbytes, subencoding,
+                            bg, color, x, y, width, height, tx, ty, tw, th)
             else:
                 self.fillRectangle(tx, ty, tw, th, bg)
                 self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
 
-    def _handleDecodeHextileSubrect(self, block, subencoding, bg, color, x, y, width, height, tx, ty, tw, th):
+    def _handleDecodeHextileSubrect(self, block, subencoding, bg, color, x, y, width, height,
+                                    tx, ty, tw, th):
         subrects = 0
         pos = 0
         if subencoding & 2:
@@ -402,15 +404,17 @@ class RFBClient(Protocol):
             pos += self.bypp
         if subencoding & 8:
             # AnySubrects
-            # ~ (subrects, ) = unpack("!B", block)
+            # (subrects, ) = unpack("!B", block)
             subrects = ord(block[pos])
-        # ~ print subrects
+        # print(subrects)
         if subrects:
             if subencoding & 16:
                 # SubrectsColoured
-                self.expect(self._handleDecodeHextileSubrectsColoured, (self.bypp + 2)*subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th)
+                self.expect(self._handleDecodeHextileSubrectsColoured, (self.bypp + 2)*subrects,
+                            bg, color, subrects, x, y, width, height, tx, ty, tw, th)
             else:
-                self.expect(self._handleDecodeHextileSubrectsFG, 2*subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th)
+                self.expect(self._handleDecodeHextileSubrectsFG, 2*subrects, bg, color, subrects,
+                            x, y, width, height, tx, ty, tw, th)
         else:
             self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
 
@@ -419,7 +423,8 @@ class RFBClient(Protocol):
         self.updateRectangle(tx, ty, tw, th, block)
         self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
 
-    def _handleDecodeHextileSubrectsColoured(self, block, bg, color, subrects, x, y, width, height, tx, ty, tw, th):
+    def _handleDecodeHextileSubrectsColoured(self, block, bg, color, subrects, x, y, width, height,
+                                             tx, ty, tw, th):
         """subrects with their own color"""
         sz = self.bypp + 2
         pos = 0
@@ -437,7 +442,8 @@ class RFBClient(Protocol):
             pos += sz
         self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
 
-    def _handleDecodeHextileSubrectsFG(self, block, bg, color, subrects, x, y, width, height, tx, ty, tw, th):
+    def _handleDecodeHextileSubrectsFG(self, block, bg, color, subrects, x, y, width, height,
+                                       tx, ty, tw, th):
         """all subrect with same color"""
         pos = 0
         end = len(block)
@@ -482,8 +488,8 @@ class RFBClient(Protocol):
     # incomming data redirector
     # ------------------------------------------------------
     def dataReceived(self, data):
-        # ~ sys.stdout.write(repr(data) + '\n')
-        # ~ print len(data), ", ", len(self._packet)
+        # sys.stdout.write(repr(data) + '\n')
+        # print(len(data), ", ", len(self._packet))
         self._packet.append(data)
         self._packet_len += len(data)
         self._handler()
@@ -494,14 +500,14 @@ class RFBClient(Protocol):
             while len(buffer) >= self._expected_len:
                 self._already_expecting = 1
                 block, buffer = buffer[:self._expected_len], buffer[self._expected_len:]
-                # ~ log.msg("handle %r with %r\n" % (block, self._expected_handler.__name__))
+                # log.msg("handle %r with %r\n" % (block, self._expected_handler.__name__))
                 self._expected_handler(block, *self._expected_args, **self._expected_kwargs)
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._already_expecting = 0
 
     def expect(self, handler, size, *args, **kwargs):
-        # ~ log.msg("expect(%r, %r, %r, %r)\n" % (handler.__name__, size, args, kwargs))
+        # log.msg("expect(%r, %r, %r, %r)\n" % (handler.__name__, size, args, kwargs))
         self._expected_handler = handler
         self._expected_len = size
         self._expected_args = args
@@ -512,15 +518,19 @@ class RFBClient(Protocol):
     # ------------------------------------------------------
     # client -> server messages
     # ------------------------------------------------------
-    def setPixelFormat(self, bpp=32, depth=24, bigendian=0, truecolor=1, redmax=255, greenmax=255, bluemax=255, redshift=0, greenshift=8, blueshift=16):
-        pixformat = pack("!BBBBHHHBBBxxx", bpp, depth, bigendian, truecolor, redmax, greenmax, bluemax, redshift, greenshift, blueshift)
+    def setPixelFormat(self, bpp=32, depth=24, bigendian=0, truecolor=1,
+                       redmax=255, greenmax=255, bluemax=255,
+                       redshift=0, greenshift=8, blueshift=16):
+
+        pixformat = pack("!BBBBHHHBBBxxx", bpp, depth, bigendian, truecolor,
+                         redmax, greenmax, bluemax, redshift, greenshift, blueshift)
         self.transport.write(pack("!Bxxx16s", 0, pixformat))
         #rember these settings
         self.bpp, self.depth, self.bigendian, self.truecolor = bpp, depth, bigendian, truecolor
         self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
         self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
-        self.bypp = self.bpp // 8        #calc bytes per pixel
-        #~ print self.bypp
+        self.bypp = self.bpp // 8  # calc bytes per pixel
+        # print(self.bypp)
 
     def setEncodings(self, list_of_encodings):
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
@@ -603,7 +613,7 @@ class RFBClient(Protocol):
         """ New cursor, focuses at (x, y)
         """
 
-    def updateDesktopSize(width, height):
+    def updateDesktopSize(self, width, height):
         """ New desktop size of width*height. """
 
     def bell(self):
@@ -665,7 +675,7 @@ if __name__ == '__main__':
             print(reason)
             from twisted.internet import reactor
             reactor.stop()
-            # ~ connector.connect()
+            # connector.connect()
 
         def clientConnectionFailed(self, connector, reason):
             print("connection failed:", reason)
@@ -675,9 +685,9 @@ if __name__ == '__main__':
     class Options(usage.Options):
         """command line options"""
         optParameters = [
-            ['display',     'd', '0',               'VNC display'],
-            ['host',        'h', 'localhost',       'remote hostname'],
-            ['outfile',     'o', None,              'Logfile [default: sys.stdout]'],
+            ['display', 'd', '0',         'VNC display'],
+            ['host',    'h', 'localhost', 'remote hostname'],
+            ['outfile', 'o', None,        'Logfile [default: sys.stdout]'],
         ]
 
     o = Options()
@@ -699,7 +709,7 @@ if __name__ == '__main__':
     application = service.Application("rfb test") # create Application
 
     # connect to this host and port, and reconnect if we get disconnected
-    vncClient = internet.TCPClient(host, port, RFBFactory()) # create the service
+    vncClient = internet.TCPClient(host, port, RFBFactory())  # create the service
     vncClient.setServiceParent(application)
 
     # this file should be run as 'twistd -y rfb.py' but it didn't work -
