@@ -87,6 +87,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             'Common Commands (CMD):',
             '  key KEY\t\tsend KEY to server, alphanumeric or keysym: ctrl-c, del',
             '  type TEXT\t\tsend alphanumeric string of TEXT',
+            '  typefile FILENAME\t\ttype out the contents of FILENAME',
             '  move X Y\t\tmove the mouse cursor to position X,Y',
             '  click BUTTON\t\tsend a mouse BUTTON click',
             '  capture FILE\t\tsave current screen as FILE',
@@ -143,6 +144,23 @@ def build_command_list(factory, args, delay=None, warp=1.0):
                 factory.deferred.addCallback(client.keyPress, key)
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
+        elif cmd == 'typefile':
+            with open(args.pop(0)) as f:
+                content = f.read()
+                for key in content:
+                    if key == '\r':
+                        continue
+                    if key == '\n':
+                        key = 'enter'
+                    if key == '\t':
+                        key = 'tab'
+                    factory.deferred.addCallback(client.keyPress, key)
+                    if delay:
+                        factory.deferred.addCallback(client.pause, delay)
+        elif cmd == 'pastefile':
+            with open(args.pop(0)) as f:
+                content = f.read().replace('\r\n', '\n')
+                factory.deferred.addCallback(client.paste, content)
         elif cmd == 'capture':
             filename = args.pop(0)
             imgformat = os.path.splitext(filename)[1][1:]
@@ -236,7 +254,7 @@ def add_standard_options(parser):
     parser.add_option('--logfile', action='store', metavar='FILE',
         help='output logging information to FILE')
 
-    parser.add_option('-v', '--verbose', action='count',
+    parser.add_option('-v', '--verbose', action='count', default=0,
         help='increase verbosity, use multple times')
 
     return parser
