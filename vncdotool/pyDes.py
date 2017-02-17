@@ -103,6 +103,7 @@ PAD_PKCS5 = 2
 # For a good description of the PKCS5 padding technique, see:
 # http://www.faqs.org/rfcs/rfc1423.html
 
+
 # The base class shared by Des and triple Des.
 class _BaseDes(object):
     def __init__(self, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
@@ -241,6 +242,7 @@ class _BaseDes(object):
                 raise ValueError("pyDes can only work with encoded strings, not Unicode.")
         return data
 
+
 #############################################################################
 #                     DES                        #
 #############################################################################
@@ -262,7 +264,6 @@ class Des(_BaseDes):
         PAD_PKCS5) to use during all encrypt/decrpt operations done
         with this instance.
     """
-
 
     # Permutation and translation tables for DES
     __pc1 = [56, 48, 40, 32, 24, 16,  8,
@@ -365,7 +366,6 @@ class Des(_BaseDes):
          7, 11, 4, 1, 9, 12, 14, 2, 0, 6, 10, 13, 15, 3, 5, 8,
          2, 1, 14, 7, 4, 10, 8, 13, 15, 12, 9, 0, 3, 5, 6, 11],
     ]
-
 
     # 32-bit permutation function P used on the output of the S-boxes
     __p = [
@@ -559,7 +559,6 @@ class Des(_BaseDes):
         self.final = self.__permutate(Des.__fp, self.R + self.L)
         return self.final
 
-
     # Data to be encrypted/decrypted
     def crypt(self, data, crypt_type):
         """Crypt the data in blocks, running it through des_crypt()"""
@@ -623,7 +622,6 @@ class Des(_BaseDes):
             else:
                 processed_block = self.__des_crypt(block, crypt_type)
 
-
             # Add the resulting crypted block to our list
             #d = self.__BitList_to_String(processed_block)
             #result.append(d)
@@ -678,7 +676,6 @@ class Des(_BaseDes):
             pad = self._guardAgainstUnicode(pad)
         data = self.crypt(data, Des.DECRYPT)
         return self._unpadData(data, pad, padmode)
-
 
 
 #############################################################################
