@@ -344,7 +344,9 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncConnectionMade(self):
         self.setPixelFormat()
-        encodings = [rfb.RAW_ENCODING, rfb.PSEUDO_DESKTOP_SIZE_ENCODING]
+        encodings = [rfb.RAW_ENCODING]
+        if not self.factory.disable_desktop_resizing:
+            encodings.append(rfb.PSEUDO_DESKTOP_SIZE_ENCODING)
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
         self.setEncodings(encodings)
@@ -424,6 +426,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     shared = True
 
+    disable_desktop_resizing = False
     pseudocursor = False
     nocursor = False
     force_caps = False

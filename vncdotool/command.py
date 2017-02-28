@@ -358,6 +358,9 @@ def vncdo():
         default=os.environ.get('VNCDOTOOL_DELAY', 10), type='int',
         help='delay MILLISECONDS between actions [%defaultms]')
 
+    op.add_option('--disable-desktop-resizing', action='store_true',
+        help="don't tell the vnc-server to use DesktopSize Pseudo-Encoding")
+
     op.add_option('--force-caps', action='store_true',
         help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
 
@@ -385,6 +388,9 @@ def vncdo():
 
     factory = build_tool(options, args)
     factory.password = options.password
+
+    if options.disable_desktop_resizing:
+        factory.disable_desktop_resizing = True
 
     if options.localcursor:
         factory.pseudocursor = True
