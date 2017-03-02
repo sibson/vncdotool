@@ -11,7 +11,7 @@ class TestVNCDoToolClient(TestCase):
 
     def setUp(self):
         self.isolation = mock.isolate.object(client.VNCDoToolClient,
-                excludes='math.sqrt,operator.add,client.KEYMAP')
+                excludes='math.sqrt,operator.add,client.KEYMAP,rfb')
         self.isolation.start()
 
         self.client = client.VNCDoToolClient()
@@ -31,7 +31,7 @@ class TestVNCDoToolClient(TestCase):
 
     def _tryPIL(self):
         try:
-            import PIL
+            import PIL  # noqa
         except ImportError:
             raise SkipTest
 
@@ -40,7 +40,10 @@ class TestVNCDoToolClient(TestCase):
         cli.vncConnectionMade()
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
-        self.client.setEncodings.assert_called_once_with([client.rfb.RAW_ENCODING, client.rfb.PSEUDO_CURSOR_ENCODING])
+        self.client.setEncodings.assert_called_once_with([
+            client.rfb.RAW_ENCODING,
+            client.rfb.PSEUDO_CURSOR_ENCODING,
+            client.rfb.PSEUDO_DESKTOP_SIZE_ENCODING])
 
     def test_keyPress_single_alpha(self):
         cli = self.client

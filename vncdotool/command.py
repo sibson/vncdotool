@@ -371,6 +371,9 @@ def vncdo():
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')
 
+    op.add_option('--disable-desktop-resizing', action='store_true',
+        help='disable desktop resizing, this was default behaviour < 0.11')
+
     op.add_option('-t', '--timeout', action='store', type='float', metavar='TIMEOUT',
         help='abort if unable to complete all actions within TIMEOUT seconds')
 
@@ -392,6 +395,9 @@ def vncdo():
 
     if options.localcursor:
         factory.pseudocursor = True
+
+    if options.disable_desktop_resizing:
+        factory.pseudodesktop = False
 
     if options.nocursor:
         factory.nocursor = True
