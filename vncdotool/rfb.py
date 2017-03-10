@@ -141,7 +141,7 @@ class RFBClient(Protocol):
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
             self.transport.write(
-                b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])))
+                bytes("RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])), 'ascii'))
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
@@ -631,8 +631,8 @@ class RFBDes(pyDes.des):
             for i in range(8):
                 if bsrc & (1 << i):
                     btgt = btgt | (1 << 7-i)
-            newkey.append(chr(btgt))
-        super(RFBDes, self).setKey(newkey)
+            newkey.append(btgt)
+        super(RFBDes, self).setKey(bytes(newkey))
 
 
 # --- test code only, see vncviewer.py
