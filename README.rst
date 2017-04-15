@@ -49,3 +49,9 @@ Also, to the TigerVNC_ project for creating a community focus RFB specification 
 .. _GitHub: http://github.com/sibson/vncdotool
 .. _TigerVNC: http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page
 .. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
+
+
+.. image:: https://d2weczhvl823v0.cloudfront.net/sibson/vncdotool/trend.png
+   :alt: Bitdeli badge
+   :target: https://bitdeli.com/free
+
