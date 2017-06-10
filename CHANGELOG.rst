@@ -1,10 +1,9 @@
 0.11.0
 ------------
   - enable PSEUDO_DESKTOP_SIZE_ENCODING by default to allow desktop resizing, thanks rebasegod
-  - 
- 
-0.10.1 (unreleased)
---------------------
+  - python 3.0 support, thanks jamtwister
+  - added pastefile command, thanks Rogan Dawes
+  - debian packaging improvments, thanks Alexander Kläser
   - add api.client.disconnect()
 
 0.10.0 (2016-03-03)
