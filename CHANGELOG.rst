@@ -1,7 +1,7 @@
 0.11.0
 ------------
   - enable PSEUDO_DESKTOP_SIZE_ENCODING by default to allow desktop resizing, thanks rebasegod
-  - 
+  - fix loggingproxy, thanks Matthias Weckbecker
  
 0.10.1 (unreleased)
 --------------------
