@@ -59,6 +59,7 @@ class RFBServer(Protocol):
 
     def _handle_security(self):
         sectype = self.buffer[0]
+        self.buffer = self.buffer[1:]
 
     def _handle_VNCAuthResponse(self):
         self.buffer = self.buffer[16:]
