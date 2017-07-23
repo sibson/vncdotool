@@ -1,13 +1,18 @@
-0.11.0
-------------
+0.11.1 (2017-07-23)
+----------------------
+  - add api.client.disconnect()
+  - fix python2.x compatibility, thanks Ostrosablin Vitaly
+
+0.11.0 (2017-06-09)
+---------------------
   - enable PSEUDO_DESKTOP_SIZE_ENCODING by default to allow desktop resizing, thanks rebasegod
   - python 3.0 support, thanks jamtwister
   - added pastefile command, thanks Rogan Dawes
   - debian packaging improvments, thanks Alexander Kläser
-  - add api.client.disconnect()
+  - fix loggingproxy, thanks Matthias Weckbecker
 
 0.10.0 (2016-03-03)
-------------------
+---------------------
   - drop official 2.6 support, it'll probably work for a while still
   - use frombytes rather than fromstring for compatibility with PIL
   - vnclog works with password protected servers using --password-required

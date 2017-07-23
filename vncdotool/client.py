@@ -289,7 +289,7 @@ class VNCDoToolClient(rfb.RFBClient):
                 sum_ += (h - e) ** 2
             rms = math.sqrt(sum_ / len(hist))
 
-            log.debug('rms %s', int(rms))
+            log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
             if rms <= maxrms:
                 return self
 
