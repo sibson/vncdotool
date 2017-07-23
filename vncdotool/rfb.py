@@ -141,7 +141,7 @@ class RFBClient(Protocol):
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
             self.transport.write(
-                bytes("RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])), 'ascii'))
+                bytes(b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1]))))
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
