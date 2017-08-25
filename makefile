@@ -2,19 +2,25 @@
 .DEFAULT: help
 
 help:
-	@echo "release:	upload a release to pypi"
 	@echo "test:		run tests"
 	@echo "docs:		build documentation"
+	@echo ""
+	@echo "version:	show current version"
+	@echo "version-M-m-p:	update version to M.m.p"
+	@echo "release:	upload a release to pypi"
+
+version:
+	python setup.py --version
 
 version-%: OLDVERSION:=$(shell python setup.py --version)
-version-%: 
-	sed -i -e s/$(OLDVERSION)/$*/ setup.py
+version-%: NEWVERSION=$(subst -,.,$*)
+version-%:
+	sed -i -e s/$(OLDVERSION)/$(NEWVERSION)/ setup.py
 	git ci setup.py -m"bump version to $*"
 
 release: release-test release-tag upload
 
-release-test:
-	tox
+release-test: test
 
 release-tag: VERSION:=$(shell python setup.py --version)
 release-tag:
@@ -29,4 +35,4 @@ docs:
 		$(MAKE) -C docs/ html
 
 test:
-	tox
+	nosetests tests/unit
