@@ -1,3 +1,7 @@
+0.11.2 (2017-09-24)
+----------------------
+  - fix version metadata, thanks Kevin Gottsman
+
 0.11.1 (2017-07-23)
 ----------------------
   - add api.client.disconnect()
