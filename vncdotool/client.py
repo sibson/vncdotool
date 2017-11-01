@@ -417,7 +417,8 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def updateDesktopSize(self, width, height):
         new_screen = Image.new("RGB", (width, height), "black")
-        new_screen.paste(self.screen, (0, 0))
+        if self.screen:
+            new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
 
 
