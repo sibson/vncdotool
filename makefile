@@ -15,7 +15,7 @@ version:
 version-%: OLDVERSION:=$(shell python setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
-	sed -i -e s/$(OLDVERSION)/$(NEWVERSION)/ setup.py
+	sed -i -e s/$(OLDVERSION)/$(NEWVERSION)/ vncdotool/__init__.py
 	git ci setup.py -m"bump version to $*"
 
 release: release-test release-tag upload
