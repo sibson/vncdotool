@@ -10,6 +10,9 @@ running::
 
     nosetests tests/functional
 
+The RFB/VNC Protocol
+-----------------------
+There is a community effort to document the protcol, _rfbproto_.
 
 Release
 --------
@@ -21,3 +24,5 @@ Release
   6. add new section to CHANGELOG
   7. update setup.py version
   8. blog post/twitter
+
+.. _rfbproto: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
