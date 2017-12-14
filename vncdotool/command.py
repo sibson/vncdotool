@@ -296,10 +296,13 @@ def parse_host(server):
 
 
 def vnclog():
+    from vncdotool import __version__
+
     usage = '%prog [options] OUTPUT'
     description = 'Capture user interactions with a VNC Server'
+    version = "%prog " + __version__
 
-    op = optparse.OptionParser(usage=usage, description=description)
+    op = optparse.OptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--listen', metavar='PORT', type='int',
@@ -352,10 +355,13 @@ def vnclog():
 
 
 def vncdo():
+    from vncdotool import __version__
+
     usage = '%prog [options] CMD CMDARGS|-|filename'
     description = 'Command line control of a VNC server'
+    version = "%prog " + __version__
 
-    op = VNCDoToolOptionParser(usage=usage, description=description)
+    op = VNCDoToolOptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
