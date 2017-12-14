@@ -80,6 +80,17 @@ class ThreadedVNCClientProxy(object):
     def __init__(self, factory):
         self.factory = factory
         self.queue = queue.Queue()
+        self._timeout = 60 * 60
+
+    @property
+    def timeout(self):
+        """Timeout in seconds for API requests."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, timeout):
+        """Timeout in seconds for API requests."""
+        self._timeout = timeout
 
     def connect(self, host, port=5900):
         reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
@@ -106,7 +117,11 @@ class ThreadedVNCClientProxy(object):
         def proxy_call(*args, **kwargs):
             reactor.callFromThread(self.factory.deferred.addCallbacks,
                                    callback, errback, args, kwargs)
-            result = self.queue.get(timeout=60 * 60)
+            try:
+                result = self.queue.get(timeout=self._timeout)
+            except queue.Empty:
+                raise VNCDoException("Timeout of waiting for client response")
+
             if isinstance(result, Failure):
                 raise VNCDoException(result)
 
