@@ -4,6 +4,7 @@ This feature is under developemental, you're help testing and
 debugging is appreciated.
 """
 
+import socket
 import threading
 try:
     import queue
@@ -60,9 +61,8 @@ def connect(server, password=None):
     if password is not None:
         factory.password = password
 
-    host, port = command.parse_host(server)
     client = ThreadedVNCClientProxy(factory)
-    client.connect(host, port)
+    client.connect(server)
 
     return client
 
@@ -81,8 +81,14 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
 
-    def connect(self, host, port=5900):
-        reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
+    def connect(self, server):
+        address_family, host, port = command.parse_server(server)
+
+        if address_family == socket.AF_INET:
+            reactor.callWhenRunning(
+                reactor.connectTCP, host, port, self.factory)
+        elif address_family == socket.AF_UNIX:
+            reactor.callWhenRunning(reactor.connectUNIX, host, self.factory)
 
     def disconnect(self):
         def disconnector(protocol):

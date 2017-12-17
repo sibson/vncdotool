@@ -12,6 +12,7 @@ from twisted.internet import reactor
 
 import math
 import time
+import socket
 import logging
 
 log = logging.getLogger('vncdotool.client')
@@ -137,7 +138,9 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def connectionMade(self):
         rfb.RFBClient.connectionMade(self)
-        self.transport.setTcpNoDelay(True)
+
+        if self.transport.addressFamily == socket.AF_INET:
+            self.transport.setTcpNoDelay(True)
 
     def _decodeKey(self, key):
         if self.factory.force_caps:
