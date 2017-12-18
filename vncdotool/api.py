@@ -114,6 +114,9 @@ class ThreadedVNCClientProxy(object):
 
         return proxy_call
 
+    def __dir__(self):
+        return dir(self.__class__) + dir(self.factory.protocol)
+
 
 if __name__ == '__main__':
     import sys
