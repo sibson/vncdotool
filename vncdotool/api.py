@@ -18,7 +18,7 @@ from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
 
 from . import command
-from .client import VNCDoToolFactory
+from .client import VNCDoToolFactory, factory_connect
 
 __all__ = ['connect']
 
@@ -61,8 +61,9 @@ def connect(server, password=None):
     if password is not None:
         factory.password = password
 
+    family, host, port = command.parse_server(server)
     client = ThreadedVNCClientProxy(factory)
-    client.connect(server)
+    client.connect(host, port=port, family=family)
 
     return client
 
@@ -81,14 +82,9 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
 
-    def connect(self, server):
-        address_family, host, port = command.parse_server(server)
-
-        if address_family == socket.AF_INET:
-            reactor.callWhenRunning(
-                reactor.connectTCP, host, port, self.factory)
-        elif address_family == socket.AF_UNIX:
-            reactor.callWhenRunning(reactor.connectUNIX, host, self.factory)
+    def connect(self, host, port=5900, family=socket.AF_INET):
+        reactor.callWhenRunning(
+            factory_connect, self.factory, host, port, family)
 
     def disconnect(self):
         def disconnector(protocol):

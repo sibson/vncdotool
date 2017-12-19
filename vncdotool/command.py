@@ -20,7 +20,7 @@ from twisted.internet import reactor, protocol
 from twisted.internet.error import ConnectionDone
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolFactory, VNCDoToolClient
+from .client import VNCDoToolFactory, VNCDoToolClient, factory_connect
 from .loggingproxy import VNCLoggingServerFactory
 
 
@@ -222,11 +222,7 @@ def build_tool(options, args):
 
     build_command_list(factory, args, options.delay, options.warp)
 
-    # connect
-    if options.address_family == socket.AF_INET:
-        reactor.connectTCP(options.host, int(options.port), factory)
-    elif options.address_family == socket.AF_UNIX:
-        reactor.connectUNIX(options.host, int(options.port))
+    factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
 
     # close the connection when we're done

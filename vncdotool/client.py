@@ -447,3 +447,10 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionMade(self, protocol):
         self.deferred.callback(protocol)
+
+
+def factory_connect(factory, host, port, family):
+    if family == socket.AF_INET:
+        reactor.connectTCP(host, port, factory)
+    elif family == socket.AF_UNIX:
+        reactor.connectUNIX(host, factory)
