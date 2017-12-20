@@ -4,6 +4,7 @@ This feature is under developemental, you're help testing and
 debugging is appreciated.
 """
 
+import socket
 import threading
 try:
     import queue
@@ -17,7 +18,7 @@ from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
 
 from . import command
-from .client import VNCDoToolFactory
+from .client import VNCDoToolFactory, factory_connect
 
 __all__ = ['connect']
 
@@ -60,9 +61,9 @@ def connect(server, password=None):
     if password is not None:
         factory.password = password
 
-    host, port = command.parse_host(server)
+    family, host, port = command.parse_server(server)
     client = ThreadedVNCClientProxy(factory)
-    client.connect(host, port)
+    client.connect(host, port=port, family=family)
 
     return client
 
@@ -81,8 +82,9 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
 
-    def connect(self, host, port=5900):
-        reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
+    def connect(self, host, port=5900, family=socket.AF_INET):
+        reactor.callWhenRunning(
+            factory_connect, self.factory, host, port, family)
 
     def disconnect(self):
         def disconnector(protocol):
