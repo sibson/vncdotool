@@ -1,3 +1,8 @@
+1.0.0 (unreleased)
+----------------------
+  - connect via UNIX sockets, thanks Matteo Cafasso
+  - bugfix, XTightVNC initial connection, thanks Antti Kervinen
+
 0.11.2 (2017-09-24)
 ----------------------
   - fix version metadata, thanks Kevin Gottsman

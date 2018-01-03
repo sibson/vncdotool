@@ -6,7 +6,7 @@ help:
 	@echo "docs:		build documentation"
 	@echo ""
 	@echo "version:	show current version"
-	@echo "version-M-m-p:	update version to M.m.p"
+	@echo "version-M.m.p:	update version to M.m.p"
 	@echo "release:	upload a release to pypi"
 
 version:
