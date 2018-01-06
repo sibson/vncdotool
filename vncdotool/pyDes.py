@@ -415,7 +415,7 @@ class des(_baseDes):
 
 	def __String_to_BitList(self, data):
 		"""Turn the string data, into a list of bits (1, 0)'s"""
-		if _pythonMajorVersion < 3:
+		if isinstance(data[0], str):
 			# Turn the strings into integers. Python 3 uses a bytes
 			# class, which already has this behaviour.
 			data = [ord(c) for c in data]
