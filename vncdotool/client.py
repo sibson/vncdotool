@@ -129,6 +129,7 @@ class VNCDoToolClient(rfb.RFBClient):
     y = 0
     buttons = 0
     screen = None
+    screen_updated = None
     deferred = None
 
     cursor = None
@@ -243,7 +244,15 @@ class VNCDoToolClient(rfb.RFBClient):
         self.deferred.addCallback(self._captureSave, filename, *args)
         return self.deferred
 
+    def framebufferUpdateRequest(self, *args):
+        self.screen_updated = False
+        return super(VNCDoToolClient, self).framebufferUpdateRequest(*args)
+
     def _captureSave(self, data, filename, *args):
+        if not self.screen_updated:
+            reactor.callLater(0.05, self._captureSave, data, filename, *args)
+            return self
+
         log.debug('captureSave %s', filename)
         if args:
             capture = self.screen.crop(args)
@@ -394,6 +403,7 @@ class VNCDoToolClient(rfb.RFBClient):
             d = self.deferred
             self.deferred = None
             d.callback(self.screen)
+        self.screen_updated = True
 
     def updateCursor(self, x, y, width, height, image, mask):
         if self.factory.nocursor:
