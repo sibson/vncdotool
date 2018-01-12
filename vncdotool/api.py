@@ -1,6 +1,6 @@
 """ Helpers to allow vncdotool to be intergrated into other applications.
 
-This feature is under developemental, you're help testing and
+This feature is under development, your help testing and
 debugging is appreciated.
 """
 
