@@ -24,7 +24,7 @@ It is possible to set a per-client timeout in seconds to prevent calls from bloc
     client.timeout = 10
     try:
         client.captureScreen('screenshot.png')
-    except VNCDoException:
+    except TimeoutError:
         print('Timeout when capturing screen')
 
 In case of too many timeout errors, it is recommended to reset the client connection via the `disconnect` and `connect` methods.
