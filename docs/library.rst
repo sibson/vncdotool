@@ -29,6 +29,14 @@ It is possible to set a per-client timeout in seconds to prevent calls from bloc
 
 In case of too many timeout errors, it is recommended to reset the client connection via the `disconnect` and `connect` methods.
 
+The :class:`vncdotool.client.VNCDoToolClient` supports the context manager protocol.
+
+::
+
+    with api.connect('vnchost:display') as client:
+        client.captureScreen('screenshot.png')
+
+
 The syncronous API can be used to automate the starting of a Virtual Machine or other application::
 
     vmtool.start('myvirtualmachine.img')
