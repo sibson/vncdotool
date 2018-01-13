@@ -83,14 +83,6 @@ class ThreadedVNCClientProxy(object):
         def errback(reason, *args, **kwargs):
             self.queue.put(Failure(reason))
 
-        def callback(protocol, *args, **kwargs):
-            def result_callback(result):
-                self.queue.put(result)
-                return result
-            d = maybeDeferred(method, protocol, *args, **kwargs)
-            d.addBoth(result_callback)
-            return d
-
         def proxy_call(*args, **kwargs):
             reactor.callFromThread(self.factory.deferred.addCallbacks,
                                    callback, errback, args, kwargs)
@@ -104,7 +96,21 @@ class ThreadedVNCClientProxy(object):
 
             return result
 
-        return proxy_call
+        if callable(method):
+            def callback(protocol, *args, **kwargs):
+                def result_callback(result):
+                    self.queue.put(result)
+                    return result
+                d = maybeDeferred(method, protocol, *args, **kwargs)
+                d.addBoth(result_callback)
+                return d
+            return proxy_call
+        else:
+            def callback(protocol, *args, **kwargs):
+                obj = getattr(protocol, attr)
+                self.queue.put(obj)
+                return protocol
+            return proxy_call()
 
     def __dir__(self):
         return dir(self.__class__) + dir(self.factory.protocol)
