@@ -37,7 +37,7 @@ if sys.version_info.major == 2:
         pass
 
 
-def connect(server, password=None):
+def connect(server, password=None, factory_class=None, proxy=None, timeout=None):
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
@@ -62,12 +62,19 @@ def connect(server, password=None):
         observer = PythonLoggingObserver()
         observer.start()
 
-    factory = VNCDoToolFactory()
+    if factory_class is None:
+        factory_class = VNCDoToolFactory
+
+    factory = factory_class()
+
     if password is not None:
         factory.password = password
 
+    if proxy is None:
+        proxy = ThreadedVNCClientProxy
+
     family, host, port = command.parse_server(server)
-    client = ThreadedVNCClientProxy(factory)
+    client = proxy(factory, timeout)
     client.connect(host, port=port, family=family)
 
     return client
@@ -83,10 +90,12 @@ def shutdown():
 
 class ThreadedVNCClientProxy(object):
 
-    def __init__(self, factory):
+    def __init__(self, factory, timeout=None):
         self.factory = factory
         self.queue = queue.Queue()
-        self._timeout = 60 * 60
+        if timeout is None:
+            timeout = 60 * 60
+        self._timeout = timeout
 
     def __enter__(self):
         return self
