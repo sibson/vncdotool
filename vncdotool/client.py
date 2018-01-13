@@ -237,11 +237,16 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('captureRegion %s', filename)
         return self._capture(filename, x, y, x+w, y+h)
 
+    def refreshScreen(self, incremental=0):
+        d = self.deferred = Deferred()
+        self.framebufferUpdateRequest(incremental=incremental)
+        d.addCallback(lambda *args: self)
+        return d
+
     def _capture(self, filename, *args):
-        self.framebufferUpdateRequest()
-        self.deferred = Deferred()
-        self.deferred.addCallback(self._captureSave, filename, *args)
-        return self.deferred
+        d = self.refreshScreen()
+        d.addCallback(self._captureSave, filename, *args)
+        return d
 
     def _captureSave(self, data, filename, *args):
         log.debug('captureSave %s', filename)
