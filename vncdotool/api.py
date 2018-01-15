@@ -4,6 +4,7 @@ This feature is under development, your help testing and
 debugging is appreciated.
 """
 
+import sys
 import socket
 import threading
 try:
@@ -29,6 +30,11 @@ _THREAD = None
 
 class VNCDoException(Exception):
     pass
+
+
+if sys.version_info.major == 2:
+    class TimeoutError(OSError):
+        pass
 
 
 def connect(server, password=None):
@@ -127,7 +133,7 @@ class ThreadedVNCClientProxy(object):
             try:
                 result = self.queue.get(timeout=self._timeout)
             except queue.Empty:
-                raise VNCDoException("Timeout of waiting for client response")
+                raise TimeoutError("Timeout while waiting for client response")
 
             if isinstance(result, Failure):
                 raise VNCDoException(result)
