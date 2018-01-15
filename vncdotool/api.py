@@ -37,42 +37,6 @@ if sys.version_info.major == 2:
         pass
 
 
-def connect(server, password=None):
-    """ Connect to a VNCServer and return a Client instance that is usable
-    in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
-
-    >>> from vncdotool import api
-    >>> with api.connect('host') as client
-    >>>     client.keyPress('c')
-
-    You may then call any regular VNCDoToolClient method on client from your
-    application code.
-
-    If you are using a GUI toolkit or other major async library please read
-    http://twistedmatrix.com/documents/13.0.0/core/howto/choosing-reactor.html
-    for a better method of intergrating vncdotool.
-    """
-    if not reactor.running:
-        global _THREAD
-        _THREAD = threading.Thread(target=reactor.run, name='Twisted',
-                         kwargs={'installSignalHandlers': False})
-        _THREAD.daemon = True
-        _THREAD.start()
-
-        observer = PythonLoggingObserver()
-        observer.start()
-
-    factory = VNCDoToolFactory()
-    if password is not None:
-        factory.password = password
-
-    family, host, port = command.parse_server(server)
-    client = ThreadedVNCClientProxy(factory)
-    client.connect(host, port=port, family=family)
-
-    return client
-
-
 def shutdown():
     if not reactor.running:
         return
@@ -83,10 +47,10 @@ def shutdown():
 
 class ThreadedVNCClientProxy(object):
 
-    def __init__(self, factory):
+    def __init__(self, factory, timeout=60 * 60):
         self.factory = factory
         self.queue = queue.Queue()
-        self._timeout = 60 * 60
+        self._timeout = timeout
 
     def __enter__(self):
         return self
@@ -144,6 +108,44 @@ class ThreadedVNCClientProxy(object):
 
     def __dir__(self):
         return dir(self.__class__) + dir(self.factory.protocol)
+
+
+def connect(server, password=None,
+        factory_class=VNCDoToolFactory, proxy=ThreadedVNCClientProxy, timeout=None):
+    """ Connect to a VNCServer and return a Client instance that is usable
+    in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
+
+    >>> from vncdotool import api
+    >>> with api.connect('host') as client
+    >>>     client.keyPress('c')
+
+    You may then call any regular VNCDoToolClient method on client from your
+    application code.
+
+    If you are using a GUI toolkit or other major async library please read
+    http://twistedmatrix.com/documents/13.0.0/core/howto/choosing-reactor.html
+    for a better method of intergrating vncdotool.
+    """
+    if not reactor.running:
+        global _THREAD
+        _THREAD = threading.Thread(target=reactor.run, name='Twisted',
+                         kwargs={'installSignalHandlers': False})
+        _THREAD.daemon = True
+        _THREAD.start()
+
+        observer = PythonLoggingObserver()
+        observer.start()
+
+    factory = factory_class()
+
+    if password is not None:
+        factory.password = password
+
+    family, host, port = command.parse_server(server)
+    client = proxy(factory, timeout)
+    client.connect(host, port=port, family=family)
+
+    return client
 
 
 if __name__ == '__main__':
