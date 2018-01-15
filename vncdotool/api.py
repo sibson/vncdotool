@@ -1,6 +1,6 @@
 """ Helpers to allow vncdotool to be intergrated into other applications.
 
-This feature is under developemental, you're help testing and
+This feature is under development, your help testing and
 debugging is appreciated.
 """
 
@@ -36,9 +36,8 @@ def connect(server, password=None):
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
     >>> from vncdotool import api
-    >>> client = api.connect('host')
-    >>> client.keyPress('c')
-    >>> api.shutdown()
+    >>> with api.connect('host') as client
+    >>>     client.keyPress('c')
 
     You may then call any regular VNCDoToolClient method on client from your
     application code.
@@ -82,6 +81,12 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
         self._timeout = 60 * 60
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.disconnect()
 
     @property
     def timeout(self):
