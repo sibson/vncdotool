@@ -234,9 +234,9 @@ class RFBClient(Protocol):
 
     def _handleAuthFailed(self, block):
         (waitfor,) = unpack("!I", block)
-        self.expect(self._handleAuthMessage, waitfor)
+        self.expect(self._handleAuthFailedMessage, waitfor)
 
-    def _handleAuthMessage(self, block):
+    def _handleAuthFailedMessage(self, block):
         self.vncAuthFailed(block)
         self.transport.loseConnection()
 
