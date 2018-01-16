@@ -51,6 +51,7 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
         self._timeout = timeout
+        self.protocol = None
 
     def __enter__(self):
         return self
@@ -69,6 +70,10 @@ class ThreadedVNCClientProxy(object):
         self._timeout = timeout
 
     def connect(self, host, port=5900, family=socket.AF_INET):
+        def capture_protocol(protocol):
+            self.protocol = protocol
+            return protocol
+        self.factory.deferred.addCallback(capture_protocol)
         reactor.callWhenRunning(
             factory_connect, self.factory, host, port, family)
 
@@ -82,6 +87,14 @@ class ThreadedVNCClientProxy(object):
 
         def errback(reason, *args, **kwargs):
             self.queue.put(Failure(reason))
+
+        def callback(protocol, *args, **kwargs):
+            def result_callback(result):
+                self.queue.put(result)
+                return result
+            d = maybeDeferred(method, protocol, *args, **kwargs)
+            d.addBoth(result_callback)
+            return d
 
         def proxy_call(*args, **kwargs):
             reactor.callFromThread(self.factory.deferred.addCallbacks,
@@ -97,20 +110,9 @@ class ThreadedVNCClientProxy(object):
             return result
 
         if callable(method):
-            def callback(protocol, *args, **kwargs):
-                def result_callback(result):
-                    self.queue.put(result)
-                    return result
-                d = maybeDeferred(method, protocol, *args, **kwargs)
-                d.addBoth(result_callback)
-                return d
             return proxy_call
         else:
-            def callback(protocol, *args, **kwargs):
-                obj = getattr(protocol, attr)
-                self.queue.put(obj)
-                return protocol
-            return proxy_call()
+            return getattr(self.protocol, attr)
 
     def __dir__(self):
         return dir(self.__class__) + dir(self.factory.protocol)
