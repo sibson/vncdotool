@@ -348,10 +348,8 @@ class VNCDoToolClient(rfb.RFBClient):
             for offset, color in zip(offsets, "RGB"):
                 pixel[offset] = color
             self.image_mode = "".join(pixel)
-
-            return True
         else:
-            return False
+            self.setPixelFormat()
 
     #
     # base customizations
@@ -364,9 +362,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.sendPassword(self.factory.password)
 
     def vncConnectionMade(self):
-        if not self.setImageMode():
-            self.setPixelFormat()
-
+        self.setImageMode()
         encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
