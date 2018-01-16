@@ -118,6 +118,7 @@ class RFBClient(Protocol):
         self._packet_len = 0
         self._handler = self._handleInitial
         self._already_expecting = 0
+        self._version = None
 
     #------------------------------------------------------
     # states used on connection startup
@@ -129,7 +130,7 @@ class RFBClient(Protocol):
             version = 3.3
             if buffer[:3] == b'RFB':
                 version_server = float(buffer[3:-1].replace(b'0', b''))
-                SUPPORTED_VERSIONS = (3.3,)
+                SUPPORTED_VERSIONS = (3.3, 3.7, 3.8)
                 if version_server in SUPPORTED_VERSIONS:
                     version = version_server
                 else:
@@ -145,10 +146,38 @@ class RFBClient(Protocol):
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
-            self.expect(self._handleAuth, 4)
+            self._version = version
+            if version < 3.7:
+                self.expect(self._handleAuth, 4)
+            else:
+                self.expect(self._handleNumberSecurityTypes, 1)
         else:
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
+
+    def _handleNumberSecurityTypes(self, block):
+        (num_types,) = unpack("!B", block)
+        if num_types:
+            self.expect(self._handleSecurityTypes, num_types)
+        else:
+            self.expect(self._handleConnFailed, 4)
+
+    def _handleSecurityTypes(self, block):
+        types = unpack("!%dB" % len(block), block)
+        SUPPORTED_TYPES = (1, 2)
+        valid_types = [sec_type for sec_type in types if sec_type in SUPPORTED_TYPES]
+        if valid_types:
+            sec_type = max(valid_types)
+            self.transport.write(pack("!B", sec_type))
+            if sec_type == 1:
+                if self._version < 3.8:
+                    self._doClientInitialization()
+                else:
+                    self.expect(self._handleVNCAuthResult, 4)
+            else:
+                self.expect(self._handleVNCAuth, 16)
+        else:
+            log.msg("unknown security types: %s" % repr(types))
 
     def _handleAuth(self, block):
         (auth,) = unpack("!I", block)
@@ -189,13 +218,27 @@ class RFBClient(Protocol):
             self._doClientInitialization()
             return
         elif result == 1:   #failed
-            self.vncAuthFailed("authentication failed")
-            self.transport.loseConnection()
+            if self._version < 3.8:
+                self.vncAuthFailed("authentication failed")
+                self.transport.loseConnection()
+            else:
+                self.expect(self._handleAuthFailed, 4)
         elif result == 2:   #too many
-            self.vncAuthFailed("too many tries to log in")
-            self.transport.loseConnection()
+            if self._version < 3.8:
+                self.vncAuthFailed("too many tries to log in")
+                self.transport.loseConnection()
+            else:
+                self.expect(self._handleAuthFailed, 4)
         else:
             log.msg("unknown auth response (%d)" % result)
+
+    def _handleAuthFailed(self, block):
+        (waitfor,) = unpack("!I", block)
+        self.expect(self._handleAuthFailedMessage, waitfor)
+
+    def _handleAuthFailedMessage(self, block):
+        self.vncAuthFailed(block)
+        self.transport.loseConnection()
 
     def _doClientInitialization(self):
         self.transport.write(pack("!B", self.factory.shared))
