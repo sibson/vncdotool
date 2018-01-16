@@ -51,6 +51,7 @@ class ThreadedVNCClientProxy(object):
         self.factory = factory
         self.queue = queue.Queue()
         self._timeout = timeout
+        self.protocol = None
 
     def __enter__(self):
         return self
@@ -69,6 +70,10 @@ class ThreadedVNCClientProxy(object):
         self._timeout = timeout
 
     def connect(self, host, port=5900, family=socket.AF_INET):
+        def capture_protocol(protocol):
+            self.protocol = protocol
+            return protocol
+        self.factory.deferred.addCallback(capture_protocol)
         reactor.callWhenRunning(
             factory_connect, self.factory, host, port, family)
 
@@ -104,7 +109,10 @@ class ThreadedVNCClientProxy(object):
 
             return result
 
-        return proxy_call
+        if callable(method):
+            return proxy_call
+        else:
+            return getattr(self.protocol, attr)
 
     def __dir__(self):
         return dir(self.__class__) + dir(self.factory.protocol)
