@@ -240,7 +240,6 @@ class VNCDoToolClient(rfb.RFBClient):
     def refreshScreen(self, incremental=0):
         d = self.deferred = Deferred()
         self.framebufferUpdateRequest(incremental=incremental)
-        d.addCallback(lambda *args: self)
         return d
 
     def _capture(self, filename, *args):
@@ -287,10 +286,10 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self.deferred
 
-    def _expectCompare(self, image, box, maxrms):
-        image = image.crop(box)
+    def _expectCompare(self, data, box, maxrms):
+        image = self.screen.crop(box)
 
-        hist = image.histogram()
+        hist = self.screen.histogram()
         if len(hist) == len(self.expected):
             sum_ = 0
             for h, e in zip(hist, self.expected):
@@ -398,7 +397,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.deferred:
             d = self.deferred
             self.deferred = None
-            d.callback(self.screen)
+            d.callback(self)
 
     def updateCursor(self, x, y, width, height, image, mask):
         if self.factory.nocursor:
