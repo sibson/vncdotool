@@ -129,6 +129,7 @@ class VNCDoToolClient(rfb.RFBClient):
     y = 0
     buttons = 0
     screen = None
+    image_mode = "RGBX"
     deferred = None
 
     cursor = None
@@ -336,6 +337,20 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
+    def setImageMode(self):
+        """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
+        """
+        if (self.truecolor and (not self.bigendian) and self.depth == 24
+                and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
+
+            pixel = ["X"] * self.bypp
+            offsets = [offset // 8 for offset in (self.redshift, self.greenshift, self.blueshift)]
+            for offset, color in zip(offsets, "RGB"):
+                pixel[offset] = color
+            self.image_mode = "".join(pixel)
+        else:
+            self.setPixelFormat()
+
     #
     # base customizations
     #
@@ -347,7 +362,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.sendPassword(self.factory.password)
 
     def vncConnectionMade(self):
-        self.setPixelFormat()
+        self.setImageMode()
         encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
@@ -372,7 +387,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = Image.frombytes('RGB', size, data, 'raw', 'RGBX')
+        update = Image.frombytes('RGB', size, data, 'raw', self.image_mode)
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
