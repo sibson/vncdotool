@@ -69,8 +69,7 @@ class TestVNCDoToolClient(TestCase):
         fname = 'foo.png'
 
         d = cli.captureScreen(fname)
-        d.addCallback.assert_a_call_exists_with(cli._captureSave, fname)
-        d.addCallback.assert_a_call_exists
+        d.addCallback.assert_called_once_with(cli._captureSave, fname)
         assert cli.framebufferUpdateRequest.called
 
     def test_captureSave(self):
