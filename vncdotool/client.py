@@ -344,7 +344,14 @@ class VNCDoToolClient(rfb.RFBClient):
     def setImageMode(self):
         """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
         """
-        if (self.truecolor and (not self.bigendian) and self.depth == 24
+        if self._version_server == 3.889:
+            self.setPixelFormat(
+                    bpp = 16, depth = 16, bigendian = 0, truecolor = 1,
+                    redmax = 31, greenmax = 63, bluemax = 31,
+                    redshift = 11, greenshift = 5, blueshift = 0
+                    )
+            self.image_mode = "BGR;16"
+        elif (self.truecolor and (not self.bigendian) and self.depth == 24
                 and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
 
             pixel = ["X"] * self.bypp
@@ -444,6 +451,16 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen = new_screen
 
 
+class VMWareClient(VNCDoToolClient):
+    def dataReceived(self, data):
+        single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
+        if len(data) == 20 and int(data[0]) == 0 and data[2:16] == single_pixel_update:
+            self.framebufferUpdateRequest()
+            self._handler()
+        else:
+            super(VMWareClient, self).dataReceived(data)
+
+
 class VNCDoToolFactory(rfb.RFBFactory):
     password = None
 
@@ -466,6 +483,10 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionMade(self, protocol):
         self.deferred.callback(protocol)
+
+
+class VMWareFactory(VNCDoToolFactory):
+    protocol = VMWareClient
 
 
 def factory_connect(factory, host, port, family):

@@ -37,6 +37,8 @@ class TestVNCDoToolClient(TestCase):
 
     def test_vncConnectionMade(self):
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         factory = cli.factory
@@ -66,6 +68,8 @@ class TestVNCDoToolClient(TestCase):
 
     def test_captureScreen(self):
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         fname = 'foo.png'
@@ -86,6 +90,8 @@ class TestVNCDoToolClient(TestCase):
         self._tryPIL()
 
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         cli.screen = mock.Mock()
