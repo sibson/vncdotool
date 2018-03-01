@@ -10,11 +10,11 @@ from helpers import PExpectAssertMixin
 class TestLogEvents(PExpectAssertMixin, TestCase):
     def setUp(self):
         cmd = u'vncev -rfbport 5999 -rfbwait 1000'
-        self.server = pexpect.spawn(cmd, timeout=2)
+        self.server = pexpect.spawn(cmd, timeout=5)
         self.server.logfile_read = sys.stdout
 
         cmd = u'vnclog --listen 1842 -s :99 -'
-        self.recorder = pexpect.spawn(cmd, timeout=2)
+        self.recorder = pexpect.spawn(cmd, timeout=5)
         self.recorder.logfile_read = sys.stdout
 
     def tearDown(self):
