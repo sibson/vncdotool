@@ -11,6 +11,7 @@ import optparse
 import sys
 import os
 import shlex
+import socket
 import logging
 import logging.handlers
 
@@ -19,7 +20,7 @@ from twisted.internet import reactor, protocol
 from twisted.internet.error import ConnectionDone
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolFactory, VNCDoToolClient
+from .client import VNCDoToolFactory, VNCDoToolClient, factory_connect
 from .loggingproxy import VNCLoggingServerFactory
 
 
@@ -87,6 +88,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             'Common Commands (CMD):',
             '  key KEY\t\tsend KEY to server, alphanumeric or keysym: ctrl-c, del',
             '  type TEXT\t\tsend alphanumeric string of TEXT',
+            '  typefile FILENAME\t\ttype out the contents of FILENAME',
             '  move X Y\t\tmove the mouse cursor to position X,Y',
             '  click BUTTON\t\tsend a mouse BUTTON click',
             '  capture FILE\t\tsave current screen as FILE',
@@ -143,6 +145,23 @@ def build_command_list(factory, args, delay=None, warp=1.0):
                 factory.deferred.addCallback(client.keyPress, key)
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
+        elif cmd == 'typefile':
+            with open(args.pop(0)) as f:
+                content = f.read()
+                for key in content:
+                    if key == '\r':
+                        continue
+                    if key == '\n':
+                        key = 'enter'
+                    if key == '\t':
+                        key = 'tab'
+                    factory.deferred.addCallback(client.keyPress, key)
+                    if delay:
+                        factory.deferred.addCallback(client.pause, delay)
+        elif cmd == 'pastefile':
+            with open(args.pop(0)) as f:
+                content = f.read().replace('\r\n', '\n')
+                factory.deferred.addCallback(client.paste, content)
         elif cmd == 'capture':
             filename = args.pop(0)
             imgformat = os.path.splitext(filename)[1][1:]
@@ -203,8 +222,7 @@ def build_tool(options, args):
 
     build_command_list(factory, args, options.delay, options.warp)
 
-    # connect
-    reactor.connectTCP(options.host, int(options.port), factory)
+    factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
 
     # close the connection when we're done
@@ -236,7 +254,7 @@ def add_standard_options(parser):
     parser.add_option('--logfile', action='store', metavar='FILE',
         help='output logging information to FILE')
 
-    parser.add_option('-v', '--verbose', action='count',
+    parser.add_option('-v', '--verbose', action='count', default=0,
         help='increase verbosity, use multple times')
 
     return parser
@@ -259,13 +277,18 @@ def setup_logging(options):
     PythonLoggingObserver().start()
 
 
-def parse_host(server):
+def parse_server(server):
     split = server.split(':')
 
     if not split[0]:
         host = '127.0.0.1'
     else:
         host = split[0]
+
+    if os.path.exists(host):
+        address_family = socket.AF_UNIX
+    else:
+        address_family = socket.AF_INET
 
     if len(split) == 3:  # ::port
         port = int(split[2])
@@ -274,14 +297,17 @@ def parse_host(server):
     else:
         port = 5900
 
-    return host, port
+    return address_family, host, port
 
 
 def vnclog():
+    from vncdotool import __version__
+
     usage = '%prog [options] OUTPUT'
     description = 'Capture user interactions with a VNC Server'
+    version = "%prog " + __version__
 
-    op = optparse.OptionParser(usage=usage, description=description)
+    op = optparse.OptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--listen', metavar='PORT', type='int',
@@ -302,7 +328,8 @@ def vnclog():
 
     setup_logging(options)
 
-    options.host, options.port = parse_host(options.server)
+    options.address_family, options.host, options.port = parse_server(
+        options.server)
 
     if len(args) != 1:
         op.error('incorrect number of arguments')
@@ -334,10 +361,13 @@ def vnclog():
 
 
 def vncdo():
+    from vncdotool import __version__
+
     usage = '%prog [options] CMD CMDARGS|-|filename'
     description = 'Command line control of a VNC server'
+    version = "%prog " + __version__
 
-    op = VNCDoToolOptionParser(usage=usage, description=description)
+    op = VNCDoToolOptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
@@ -353,6 +383,9 @@ def vncdo():
     op.add_option('--nocursor', action='store_true',
         help='no mouse pointer in screen captures')
 
+    op.add_option('--disable-desktop-resizing', action='store_true',
+        help='disable desktop resizing, this was default behaviour < 0.11')
+
     op.add_option('-t', '--timeout', action='store', type='float', metavar='TIMEOUT',
         help='abort if unable to complete all actions within TIMEOUT seconds')
 
@@ -365,7 +398,8 @@ def vncdo():
         op.error('no command provided')
 
     setup_logging(options)
-    options.host, options.port = parse_host(options.server)
+    options.address_family, options.host, options.port = parse_server(
+        options.server)
 
     log.info('connecting to %s:%s', options.host, options.port)
 
@@ -374,6 +408,9 @@ def vncdo():
 
     if options.localcursor:
         factory.pseudocursor = True
+
+    if options.disable_desktop_resizing:
+        factory.pseudodesktop = False
 
     if options.nocursor:
         factory.nocursor = True

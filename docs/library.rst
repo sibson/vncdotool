@@ -7,9 +7,9 @@ It uses a seperate thread to run the Twisted reactor and communitcates with the 
 To use the syncronous API you can do the following::
 
     from vncdotool import api
-    client = api.connect('vnchost:display')
+    client = api.connect('vnchost:display', password=None)
 
-You can then call any of the methods available on 
+You can then call any of the methods available on
 :class:`vncdotool.client.VNCDoToolClient` and they will block until completion.
 For example::
 
@@ -17,7 +17,27 @@ For example::
     client.keyPress('enter')
     client.expectScreen('login_success.png', maxrms=10)
 
-This can be used to automate the starting of an Virtual Machine or other application::
+It is possible to set a per-client timeout in seconds to prevent calls from blocking indefinitely.
+
+::
+
+    client.timeout = 10
+    try:
+        client.captureScreen('screenshot.png')
+    except TimeoutError:
+        print('Timeout when capturing screen')
+
+In case of too many timeout errors, it is recommended to reset the client connection via the `disconnect` and `connect` methods.
+
+The :class:`vncdotool.client.VNCDoToolClient` supports the context manager protocol.
+
+::
+
+    with api.connect('vnchost:display') as client:
+        client.captureScreen('screenshot.png')
+
+
+The syncronous API can be used to automate the starting of a Virtual Machine or other application::
 
     vmtool.start('myvirtualmachine.img')
     client.connect('vmaddress::5950')

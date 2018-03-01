@@ -11,7 +11,7 @@ class TestVNCDoToolClient(TestCase):
 
     def setUp(self):
         self.isolation = mock.isolate.object(client.VNCDoToolClient,
-                excludes='math.sqrt,operator.add,client.KEYMAP')
+                excludes='math.sqrt,operator.add,client.KEYMAP,rfb')
         self.isolation.start()
 
         self.client = client.VNCDoToolClient()
@@ -31,16 +31,22 @@ class TestVNCDoToolClient(TestCase):
 
     def _tryPIL(self):
         try:
-            import PIL
+            import PIL  # noqa
         except ImportError:
             raise SkipTest
 
     def test_vncConnectionMade(self):
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
+        cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
-        self.client.setEncodings.assert_called_once_with([client.rfb.RAW_ENCODING, client.rfb.PSEUDO_CURSOR_ENCODING])
+        self.client.setEncodings.assert_called_once_with([
+            client.rfb.RAW_ENCODING,
+            client.rfb.PSEUDO_CURSOR_ENCODING,
+            client.rfb.PSEUDO_DESKTOP_SIZE_ENCODING])
 
     def test_keyPress_single_alpha(self):
         cli = self.client
@@ -62,6 +68,9 @@ class TestVNCDoToolClient(TestCase):
 
     def test_captureScreen(self):
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
+        cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         fname = 'foo.png'
 
@@ -81,6 +90,9 @@ class TestVNCDoToolClient(TestCase):
         self._tryPIL()
 
         cli = self.client
+        cli._packet = [b"RFB003.003\n"]
+        cli._handleInitial()
+        cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
         cli.screen = mock.Mock()
         cli.screen.size = (1024, 768)
@@ -101,20 +113,20 @@ class TestVNCDoToolClient(TestCase):
         cli = self.client
         d = cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
-        image = mock.Mock()
-        image.histogram.return_value = [1, 2, 3]
-        image.crop.return_value = image
-        result = cli._expectCompare(image, None, 5)
+        cli.screen = mock.Mock()
+        cli.screen.histogram.return_value = [1, 2, 3]
+        cli.screen.crop.return_value = cli.screen
+        result = cli._expectCompare(cli, None, 5)
         assert result == cli
 
     def test_expectCompareExactSuccess(self):
         cli = self.client
         d = cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
-        image = mock.Mock()
-        image.histogram.return_value = [2, 2, 2]
-        image.crop.return_value = image
-        result = cli._expectCompare(image, None, 0)
+        cli.screen = mock.Mock()
+        cli.screen.histogram.return_value = [2, 2, 2]
+        cli.screen.crop.return_value = cli.screen
+        result = cli._expectCompare(cli, None, 0)
         assert result == cli
 
     def test_expectCompareFails(self):
@@ -122,11 +134,11 @@ class TestVNCDoToolClient(TestCase):
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
         cli.framebufferUpdateRequest = mock.Mock()
-        image = mock.Mock()
-        image.histogram.return_value = [1, 1, 1]
-        image.crop.return_value = image
+        cli.screen = mock.Mock()
+        cli.screen.histogram.return_value = [1, 1, 1]
+        cli.screen.crop.return_value = cli.screen
 
-        result = cli._expectCompare(image, None, 0)
+        result = cli._expectCompare(cli, None, 0)
 
         assert result != cli
         assert result == cli.deferred
@@ -140,11 +152,11 @@ class TestVNCDoToolClient(TestCase):
         cli.deferred = mock.Mock()
         cli.expected = [2, 2]
         cli.framebufferUpdateRequest = mock.Mock()
-        image = mock.Mock()
-        image.histogram.return_value = [1, 1, 1]
-        image.crop.return_value = image
+        cli.screen = mock.Mock()
+        cli.screen.histogram.return_value = [1, 1, 1]
+        cli.screen.crop.return_value = cli.screen
 
-        result = cli._expectCompare(image, None, 0)
+        result = cli._expectCompare(cli, None, 0)
 
         assert result != cli
         assert result == cli.deferred
@@ -184,7 +196,7 @@ class TestVNCDoToolClient(TestCase):
         self.client.deferred = self.deferred
         self.client.commitUpdate(rects)
 
-        self.deferred.callback.assert_called_once_with(self.client.screen)
+        self.deferred.callback.assert_called_once_with(self.client)
 
     def test_vncRequestPassword_attribute(self):
         cli = self.client

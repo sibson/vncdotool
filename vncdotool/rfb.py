@@ -37,6 +37,7 @@ ZLIBHEX_ENCODING =              8
 ZRLE_ENCODING =                 16
 #0xffffff00 to 0xffffffff tight options
 PSEUDO_CURSOR_ENCODING =        -239
+PSEUDO_DESKTOP_SIZE_ENCODING =  -223
 
 #keycodes
 #for KeyEvent()
@@ -117,6 +118,8 @@ class RFBClient(Protocol):
         self._packet_len = 0
         self._handler = self._handleInitial
         self._already_expecting = 0
+        self._version = None
+        self._version_server = None
 
     #------------------------------------------------------
     # states used on connection startup
@@ -128,7 +131,7 @@ class RFBClient(Protocol):
             version = 3.3
             if buffer[:3] == b'RFB':
                 version_server = float(buffer[3:-1].replace(b'0', b''))
-                SUPPORTED_VERSIONS = (3.3,)
+                SUPPORTED_VERSIONS = (3.3, 3.7, 3.8)
                 if version_server in SUPPORTED_VERSIONS:
                     version = version_server
                 else:
@@ -140,14 +143,43 @@ class RFBClient(Protocol):
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
             self.transport.write(
-                b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1])))
+                bytes(b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1]))))
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._handler = self._handleExpected
-            self.expect(self._handleAuth, 4)
+            self._version = version
+            self._version_server = version_server
+            if version < 3.7:
+                self.expect(self._handleAuth, 4)
+            else:
+                self.expect(self._handleNumberSecurityTypes, 1)
         else:
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
+
+    def _handleNumberSecurityTypes(self, block):
+        (num_types,) = unpack("!B", block)
+        if num_types:
+            self.expect(self._handleSecurityTypes, num_types)
+        else:
+            self.expect(self._handleConnFailed, 4)
+
+    def _handleSecurityTypes(self, block):
+        types = unpack("!%dB" % len(block), block)
+        SUPPORTED_TYPES = (1, 2)
+        valid_types = [sec_type for sec_type in types if sec_type in SUPPORTED_TYPES]
+        if valid_types:
+            sec_type = max(valid_types)
+            self.transport.write(pack("!B", sec_type))
+            if sec_type == 1:
+                if self._version < 3.8:
+                    self._doClientInitialization()
+                else:
+                    self.expect(self._handleVNCAuthResult, 4)
+            else:
+                self.expect(self._handleVNCAuth, 16)
+        else:
+            log.msg("unknown security types: %s" % repr(types))
 
     def _handleAuth(self, block):
         (auth,) = unpack("!I", block)
@@ -188,13 +220,27 @@ class RFBClient(Protocol):
             self._doClientInitialization()
             return
         elif result == 1:   #failed
-            self.vncAuthFailed("authentication failed")
-            self.transport.loseConnection()
+            if self._version < 3.8:
+                self.vncAuthFailed("authentication failed")
+                self.transport.loseConnection()
+            else:
+                self.expect(self._handleAuthFailed, 4)
         elif result == 2:   #too many
-            self.vncAuthFailed("too many tries to log in")
-            self.transport.loseConnection()
+            if self._version < 3.8:
+                self.vncAuthFailed("too many tries to log in")
+                self.transport.loseConnection()
+            else:
+                self.expect(self._handleAuthFailed, 4)
         else:
             log.msg("unknown auth response (%d)" % result)
+
+    def _handleAuthFailed(self, block):
+        (waitfor,) = unpack("!I", block)
+        self.expect(self._handleAuthFailedMessage, waitfor)
+
+    def _handleAuthFailedMessage(self, block):
+        self.vncAuthFailed(block)
+        self.transport.loseConnection()
 
     def _doClientInitialization(self):
         self.transport.write(pack("!B", self.factory.shared))
@@ -265,6 +311,8 @@ class RFBClient(Protocol):
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
+            elif encoding == PSEUDO_DESKTOP_SIZE_ENCODING:
+                self._handleDecodeDesktopSize(width, height)
             else:
                 log.msg("unknown encoding received (encoding %d)" % encoding)
                 self._doConnection()
@@ -453,6 +501,11 @@ class RFBClient(Protocol):
         self.updateCursor(x, y, width, height, image, mask)
         self._doConnection()
 
+    # --- Pseudo Desktop Size Encoding
+    def _handleDecodeDesktopSize(self, width, height):
+        self.updateDesktopSize(width, height)
+        self._doConnection()
+
     # ---  other server messages
 
     def _handleServerCutText(self, block):
@@ -588,6 +641,9 @@ class RFBClient(Protocol):
     def updateCursor(self, x, y, width, height, image, mask):
         """ New cursor, focuses at (x, y)
         """
+
+    def updateDesktopSize(width, height):
+        """ New desktop size of width*height. """
 
     def bell(self):
         """bell"""

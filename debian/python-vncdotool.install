@@ -1,4 +1,4 @@
-usr/*
 debian/vncdo usr/bin
 debian/vnclog usr/bin
 debian/vncdotool usr/bin
+vncdotool/ usr/share/pyshared

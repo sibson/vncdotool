@@ -1,6 +1,6 @@
-
 from vncdotool import command
 
+import socket
 import unittest
 
 from . import mock
@@ -153,15 +153,17 @@ class TestBuildCommandList(unittest.TestCase):
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 
 
-class TestParseHost(object):
-
+class TestParseServer(object):
     def setUp(self):
-        self.isolation = mock.isolate.object(command.parse_host)
+        self.isolation = mock.isolate.object(command.parse_server)
         self.isolation.start()
         self.options = mock.Mock()
         self.options.server = '127.0.0.1'
         parse_args = command.VNCDoToolOptionParser.return_value.parse_args
         parse_args.return_value = (self.options, [])
+        command.socket.AF_INET = socket.AF_INET
+        command.socket.AF_UNIX = socket.AF_UNIX
+        command.os.path.exists.return_value = False
 
     def tearDown(self):
         if self.isolation:
@@ -169,35 +171,47 @@ class TestParseHost(object):
             self.isolation = None
 
     def test_default(self):
-        host, port = command.parse_host('')
+        family, host, port = command.parse_server('')
+        assert family == socket.AF_INET
         assert host == '127.0.0.1'
         assert port == 5900
 
     def test_host_display(self):
-        host, port = command.parse_host('10.11.12.13:10')
+        family, host, port = command.parse_server('10.11.12.13:10')
+        assert family == socket.AF_INET
         assert host == '10.11.12.13'
         assert port == 5910
 
     def test_host_port(self):
-        host, port = command.parse_host('10.11.12.13::4444')
+        family, host, port = command.parse_server('10.11.12.13::4444')
+        assert family == socket.AF_INET
         assert host == '10.11.12.13'
         assert port == 4444
 
     def test_just_host(self):
-        host, port = command.parse_host('10.11.12.13')
+        family, host, port = command.parse_server('10.11.12.13')
+        assert family == socket.AF_INET
         assert host == '10.11.12.13'
         assert port == 5900
 
     def test_just_display(self):
-        host, port = command.parse_host(':10')
+        family, host, port = command.parse_server(':10')
+        assert family == socket.AF_INET
         assert host == '127.0.0.1'
         assert port == 5910
 
     def test_just_port(self):
-        host, port = command.parse_host('::1111')
+        family, host, port = command.parse_server('::1111')
+        assert family == socket.AF_INET
         assert host == '127.0.0.1'
         assert port == 1111
 
+    def test_unix_socket(self):
+        command.os.path.exists.return_value = True
+        family, host, port = command.parse_server('/some/path/unix.skt')
+        assert family == socket.AF_UNIX
+        assert host == '/some/path/unix.skt'
+        assert port == 5900
 
 
 class TestVNCDoCLIClient(unittest.TestCase):

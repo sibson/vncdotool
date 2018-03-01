@@ -12,6 +12,7 @@ from twisted.internet import reactor
 
 import math
 import time
+import socket
 import logging
 
 log = logging.getLogger('vncdotool.client')
@@ -123,10 +124,12 @@ class AuthenticationError(Exception):
 
 
 class VNCDoToolClient(rfb.RFBClient):
+    encoding = rfb.RAW_ENCODING
     x = 0
     y = 0
     buttons = 0
     screen = None
+    image_mode = "RGBX"
     deferred = None
 
     cursor = None
@@ -136,7 +139,9 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def connectionMade(self):
         rfb.RFBClient.connectionMade(self)
-        self.transport.setTcpNoDelay(True)
+
+        if self.transport.addressFamily == socket.AF_INET:
+            self.transport.setTcpNoDelay(True)
 
     def _decodeKey(self, key):
         if self.factory.force_caps:
@@ -233,11 +238,15 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('captureRegion %s', filename)
         return self._capture(filename, x, y, x+w, y+h)
 
+    def refreshScreen(self, incremental=0):
+        d = self.deferred = Deferred()
+        self.framebufferUpdateRequest(incremental=incremental)
+        return d
+
     def _capture(self, filename, *args):
-        self.framebufferUpdateRequest()
-        self.deferred = Deferred()
-        self.deferred.addCallback(self._captureSave, filename, *args)
-        return self.deferred
+        d = self.refreshScreen()
+        d.addCallback(self._captureSave, filename, *args)
+        return d
 
     def _captureSave(self, data, filename, *args):
         log.debug('captureSave %s', filename)
@@ -278,17 +287,17 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self.deferred
 
-    def _expectCompare(self, image, box, maxrms):
-        image = image.crop(box)
+    def _expectCompare(self, data, box, maxrms):
+        image = self.screen.crop(box)
 
-        hist = image.histogram()
+        hist = self.screen.histogram()
         if len(hist) == len(self.expected):
             sum_ = 0
             for h, e in zip(hist, self.expected):
                 sum_ += (h - e) ** 2
             rms = math.sqrt(sum_ / len(hist))
 
-            log.debug('rms %s', int(rms))
+            log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
             if rms <= maxrms:
                 return self
 
@@ -332,6 +341,27 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
+    def setImageMode(self):
+        """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
+        """
+        if self._version_server == 3.889:
+            self.setPixelFormat(
+                    bpp = 16, depth = 16, bigendian = 0, truecolor = 1,
+                    redmax = 31, greenmax = 63, bluemax = 31,
+                    redshift = 11, greenshift = 5, blueshift = 0
+                    )
+            self.image_mode = "BGR;16"
+        elif (self.truecolor and (not self.bigendian) and self.depth == 24
+                and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
+
+            pixel = ["X"] * self.bypp
+            offsets = [offset // 8 for offset in (self.redshift, self.greenshift, self.blueshift)]
+            for offset, color in zip(offsets, "RGB"):
+                pixel[offset] = color
+            self.image_mode = "".join(pixel)
+        else:
+            self.setPixelFormat()
+
     #
     # base customizations
     #
@@ -343,10 +373,12 @@ class VNCDoToolClient(rfb.RFBClient):
         self.sendPassword(self.factory.password)
 
     def vncConnectionMade(self):
-        self.setPixelFormat()
-        encodings = [rfb.RAW_ENCODING]
+        self.setImageMode()
+        encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
+        if self.factory.pseudodesktop:
+            encodings.append(rfb.PSEUDO_DESKTOP_SIZE_ENCODING)
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
@@ -366,7 +398,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = Image.frombytes('RGB', size, data, 'raw', 'RGBX')
+        update = Image.frombytes('RGB', size, data, 'raw', self.image_mode)
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
@@ -387,7 +419,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.deferred:
             d = self.deferred
             self.deferred = None
-            d.callback(self.screen)
+            d.callback(self)
 
     def updateCursor(self, x, y, width, height, image, mask):
         if self.factory.nocursor:
@@ -412,6 +444,22 @@ class VNCDoToolClient(rfb.RFBClient):
         y = self.y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
+    def updateDesktopSize(self, width, height):
+        new_screen = Image.new("RGB", (width, height), "black")
+        if self.screen:
+            new_screen.paste(self.screen, (0, 0))
+        self.screen = new_screen
+
+
+class VMWareClient(VNCDoToolClient):
+    def dataReceived(self, data):
+        single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
+        if len(data) == 20 and int(data[0]) == 0 and data[2:16] == single_pixel_update:
+            self.framebufferUpdateRequest()
+            self._handler()
+        else:
+            super(VMWareClient, self).dataReceived(data)
+
 
 class VNCDoToolFactory(rfb.RFBFactory):
     password = None
@@ -421,6 +469,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     pseudocursor = False
     nocursor = False
+    pseudodesktop = True
     force_caps = False
 
     def __init__(self):
@@ -434,3 +483,14 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionMade(self, protocol):
         self.deferred.callback(protocol)
+
+
+class VMWareFactory(VNCDoToolFactory):
+    protocol = VMWareClient
+
+
+def factory_connect(factory, host, port, family):
+    if family == socket.AF_INET:
+        reactor.connectTCP(host, port, factory)
+    elif family == socket.AF_UNIX:
+        reactor.connectUNIX(host, factory)

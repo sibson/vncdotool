@@ -1,9 +1,11 @@
 """ Helpers to allow vncdotool to be intergrated into other applications.
 
-This feature is under developemental, you're help testing and
+This feature is under development, your help testing and
 debugging is appreciated.
 """
 
+import sys
+import socket
 import threading
 try:
     import queue
@@ -17,7 +19,7 @@ from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
 
 from . import command
-from .client import VNCDoToolFactory, VNCDoToolClient
+from .client import VNCDoToolFactory, factory_connect
 
 __all__ = ['connect']
 
@@ -30,14 +32,100 @@ class VNCDoException(Exception):
     pass
 
 
-def connect(server, password=None):
+if sys.version_info.major == 2:
+    class TimeoutError(OSError):
+        pass
+
+
+def shutdown():
+    if not reactor.running:
+        return
+
+    reactor.callFromThread(reactor.stop)
+    _THREAD.join()
+
+
+class ThreadedVNCClientProxy(object):
+
+    def __init__(self, factory, timeout=60 * 60):
+        self.factory = factory
+        self.queue = queue.Queue()
+        self._timeout = timeout
+        self.protocol = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.disconnect()
+
+    @property
+    def timeout(self):
+        """Timeout in seconds for API requests."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, timeout):
+        """Timeout in seconds for API requests."""
+        self._timeout = timeout
+
+    def connect(self, host, port=5900, family=socket.AF_INET):
+        def capture_protocol(protocol):
+            self.protocol = protocol
+            return protocol
+        self.factory.deferred.addCallback(capture_protocol)
+        reactor.callWhenRunning(
+            factory_connect, self.factory, host, port, family)
+
+    def disconnect(self):
+        def disconnector(protocol):
+            protocol.transport.loseConnection()
+        reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
+
+    def __getattr__(self, attr):
+        method = getattr(self.factory.protocol, attr)
+
+        def errback(reason, *args, **kwargs):
+            self.queue.put(Failure(reason))
+
+        def callback(protocol, *args, **kwargs):
+            def result_callback(result):
+                self.queue.put(result)
+                return result
+            d = maybeDeferred(method, protocol, *args, **kwargs)
+            d.addBoth(result_callback)
+            return d
+
+        def proxy_call(*args, **kwargs):
+            reactor.callFromThread(self.factory.deferred.addCallbacks,
+                                   callback, errback, args, kwargs)
+            try:
+                result = self.queue.get(timeout=self._timeout)
+            except queue.Empty:
+                raise TimeoutError("Timeout while waiting for client response")
+
+            if isinstance(result, Failure):
+                raise VNCDoException(result)
+
+            return result
+
+        if callable(method):
+            return proxy_call
+        else:
+            return getattr(self.protocol, attr)
+
+    def __dir__(self):
+        return dir(self.__class__) + dir(self.factory.protocol)
+
+
+def connect(server, password=None,
+        factory_class=VNCDoToolFactory, proxy=ThreadedVNCClientProxy, timeout=None):
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
     >>> from vncdotool import api
-    >>> client = api.connect('host')
-    >>> client.keyPress('c')
-    >>> api.shutdown()
+    >>> with api.connect('host') as client
+    >>>     client.keyPress('c')
 
     You may then call any regular VNCDoToolClient method on client from your
     application code.
@@ -56,63 +144,16 @@ def connect(server, password=None):
         observer = PythonLoggingObserver()
         observer.start()
 
-    factory = VNCDoToolFactory()
+    factory = factory_class()
+
     if password is not None:
         factory.password = password
 
-    host, port = command.parse_host(server)
-    client = ThreadedVNCClientProxy(factory)
-    client.connect(host, port)
+    family, host, port = command.parse_server(server)
+    client = proxy(factory, timeout)
+    client.connect(host, port=port, family=family)
 
     return client
-
-
-def shutdown():
-    if not reactor.running:
-        return
-
-    reactor.callFromThread(reactor.stop)
-    _THREAD.join()
-
-
-class ThreadedVNCClientProxy(object):
-
-    def __init__(self, factory):
-        self.factory = factory
-        self.queue = queue.Queue()
-
-    def connect(self, host, port=5900):
-        reactor.callWhenRunning(reactor.connectTCP, host, port, self.factory)
-
-    def disconnect(self):
-        def disconnector(protocol):
-            protocol.transport.loseConnection()
-        reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
-
-    def __getattr__(self, attr):
-        method = getattr(VNCDoToolClient, attr)
-
-        def errback(reason, *args, **kwargs):
-            self.queue.put(Failure(reason))
-
-        def callback(protocol, *args, **kwargs):
-            def result_callback(result):
-                self.queue.put(result)
-                return result
-            d = maybeDeferred(method, protocol, *args, **kwargs)
-            d.addBoth(result_callback)
-            return d
-
-        def proxy_call(*args, **kwargs):
-            reactor.callFromThread(self.factory.deferred.addCallbacks,
-                                   callback, errback, args, kwargs)
-            result = self.queue.get(timeout=60 * 60)
-            if isinstance(result, Failure):
-                raise VNCDoException(result)
-
-            return result
-
-        return proxy_call
 
 
 if __name__ == '__main__':
