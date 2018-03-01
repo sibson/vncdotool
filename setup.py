@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 
 from setuptools import setup
+from vncdotool import __version__
 
 README = open('README.rst', 'rt').read()
 
 setup(
     name='vncdotool',
-    version='0.11.2',
+    version=__version__,
     description='Command line VNC client',
     install_requires=[
         'Twisted',

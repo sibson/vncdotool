@@ -11,6 +11,7 @@ import optparse
 import sys
 import os
 import shlex
+import socket
 import logging
 import logging.handlers
 
@@ -19,7 +20,7 @@ from twisted.internet import reactor, protocol
 from twisted.internet.error import ConnectionDone
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolFactory, VNCDoToolClient
+from .client import VNCDoToolFactory, VNCDoToolClient, factory_connect
 from .loggingproxy import VNCLoggingServerFactory
 
 
@@ -221,8 +222,7 @@ def build_tool(options, args):
 
     build_command_list(factory, args, options.delay, options.warp)
 
-    # connect
-    reactor.connectTCP(options.host, int(options.port), factory)
+    factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
 
     # close the connection when we're done
@@ -277,13 +277,18 @@ def setup_logging(options):
     PythonLoggingObserver().start()
 
 
-def parse_host(server):
+def parse_server(server):
     split = server.split(':')
 
     if not split[0]:
         host = '127.0.0.1'
     else:
         host = split[0]
+
+    if os.path.exists(host):
+        address_family = socket.AF_UNIX
+    else:
+        address_family = socket.AF_INET
 
     if len(split) == 3:  # ::port
         port = int(split[2])
@@ -292,14 +297,17 @@ def parse_host(server):
     else:
         port = 5900
 
-    return host, port
+    return address_family, host, port
 
 
 def vnclog():
+    from vncdotool import __version__
+
     usage = '%prog [options] OUTPUT'
     description = 'Capture user interactions with a VNC Server'
+    version = "%prog " + __version__
 
-    op = optparse.OptionParser(usage=usage, description=description)
+    op = optparse.OptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--listen', metavar='PORT', type='int',
@@ -320,7 +328,8 @@ def vnclog():
 
     setup_logging(options)
 
-    options.host, options.port = parse_host(options.server)
+    options.address_family, options.host, options.port = parse_server(
+        options.server)
 
     if len(args) != 1:
         op.error('incorrect number of arguments')
@@ -352,10 +361,13 @@ def vnclog():
 
 
 def vncdo():
+    from vncdotool import __version__
+
     usage = '%prog [options] CMD CMDARGS|-|filename'
     description = 'Command line control of a VNC server'
+    version = "%prog " + __version__
 
-    op = VNCDoToolOptionParser(usage=usage, description=description)
+    op = VNCDoToolOptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
     op.add_option('--delay', action='store', metavar='MILLISECONDS',
@@ -386,7 +398,8 @@ def vncdo():
         op.error('no command provided')
 
     setup_logging(options)
-    options.host, options.port = parse_host(options.server)
+    options.address_family, options.host, options.port = parse_server(
+        options.server)
 
     log.info('connecting to %s:%s', options.host, options.port)
 
