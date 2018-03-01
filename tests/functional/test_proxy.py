@@ -10,9 +10,10 @@ from helpers import PExpectAssertMixin
 class TestLogEvents(PExpectAssertMixin, TestCase):
     def setUp(self):
         cmd = u'vncev -rfbport 5999 -rfbwait 1000'
-        self.server = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
+        self.server = pexpect.spawn(cmd, logfile=sys.stdout, timeout=10)
+
         cmd = u'vnclog --listen 1842 -s :99 -'
-        self.recorder = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
+        self.recorder = pexpect.spawn(cmd, logfile=sys.stdout, timeout=10)
 
     def tearDown(self):
         self.server.terminate(force=True)
@@ -21,8 +22,7 @@ class TestLogEvents(PExpectAssertMixin, TestCase):
 
     def run_vncdo(self, commands):
         cmd = u'vncdo -s localhost::1842 ' + commands
-        vnc = pexpect.spawn(cmd, timeout=2)
-        vnc.logfile_read = sys.stdout
+        vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=2)
         retval = vnc.wait()
         assert retval == 0, (retval, str(vnc))
 
