@@ -1,4 +1,4 @@
-1.0.0 (unreleased)
+0.12.0 (2018-04-07)
 ----------------------
   - connect via UNIX sockets, thanks Matteo Cafasso
   - bugfix, XTightVNC initial connection, thanks Antti Kervinen
