@@ -49,6 +49,11 @@ class VNCDoCLIClient(VNCDoToolClient):
 
         self.sendPassword(self.factory.password)
 
+    def updateDesktopSize(self, width, height):
+        try:
+            super().updateDesktopSize(width, height)
+        except ValueError:
+            pass
 
 class VNCDoCLIFactory(VNCDoToolFactory):
     protocol = VNCDoCLIClient
