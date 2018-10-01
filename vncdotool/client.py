@@ -290,7 +290,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def _expectCompare(self, data, box, maxrms):
         image = self.screen.crop(box)
 
-        hist = self.screen.histogram()
+        hist = image.histogram()
         if len(hist) == len(self.expected):
             sum_ = 0
             for h, e in zip(hist, self.expected):
