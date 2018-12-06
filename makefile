@@ -1,6 +1,8 @@
 .PHONY: upload release release-test release-tag upload docs
 .DEFAULT: help
 
+VERSION_FILE?=vncdotool/__init__.py
+
 help:
 	@echo "test:		run tests"
 	@echo "docs:		build documentation"
@@ -15,7 +17,7 @@ version:
 version-%: OLDVERSION:=$(shell python setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
-	sed -i -e s/$(OLDVERSION)/$(NEWVERSION)/ vncdotool/__init__.py
+	sed -i -e s/$(OLDVERSION)/$(NEWVERSION)/ $(VERSION_FILE)
 	git ci setup.py -m"bump version to $*"
 
 release: release-test release-tag upload
