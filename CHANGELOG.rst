@@ -1,3 +1,8 @@
+0.12.1 (2018-12-06)
+----------------------
+   - bugfix expectRegion to use cropped images for compare, thanks Michael Fürnschuß
+   - direct support for building RPMs, thanks Plamen Dimitrov
+
 0.12.0 (2018-04-07)
 ----------------------
   - connect via UNIX sockets, thanks Matteo Cafasso
