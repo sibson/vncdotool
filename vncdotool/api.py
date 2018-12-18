@@ -118,7 +118,7 @@ class ThreadedVNCClientProxy(object):
         return dir(self.__class__) + dir(self.factory.protocol)
 
 
-def connect(server, password=None,
+def connect(server, password=None, port=None,
         factory_class=VNCDoToolFactory, proxy=ThreadedVNCClientProxy, timeout=None):
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
@@ -149,9 +149,9 @@ def connect(server, password=None,
     if password is not None:
         factory.password = password
 
-    family, host, port = command.parse_server(server)
+    s_family, s_host, s_port = command.parse_server(server)
     client = proxy(factory, timeout)
-    client.connect(host, port=port, family=family)
+    client.connect(s_host, port=(port if port else s_port), family=s_family)
 
     return client
 
