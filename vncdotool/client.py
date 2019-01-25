@@ -278,7 +278,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, x, y, maxrms)
 
     def _expectFramebuffer(self, filename, x, y, maxrms):
-        self.framebufferUpdateRequest(incremental=1)
+        self.framebufferUpdateRequest(incremental=self.factory.incremental_expect)
         image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()

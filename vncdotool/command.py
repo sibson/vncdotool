@@ -393,6 +393,9 @@ def vncdo():
         metavar='FACTOR', default=1.0,
         help='pause time is accelerated by FACTOR [x%default]')
 
+    op.add_option('--incremental-expect', action='store', type='int', metavar='INCREMENTAL_EXPECT', default='1',
+        help='try setting this to 0 if expect has problems matching the current screen [%default]')
+
     options, args = op.parse_args()
     if not len(args):
         op.error('no command provided')
@@ -417,6 +420,8 @@ def vncdo():
 
     if options.force_caps:
         factory.force_caps = True
+
+    factory.incremental_expect = options.incremental_expect
 
     if options.timeout:
         message = 'TIMEOUT Exceeded (%ss)' % options.timeout
