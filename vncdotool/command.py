@@ -6,6 +6,8 @@ Command line interface to interact with a VNC Server
 
 MIT License
 """
+from __future__ import print_function
+
 import getpass
 import optparse
 import sys
@@ -167,7 +169,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
                 print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS))
+                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
+                sys.exit(1)
             else:
                 factory.deferred.addCallback(client.captureScreen, filename)
         elif cmd == 'expect':
@@ -183,7 +186,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
                 print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS))
+                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
+                sys.exit(1)
             else:
                 factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
         elif cmd == 'rexpect':
@@ -203,7 +207,8 @@ def build_command_list(factory, args, delay=None, warp=1.0):
             lex.whitespace_split = True
             args = list(lex) + args
         else:
-            print('unknown cmd "%s"' % cmd)
+            print('unknown cmd "%s"' % cmd, file=sys.stderr)
+            sys.exit(1)
 
         if delay and args:
             factory.deferred.addCallback(client.pause, delay)
