@@ -226,25 +226,25 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, filename):
+    def captureScreen(self, filename, incremental=0):
         """ Save the current display to filename
         """
         log.debug('captureScreen %s', filename)
-        return self._capture(filename)
+        return self._capture(filename, incremental)
 
-    def captureRegion(self, filename, x, y, w, h):
+    def captureRegion(self, filename, x, y, w, h, incremental=0):
         """ Save a region of the current display to filename
         """
         log.debug('captureRegion %s', filename)
-        return self._capture(filename, x, y, x+w, y+h)
+        return self._capture(filename, incremental, x, y, x+w, y+h)
 
     def refreshScreen(self, incremental=0):
         d = self.deferred = Deferred()
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, filename, *args):
-        d = self.refreshScreen()
+    def _capture(self, filename, incremental, *args):
+        d = self.refreshScreen(incremental)
         d.addCallback(self._captureSave, filename, *args)
         return d
 
