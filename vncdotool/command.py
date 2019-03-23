@@ -260,7 +260,7 @@ def add_standard_options(parser):
         help='output logging information to FILE')
 
     parser.add_option('-v', '--verbose', action='count', default=0,
-        help='increase verbosity, use multple times')
+        help='increase verbosity, use multiple times')
 
     return parser
 
