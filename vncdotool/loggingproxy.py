@@ -19,6 +19,7 @@ TYPE_LEN = {
     3: 10,
     4: 8,
     5: 6,
+    255: 12
 }
 
 REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.items())
@@ -31,19 +32,20 @@ class RFBServer(Protocol):
         Protocol.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
-        self.buffer = ''
+        self.buffer = b''
         self.nbytes = 0
         # XXX send version message
         self._handler = self._handle_version, 12
 
     def dataReceived(self, data):
-        self.buffer += data
+        self.buffer = data + self.buffer
         while len(self.buffer) >= self._handler[1]:
             self._handler[0]()
 
     def _handle_version(self):
-        msg = self.buffer[:12]
+        msg = self.buffer[:12].decode('utf-8')
         self.buffer = self.buffer[12:]
+
         if not msg.startswith('RFB 003.') and msg.endswith('\n'):
             self.transport.loseConnection()
 
@@ -55,11 +57,17 @@ class RFBServer(Protocol):
                 self._handler = self._handle_clientInit, 1
         elif version in ('007', '008'):
             # XXX send security v3.7+
-            self._handler = self._handle_security, 1
+            self._handler = self._handle_security, 2
 
     def _handle_security(self):
-        sectype = self.buffer[0]
-        self.buffer = self.buffer[1:]
+        sectype = unpack('!H', self.buffer[:2])[0]
+        self.buffer = self.buffer[2:]
+        if sectype != 1:
+            self.transport.loseConnection()
+            print("sectype: ", sectype)
+            raise "Security type not implanted!"
+        else:
+            self._handler = self._handle_protocol, 1
 
     def _handle_VNCAuthResponse(self):
         self.buffer = self.buffer[16:]
@@ -73,7 +81,7 @@ class RFBServer(Protocol):
         self._handler = self._handle_protocol, 1
 
     def _handle_protocol(self):
-        ptype = unpack('!B', self.buffer[0])[0]
+        ptype = unpack('!B', self.buffer[:1])[0]
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
             self._handler = self._handle_protocol, nbytes + 1
@@ -101,6 +109,10 @@ class RFBServer(Protocol):
             self.handle_pointerEvent(x, y, buttonmask)
         elif ptype == 6:
             self.handle_clientCutText(block)
+        elif ptype == 255:
+            # https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message
+            downFlag, keySym = unpack('!xHIxxxx', block)
+            self.handle_keyEvent(keySym, downFlag)
 
     def handle_setPixelFormat(self, bbp, depth, bigendian, truecolor, rmax, gmax, bmax, rshift, gshift, bshift):
         pass
