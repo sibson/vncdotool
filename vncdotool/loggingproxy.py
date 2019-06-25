@@ -38,7 +38,7 @@ class RFBServer(Protocol):
         self._handler = self._handle_version, 12
 
     def dataReceived(self, data):
-        self.buffer = data + self.buffer
+        self.buffer = self.buffer + data
         while len(self.buffer) >= self._handler[1]:
             self._handler[0]()
 
@@ -60,13 +60,9 @@ class RFBServer(Protocol):
             self._handler = self._handle_security, 2
 
     def _handle_security(self):
-        sectype = unpack('!H', self.buffer[:2])[0]
+        sectype, shared = unpack('!BB', self.buffer[:2])
         self.buffer = self.buffer[2:]
-        if sectype != 1:
-            self.transport.loseConnection()
-            print("sectype: ", sectype)
-            raise "Security type not implanted!"
-        else:
+        if sectype == 1:
             self._handler = self._handle_protocol, 1
 
     def _handle_VNCAuthResponse(self):
