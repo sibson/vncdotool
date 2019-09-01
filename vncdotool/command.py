@@ -113,7 +113,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
-def build_command_list(factory, args, delay=None, warp=1.0):
+def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshes=False):
     client = VNCDoCLIClient
 
     if delay:
@@ -172,7 +172,7 @@ def build_command_list(factory, args, delay=None, warp=1.0):
                         imgformat, SUPPORTED_FORMATS), file=sys.stderr)
                 sys.exit(1)
             else:
-                factory.deferred.addCallback(client.captureScreen, filename)
+                factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))
@@ -225,7 +225,7 @@ def build_tool(options, args):
         lex.whitespace_split = True
         args = list(lex)
 
-    build_command_list(factory, args, options.delay, options.warp)
+    build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
@@ -260,7 +260,7 @@ def add_standard_options(parser):
         help='output logging information to FILE')
 
     parser.add_option('-v', '--verbose', action='count', default=0,
-        help='increase verbosity, use multple times')
+        help='increase verbosity, use multiple times')
 
     return parser
 
@@ -397,6 +397,9 @@ def vncdo():
     op.add_option('-w', '--warp', action='store', type='float',
         metavar='FACTOR', default=1.0,
         help='pause time is accelerated by FACTOR [x%default]')
+
+    op.add_option('-i', '--incremental-refreshes', action='store_true', default=False,
+        help='set the "incremental" flag')
 
     options, args = op.parse_args()
     if not len(args):
