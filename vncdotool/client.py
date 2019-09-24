@@ -136,6 +136,7 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask = None
 
     SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
+    SPECIAL_KEYS_US_MAP="`1234567890-="
 
     def connectionMade(self):
         rfb.RFBClient.connectionMade(self)
@@ -147,6 +148,8 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.factory.force_caps:
             if key.isupper() or key in self.SPECIAL_KEYS_US:
                 key = 'shift-%c' % key
+        elif key in self.SPECIAL_KEYS_US:
+            key = 'shift-%c' % self.SPECIAL_KEYS_US_MAP[self.SPECIAL_KEYS_US.index(key)]
 
         if len(key) == 1:
             keys = [key]
