@@ -1,5 +1,5 @@
 import sys
-from mock import Mock
+from mock import Mock, ClassTypes, wraps, _importer
 
 class _isolate(object):
     def __init__(self, target, excludes=None):
