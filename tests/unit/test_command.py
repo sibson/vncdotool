@@ -77,7 +77,7 @@ class TestBuildCommandList(unittest.TestCase):
         command.SUPPORTED_FORMATS = ('png',)
         command.os.path.splitext.return_value = 'capture', '.png'
         self.call_build_commands_list('capture foo.png')
-        self.assertCalled(self.client.captureScreen, 'foo.png')
+        self.assertCalled(self.client.captureScreen, 'foo.png', 0)
 
     def test_capture_not_supported(self):
         command.SUPPORTED_FORMATS = ('png',)
