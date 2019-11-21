@@ -1,5 +1,6 @@
 .. image:: https://img.shields.io/pypi/v/vncdotool.svg :target: https://pypi.python.org/pypi/vncdotool
-.. image:: https://img.shields.io/travis/sibson/vncdotool.svg :target: https://travis-ci.org/sibson/vncdotool
+.. image:: https://circleci.com/gh/sibson/vncdotool.svg?style=svg
+    :target: https://circleci.com/gh/sibson/vncdotool
 
 vncdotool
 ===========
