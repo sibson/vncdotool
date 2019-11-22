@@ -115,7 +115,7 @@ except ImportError as error:
     # it.
     class _Image(object):
         def __getattr__(self, _):
-            raise ImportError(error)
+            raise ImportError(error) # noqa: F821
     Image = _Image()
 
 

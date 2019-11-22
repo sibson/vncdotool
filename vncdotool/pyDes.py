@@ -24,6 +24,7 @@
 #  * Santiago Palladino for providing the PKCS5 padding technique.
 #  * Shaya for correcting the PAD_PKCS5 triple des CBC errors.
 #
+# flake8: noqa
 """A pure python implementation of the DES and TRIPLE DES encryption algorithms.
 
 Class initialization
@@ -229,7 +230,7 @@ class _baseDes(object):
 		# Only accept byte strings or ascii unicode values, otherwise
 		# there is no way to correctly decode the data into bytes.
 		if _pythonMajorVersion < 3:
-			if isinstance(data, unicode):
+			if isinstance(data, unicode): # noqa: F821
 				raise ValueError("pyDes can only work with bytes, not Unicode strings.")
 		else:
 			if isinstance(data, str):

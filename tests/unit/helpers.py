@@ -1,5 +1,6 @@
 import sys
-from mock import Mock, ClassTypes, wraps, _importer
+from unittest.mock import Mock, _importer
+from functools import wraps
 
 class _isolate(object):
     def __init__(self, target, excludes=None):
@@ -34,7 +35,7 @@ class _isolate(object):
         self.module.__dict__.update(old_module_dict)
 
     def __call__(self, thing, *args, **kwargs):
-        if isinstance(thing, ClassTypes):
+        if isinstance(thing, type):
             return self.decorate_class(thing)
         else:
             return self.decorate_callable(thing)

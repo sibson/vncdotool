@@ -11,6 +11,7 @@ http://www.realvnc.com/docs/rfbproto.pdf
 
 MIT License
 """
+# flake8: noqa
 
 import sys
 import math
