@@ -24,6 +24,7 @@
 #  * Santiago Palladino for providing the PKCS5 padding technique.
 #  * Shaya for correcting the PAD_PKCS5 triple des CBC errors.
 #
+# flake8: noqa
 """A pure python implementation of the DES and TRIPLE DES encryption algorithms.
 
 Class initialization
