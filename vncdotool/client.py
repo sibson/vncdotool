@@ -330,12 +330,14 @@ class VNCDoToolClient(rfb.RFBClient):
             ysteps = range(self.y, y, step)
 
         for ypos in ysteps:
-            time.sleep(.2)
             self.mouseMove(self.x, ypos)
+            reactor.doPoll(timeout=5)
+            time.sleep(.2)
 
         for xpos in xsteps:
-            time.sleep(.2)
             self.mouseMove(xpos, self.y)
+            reactor.doPoll(timeout=5)
+            time.sleep(.2)
 
         self.mouseMove(x, y)
 
