@@ -24,6 +24,9 @@ from twisted.application import internet, service
 
 #~ from twisted.internet import reactor
 
+# Python3 compatibility replacement for ord(str) as ord(byte)
+if not isinstance(b' ', str):
+    def ord(x): return x
 
 #encoding-type
 #for SetEncodings()
