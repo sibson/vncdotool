@@ -15,6 +15,7 @@ MIT License
 
 import sys
 import math
+import zlib
 from struct import pack, unpack
 from . import pyDes
 from twisted.python import usage, log
@@ -115,6 +116,49 @@ KEY_BackSlash = 0x005C
 KEY_SpaceBar=   0x0020
 
 
+# ZRLE helpers
+def _next_bit(it, pixels_in_tile):
+    num_pixels = 0
+    while True:
+        b = ord(next(it))
+
+        for n in range(8):
+            value = b >> (7 - n)
+            yield value & 1
+
+            num_pixels += 1
+            if num_pixels == pixels_in_tile:
+                return
+
+
+def _next_dibit(it, pixels_in_tile):
+    num_pixels = 0
+    while True:
+        b = ord(next(it))
+
+        for n in range(0, 8, 2):
+            value = b >> (6 - n)
+            yield value & 3
+
+            num_pixels += 1
+            if num_pixels == pixels_in_tile:
+                return
+
+
+def _next_nibble(it, pixels_in_tile):
+    num_pixels = 0
+    while True:
+        b = ord(next(it))
+
+        for n in range(0, 8, 4):
+            value = b >> (4 - n)
+            yield value & 15
+
+            num_pixels += 1
+            if num_pixels == pixels_in_tile:
+                return
+
+
 class RFBClient(Protocol):
 
     def __init__(self):
@@ -124,6 +168,7 @@ class RFBClient(Protocol):
         self._already_expecting = 0
         self._version = None
         self._version_server = None
+        self._zlib_stream = zlib.decompressobj(0)
 
     #------------------------------------------------------
     # states used on connection startup
@@ -309,8 +354,8 @@ class RFBClient(Protocol):
                 self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
             elif encoding == RRE_ENCODING:
                 self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
-            #~ elif encoding == ZRLE_ENCODING:
-                #~ self.expect(self._handleDecodeZRLE, )
+            elif encoding == ZRLE_ENCODING:
+                self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == PSEUDO_CURSOR_ENCODING:
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
@@ -493,9 +538,114 @@ class RFBClient(Protocol):
 
 
     # ---  ZRLE Encoding
+    def _handleDecodeZRLE(self, block, x, y, width, height):
+        """
+        Handle ZRLE encoding.
+        See https://tools.ietf.org/html/rfc6143#section-7.7.6 (ZRLE)
+        and https://tools.ietf.org/html/rfc6143#section-7.7.5 (TRLE)
+        """
+        (compressed_bytes,) = unpack("!L", block)
+        self.expect(self._handleDecodeZRLEdata, compressed_bytes, x, y, width, height)
 
-    def _handleDecodeZRLE(self, block):
-        raise NotImplementedError
+    def _handleDecodeZRLEdata(self, block, x, y, width, height):
+        tx = x
+        ty = y
+
+        data = self._zlib_stream.decompress(block)
+        it = iter(data)
+
+        def cpixel(i):
+            yield next(i)
+            yield next(i)
+            yield next(i)
+            # Alpha channel
+            yield 0xff
+
+        while True:
+            try:
+                subencoding = ord(next(it))
+            except StopIteration:
+                break
+
+            # calc tile size
+            tw = th = 64
+            if x + width - tx < 64:
+                tw = x + width - tx
+            if y + height - ty < 64:
+                th = y + height - ty
+
+            pixels_in_tile = tw * th
+
+            # decode next tile
+            num_pixels = 0
+            pixel_data = bytearray()
+            palette_size = subencoding & 127
+            if subencoding & 0x80:
+                # RLE
+
+                def do_rle(pixel):
+                    run_length_next = ord(next(it))
+                    run_length = run_length_next
+                    while run_length_next == 255:
+                        run_length_next = ord(next(it))
+                        run_length += run_length_next
+                    pixel_data.extend(pixel * (run_length + 1))
+                    return run_length + 1
+
+                if palette_size == 0:
+                    # plain RLE
+                    while num_pixels < pixels_in_tile:
+                        color = bytearray(cpixel(it))
+                        num_pixels += do_rle(color)
+                    if num_pixels != pixels_in_tile:
+                        raise ValueError("too many pixels")
+                else:
+                    palette = [bytearray(cpixel(it)) for p in range(palette_size)]
+
+                    while num_pixels < pixels_in_tile:
+                        palette_index = ord(next(it))
+                        if palette_index & 0x80:
+                            palette_index &= 0x7F
+                            # run of length > 1, more bytes follow to determine run length
+                            num_pixels += do_rle(palette[palette_index])
+                        else:
+                            # run of length 1
+                            pixel_data.extend(palette[palette_index])
+                            num_pixels += 1
+                    if num_pixels != pixels_in_tile:
+                        raise ValueError("too many pixels")
+
+                self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+            else:
+                # No RLE
+                if palette_size == 1:
+                    # Fill tile with plain color
+                    color = bytearray(cpixel(it))
+                    self.fillRectangle(tx, ty, tw, th, bytes(color))
+                else:
+                    if palette_size > 16 or palette_size == 0:
+                        raise ValueError(
+                            "Palette of size {0} is not allowed".format(palette_size))
+
+                    palette = [bytearray(cpixel(it)) for _ in range(palette_size)]
+                    if palette_size == 2:
+                        next_index = _next_bit(it, pixels_in_tile)
+                    elif palette_size == 3 or palette_size == 4:
+                        next_index = _next_dibit(it, pixels_in_tile)
+                    else:
+                        next_index = _next_nibble(it, pixels_in_tile)
+
+                    for palette_index in next_index:
+                        pixel_data.extend(palette[palette_index])
+                self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+
+            # Next tile
+            tx = tx + 64
+            if tx >= x + width:
+                tx = x
+                ty = ty + 64
+
+        self._doConnection()
 
     # --- Pseudo Cursor Encoding
     def _handleDecodePsuedoCursor(self, block, x, y, width, height):
