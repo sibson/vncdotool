@@ -124,7 +124,7 @@ class AuthenticationError(Exception):
 
 
 class VNCDoToolClient(rfb.RFBClient):
-    encoding = rfb.RAW_ENCODING
+    encoding = rfb.ZRLE_ENCODING
     x = 0
     y = 0
     buttons = 0
