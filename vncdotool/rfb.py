@@ -117,7 +117,7 @@ KEY_SpaceBar=   0x0020
 
 
 # ZRLE helpers
-def _next_bit(it, pixels_in_tile):
+def _zrle_next_bit(it, pixels_in_tile):
     num_pixels = 0
     while True:
         b = ord(next(it))
@@ -131,7 +131,7 @@ def _next_bit(it, pixels_in_tile):
                 return
 
 
-def _next_dibit(it, pixels_in_tile):
+def _zrle_next_dibit(it, pixels_in_tile):
     num_pixels = 0
     while True:
         b = ord(next(it))
@@ -145,7 +145,7 @@ def _next_dibit(it, pixels_in_tile):
                 return
 
 
-def _next_nibble(it, pixels_in_tile):
+def _zrle_next_nibble(it, pixels_in_tile):
     num_pixels = 0
     while True:
         b = ord(next(it))
@@ -629,11 +629,11 @@ class RFBClient(Protocol):
 
                     palette = [bytearray(cpixel(it)) for _ in range(palette_size)]
                     if palette_size == 2:
-                        next_index = _next_bit(it, pixels_in_tile)
+                        next_index = _zrle_next_bit(it, pixels_in_tile)
                     elif palette_size == 3 or palette_size == 4:
-                        next_index = _next_dibit(it, pixels_in_tile)
+                        next_index = _zrle_next_dibit(it, pixels_in_tile)
                     else:
-                        next_index = _next_nibble(it, pixels_in_tile)
+                        next_index = _zrle_next_nibble(it, pixels_in_tile)
 
                     for palette_index in next_index:
                         pixel_data.extend(palette[palette_index])
