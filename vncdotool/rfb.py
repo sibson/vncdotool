@@ -796,7 +796,7 @@ class RFBClient(Protocol):
         """ New cursor, focuses at (x, y)
         """
 
-    def updateDesktopSize(width, height):
+    def updateDesktopSize(self, width, height):
         """ New desktop size of width*height. """
 
     def bell(self):
