@@ -618,12 +618,16 @@ class RFBClient(Protocol):
                 self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
             else:
                 # No RLE
-                if palette_size == 1:
+                if palette_size == 0:
+                    # Raw pixel data
+                    pixel_data = b''.join(bytes(cpixel(it)) for _ in range(pixels_in_tile))
+                    self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+                elif palette_size == 1:
                     # Fill tile with plain color
                     color = bytearray(cpixel(it))
                     self.fillRectangle(tx, ty, tw, th, bytes(color))
                 else:
-                    if palette_size > 16 or palette_size == 0:
+                    if palette_size > 16:
                         raise ValueError(
                             "Palette of size {0} is not allowed".format(palette_size))
 
@@ -637,7 +641,7 @@ class RFBClient(Protocol):
 
                     for palette_index in next_index:
                         pixel_data.extend(palette[palette_index])
-                self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+                    self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
 
             # Next tile
             tx = tx + 64
