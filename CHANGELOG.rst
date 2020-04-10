@@ -1,7 +1,13 @@
+1.0.0 (2020-04-10)
+----------------------
+  - add ZRLE encoding, thanks Adrian Weiler
+  - drop python2 support
+  - fix mouseDrag behaviour, thanks Samir Aguiar
+
 0.13.0 (2019-11-21)
 ----------------------
-   - new flag --incremental-refreshes, increased compatibility of capture, thanks Amir Rossert
-   - exit non-zero and print to stderr for unknown commands, thanks Amir Rossert
+  - new flag --incremental-refreshes, increased compatibility of capture, thanks Amir Rossert
+  - exit non-zero and print to stderr for unknown commands, thanks Amir Rossert
 
 0.12.1 (2018-12-06)
 ----------------------
