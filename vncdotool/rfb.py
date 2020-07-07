@@ -40,7 +40,7 @@ if sys.version_info[0] >= 3:
         elif isinstance(x, bytes) or isinstance(x, str):
             return original_ord(x)
         else:
-            raise TypeError(f"ord takes an int, a byte, or a str. Got {type(x)} : {x}")
+            raise TypeError(f"our customized ord takes an int, a byte, or a str. Got {type(x)} : {x}")
 
 #encoding-type
 #for SetEncodings()
