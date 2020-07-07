@@ -26,8 +26,21 @@ from twisted.application import internet, service
 #~ from twisted.internet import reactor
 
 # Python3 compatibility replacement for ord(str) as ord(byte)
-if not isinstance(b' ', str):
-    def ord(x): return x
+if sys.version_info[0] >= 3:
+    original_ord = ord
+    def ord(x):
+        # in python 2, there are two possible cases ord is used.
+        # * string of length > 1, --(index access)--> string of length 1 --(ord)--> int
+        # * string of length 1 --(ord)--> int
+        # however in python3, this usage morphs into
+        # * byte of length > 1, --(index access)--> int --(ord)--> Error
+        # * byte of length 1 --(ord)--> int
+        if isinstance(x, int):
+            return x
+        elif isinstance(x, bytes) or isinstance(x, str):
+            return original_ord(x)
+        else:
+            raise TypeError(f"our customized ord takes an int, a byte, or a str. Got {type(x)} : {x}")
 
 #encoding-type
 #for SetEncodings()
@@ -487,6 +500,8 @@ class RFBClient(Protocol):
             pos += self.bypp
         if subencoding & 8:     #AnySubrects
             #~ (subrects, ) = unpack("!B", block)
+            # In python2, block : string, block[pos] : string, ord(block[pos]) : int
+            # In python3, block : byte,   block[pos] : int,    ord(block[pos]) : error
             subrects = ord(block[pos])
         #~ print subrects
         if subrects:
