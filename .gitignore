@@ -7,3 +7,6 @@ vncdotool.egg-info
 .noseids
 .tox
 docs/_build
+
+*~
+#*
