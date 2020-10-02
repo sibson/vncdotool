@@ -2,12 +2,23 @@ Embedding in Python Applications
 ===================================
 vncdotool is built with the Twisted_ framework, as such it best intergrates with other Twisted Applications
 Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatability layer.
-It uses a seperate thread to run the Twisted reactor and communitcates with the main program using a threadsafe Queue.
+It uses a seperate thread to run the Twisted reactor and communicates with the main program using a threadsafe Queue.
 
 To use the syncronous API you can do the following::
 
     from vncdotool import api
-    client = api.connect('vnchost:display', password=None)
+    client = api.connect('vncserver', password=None)
+
+The first argument passed to the `connect` method is the VNC server to connect to, and it needs to be in the format `address[:display|::port]`. For example::
+
+    # connect to 192.168.1.1 on default port 5900
+    client = api.connect('192.168.1.1', password=None)
+
+    # connect to localhost on display :3 (port 5903)
+    client = api.connect('localhost:3', password=None)
+
+    # connect to myvncserver.com on port 5902 (two colons needed)
+    client = api.connect('myvncserver.com::5902', password=None)
 
 You can then call any of the methods available on
 :class:`vncdotool.client.VNCDoToolClient` and they will block until completion.

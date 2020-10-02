@@ -10,7 +10,7 @@ It's under active development and seems to be working, but please report any pro
 
 Quick Start
 --------------------------------
-To use vncdotool you will need a VNC server.  
+To use vncdotool you will need a VNC server.
 Most virtualization products include one, or use RealVNC, TightVNC or clone your Desktop using x11vnc.
 
 Once, you have a server running you can install vncdotool from pypi::
@@ -19,11 +19,22 @@ Once, you have a server running you can install vncdotool from pypi::
 
 and then send a message to the vncserver with::
 
-    vncdo -s vncserveraddress type "hello world"
+    vncdo -s vncserver type "hello world"
+
+The `vncserver` argument needs to be in the format `address[:display|::port]`. For example::
+
+    # connect to 192.168.1.1 on default port 5900
+    vncdo -s 192.168.1.1 type "hello world"
+
+    # connect to localhost on display :3 (port 5903)
+    vncdo -s localhost:3 type "hello world"
+
+    # connect to myvncserver.com on port 5902 (two colons needed)
+    vncdo -s myvncserver.com::5902 type "hello world"
 
 You can also take a screen capture with::
 
-    vncdo -s vncservername capture screen.png
+    vncdo -s vncserver capture screen.png
 
 
 More documentation can be found on `Read the Docs`_.
