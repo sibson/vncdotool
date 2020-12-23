@@ -181,7 +181,10 @@ class RFBClient(Protocol):
         self._already_expecting = 0
         self._version = None
         self._version_server = None
-        self._zlib_stream = zlib.decompressobj(0)
+        try: # Automatically determine the window size from the zlib header. Only supported since zlib 1.2.3.5.
+            self._zlib_stream = zlib.decompressobj(0)
+        except builtins.ValueError:
+            self._zlib_stream = zlib.decompressobj()
 
     #------------------------------------------------------
     # states used on connection startup
