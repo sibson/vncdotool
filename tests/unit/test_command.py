@@ -2,15 +2,15 @@ from vncdotool import command
 
 import socket
 import unittest
-
-from . import mock
+import mock
+from .helpers import isolate
 
 
 class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
         super(TestBuildCommandList, self).setUp()
-        self.isolation = mock.isolate.object(command.build_command_list)
+        self.isolation = isolate.object(command.build_command_list)
         self.isolation.start()
         self.factory = mock.Mock()
         self.client = command.VNCDoCLIClient
@@ -68,7 +68,7 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('type foobar')
         call = self.factory.deferred.addCallback
         for key in 'foobar':
-            call.assert_calls_exist_with(self.client.keyPress, key)
+            call.assert_any_call(self.client.keyPress, key)
 
     def test_type_missing(self):
         pass
@@ -77,7 +77,7 @@ class TestBuildCommandList(unittest.TestCase):
         command.SUPPORTED_FORMATS = ('png',)
         command.os.path.splitext.return_value = 'capture', '.png'
         self.call_build_commands_list('capture foo.png')
-        self.assertCalled(self.client.captureScreen, 'foo.png')
+        self.assertCalled(self.client.captureScreen, 'foo.png', 0)
 
     def test_capture_not_supported(self):
         command.SUPPORTED_FORMATS = ('png',)
@@ -102,16 +102,16 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('type foobar key enter')
         call = self.factory.deferred.addCallback
         for key in 'foobar':
-            call.assert_calls_exist_with(self.client.keyPress, key)
-        call.assert_calls_exist_with(self.client.keyPress, 'enter')
+            call.assert_any_call(self.client.keyPress, key)
+        call.assert_any_call(self.client.keyPress, 'enter')
 
     def test_chain_type_expect(self):
         self.call_build_commands_list('type username expect password.png 0')
         call = self.factory.deferred.addCallback
         for key in 'username':
-            call.assert_calls_exist_with(self.client.keyPress, key)
+            call.assert_any_call(self.client.keyPress, key)
 
-        call.assert_calls_exist_with(self.client.expectScreen, 'password.png', 0)
+        call.assert_any_call(self.client.expectScreen, 'password.png', 0)
 
     def test_pause(self):
         self.call_build_commands_list('pause 0.3')
@@ -155,7 +155,7 @@ class TestBuildCommandList(unittest.TestCase):
 
 class TestParseServer(object):
     def setUp(self):
-        self.isolation = mock.isolate.object(command.parse_server)
+        self.isolation = isolate.object(command.parse_server)
         self.isolation.start()
         self.options = mock.Mock()
         self.options.server = '127.0.0.1'
@@ -217,7 +217,7 @@ class TestParseServer(object):
 class TestVNCDoCLIClient(unittest.TestCase):
 
     def setUp(self):
-        self.isolation = mock.isolate.object(command.VNCDoCLIClient)
+        self.isolation = isolate.object(command.VNCDoCLIClient)
         self.isolation.start()
         self.client = command.VNCDoCLIClient()
         self.client.factory = mock.Mock()

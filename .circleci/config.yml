@@ -1,0 +1,30 @@
+jobs:
+  build:
+    executor: python/default
+    steps:
+      - checkout
+      - python/load-cache
+      - python/install-deps
+      - run:
+          command: |
+            if << parameters.local >>; then
+              pip install --user -r requirements-dev.txt
+            else
+              pip install -r requirements-dev.txt
+            fi
+            pip install nose
+          name: Install Test Dependencies
+      - python/save-cache
+      - run:
+          command: |
+              nosetests --with-xunit --xunit-file="$CIRCLE_TEST_REPORTS/nosetests.xml" tests/unit
+
+orbs:
+  python: circleci/python@0.1
+
+version: 2.1
+
+workflows:
+  main:
+    jobs:
+      - build

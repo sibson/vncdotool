@@ -1,16 +1,18 @@
 from unittest import TestCase
 
 from nose.plugins.skip import SkipTest
-from . import mock
+import mock
 
 from vncdotool import client
 from vncdotool import rfb
+
+from .helpers import isolate
 
 
 class TestVNCDoToolClient(TestCase):
 
     def setUp(self):
-        self.isolation = mock.isolate.object(client.VNCDoToolClient,
+        self.isolation = isolate.object(client.VNCDoToolClient,
                 excludes='math.sqrt,operator.add,client.KEYMAP,rfb')
         self.isolation.start()
 
@@ -51,20 +53,20 @@ class TestVNCDoToolClient(TestCase):
     def test_keyPress_single_alpha(self):
         cli = self.client
         cli.keyPress('a')
-        cli.keyEvent.assert_a_call_exists_with(ord('a'), down=1)
-        cli.keyEvent.assert_a_call_exists_with(ord('a'), down=0)
+        cli.keyEvent.assert_any_call(ord('a'), down=1)
+        cli.keyEvent.assert_any_call(ord('a'), down=0)
 
     def test_keyPress_multiple(self):
         cli = self.client
         cli.keyPress('ctrl-alt-del')
 
         # XXX doesn't ensure correct order
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=1)
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=1)
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=1)
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_ControlLeft, down=0)
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_AltLeft, down=0)
-        cli.keyEvent.assert_a_call_exists_with(rfb.KEY_Delete, down=0)
+        cli.keyEvent.assert_any_call(rfb.KEY_ControlLeft, down=1)
+        cli.keyEvent.assert_any_call(rfb.KEY_AltLeft, down=1)
+        cli.keyEvent.assert_any_call(rfb.KEY_Delete, down=1)
+        cli.keyEvent.assert_any_call(rfb.KEY_ControlLeft, down=0)
+        cli.keyEvent.assert_any_call(rfb.KEY_AltLeft, down=0)
+        cli.keyEvent.assert_any_call(rfb.KEY_Delete, down=0)
 
     def test_captureScreen(self):
         cli = self.client

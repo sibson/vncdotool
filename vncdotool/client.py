@@ -115,7 +115,7 @@ except ImportError as error:
     # it.
     class _Image(object):
         def __getattr__(self, _):
-            raise ImportError(error)
+            raise ImportError(error) # noqa: F821
     Image = _Image()
 
 
@@ -226,25 +226,25 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, filename):
+    def captureScreen(self, filename, incremental=0):
         """ Save the current display to filename
         """
         log.debug('captureScreen %s', filename)
-        return self._capture(filename)
+        return self._capture(filename, incremental)
 
-    def captureRegion(self, filename, x, y, w, h):
+    def captureRegion(self, filename, x, y, w, h, incremental=0):
         """ Save a region of the current display to filename
         """
         log.debug('captureRegion %s', filename)
-        return self._capture(filename, x, y, x+w, y+h)
+        return self._capture(filename, incremental, x, y, x+w, y+h)
 
     def refreshScreen(self, incremental=0):
         d = self.deferred = Deferred()
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, filename, *args):
-        d = self.refreshScreen()
+    def _capture(self, filename, incremental, *args):
+        d = self.refreshScreen(incremental)
         d.addCallback(self._captureSave, filename, *args)
         return d
 
@@ -330,12 +330,14 @@ class VNCDoToolClient(rfb.RFBClient):
             ysteps = range(self.y, y, step)
 
         for ypos in ysteps:
-            time.sleep(.2)
             self.mouseMove(self.x, ypos)
+            reactor.doPoll(timeout=5)
+            time.sleep(.2)
 
         for xpos in xsteps:
-            time.sleep(.2)
             self.mouseMove(xpos, self.y)
+            reactor.doPoll(timeout=5)
+            time.sleep(.2)
 
         self.mouseMove(x, y)
 
