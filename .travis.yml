@@ -5,6 +5,12 @@ python:
   - "2.7"
   - "3.5"
 
+addons:
+  apt:
+    packages:
+      - vnc4server
+      - xfonts-base
+
 # command to install dependencies
 install:
     - if [[ "$TRAVIS_PYTHON_VERSION" == "2.6" ]]; then pip install -r requirements-2.6-dev.txt; else pip install -r requirements-dev.txt; fi
