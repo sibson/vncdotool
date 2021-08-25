@@ -31,11 +31,12 @@ More documentation can be found on `Read the Docs`_.
 
 Feedback
 --------------------------------
-Comments, suggestions and patches are welcome and appreciated.
-They can be sent to via GitHub_, vncdotool@googlegroups.com or sibson+vncdotool@gmail.com.
+If you need help getting VNCDoTool working try the communinity at `_Stackoverflow`
 
+Patches, and ideas for improvements are welcome and appreciated, via `_GitHub` issues.
 If you are reporting a bug or issue please include the version of both vncdotool
 and the VNC server you are using it with.
+
 
 Acknowledgements
 --------------------------------
@@ -49,3 +50,4 @@ Also, to the TigerVNC_ project for creating a community focus RFB specification 
 .. _GitHub: http://github.com/sibson/vncdotool
 .. _TigerVNC: http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page
 .. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
+.. _Stackoverflow: https://stackoverflow.com/questions/ask?tags=vncdotool
