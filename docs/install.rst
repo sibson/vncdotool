@@ -38,7 +38,7 @@ If you are not familiar with Python, the most reliable way to install vncdotool 
     3. Open an elevated Windows PowerShell console:
         - Type "PowerShell" (without quotes) in the search field of the Windows taskbar
         - Click "Run as administrator" in the right pane above the search field
-        - Type or paste each of the following lines below, pressing Enter after each line and waiting for each line to process (change “Python39” to different version as applicable):
+        - Type or paste each of the following lines below, pressing Enter after each line and waiting for each line to process (change “Python39” to different version as applicable)::
 
             [Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\Program Files\Python39\;C:\Program Files\Python39\Scripts\", "User")
             python -m pip install --upgrade pip
