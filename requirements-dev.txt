@@ -8,3 +8,5 @@ pytest==2.8.6
 tox==2.3.1
 virtualenv==14.0.1
 mock
+pyvirtualdisplay
+attrs>=19.3.0
