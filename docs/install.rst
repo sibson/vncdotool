@@ -22,26 +22,6 @@ Windows
 ---------
 If you are not familiar with Python, the most reliable way to install vncdotool is to use binary packages.
 
-  1. Download Python (Current 64-bit Windows Version): https://www.python.org/downloads/
-Start the installation > On the first screen of the installer...
-Check the box for "Add Python to PATH"
-Any other check boxes can be left checked or unchecked per their default
-Click "Customize installation"
-On the Optional Features install page, no changes are needed
-On the Advanced Options page...
-Make sure the boxes for "Install for all users" and "Add Python to environment variables" are checked
-Uncheck "Precompile standard library" unless needed for other projects
-Any other check boxes can be left checked or unchecked per their default
-Click "Install" at the bottom
-Click "Close" when installation is complete
-Open an elevated Windows PowerShell console:
-Type "PowerShell" (without quotes) in the search field of the Windows taskbar
-Click "Run as administrator" in the right pane above the search field
-Type or paste each of the following lines below, pressing Enter after each line and waiting for each line to process (change “Python39” to different version as applicable):
-[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\Program Files\Python39\;C:\Program Files\Python39\Scripts\", "User")
-python -m pip install --upgrade pip
-pip install vncdotool
-  1. VNCDoTool is ready to use
 
     1. Download Python, current 64-bit Windows Version, from `Official Python`_ website https://www.python.org/downloads/
     2. Start the installation > On the first screen of the installer...
@@ -62,6 +42,7 @@ pip install vncdotool
             ```[Environment]::SetEnvironmentVariable("Path", "$env:Path;C:\Program Files\Python39\;C:\Program Files\Python39\Scripts\", "User")
                python -m pip install --upgrade pip
                pip install vncdotool
+               '''
 
     4. At a Powershell prompt::
 
