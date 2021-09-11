@@ -31,7 +31,7 @@ class RFBServer(Protocol):
         Protocol.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
-        self.buffer = ''
+        self.buffer = b''
         self.nbytes = 0
         # XXX send version message
         self._handler = self._handle_version, 12
@@ -44,16 +44,16 @@ class RFBServer(Protocol):
     def _handle_version(self):
         msg = self.buffer[:12]
         self.buffer = self.buffer[12:]
-        if not msg.startswith('RFB 003.') and msg.endswith('\n'):
+        if not msg.startswith(b'RFB 003.') and msg.endswith(b'\n'):
             self.transport.loseConnection()
 
         version = msg[8:11]
-        if version in ('003', '005'):
+        if version in (b'003', b'005'):
             if self.factory.password_required:
                 self._handler = self._handle_VNCAuthResponse, 16
             else:
                 self._handler = self._handle_clientInit, 1
-        elif version in ('007', '008'):
+        elif version in (b'007', b'008'):
             # XXX send security v3.7+
             self._handler = self._handle_security, 1
 
