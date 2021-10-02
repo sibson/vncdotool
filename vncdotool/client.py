@@ -464,6 +464,7 @@ class VMWareClient(VNCDoToolClient):
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
+    username = None
     password = None
 
     protocol = VNCDoToolClient
