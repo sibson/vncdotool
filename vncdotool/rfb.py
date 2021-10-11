@@ -16,6 +16,12 @@ MIT License
 import sys
 import math
 import zlib
+import getpass
+import os
+from Crypto.Cipher import AES
+from Crypto.Hash import MD5
+from Crypto.Util.Padding import pad
+from Crypto.Util.number import bytes_to_long, long_to_bytes
 from struct import pack, unpack
 from . import pyDes
 from twisted.python import usage, log
@@ -194,6 +200,8 @@ class RFBClient(Protocol):
             if buffer[:3] == b'RFB':
                 version_server = float(buffer[3:-1].replace(b'0', b''))
                 SUPPORTED_VERSIONS = (3.3, 3.7, 3.8)
+                if version_server == 3.889: # Apple Remote Desktop
+                    version_server = 3.8
                 if version_server in SUPPORTED_VERSIONS:
                     version = version_server
                 else:
@@ -228,7 +236,7 @@ class RFBClient(Protocol):
 
     def _handleSecurityTypes(self, block):
         types = unpack("!%dB" % len(block), block)
-        SUPPORTED_TYPES = (1, 2)
+        SUPPORTED_TYPES = (1, 2, 30)
         valid_types = [sec_type for sec_type in types if sec_type in SUPPORTED_TYPES]
         if valid_types:
             sec_type = max(valid_types)
@@ -238,8 +246,10 @@ class RFBClient(Protocol):
                     self._doClientInitialization()
                 else:
                     self.expect(self._handleVNCAuthResult, 4)
-            else:
+            elif sec_type == 2:
                 self.expect(self._handleVNCAuth, 16)
+            elif sec_type == 30: # Apple Remote Desktop
+                self.expect(self._handleAppleAuth, 4)
         else:
             log.msg("unknown security types: %s" % repr(types))
 
@@ -267,6 +277,50 @@ class RFBClient(Protocol):
         self._challenge = block
         self.vncRequestPassword()
         self.expect(self._handleVNCAuthResult, 4)
+
+    def _handleAppleAuth(self, block):
+        authMeta = unpack("!%dB" % len(block), block)
+        self.generator = authMeta[1]
+        self.keyLen = authMeta[3]
+        self.expect(self._handleAppleAuthKey, self.keyLen)
+
+    def _handleAppleAuthKey(self, block):
+        self.modulus = block
+        self.expect(self._handleAppleAuthCert, self.keyLen)
+
+    def _handleAppleAuthCert(self, block):
+        self.serverKey = block
+
+        self.ardRequestCredentials()
+
+        self._encryptArd()
+        self.expect(self._handleVNCAuthResult, 4)
+
+    def _encryptArd(self):
+        userStruct = self.factory.username + ("\0" * (64 - len(self.factory.username))) + self.factory.password + ("\0" * (64 - len(self.factory.password)))
+
+        s = bytes_to_long(os.urandom(512))
+        g = self.generator
+        kl = self.keyLen
+        m = bytes_to_long(self.modulus)
+        sk = bytes_to_long(self.serverKey)
+
+        key = long_to_bytes(pow(g,s,m))
+        shared = long_to_bytes(pow(sk,s,m))
+
+        h = MD5.new()
+        h.update(shared)
+        keyDigest = h.digest()
+
+        cipher = AES.new(keyDigest, AES.MODE_ECB)
+        ciphertext = cipher.encrypt(userStruct.encode('utf-8'))
+        self.transport.write(ciphertext+key)
+
+    def ardRequestCredentials(self):
+        if self.factory.username is None:
+            self.factory.username = input('Apple username: ')
+        if self.factory.password is None:
+            self.factory.password = getpass.getpass('Apple password:')
 
     def sendPassword(self, password):
         """send password"""
