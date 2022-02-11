@@ -387,10 +387,10 @@ class VNCDoToolClient(rfb.RFBClient):
         self.factory.clientConnectionMade(self)
 
     def bell(self):
-        print('ding')
+        log.info('ding')
 
     def copy_text(self, text):
-        print('clipboard copy', repr(text))
+        log.info('clipboard copy', repr(text))
 
     def paste(self, message):
         self.clientCutText(message)
