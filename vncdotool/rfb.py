@@ -197,6 +197,7 @@ class RFBClient(Protocol):
         buffer = b''.join(self._packet)
         if b'\n' in buffer:
             version = 3.3
+            version_server = None
             if buffer[:3] == b'RFB':
                 version_server = float(buffer[3:-1].replace(b'0', b''))
                 SUPPORTED_VERSIONS = (3.3, 3.7, 3.8)
@@ -209,6 +210,8 @@ class RFBClient(Protocol):
                             % version_server)
                     version = max(filter(
                         lambda x: x <= version_server, SUPPORTED_VERSIONS))
+            else:
+                log.msg("Server did not return expected version format: %s", buffer[:30])
             buffer = buffer[12:]
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
