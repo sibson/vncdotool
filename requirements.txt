@@ -1,4 +1,4 @@
 Pillow==6.2.0
-Twisted==21.7.0
+Twisted==22.2.0
 zope.interface==5.4.0
 pycryptodome==3.12.0
