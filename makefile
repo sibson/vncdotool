@@ -17,7 +17,7 @@ version:
 version-%: OLDVERSION:=$(shell python setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
-	sed -i '' -e s/$(OLDVERSION)/$(NEWVERSION)/ $(VERSION_FILE)
+	sed -i '' -e 's/$(OLDVERSION)/$(NEWVERSION)/' $(VERSION_FILE)
 	git ci $(VERSION_FILE) -m"bump version to $*"
 
 release: release-test release-tag upload
