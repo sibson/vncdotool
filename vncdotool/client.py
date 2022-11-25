@@ -278,28 +278,26 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, x, y, maxrms)
 
     def _expectFramebuffer(self, filename, x, y, maxrms):
-        self.framebufferUpdateRequest(incremental=1)
         image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()
-        self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, (x, y, x + w, y + h), maxrms)
 
-        return self.deferred
+        return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
 
     def _expectCompare(self, data, box, maxrms):
-        image = self.screen.crop(box)
+        if self.screen:
+            image = self.screen.crop(box)
 
-        hist = image.histogram()
-        if len(hist) == len(self.expected):
-            sum_ = 0
-            for h, e in zip(hist, self.expected):
-                sum_ += (h - e) ** 2
-            rms = math.sqrt(sum_ / len(hist))
+            hist = image.histogram()
+            if len(hist) == len(self.expected):
+                sum_ = 0
+                for h, e in zip(hist, self.expected):
+                    sum_ += (h - e) ** 2
+                rms = math.sqrt(sum_ / len(hist))
 
-            log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
-            if rms <= maxrms:
-                return self
+                log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
+                if rms <= maxrms:
+                    return self
 
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, maxrms)
