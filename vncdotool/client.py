@@ -285,7 +285,9 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
 
     def _expectCompare(self, data, box, maxrms):
+        incremental = 0
         if self.screen:
+            incremental = 1
             image = self.screen.crop(box)
 
             hist = image.histogram()
@@ -301,7 +303,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, maxrms)
-        self.framebufferUpdateRequest(incremental=1)  # use box ~(x, y, w - x, h - y)?
+        self.framebufferUpdateRequest(incremental=incremental)  # use box ~(x, y, w - x, h - y)?
 
         return self.deferred
 
