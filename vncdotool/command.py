@@ -105,7 +105,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             '  mouseup BUTTON\tsend BUTTON up',
             '  drag X Y\t\tmove the mouse to X,Y in small steps',
             '  rcapture FILE X Y W H\tcapture a region of the screen',
-            '  rexpect FILE X Y\texpect that matches a region of the screen',
+            '  rexpect FILE X Y FUZZ\texpect that matches a region of the screen',
             '',
             'If a filename is given commands will be read from it, or stdin `-`',
             '',
