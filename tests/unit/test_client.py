@@ -1,21 +1,14 @@
-from unittest import TestCase
+from unittest import TestCase, SkipTest
 
-from nose.plugins.skip import SkipTest
 import mock
 
 from vncdotool import client
 from vncdotool import rfb
 
-from .helpers import isolate
-
 
 class TestVNCDoToolClient(TestCase):
 
     def setUp(self):
-        self.isolation = isolate.object(client.VNCDoToolClient,
-                excludes='math.sqrt,operator.add,client.KEYMAP,rfb')
-        self.isolation.start()
-
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
@@ -25,11 +18,6 @@ class TestVNCDoToolClient(TestCase):
         self.client.pointerEvent = mock.Mock()
         self.client.keyEvent = mock.Mock()
         self.client.setEncodings = mock.Mock()
-
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
 
     def _tryPIL(self):
         try:
@@ -68,7 +56,8 @@ class TestVNCDoToolClient(TestCase):
         cli.keyEvent.assert_any_call(rfb.KEY_AltLeft, down=0)
         cli.keyEvent.assert_any_call(rfb.KEY_Delete, down=0)
 
-    def test_captureScreen(self):
+    @mock.patch('vncdotool.client.Deferred')
+    def test_captureScreen(self, Deferred):
         cli = self.client
         cli._packet = [b"RFB003.003\n"]
         cli._handleInitial()
@@ -88,7 +77,9 @@ class TestVNCDoToolClient(TestCase):
         cli.screen.save.assert_called_once_with(fname)
         assert r == cli
 
-    def test_expectScreen(self):
+    @mock.patch('PIL.Image.open')
+    @mock.patch('vncdotool.client.Deferred')
+    def test_expectScreen(self, Deferred, image_open):
         self._tryPIL()
 
         cli = self.client
@@ -106,10 +97,10 @@ class TestVNCDoToolClient(TestCase):
         d = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
 
-        client.Image.open.assert_called_once_with(fname)
+        image_open.assert_called_once_with(fname)
 
         assert cli.expected == client.Image.open.return_value.histogram.return_value
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
+        Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
 
     def test_expectCompareSuccess(self):
         cli = self.client
@@ -131,7 +122,8 @@ class TestVNCDoToolClient(TestCase):
         result = cli._expectCompare(cli, None, 0)
         assert result == cli
 
-    def test_expectCompareFails(self):
+    @mock.patch('vncdotool.client.Deferred')
+    def test_expectCompareFails(self, Deferred):
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
@@ -149,7 +141,8 @@ class TestVNCDoToolClient(TestCase):
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
         cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
 
-    def test_expectCompareMismatch(self):
+    @mock.patch('vncdotool.client.Deferred')
+    def test_expectCompareMismatch(self, Deferred):
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2]
@@ -167,7 +160,8 @@ class TestVNCDoToolClient(TestCase):
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
         cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
 
-    def test_updateRectangeFullScreen(self):
+    @mock.patch('PIL.Image.frombytes')
+    def test_updateRectangeFullScreen(self, frombytes):
         cli = self.client
         cli.image = mock.Mock()
         data = mock.Mock()
@@ -178,7 +172,8 @@ class TestVNCDoToolClient(TestCase):
 
         assert cli.screen == client.Image.frombytes.return_value
 
-    def test_updateRectangeRegion(self):
+    @mock.patch('PIL.Image.frombytes')
+    def test_updateRectangeRegion(self, frombytes):
         cli = self.client
         cli.image = mock.Mock()
         cli.screen = mock.Mock()
