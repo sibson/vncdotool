@@ -1,9 +1,11 @@
 Tests
 -----------
 
+
 unit tests are run with::
 
-    nosetests tests/unit
+    pip install -r requirements-dev.txt
+    python -m unittest tests/unit/*.py
 
 The functional tests require libvncserver/examples to be on your path before
 running::
