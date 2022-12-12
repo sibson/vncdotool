@@ -1,9 +1,11 @@
-*.pyc
-build
-dist
-MANIFEST
-vncdotool.egg-info
 .coverage
 .noseids
 .tox
+.venv
+
+*.pyc
+build
+dist
 docs/_build
+MANIFEST
+vncdotool.egg-info
