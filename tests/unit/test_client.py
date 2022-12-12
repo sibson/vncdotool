@@ -1,6 +1,5 @@
-from unittest import TestCase, SkipTest
+from unittest import TestCase, SkipTest, mock
 
-import mock
 
 from vncdotool import client
 from vncdotool import rfb

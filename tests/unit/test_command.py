@@ -1,11 +1,10 @@
 from vncdotool import command
 
 import socket
-import unittest
-import mock
+from unittest import mock, TestCase
 
 
-class TestBuildCommandList(unittest.TestCase):
+class TestBuildCommandList(TestCase):
 
     def setUp(self):
         super(TestBuildCommandList, self).setUp()
@@ -201,7 +200,7 @@ class TestParseServer(object):
         assert port == 5900
 
 
-class TestVNCDoCLIClient(unittest.TestCase):
+class TestVNCDoCLIClient(TestCase):
 
     def setUp(self):
         self.client = command.VNCDoCLIClient()
