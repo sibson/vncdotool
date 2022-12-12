@@ -113,6 +113,10 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
+class CommandParseError(RuntimeError):
+    pass
+
+
 def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshes=False):
     client = VNCDoCLIClient
 
@@ -168,11 +172,8 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             filename = args.pop(0)
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
-                print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
-                sys.exit(1)
-            else:
-                factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
+                raise CommandParseError(f'unsupported image format "{imgformat}", choose one of {SUPPORTED_FORMATS}')
+            factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))
@@ -185,11 +186,8 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             h = int(args.pop(0))
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
-                print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
-                sys.exit(1)
-            else:
-                factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
+                raise CommandParseError(f'unsupported image format "{imgformat}", choose one of {SUPPORTED_FORMATS}')
+            factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
         elif cmd == 'rexpect':
             filename = args.pop(0)
             x = int(args.pop(0))
@@ -207,8 +205,7 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             lex.whitespace_split = True
             args = list(lex) + args
         else:
-            print('unknown cmd "%s"' % cmd, file=sys.stderr)
-            sys.exit(1)
+            raise CommandParseError('unknown cmd "%s"' % cmd)
 
         if delay and args:
             factory.deferred.addCallback(client.pause, delay)
@@ -225,7 +222,11 @@ def build_tool(options, args):
         lex.whitespace_split = True
         args = list(lex)
 
-    build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
+    try:
+        build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
+    except CommandParseError as e:
+        print(e.msg)
+        sys.exit(1)
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
