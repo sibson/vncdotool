@@ -3,23 +3,16 @@ from vncdotool import command
 import socket
 import unittest
 import mock
-from .helpers import isolate
 
 
 class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
         super(TestBuildCommandList, self).setUp()
-        self.isolation = isolate.object(command.build_command_list)
-        self.isolation.start()
         self.factory = mock.Mock()
         self.client = command.VNCDoCLIClient
         self.deferred = self.factory.deferred
 
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
 
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
@@ -82,8 +75,9 @@ class TestBuildCommandList(unittest.TestCase):
     def test_capture_not_supported(self):
         command.SUPPORTED_FORMATS = ('png',)
         command.os.path.splitext.return_value = 'capture', '.mpeg'
-        self.call_build_commands_list('capture foo.mpeg')
-        assert not self.deferred.addCallback.called
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('capture foo.mpeg')
+        self.assertFalse(self.deferred.addCallback.called)
 
     def test_capture_missing_filename(self):
         pass
@@ -155,8 +149,6 @@ class TestBuildCommandList(unittest.TestCase):
 
 class TestParseServer(object):
     def setUp(self):
-        self.isolation = isolate.object(command.parse_server)
-        self.isolation.start()
         self.options = mock.Mock()
         self.options.server = '127.0.0.1'
         parse_args = command.VNCDoToolOptionParser.return_value.parse_args
@@ -164,11 +156,6 @@ class TestParseServer(object):
         command.socket.AF_INET = socket.AF_INET
         command.socket.AF_UNIX = socket.AF_UNIX
         command.os.path.exists.return_value = False
-
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
 
     def test_default(self):
         family, host, port = command.parse_server('')
@@ -217,17 +204,11 @@ class TestParseServer(object):
 class TestVNCDoCLIClient(unittest.TestCase):
 
     def setUp(self):
-        self.isolation = isolate.object(command.VNCDoCLIClient)
-        self.isolation.start()
         self.client = command.VNCDoCLIClient()
         self.client.factory = mock.Mock()
 
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
-
-    def test_vncRequestPassword_prompt(self):
+    @mock.patch('getpass.getpass')
+    def test_vncRequestPassword_prompt(self, getpass):
         cli = self.client
         cli.factory.password = None
         cli.sendPassword = mock.Mock()
