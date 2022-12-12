@@ -118,10 +118,12 @@ try:
 except ImportError as error:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
-    class _Image:
+    class _RuntimeImportError:
         def __getattr__(self, _: str) -> Any:
             raise ImportError(error) # noqa: F821
-    Image = _Image()  # type: ignore[assignment]
+
+    Image = _RuntimeImportError()  # type: ignore[assignment]
+    PIL = _RuntimeImportError()  # type: ignore[assignment]
 
 
 class AuthenticationError(Exception):
