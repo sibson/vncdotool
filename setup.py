@@ -14,7 +14,6 @@ setup(
         "Pillow",
     ],
     tests_require=[
-        'nose',
         'pexpect',
     ],
     url='http://github.com/sibson/vncdotool',

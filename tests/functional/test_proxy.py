@@ -1,11 +1,13 @@
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 import sys
+from shutil import which
 
 import pexpect
 
 from vncdotool import rfb
 
 
+@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
 class TestLogEvents(TestCase):
     def setUp(self):
         cmd = 'vncev -rfbport 5999 -rfbwait 1000'

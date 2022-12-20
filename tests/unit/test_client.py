@@ -1,7 +1,5 @@
 from unittest import TestCase, mock
 
-from nose.plugins.skip import SkipTest
-
 from vncdotool import client
 from vncdotool import rfb
 
@@ -74,8 +72,6 @@ class TestVNCDoToolClient(TestCase):
     @mock.patch('PIL.Image.open')
     @mock.patch('vncdotool.client.Deferred')
     def test_expectScreen(self, Deferred, image_open):
-        pytest.importorskip("PIL")
-
         cli = self.client
         cli._packet = [b"RFB003.003\n"]
         cli._handleInitial()

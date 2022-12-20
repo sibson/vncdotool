@@ -9,16 +9,9 @@ class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
         super(TestBuildCommandList, self).setUp()
-        self.isolation = isolate.object(command.build_command_list)
-        self.isolation.start()
         self.factory = mock.Mock()
         self.client = command.VNCDoCLIClient
         self.deferred = self.factory.deferred
-
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
 
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
@@ -49,7 +42,7 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('move 100 200')
         self.assertCalled(self.client.mouseMove, 100, 200)
 
-    def test_move(self):
+    def test_mousemove(self):
         self.call_build_commands_list('mousemove 100 200')
         self.assertCalled(self.client.mouseMove, 100, 200)
 

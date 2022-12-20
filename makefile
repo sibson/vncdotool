@@ -1,4 +1,5 @@
-.PHONY: upload release release-test release-tag upload docs
+#!/usr/bin/make -f
+.PHONY: upload release release-test release-tag upload docs test
 .DEFAULT: help
 
 VERSION_FILE?=vncdotool/__init__.py
@@ -34,7 +35,7 @@ upload:
 	twine upload dist/$(shell python setup.py --fullname).*
 
 docs:
-		$(MAKE) -C docs/ html
+	$(MAKE) -C docs/ html
 
 test:
 	python -m unittest discover tests/unit

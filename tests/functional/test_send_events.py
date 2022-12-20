@@ -1,6 +1,7 @@
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 import sys
 import os.path
+from shutil import which
 
 import pexpect
 
@@ -9,6 +10,7 @@ KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 
 
+@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
 class TestSendEvents(TestCase):
 
     def setUp(self):
