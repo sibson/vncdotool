@@ -10,6 +10,7 @@ setup(
     install_requires=[
         'Twisted',
         "Pillow",
+        "PyCryptodome",
     ],
     tests_require=[
         'pexpect',
