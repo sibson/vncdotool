@@ -3,8 +3,6 @@
 from setuptools import setup
 from vncdotool import __version__
 
-README = open('README.rst', 'rt').read()
-
 setup(
     name='vncdotool',
     version=__version__,
