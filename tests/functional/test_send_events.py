@@ -19,11 +19,11 @@ class TestSendEvents(TestCase):
         self.server.terminate(force=True)
 
     def assertKeyDown(self, key):
-        down = '^.*down:\s+\(%s\)\r' % hex(key)
+        down = r'^.*down:\s+\(%s\)\r' % hex(key)
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = '^.*up:\s+\(%s\)\r' % hex(key)
+        up = r'^.*up:\s+\(%s\)\r' % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):
