@@ -92,7 +92,7 @@ The quickest way to get started is to run::
 
     > vnclog --viewer vncviewer keylog.vdo
 
-For more control you can launch the viewer seperately but be sure to connect
+For more control you can launch the viewer separately but be sure to connect
 to the correct ports::
 
     > vnclog keylog.vdo

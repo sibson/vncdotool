@@ -1,10 +1,10 @@
 Embedding in Python Applications
 ===================================
 vncdotool is built with the Twisted_ framework, as such it best intergrates with other Twisted Applications
-Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatability layer.
-It uses a seperate thread to run the Twisted reactor and communicates with the main program using a threadsafe Queue.
+Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatibility layer.
+It uses a separate thread to run the Twisted reactor and communicates with the main program using a threadsafe Queue.
 
-To use the syncronous API you can do the following::
+To use the synchronous API you can do the following::
 
     from vncdotool import api
     client = api.connect('vncserver', password=None)
@@ -48,7 +48,7 @@ The :class:`vncdotool.client.VNCDoToolClient` supports the context manager proto
         client.captureScreen('screenshot.png')
 
 
-The syncronous API can be used to automate the starting of a Virtual Machine or other application::
+The synchronous API can be used to automate the starting of a Virtual Machine or other application::
 
     vmtool.start('myvirtualmachine.img')
     client.connect('vmaddress::5950')

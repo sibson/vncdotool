@@ -33,7 +33,7 @@
   - enable PSEUDO_DESKTOP_SIZE_ENCODING by default to allow desktop resizing, thanks rebasegod
   - python 3.0 support, thanks jamtwister
   - added pastefile command, thanks Rogan Dawes
-  - debian packaging improvments, thanks Alexander Kläser
+  - debian packaging improvements, thanks Alexander Kläser
   - fix loggingproxy, thanks Matthias Weckbecker
 
 0.10.0 (2016-03-03)
@@ -49,7 +49,7 @@
 ------------------
   - add special keys [~!@#$%^&*()_+{}|:\"<>?] to --force-caps, for servers that don't handle them, Tyler Oderkirk, Aragats Amirkhanyan
   - improve vnclog performance with TCP_NODELAY, Ian Britten
-  - by default pause 10ms between sending commands, better compatability with servers
+  - by default pause 10ms between sending commands, better compatibility with servers
   - better handle screen resizing, Daniel Stelter-Gliese
   - API, fix deadlocks due to threaded init of PIL, thanks Antti Kervinen
   - API, support password protected server, thanks Antti Kervinen
@@ -65,7 +65,7 @@ Thanks to Jan Sedlák, Daniel Stelter-Gliese, Antti Kervinen, Anatoly Techtonik,
   - regional capture and expect that operate on a portion of the display
   - --force-caps, better compatibility when sending UPPERCASE to servers
   - --timeout, exit with an error after a given number of seconds
-  - experimental syncronous API for easier intergration with non-Twisted apps
+  - experimental synchronous API for easier integration with non-Twisted apps
 
 0.3.0 (2012-12-22)
 ------------------

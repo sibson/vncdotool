@@ -41,7 +41,7 @@ More documentation can be found on `Read the Docs`_.
 
 Feedback
 --------------------------------
-If you need help getting VNCDoTool working try the communinity at `_Stackoverflow`
+If you need help getting VNCDoTool working try the community at `_Stackoverflow`
 
 Patches, and ideas for improvements are welcome and appreciated, via `_GitHub` issues.
 If you are reporting a bug or issue please include the version of both vncdotool

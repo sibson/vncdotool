@@ -16,15 +16,15 @@ Wishlist
 ----------------
   - zipped vdo files, containing script and screen caps
   - custom capture file name in service mode
-  - pexpect/twisted intergration
+  - pexpect/twisted integration
   - support more encodings
-    - psedo cursor needs to handle updating damaged areas on move
+    - pseudo cursor needs to handle updating damaged areas on move
   - strings, tesseract OCR
   - PPA
   - submit to debian/ubuntu
   - drop twisted dependency
   - windows exe
-  - intergrate with https://wiki.ubuntu.com/Xpresser, http://blog.labix.org/2010/05/18/xpresser-python-library-for-gui-automation-with-image-matching
+  - integrate with https://wiki.ubuntu.com/Xpresser, http://blog.labix.org/2010/05/18/xpresser-python-library-for-gui-automation-with-image-matching
 
 Rejected
 ----------------
