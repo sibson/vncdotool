@@ -347,7 +347,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def setImageMode(self) -> None:
         """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
         """
-        if self._version_server == 3.889:
+        if self._version_server == (3, 889):
             self.setPixelFormat(
                 bpp=16,
                 depth=16,

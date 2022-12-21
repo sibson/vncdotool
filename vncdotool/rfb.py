@@ -18,6 +18,7 @@ import math
 import zlib
 import getpass
 import os
+import re
 from typing import Any, Callable, Iterator, List, Optional, Tuple, TypeVar
 
 from Crypto.Cipher import AES
@@ -171,12 +172,22 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 
 class RFBClient(Protocol):  # type: ignore[misc]
 
+    RE_HANDSHAKE = re.compile(b"^RFB[ ]([0-9]{3})[.]([0-9]{3})[\n]")
+    # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
+    SUPPORTED_VERSIONS = {
+        (3, 3),
+        # (3, 5),
+        (3, 7),
+        (3, 8),
+        (3, 889),  # Apple Remote Desktop
+    }
+
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
         self._already_expecting = False
-        self._version = None
-        self._version_server = None
+        self._version: Ver = (0, 0)
+        self._version_server: Ver = (0, 0)
         self._zlib_stream = zlib.decompressobj(0)
 
     #------------------------------------------------------
@@ -184,30 +195,24 @@ class RFBClient(Protocol):  # type: ignore[misc]
     #------------------------------------------------------
 
     def _handleInitial(self) -> None:
-        buffer = self._packet
-        if b'\n' in buffer:
-            version = 3.3
-            if buffer[:3] == b'RFB':
-                version_server = float(buffer[3:-1].replace(b'0', b''))
-                SUPPORTED_VERSIONS = (3.3, 3.7, 3.8)
-                if version_server == 3.889: # Apple Remote Desktop
-                    version_server = 3.8
-                if version_server in SUPPORTED_VERSIONS:
-                    version = version_server
-                else:
-                    log.msg("Protocol version %.3f not supported"
-                            % version_server)
-                    version = max(filter(
-                        lambda x: x <= version_server, SUPPORTED_VERSIONS))
+        m = self.RE_HANDSHAKE.match(self._packet)
+        if m:
+            version_server = (int(m[1]), int(m[2]))
+            if version_server == (3, 889): # Apple Remote Desktop
+                version_server = (3, 8)
+            if version_server in self.SUPPORTED_VERSIONS:
+                version = version_server
+            else:
+                log.msg("Protocol version %d.%d not supported" % version_server)
+                version = max(x for x in self.SUPPORTED_VERSIONS if x <= version_server)
+
             del self._packet[0:12]
-            log.msg("Using protocol version %.3f" % version)
-            parts = str(version).split('.')
-            self.transport.write(
-                bytes(b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1]))))
+            log.msg("Using protocol version %d.%d" % version)
+            self.transport.write(b"RFB %03d.%03d\n" % version)
             self._handler = self._handleExpected
             self._version = version
             self._version_server = version_server
-            if version < 3.7:
+            if version < (3, 7):
                 self.expect(self._handleAuth, 4)
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
@@ -227,7 +232,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
             if sec_type == 1:
-                if self._version < 3.8:
+                if self._version < (3, 8):
                     self._doClientInitialization()
                 else:
                     self.expect(self._handleVNCAuthResult, 4)
@@ -321,13 +326,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doClientInitialization()
             return
         elif result == 1:   #failed
-            if self._version < 3.8:
+            if self._version < (3, 8):
                 self.vncAuthFailed("authentication failed")
                 self.transport.loseConnection()
             else:
                 self.expect(self._handleAuthFailed, 4)
         elif result == 2:   #too many
-            if self._version < 3.8:
+            if self._version < (3, 8):
                 self.vncAuthFailed("too many tries to log in")
                 self.transport.loseConnection()
             else:
