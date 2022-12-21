@@ -181,6 +181,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (3, 8),
         (3, 889),  # Apple Remote Desktop
     }
+    SUPPORTED_TYPES = {
+        1,
+        2,  # VNC Auth
+        30,  # Apple Remote Desktop
+    }
 
     def __init__(self) -> None:
         self._packet = bytearray()
@@ -226,8 +231,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleSecurityTypes(self, block: bytes) -> None:
         types = unpack(f"!{len(block)}B", block)
-        SUPPORTED_TYPES = (1, 2, 30)
-        valid_types = [sec_type for sec_type in types if sec_type in SUPPORTED_TYPES]
+        valid_types = set(types) & self.SUPPORTED_TYPES
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
