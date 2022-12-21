@@ -96,8 +96,6 @@ class TestVNCDoToolClient(TestCase):
         cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
-        cli.screen = mock.Mock()
-        cli.screen.size = (1024, 768)
         fname = 'something.png'
 
         region = (0 ,0, 11, 22)
