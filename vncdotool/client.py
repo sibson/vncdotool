@@ -252,6 +252,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _captureSave(self: TClient, data: object, filename: str, *args: int) -> TClient:
         log.debug('captureSave %s', filename)
+        assert self.screen is not None
         if args:
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:

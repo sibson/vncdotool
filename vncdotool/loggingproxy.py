@@ -142,6 +142,7 @@ class VNCLoggingClient(VNCDoToolClient):
 
     def commitUpdate(self, rectangles: Optional[List[Rect]] = None) -> None:
         if self.capture_file:
+            assert self.screen is not None
             self.screen.save(self.capture_file)
             self.recorder('expect %s\n' % self.capture_file)
             self.capture_file = None
@@ -223,6 +224,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         else:
             cmds += 'keyup', key
         cmds.append('\n')
+        assert self.recorder is not None
         self.recorder(' '.join(cmds))
 
     def handle_pointerEvent(self, x: int, y: int, buttonmask: int) -> None:
@@ -238,6 +240,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
             if buttonmask & (1 << (button - 1)):
                 cmds.append('click %d' % button)
         cmds.append('\n')
+        assert self.recorder is not None
         self.recorder(' '.join(cmds))
 
 

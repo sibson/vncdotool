@@ -579,8 +579,9 @@ class des(_baseDes):
 			# print "Len of data: %f" % (len(data) / self.block_size)
 
 		if self.getMode() == CBC:
-			if self.getIV():
-				iv = self.__String_to_BitList(self.getIV())
+			iv_ = self.getIV()
+			if iv_:
+				iv = self.__String_to_BitList(iv_)
 			else:
 				raise ValueError("For CBC mode, you must supply the Initial Value (IV) for ciphering")
 
@@ -720,10 +721,11 @@ class triple_des(_baseDes):
 			else:
 				raise ValueError("Invalid triple DES key size. Key must be either 16 or 24 bytes long")
 		if self.getMode() == CBC:
-			if not self.getIV():
+			iv = self.getIV()
+			if not iv:
 				# Use the first 8 bytes of the key
-				self._iv = key[:self.block_size]
-			if len(self.getIV()) != self.block_size:
+				self._iv = iv = key[:self.BLOCK_SIZE]
+			if len(iv) != self.BLOCK_SIZE:
 				raise ValueError("Invalid IV, must be 8 bytes in length")
 		self.__key1 = des(key[:8], self._mode, self._iv,
 				  self._padding, self._padmode)
@@ -783,9 +785,12 @@ class triple_des(_baseDes):
 		# Pad the data accordingly.
 		data = self._padData(data, pad, padmode)
 		if self.getMode() == CBC:
-			self.__key1.setIV(self.getIV())
-			self.__key2.setIV(self.getIV())
-			self.__key3.setIV(self.getIV())
+			iv = self.getIV()
+			if iv is None:
+				raise ValueError("For CVC IV must not be None")
+			self.__key1.setIV(iv)
+			self.__key2.setIV(iv)
+			self.__key3.setIV(iv)
 			i = 0
 			result: List[bytes] = []
 			while i < len(data):
@@ -828,9 +833,12 @@ class triple_des(_baseDes):
 		if pad is not None:
 			pad = self._guardAgainstUnicode(pad)
 		if self.getMode() == CBC:
-			self.__key1.setIV(self.getIV())
-			self.__key2.setIV(self.getIV())
-			self.__key3.setIV(self.getIV())
+			iv = self.getIV()
+			if iv is None:
+				raise ValueError("For CVC IV must not be None")
+			self.__key1.setIV(iv)
+			self.__key2.setIV(iv)
+			self.__key3.setIV(iv)
 			i = 0
 			result: List[bytes] = []
 			while i < len(data):

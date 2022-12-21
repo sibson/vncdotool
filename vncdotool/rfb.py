@@ -523,6 +523,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         #dont inc the first time
         if tx is not None:
+            assert ty is not None
             #calc next subrect pos
             tx += 16
             if tx >= x + width:

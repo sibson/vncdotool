@@ -46,7 +46,8 @@ def shutdown() -> None:
         return
 
     reactor.callFromThread(reactor.stop)
-    _THREAD.join()
+    if _THREAD is not None:
+        _THREAD.join()
 
 
 class ThreadedVNCClientProxy:
