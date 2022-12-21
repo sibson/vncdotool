@@ -19,7 +19,7 @@ class TestVNCDoToolClient(TestCase):
 
     def test_vncConnectionMade(self):
         cli = self.client
-        cli._packet = [b"RFB003.003\n"]
+        cli._packet = [b"RFB 003.003\n"]
         cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
@@ -51,7 +51,7 @@ class TestVNCDoToolClient(TestCase):
     @mock.patch('vncdotool.client.Deferred')
     def test_captureScreen(self, Deferred):
         cli = self.client
-        cli._packet = [b"RFB003.003\n"]
+        cli._packet = [b"RFB 003.003\n"]
         cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
@@ -73,7 +73,7 @@ class TestVNCDoToolClient(TestCase):
     @mock.patch('vncdotool.client.Deferred')
     def test_expectScreen(self, Deferred, image_open):
         cli = self.client
-        cli._packet = [b"RFB003.003\n"]
+        cli._packet = [b"RFB 003.003\n"]
         cli._handleInitial()
         cli._handleServerInit(b" " * 24)
         cli.vncConnectionMade()
