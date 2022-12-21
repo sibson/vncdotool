@@ -110,17 +110,18 @@ PAD_PKCS5 = Padding.PKCS5
 
 # The base class shared by des and triple des.
 class _baseDes:
+	BLOCK_SIZE = 8
+
 	def __init__(self, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
 		if IV:
 			IV = self._guardAgainstUnicode(IV)
 		if pad:
 			pad = self._guardAgainstUnicode(pad)
-		self.block_size = 8
 		# Sanity checking of arguments.
 		if pad and padmode == PAD_PKCS5:
 			raise ValueError("Cannot use a pad character with PAD_PKCS5")
-		if IV and len(IV) != self.block_size:
-			raise ValueError("Invalid Initial Value (IV), must be a multiple of " + str(self.block_size) + " bytes")
+		if IV and len(IV) != self.BLOCK_SIZE:
+			raise ValueError(f"Invalid Initial Value (IV), must be a multiple of {self.BLOCK_SIZE} bytes")
 
 		# Set the passed in variables
 		self._mode = mode
@@ -169,8 +170,8 @@ class _baseDes:
 
 	def setIV(self, IV: bytes) -> None:
 		"""Will set the Initial Value, used in conjunction with CBC mode"""
-		if not IV or len(IV) != self.block_size:
-			raise ValueError("Invalid Initial Value (IV), must be a multiple of " + str(self.block_size) + " bytes")
+		if not IV or len(IV) != self.BLOCK_SIZE:
+			raise ValueError(f"Invalid Initial Value (IV), must be a multiple of {self.BLOCK_SIZE} bytes")
 		IV = self._guardAgainstUnicode(IV)
 		self._iv = IV
 
@@ -182,20 +183,18 @@ class _baseDes:
 		if pad and padmode == PAD_PKCS5:
 			raise ValueError("Cannot use a pad character with PAD_PKCS5")
 
-		if padmode == PAD_NORMAL:
-			if len(data) % self.block_size == 0:
-				# No padding required.
-				return data
-
+		pad_len = -len(data) % self.BLOCK_SIZE
+		if pad_len == 0:
+			# No padding required.
+			pass
+		elif padmode == PAD_NORMAL:
 			if not pad:
 				# Get the default padding.
 				pad = self.getPadding()
 			if not pad:
-				raise ValueError("Data must be a multiple of " + str(self.block_size) + " bytes in length. Use padmode=PAD_PKCS5 or set the pad character.")
-			data += (self.block_size - (len(data) % self.block_size)) * pad
-
+				raise ValueError(f"Data must be a multiple of {self.BLOCK_SIZE} bytes in length. Use padmode=PAD_PKCS5 or set the pad character.")
+			data += pad * pad_len
 		elif padmode == PAD_PKCS5:
-			pad_len = 8 - (len(data) % self.block_size)
 			data += bytes([pad_len] * pad_len)
 
 		return data
@@ -215,8 +214,7 @@ class _baseDes:
 				# Get the default padding.
 				pad = self.getPadding()
 			if pad:
-				data = data[:-self.block_size] + \
-				       data[-self.block_size:].rstrip(pad)
+				data = data[:-self.BLOCK_SIZE] + data[-self.BLOCK_SIZE:].rstrip(pad)
 
 		elif padmode == PAD_PKCS5:
 			pad_len = data[-1]
@@ -435,7 +433,7 @@ class des(_baseDes):
 		result: List[int] = []
 		c = 0
 		for pos, ch in enumerate(data):
-			c += data[pos] << (7 - (pos % 8))
+			c += ch << (-pos % 8)
 			if (pos % 8) == 7:
 				result.append(c)
 				c = 0
@@ -546,14 +544,14 @@ class des(_baseDes):
 		# Error check the data
 		if not data:
 			return b''
-		if len(data) % self.block_size != 0:
+		if len(data) % self.BLOCK_SIZE != 0:
 			if crypt_type == des.DECRYPT: # Decryption must work on 8 byte blocks
-				raise ValueError("Invalid data length, data must be a multiple of " + str(self.block_size) + " bytes\n.")
-			if not self.getPadding():
-				raise ValueError("Invalid data length, data must be a multiple of " + str(self.block_size) + " bytes\n. Try setting the optional padding character")
-			else:
-				data += (self.block_size - (len(data) % self.block_size)) * self.getPadding()
-			# print "Len of data: %f" % (len(data) / self.block_size)
+				raise ValueError(f"Invalid data length, data must be a multiple of {self.BLOCK_SIZE} bytes\n.")
+			pad = self.getPadding()
+			if not pad:
+				raise ValueError(f"Invalid data length, data must be a multiple of {self.BLOCK_SIZE} bytes\n. Try setting the optional padding character")
+			data += pad * (-len(data) % self.BLOCK_SIZE)
+			# print "Len of data: %f" % (len(data) / self.BLOCK_SIZE)
 
 		if self.getMode() == CBC:
 			iv_ = self.getIV()
@@ -696,7 +694,7 @@ class triple_des(_baseDes):
 				# Use the first 8 bytes of the key
 				self._iv = iv = key[:self.BLOCK_SIZE]
 			if len(iv) != self.BLOCK_SIZE:
-				raise ValueError("Invalid IV, must be 8 bytes in length")
+				raise ValueError(f"Invalid IV, must be {self.BLOCK_SIZE} bytes in length")
 		self.__key1 = des(key[:8], self._mode, self._iv, self._padding, self._padmode)
 		self.__key2 = des(key[8:16], self._mode, self._iv, self._padding, self._padmode)
 		if self.key_size == 16:
