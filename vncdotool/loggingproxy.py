@@ -3,12 +3,14 @@ import sys
 import time
 import os.path
 import logging
-
+from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
 from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
+from twisted.python.failure import Failure
 
 from .client import VNCDoToolClient, KEYMAP
+from .rfb import Rect
 
 
 log = logging.getLogger('proxy')
@@ -24,10 +26,10 @@ TYPE_LEN = {
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
 
 
-class RFBServer(Protocol):
-    _handler = None
+class RFBServer(Protocol):  # type: ignore[misc]
+    _handler: Tuple[Callable[..., None], int] = (lambda data: None, 0)
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         Protocol.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
@@ -36,12 +38,12 @@ class RFBServer(Protocol):
         # XXX send version message
         self._handler = self._handle_version, 12
 
-    def dataReceived(self, data):
+    def dataReceived(self, data: bytes) -> None:
         self.buffer += data
         while len(self.buffer) >= self._handler[1]:
             self._handler[0]()
 
-    def _handle_version(self):
+    def _handle_version(self) -> None:
         msg = self.buffer[:12]
         self.buffer = self.buffer[12:]
         if not msg.startswith(b'RFB 003.') and msg.endswith(b'\n'):
@@ -57,22 +59,22 @@ class RFBServer(Protocol):
             # XXX send security v3.7+
             self._handler = self._handle_security, 1
 
-    def _handle_security(self):
+    def _handle_security(self) -> None:
         # sectype = self.buffer[0]
         self.buffer = self.buffer[1:]
 
-    def _handle_VNCAuthResponse(self):
+    def _handle_VNCAuthResponse(self) -> None:
         self.buffer = self.buffer[16:]
         self._handler = self._handle_clientInit, 1
 
-    def _handle_clientInit(self):
+    def _handle_clientInit(self) -> None:
         # shared = self.buffer[0]
         self.buffer = self.buffer[1:]
         # XXX react to shared
         # XXX send serverInit
         self._handler = self._handle_protocol, 1
 
-    def _handle_protocol(self):
+    def _handle_protocol(self) -> None:
         ptype = unpack('!B', self.buffer[0])[0]
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
@@ -102,59 +104,59 @@ class RFBServer(Protocol):
         elif ptype == 6:
             self.handle_clientCutText(block)
 
-    def handle_setPixelFormat(self, bbp, depth, bigendian, truecolor, rmax, gmax, bmax, rshift, gshift, bshift):
+    def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:
         pass
 
-    def handle_setEncodings(self, encodings):
+    def handle_setEncodings(self, encodings: Sequence[int]) -> None:
         pass
 
-    def handle_framebufferUpdate(self, x, y, w, h, incremental):
+    def handle_framebufferUpdate(self, x: int, y: int, w: int, h: int, incremental: bool) -> None:
         pass
 
-    def handle_keyEvent(self, key, down):
+    def handle_keyEvent(self, key: int, down: bool) -> None:
         pass
 
-    def handle_pointerEvent(self, x, y, buttonmask):
+    def handle_pointerEvent(self, x: int, y: int, buttonmask: int) -> None:
         pass
 
-    def handle_clientCutText(self, block):
+    def handle_clientCutText(self, block: bytes) -> None:
         pass
 
 
 class NullTransport:
 
-    def write(self, data):
+    def write(self, data: bytes) -> None:
         return
 
-    def writeSequence(self, data):
+    def writeSequence(self, data: bytes) -> None:
         return
 
-    def setTcpNoDelay(self, enabled):
+    def setTcpNoDelay(self, enabled: bool) -> None:
         return
 
 
 class VNCLoggingClient(VNCDoToolClient):
     """ Specialization of a VNCDoToolClient that will save screen captures
     """
-    capture_file = None
+    capture_file: Optional[str] = None
 
-    def commitUpdate(self, rectangles):
+    def commitUpdate(self, rectangles: Optional[List[Rect]] = None) -> None:
         if self.capture_file:
             self.screen.save(self.capture_file)
             self.recorder('expect %s\n' % self.capture_file)
             self.capture_file = None
 
 
-class VNCLoggingClientProxy(portforward.ProxyClient):
+class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
     """ Accept data from a server and forward to logger and downstream client
 
     vnc server -> VNCLoggingClientProxy -> vnc client
                                         -> VNCLoggingClient
     """
-    vnclog = None
+    vnclog: Optional[VNCLoggingClient] = None
     ncaptures = 0
 
-    def startLogging(self, peer):
+    def startLogging(self, peer: "VNCLoggingServerProxy") -> None:
         self.vnclog = VNCLoggingClient()
         self.vnclog.transport = NullTransport()
         self.vnclog.factory = self.peer.factory
@@ -164,17 +166,17 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
         self.vnclog._handler = self.vnclog._handleExpected
         self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
-    def dataReceived(self, data):
+    def dataReceived(self, data: bytes) -> None:
         portforward.ProxyClient.dataReceived(self, data)
         if self.vnclog:
             self.vnclog.dataReceived(data)
 
 
-class VNCLoggingClientFactory(portforward.ProxyClientFactory):
+class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[misc]
     protocol = VNCLoggingClientProxy
 
 
-class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
+class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore[misc]
     """ Proxy in the Middle, decodes and logs RFB messages before sending them upstream
 
     vnc client -> VNCLoggingServerProxy -> vnc server
@@ -182,31 +184,31 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     """
     clientProtocolFactory = VNCLoggingClientFactory
 
-    server = None
+    server: Optional[str] = None
     buttons = 0
-    recorder = None
+    recorder: Optional[Callable[[str], int]] = None
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         log.info('new connection from %s', self.transport.getPeer().host)
         portforward.ProxyServer.connectionMade(self)
         RFBServer.connectionMade(self)
-        self.mouse = (None, None)
+        self.mouse: Tuple[Optional[int], Optional[int]] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
 
-    def connectionLost(self, reason):
+    def connectionLost(self, reason: Failure) -> None:
         portforward.ProxyServer.connectionLost(self, reason)
         self.factory.clientConnectionLost(self)
 
-    def dataReceived(self, data):
+    def dataReceived(self, data: bytes) -> None:
         RFBServer.dataReceived(self, data)
         portforward.ProxyServer.dataReceived(self, data)
 
-    def _handle_clientInit(self):
+    def _handle_clientInit(self) -> None:
         RFBServer._handle_clientInit(self)
         self.peer.startLogging(self)
 
-    def handle_keyEvent(self, key, down):
+    def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
         if key in REVERSE_MAP:
@@ -223,7 +225,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         cmds.append('\n')
         self.recorder(' '.join(cmds))
 
-    def handle_pointerEvent(self, x, y, buttonmask):
+    def handle_pointerEvent(self, x: int, y: int, buttonmask: int) -> None:
         now = time.time()
 
         cmds = ['pause', '%.4f' % (now - self.last_event)]
@@ -239,17 +241,17 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         self.recorder(' '.join(cmds))
 
 
-class VNCLoggingServerFactory(portforward.ProxyFactory):
+class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     protocol = VNCLoggingServerProxy
     shared = True
     pseudocursor = False
     nocursor = False
     password_required = False
 
-    output = sys.stdout
-    _out = None
+    output: Union[IO[str], str] = sys.stdout
+    _out: Optional[IO[str]] = None
 
-    def getRecorder(self):
+    def getRecorder(self) -> Callable[[str], int]:
         try:
             return self.output.write
         except AttributeError:
@@ -258,10 +260,10 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
             self._out = open(outfile, 'w')
             return self._out.write
 
-    def clientConnectionMade(self, client):
+    def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:
         pass
 
-    def clientConnectionLost(self, client):
+    def clientConnectionLost(self, client: VNCLoggingServerProxy) -> None:
         if self._out:
             self._out.close()
             self._out = None

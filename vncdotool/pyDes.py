@@ -86,6 +86,7 @@ Note: This code was not written for high-end systems needing a fast
 """
 
 import sys
+from typing import Dict, List, Optional, Union
 
 # _pythonMajorVersion is used to handle Python2 and Python3 differences.
 _pythonMajorVersion = sys.version_info[0]
@@ -106,7 +107,7 @@ PAD_PKCS5 = 2
 
 # The base class shared by des and triple des.
 class _baseDes:
-	def __init__(self, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
+	def __init__(self, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
 		if IV:
 			IV = self._guardAgainstUnicode(IV)
 		if pad:
@@ -124,53 +125,53 @@ class _baseDes:
 		self._padding = pad
 		self._padmode = padmode
 
-	def getKey(self):
+	def getKey(self) -> bytes:
 		"""getKey() -> bytes"""
 		return self.__key
 
-	def setKey(self, key):
+	def setKey(self, key: bytes) -> None:
 		"""Will set the crypting key for this object."""
 		key = self._guardAgainstUnicode(key)
 		self.__key = key
 
-	def getMode(self):
+	def getMode(self) -> Mode:
 		"""getMode() -> pyDes.ECB or pyDes.CBC"""
 		return self._mode
 
-	def setMode(self, mode):
+	def setMode(self, mode: Mode) -> None:
 		"""Sets the type of crypting mode, pyDes.ECB or pyDes.CBC"""
 		self._mode = mode
 
-	def getPadding(self):
-		"""getPadding() -> bytes of length 1. Padding character."""
+	def getPadding(self) -> Optional[bytes]:
+		"""getPadding() -> bytes of length 1. Padding character or None."""
 		return self._padding
 
-	def setPadding(self, pad):
+	def setPadding(self, pad: bytes) -> None:
 		"""setPadding() -> bytes of length 1. Padding character."""
 		if pad is not None:
 			pad = self._guardAgainstUnicode(pad)
 		self._padding = pad
 
-	def getPadMode(self):
+	def getPadMode(self) -> Padding:
 		"""getPadMode() -> pyDes.PAD_NORMAL or pyDes.PAD_PKCS5"""
 		return self._padmode
 
-	def setPadMode(self, mode):
+	def setPadMode(self, mode: Padding) -> None:
 		"""Sets the type of padding mode, pyDes.PAD_NORMAL or pyDes.PAD_PKCS5"""
 		self._padmode = mode
 
-	def getIV(self):
+	def getIV(self) -> Optional[bytes]:
 		"""getIV() -> bytes"""
 		return self._iv
 
-	def setIV(self, IV):
+	def setIV(self, IV: bytes) -> None:
 		"""Will set the Initial Value, used in conjunction with CBC mode"""
 		if not IV or len(IV) != self.block_size:
 			raise ValueError("Invalid Initial Value (IV), must be a multiple of " + str(self.block_size) + " bytes")
 		IV = self._guardAgainstUnicode(IV)
 		self._iv = IV
 
-	def _padData(self, data, pad, padmode):
+	def _padData(self, data: bytes, pad: Optional[bytes], padmode: Optional[Padding]) -> bytes:
 		# Pad data depending on the mode
 		if padmode is None:
 			# Get the default padding mode.
@@ -199,7 +200,7 @@ class _baseDes:
 
 		return data
 
-	def _unpadData(self, data, pad, padmode):
+	def _unpadData(self, data: bytes, pad: Optional[bytes], padmode: Optional[Padding]) -> bytes:
 		# Unpad data depending on the mode.
 		if not data:
 			return data
@@ -226,7 +227,7 @@ class _baseDes:
 
 		return data
 
-	def _guardAgainstUnicode(self, data):
+	def _guardAgainstUnicode(self, data: Union[bytes, str]) -> bytes:
 		# Only accept byte strings or ascii unicode values, otherwise
 		# there is no way to correctly decode the data into bytes.
 		if _pythonMajorVersion < 3:
@@ -395,26 +396,26 @@ class des(_baseDes):
 	DECRYPT =	0x01
 
 	# Initialisation
-	def __init__(self, key, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
+	def __init__(self, key: bytes, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
 		# Sanity checking of arguments.
 		if len(key) != 8:
 			raise ValueError("Invalid DES key size. Key must be exactly 8 bytes long.")
 		_baseDes.__init__(self, mode, IV, pad, padmode)
 		self.key_size = 8
 
-		self.L = []
-		self.R = []
-		self.Kn = [ [0] * 48 ] * 16	# 16 48-bit keys (K1 - K16)
-		self.final = []
+		self.L: List[int] = []
+		self.R: List[int] = []
+		self.Kn: List[List[int]] = [ [0] * 48 ] * 16	# 16 48-bit keys (K1 - K16)
+		self.final: List[int] = []
 
 		self.setKey(key)
 
-	def setKey(self, key):
+	def setKey(self, key: bytes) -> None:
 		"""Will set the crypting key for this object. Must be 8 bytes."""
 		_baseDes.setKey(self, key)
 		self.__create_sub_keys()
 
-	def __String_to_BitList(self, data):
+	def __String_to_BitList(self, data: bytes) -> List[int]:
 		"""Turn the string data, into a list of bits (1, 0)'s"""
 		if isinstance(data[0], str):
 			# Turn the strings into integers. Python 3 uses a bytes
@@ -435,9 +436,9 @@ class des(_baseDes):
 
 		return result
 
-	def __BitList_to_String(self, data):
+	def __BitList_to_String(self, data: List[int]) -> bytes:
 		"""Turn the list of bits -> data, into a string"""
-		result = []
+		result: List[int] = []
 		pos = 0
 		c = 0
 		while pos < len(data):
@@ -452,13 +453,13 @@ class des(_baseDes):
 		else:
 			return bytes(result)
 
-	def __permutate(self, table, block):
+	def __permutate(self, table: List[int], block: List[int]) -> List[int]:
 		"""Permutate this block with the specified table"""
 		return list(map(lambda x: block[x], table))
 
 	# Transform the secret key, so that it is ready for data processing
 	# Create the 16 subkeys, K[1] - K[16]
-	def __create_sub_keys(self):
+	def __create_sub_keys(self) -> None:
 		"""Create the 16 subkeys K[1] to K[16] from the given key"""
 		key = self.__permutate(des.__pc1, self.__String_to_BitList(self.getKey()))
 		i = 0
@@ -483,7 +484,7 @@ class des(_baseDes):
 			i += 1
 
 	# Main part of the encryption algorithm, the number cruncher :)
-	def __des_crypt(self, block, crypt_type):
+	def __des_crypt(self, block: List[int], crypt_type: Type) -> List[int]:
 		"""Crypt the block of data through DES bit-manipulation"""
 		block = self.__permutate(des.__ip, block)
 		self.L = block[:32]
@@ -562,7 +563,7 @@ class des(_baseDes):
 
 
 	# Data to be encrypted/decrypted
-	def crypt(self, data, crypt_type):
+	def crypt(self, data: bytes, crypt_type: Type) -> bytes:
 		"""Crypt the data in blocks, running it through des_crypt()"""
 
 		# Error check the data
@@ -585,8 +586,8 @@ class des(_baseDes):
 
 		# Split the data into blocks, crypting each one seperately
 		i = 0
-		dict = {}
-		result = []
+		#dict: Dict = {}
+		result: List[bytes] = []
 		#cached = 0
 		#lines = 0
 		while i < len(data):
@@ -640,7 +641,7 @@ class des(_baseDes):
 		else:
 			return bytes.fromhex('').join(result)
 
-	def encrypt(self, data, pad=None, padmode=None):
+	def encrypt(self, data: bytes, pad: Optional[bytes] = None, padmode: Optional[Padding] = None) -> bytes:
 		"""encrypt(data, [pad], [padmode]) -> bytes
 
 		data : Bytes to be encrypted
@@ -659,7 +660,7 @@ class des(_baseDes):
 		data = self._padData(data, pad, padmode)
 		return self.crypt(data, des.ENCRYPT)
 
-	def decrypt(self, data, pad=None, padmode=None):
+	def decrypt(self, data: bytes, pad: Optional[bytes] = None, padmode: Optional[Padding] = None) -> bytes:
 		"""decrypt(data, [pad], [padmode]) -> bytes
 
 		data : Bytes to be encrypted
@@ -706,11 +707,11 @@ class triple_des(_baseDes):
 		PAD_PKCS5) to use during all encrypt/decrpt operations done
 		with this instance.
 	"""
-	def __init__(self, key, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
+	def __init__(self, key: bytes, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
 		_baseDes.__init__(self, mode, IV, pad, padmode)
 		self.setKey(key)
 
-	def setKey(self, key):
+	def setKey(self, key: bytes) -> None:
 		"""Will set the crypting key for this object. Either 16 or 24 bytes long."""
 		self.key_size = 24  # Use DES-EDE3 mode
 		if len(key) != self.key_size:
@@ -737,31 +738,31 @@ class triple_des(_baseDes):
 
 	# Override setter methods to work on all 3 keys.
 
-	def setMode(self, mode):
+	def setMode(self, mode: Mode) -> None:
 		"""Sets the type of crypting mode, pyDes.ECB or pyDes.CBC"""
 		_baseDes.setMode(self, mode)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setMode(mode)
 
-	def setPadding(self, pad):
+	def setPadding(self, pad: bytes) -> None:
 		"""setPadding() -> bytes of length 1. Padding character."""
 		_baseDes.setPadding(self, pad)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setPadding(pad)
 
-	def setPadMode(self, mode):
+	def setPadMode(self, mode: Padding) -> None:
 		"""Sets the type of padding mode, pyDes.PAD_NORMAL or pyDes.PAD_PKCS5"""
 		_baseDes.setPadMode(self, mode)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setPadMode(mode)
 
-	def setIV(self, IV):
+	def setIV(self, IV: bytes) -> None:
 		"""Will set the Initial Value, used in conjunction with CBC mode"""
 		_baseDes.setIV(self, IV)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setIV(IV)
 
-	def encrypt(self, data, pad=None, padmode=None):
+	def encrypt(self, data: bytes, pad: Optional[bytes] = None, padmode: Optional[Padding] = None) -> bytes:
 		"""encrypt(data, [pad], [padmode]) -> bytes
 
 		data : bytes to be encrypted
@@ -786,7 +787,7 @@ class triple_des(_baseDes):
 			self.__key2.setIV(self.getIV())
 			self.__key3.setIV(self.getIV())
 			i = 0
-			result = []
+			result: List[bytes] = []
 			while i < len(data):
 				block = self.__key1.crypt(data[i:i+8], ENCRYPT)
 				block = self.__key2.crypt(block, DECRYPT)
@@ -805,7 +806,7 @@ class triple_des(_baseDes):
 			data = self.__key2.crypt(data, DECRYPT)
 			return self.__key3.crypt(data, ENCRYPT)
 
-	def decrypt(self, data, pad=None, padmode=None):
+	def decrypt(self, data: bytes, pad: Optional[bytes] = None, padmode: Optional[Padding] = None) -> bytes:
 		"""decrypt(data, [pad], [padmode]) -> bytes
 
 		data : bytes to be encrypted
@@ -831,7 +832,7 @@ class triple_des(_baseDes):
 			self.__key2.setIV(self.getIV())
 			self.__key3.setIV(self.getIV())
 			i = 0
-			result = []
+			result: List[bytes] = []
 			while i < len(data):
 				iv = data[i:i+8]
 				block = self.__key3.crypt(iv,    DECRYPT)
