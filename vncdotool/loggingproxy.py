@@ -211,17 +211,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
-        if key in REVERSE_MAP:
-            key = REVERSE_MAP[key]
-        else:
-            key = chr(key)
+        rev = REVERSE_MAP.get(key, chr(key))
 
         cmds = ['pause', '%.4f' % (now - self.last_event)]
         self.last_event = now
         if down:
-            cmds += 'keydown', key
+            cmds += 'keydown', rev
         else:
-            cmds += 'keyup', key
+            cmds += 'keyup', rev
         cmds.append('\n')
         assert self.recorder is not None
         self.recorder(' '.join(cmds))
