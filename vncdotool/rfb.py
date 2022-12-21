@@ -319,7 +319,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def sendPassword(self, password: str) -> None:
         """send password"""
         pw = (password + '\0' * 8)[:8]        #make sure its 8 chars long, zero padded
-        des = RFBDes(pw)
+        des = RFBDes(pw.encode("ASCII"))  #unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
         response = des.encrypt(self._challenge)
         self.transport.write(response)
 
@@ -819,7 +819,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.expect(self._handleServerCutTextValue, length)
 
     def _handleServerCutTextValue(self, block: bytes) -> None:
-        self.copy_text(block)
+        self.copy_text(block.decode("iso-8859-1"))
         self.expect(self._handleConnection, 1)
 
     #------------------------------------------------------
@@ -906,10 +906,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.transport.write(pack("!BBHH", 5, buttonmask, x, y))
 
     def clientCutText(self, message: str) -> None:
-        """The client has new ASCII text in its cut buffer.
+        """The client has new ISO 8859-1 (Latin-1) text in its cut buffer.
            (aka clipboard)
         """
-        self.transport.write(pack("!BxxxI", 6, len(message)) + message)
+        data = message.encode("iso-8859-1")
+        self.transport.write(pack("!BxxxI", 6, len(data)) + data)
 
     #------------------------------------------------------
     # callbacks
@@ -971,7 +972,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """bell"""
 
     def copy_text(self, text: str) -> None:
-        """The server has new ASCII text in its cut buffer.
+        """The server has new ISO 8859-1 (Latin-1) text in its cut buffer.
            (aka clipboard)"""
 
 
