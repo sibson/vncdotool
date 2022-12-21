@@ -673,11 +673,8 @@ class triple_des(_baseDes):
 
 	def setKey(self, key: bytes) -> None:
 		"""Will set the crypting key for this object. Either 16 or 24 bytes long."""
-		self.key_size = 24  # Use DES-EDE3 mode
-		if len(key) != self.key_size:
-			if len(key) == 16: # Use DES-EDE2 mode
-				self.key_size = 16
-			else:
+		self.key_size = len(key)
+		if self.key_size not in {16, 24}:  # DES-EDE2 or DES-EDE3 mode
 				raise ValueError("Invalid triple DES key size. Key must be either 16 or 24 bytes long")
 		if self.getMode() == CBC:
 			iv = self.getIV()
