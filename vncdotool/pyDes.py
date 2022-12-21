@@ -701,15 +701,12 @@ class triple_des(_baseDes):
 				self._iv = iv = key[:self.BLOCK_SIZE]
 			if len(iv) != self.BLOCK_SIZE:
 				raise ValueError("Invalid IV, must be 8 bytes in length")
-		self.__key1 = des(key[:8], self._mode, self._iv,
-				  self._padding, self._padmode)
-		self.__key2 = des(key[8:16], self._mode, self._iv,
-				  self._padding, self._padmode)
+		self.__key1 = des(key[:8], self._mode, self._iv, self._padding, self._padmode)
+		self.__key2 = des(key[8:16], self._mode, self._iv, self._padding, self._padmode)
 		if self.key_size == 16:
 			self.__key3 = self.__key1
 		else:
-			self.__key3 = des(key[16:], self._mode, self._iv,
-					  self._padding, self._padmode)
+			self.__key3 = des(key[16:], self._mode, self._iv, self._padding, self._padmode)
 		_baseDes.setKey(self, key)
 
 	# Override setter methods to work on all 3 keys.

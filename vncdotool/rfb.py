@@ -954,7 +954,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
            the pixel format set up earlier"""
         #fallback variant, use update recatngle
         #override with specialized function for better performance
-        self.updateRectangle(x, y, width, height, color*width*height)
+        self.updateRectangle(x, y, width, height, color * width * height)
 
     def updateCursor(self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes) -> None:
         """ New cursor, focuses at (x, y)

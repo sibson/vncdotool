@@ -138,8 +138,11 @@ def connect(
     """
     if not reactor.running:
         global _THREAD
-        _THREAD = threading.Thread(target=reactor.run, name='Twisted',
-                         kwargs={'installSignalHandlers': False})
+        _THREAD = threading.Thread(
+            target=reactor.run,
+            name='Twisted',
+            kwargs={'installSignalHandlers': False},
+        )
         _THREAD.daemon = True
         _THREAD.start()
 

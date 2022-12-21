@@ -349,10 +349,17 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         if self._version_server == 3.889:
             self.setPixelFormat(
-                    bpp = 16, depth = 16, bigendian = 0, truecolor = 1,
-                    redmax = 31, greenmax = 63, bluemax = 31,
-                    redshift = 11, greenshift = 5, blueshift = 0
-                    )
+                bpp=16,
+                depth=16,
+                bigendian=False,
+                truecolor=True,
+                redmax=31,
+                greenmax=63,
+                bluemax=31,
+                redshift=11,
+                greenshift=5,
+                blueshift=0,
+            )
             self.image_mode = "BGR;16"
         elif (self.truecolor and (not self.bigendian) and self.depth == 24
                 and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
