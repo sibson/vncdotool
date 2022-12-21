@@ -323,14 +323,14 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug('mouseDrag %d,%d', x, y)
         if x < self.x:
-            xsteps = [self.x - i for i in range(step, self.x - x + 1, step)]
+            xsteps = range(self.x - step, x, -step)
         else:
-            xsteps = range(self.x, x, step)
+            xsteps = range(self.x + step, x, step)
 
         if y < self.y:
-            ysteps = [self.y - i for i in range(step, self.y - y + 1, step)]
+            ysteps = range(self.y - step, y, -step)
         else:
-            ysteps = range(self.y, y, step)
+            ysteps = range(self.y + step, y, step)
 
         for ypos in ysteps:
             self.mouseMove(self.x, ypos)
