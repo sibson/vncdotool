@@ -433,14 +433,12 @@ class des(_baseDes):
 	def __BitList_to_String(self, data: List[int]) -> bytes:
 		"""Turn the list of bits -> data, into a string"""
 		result: List[int] = []
-		pos = 0
 		c = 0
-		while pos < len(data):
+		for pos, ch in enumerate(data):
 			c += data[pos] << (7 - (pos % 8))
 			if (pos % 8) == 7:
 				result.append(c)
 				c = 0
-			pos += 1
 
 		return bytes(result)
 
@@ -453,26 +451,20 @@ class des(_baseDes):
 	def __create_sub_keys(self) -> None:
 		"""Create the 16 subkeys K[1] to K[16] from the given key"""
 		key = self.__permutate(des.__pc1, self.__String_to_BitList(self.getKey()))
-		i = 0
 		# Split into Left and Right sections
 		self.L = key[:28]
 		self.R = key[28:]
-		while i < 16:
-			j = 0
+		for i in range(16):
 			# Perform circular left shifts
-			while j < des.__left_rotations[i]:
+			for _ in range(des.__left_rotations[i]):
 				self.L.append(self.L[0])
 				del self.L[0]
 
 				self.R.append(self.R[0])
 				del self.R[0]
 
-				j += 1
-
 			# Create one of the 16 subkeys through pc2 permutation
 			self.Kn[i] = self.__permutate(des.__pc2, self.L + self.R)
-
-			i += 1
 
 	# Main part of the encryption algorithm, the number cruncher :)
 	def __des_crypt(self, block: List[int], crypt_type: Type) -> List[int]:
@@ -490,8 +482,7 @@ class des(_baseDes):
 			iteration = 15
 			iteration_adjustment = -1
 
-		i = 0
-		while i < 16:
+		for i in range(16):
 			# Make a copy of R[i-1], this will later become L[i]
 			tempR = self.R[:]
 
@@ -511,10 +502,9 @@ class des(_baseDes):
 			#		B.append(self.R[j-6:j])
 
 			# Permutate B[1] to B[8] using the S-Boxes
-			j = 0
 			Bn = [0] * 32
 			pos = 0
-			while j < 8:
+			for j in range(8):
 				# Work out the offsets
 				m = (B[j][0] << 1) + B[j][5]
 				n = (B[j][1] << 3) + (B[j][2] << 2) + (B[j][3] << 1) + B[j][4]
@@ -529,7 +519,6 @@ class des(_baseDes):
 				Bn[pos + 3] = v & 1
 
 				pos += 4
-				j += 1
 
 			# Permutate the concatination of B[1] to B[8] (Bn)
 			self.R = self.__permutate(des.__p, Bn)
@@ -537,15 +526,12 @@ class des(_baseDes):
 			# Xor with L[i - 1]
 			self.R = list(map(lambda x, y: x ^ y, self.R, self.L))
 			# Optimization: This now replaces the below commented code
-			#j = 0
-			#while j < len(self.R):
-			#	self.R[j] = self.R[j] ^ self.L[j]
-			#	j += 1
+			#for j, (l, r) in enumerate(zip(self.L, self.R)):
+			#	self.R[j] = r ^ l
 
 			# L[i] becomes R[i - 1]
 			self.L = tempR
 
-			i += 1
 			iteration += iteration_adjustment
 
 		# Final permutation of R[16]L[16]
@@ -559,7 +545,7 @@ class des(_baseDes):
 
 		# Error check the data
 		if not data:
-			return ''
+			return b''
 		if len(data) % self.block_size != 0:
 			if crypt_type == des.DECRYPT: # Decryption must work on 8 byte blocks
 				raise ValueError("Invalid data length, data must be a multiple of " + str(self.block_size) + " bytes\n.")
@@ -598,19 +584,15 @@ class des(_baseDes):
 			if self.getMode() == CBC:
 				if crypt_type == des.ENCRYPT:
 					block = list(map(lambda x, y: x ^ y, block, iv))
-					#j = 0
-					#while j < len(block):
+					#for j in range(len(block)):
 					#	block[j] = block[j] ^ iv[j]
-					#	j += 1
 
 				processed_block = self.__des_crypt(block, crypt_type)
 
 				if crypt_type == des.DECRYPT:
 					processed_block = list(map(lambda x, y: x ^ y, processed_block, iv))
-					#j = 0
-					#while j < len(processed_block):
+					#for j in range(len(processed_block)):
 					#	processed_block[j] = processed_block[j] ^ iv[j]
-					#	j += 1
 					iv = block
 				else:
 					iv = processed_block
@@ -774,9 +756,8 @@ class triple_des(_baseDes):
 			self.__key1.setIV(iv)
 			self.__key2.setIV(iv)
 			self.__key3.setIV(iv)
-			i = 0
 			result: List[bytes] = []
-			while i < len(data):
+			for i in range(0, len(data), 8):
 				block = self.__key1.crypt(data[i:i+8], des.ENCRYPT)
 				block = self.__key2.crypt(block, des.DECRYPT)
 				block = self.__key3.crypt(block, des.ENCRYPT)
@@ -784,7 +765,6 @@ class triple_des(_baseDes):
 				self.__key2.setIV(block)
 				self.__key3.setIV(block)
 				result.append(block)
-				i += 8
 			return b''.join(result)
 		else:
 			data = self.__key1.crypt(data, des.ENCRYPT)
@@ -817,9 +797,8 @@ class triple_des(_baseDes):
 			self.__key1.setIV(iv)
 			self.__key2.setIV(iv)
 			self.__key3.setIV(iv)
-			i = 0
 			result: List[bytes] = []
-			while i < len(data):
+			for i in range(0, len(data), 8):
 				iv = data[i:i+8]
 				block = self.__key3.crypt(iv,    des.DECRYPT)
 				block = self.__key2.crypt(block, des.ENCRYPT)
@@ -828,7 +807,6 @@ class triple_des(_baseDes):
 				self.__key2.setIV(iv)
 				self.__key3.setIV(iv)
 				result.append(block)
-				i += 8
 			data = b''.join(result)
 		else:
 			data = self.__key3.crypt(data, des.DECRYPT)

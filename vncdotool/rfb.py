@@ -711,12 +711,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             # Alpha channel
             yield 0xff
 
-        while True:
-            try:
-                subencoding = ord(next(it))
-            except StopIteration:
-                break
-
+        for subencoding in it:
             # calc tile size
             tw = th = 64
             if x + width - tx < 64:
