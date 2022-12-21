@@ -39,23 +39,6 @@ Ver = Tuple[int, int]
 
 #~ from twisted.internet import reactor
 
-# Python3 compatibility replacement for ord(str) as ord(byte)
-if sys.version_info[0] >= 3:
-    original_ord = ord
-    def ord(x):
-        # in python 2, there are two possible cases ord is used.
-        # * string of length > 1, --(index access)--> string of length 1 --(ord)--> int
-        # * string of length 1 --(ord)--> int
-        # however in python3, this usage morphs into
-        # * byte of length > 1, --(index access)--> int --(ord)--> Error
-        # * byte of length 1 --(ord)--> int
-        if isinstance(x, int):
-            return x
-        elif isinstance(x, bytes) or isinstance(x, str):
-            return original_ord(x)
-        else:
-            raise TypeError(f"our customized ord takes an int, a byte, or a str. Got {type(x)} : {x}")
-
 #encoding-type
 #for SetEncodings()
 RAW_ENCODING =                  0
@@ -147,7 +130,7 @@ KEY_SpaceBar=   0x0020
 def _zrle_next_bit(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
     num_pixels = 0
     while True:
-        b = ord(next(it))
+        b = next(it)
 
         for n in range(8):
             value = b >> (7 - n)
@@ -161,7 +144,7 @@ def _zrle_next_bit(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 def _zrle_next_dibit(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
     num_pixels = 0
     while True:
-        b = ord(next(it))
+        b = next(it)
 
         for n in range(0, 8, 2):
             value = b >> (6 - n)
@@ -175,7 +158,7 @@ def _zrle_next_dibit(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
     num_pixels = 0
     while True:
-        b = ord(next(it))
+        b = next(it)
 
         for n in range(0, 8, 4):
             value = b >> (4 - n)
@@ -189,8 +172,7 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 class RFBClient(Protocol):  # type: ignore[misc]
 
     def __init__(self) -> None:
-        self._packet = []
-        self._packet_len = 0
+        self._packet = bytearray()
         self._handler = self._handleInitial
         self._already_expecting = 0
         self._version = None
@@ -202,7 +184,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     #------------------------------------------------------
 
     def _handleInitial(self) -> None:
-        buffer = b''.join(self._packet)
+        buffer = self._packet
         if b'\n' in buffer:
             version = 3.3
             if buffer[:3] == b'RFB':
@@ -217,13 +199,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
                             % version_server)
                     version = max(filter(
                         lambda x: x <= version_server, SUPPORTED_VERSIONS))
-            buffer = buffer[12:]
+            del self._packet[0:12]
             log.msg("Using protocol version %.3f" % version)
             parts = str(version).split('.')
             self.transport.write(
                 bytes(b"RFB %03d.%03d\n" % (int(parts[0]), int(parts[1]))))
-            self._packet[:] = [buffer]
-            self._packet_len = len(buffer)
             self._handler = self._handleExpected
             self._version = version
             self._version_server = version_server
@@ -231,9 +211,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleAuth, 4)
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
-        else:
-            self._packet[:] = [buffer]
-            self._packet_len = len(buffer)
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
         (num_types,) = unpack("!B", block)
@@ -600,7 +577,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             #~ (subrects, ) = unpack("!B", block)
             # In python2, block : string, block[pos] : string, ord(block[pos]) : int
             # In python3, block : byte,   block[pos] : int,    ord(block[pos]) : error
-            subrects = ord(block[pos])
+            subrects = block[pos]
         #~ print subrects
         if subrects:
             if subencoding & 16:    #SubrectsColoured
@@ -680,8 +657,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         pos = 0
         end = len(block)
         while pos < end:
-            xy = ord(block[pos])
-            wh = ord(block[pos+1])
+            xy = block[pos]
+            wh = block[pos+1]
             sx = xy >> 4
             sy = xy & 0xf
             sw = (wh >> 4) + 1
@@ -752,10 +729,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 # RLE
 
                 def do_rle(pixel: bytes) -> int:
-                    run_length_next = ord(next(it))
+                    run_length_next = next(it)
                     run_length = run_length_next
                     while run_length_next == 255:
-                        run_length_next = ord(next(it))
+                        run_length_next = next(it)
                         run_length += run_length_next
                     pixel_data.extend(pixel * (run_length + 1))
                     return run_length + 1
@@ -771,7 +748,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                     palette = [bytearray(cpixel(it)) for p in range(palette_size)]
 
                     while num_pixels < pixels_in_tile:
-                        palette_index = ord(next(it))
+                        palette_index = next(it)
                         if palette_index & 0x80:
                             palette_index &= 0x7F
                             # run of length > 1, more bytes follow to determine run length
@@ -847,20 +824,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def dataReceived(self, data: bytes) -> None:
         #~ sys.stdout.write(repr(data) + '\n')
         #~ print len(data), ", ", len(self._packet)
-        self._packet.append(data)
-        self._packet_len += len(data)
+        self._packet.extend(data)
         self._handler()
 
     def _handleExpected(self) -> None:
-        if self._packet_len >= self._expected_len:
-            buffer = b''.join(self._packet)
-            while len(buffer) >= self._expected_len:
+        if len(self._packet) >= self._expected_len:
+            while len(self._packet) >= self._expected_len:
                 self._already_expecting = 1
-                block, buffer = buffer[:self._expected_len], buffer[self._expected_len:]
+                block = bytes(self._packet[:self._expected_len])
+                del self._packet[:self._expected_len]
                 #~ log.msg(f"handle {block!r} with {self._expected_handler.__name__!r}")
                 self._expected_handler(block, *self._expected_args, **self._expected_kwargs)
-            self._packet[:] = [buffer]
-            self._packet_len = len(buffer)
             self._already_expecting = 0
 
     def expect(self, handler: Callable[..., None], size: int, *args: Any, **kwargs: Any) -> None:

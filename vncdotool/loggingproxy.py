@@ -33,8 +33,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
         Protocol.connectionMade(self)
         self.transport.setTcpNoDelay(True)
 
-        self.buffer = b''
-        self.nbytes = 0
+        self.buffer = bytearray()
         # XXX send version message
         self._handler = self._handle_version, 12
 
@@ -45,7 +44,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
     def _handle_version(self) -> None:
         msg = self.buffer[:12]
-        self.buffer = self.buffer[12:]
+        del self.buffer[:12]
         if not msg.startswith(b'RFB 003.') and msg.endswith(b'\n'):
             self.transport.loseConnection()
 
@@ -61,15 +60,15 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
     def _handle_security(self) -> None:
         # sectype = self.buffer[0]
-        self.buffer = self.buffer[1:]
+        del self.buffer[:1]
 
     def _handle_VNCAuthResponse(self) -> None:
-        self.buffer = self.buffer[16:]
+        del self.buffer[:16]
         self._handler = self._handle_clientInit, 1
 
     def _handle_clientInit(self) -> None:
         # shared = self.buffer[0]
-        self.buffer = self.buffer[1:]
+        del self.buffer[:1]
         # XXX react to shared
         # XXX send serverInit
         self._handler = self._handle_protocol, 1
@@ -81,8 +80,8 @@ class RFBServer(Protocol):  # type: ignore[misc]
             self._handler = self._handle_protocol, nbytes + 1
             return
 
-        block = self.buffer[1:nbytes]
-        self.buffer = self.buffer[nbytes:]
+        block = bytes(self.buffer[1:nbytes])
+        del self.buffer[:nbytes]
         if ptype == 0:
             args = unpack('!xxxBBBBHHHBBBxxx', block)
             self.handle_setPixelFormat(*args)
@@ -90,7 +89,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
             nencodings = unpack('!xH', block)[0]
             nbytes = 4 * nencodings
             encodings = unpack('!' + 'I' * nencodings, self.buffer[:nbytes])
-            self.buffer = self.buffer[nbytes:]
+            del self.buffer[:nbytes]
             self.handle_setEncodings(encodings)
         elif ptype == 3:
             inc, x, y, w, h = unpack('!BHHHH', block)
