@@ -74,7 +74,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
         self._handler = self._handle_protocol, 1
 
     def _handle_protocol(self) -> None:
-        ptype = unpack('!B', self.buffer[0])[0]
+        ptype, = unpack('!B', self.buffer[:1])
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
             self._handler = self._handle_protocol, nbytes + 1
