@@ -251,13 +251,13 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     _out: Optional[IO[str]] = None
 
     def getRecorder(self) -> Callable[[str], int]:
-        try:
-            return self.output.write
-        except AttributeError:
+        if isinstance(self.output, str):
             now = time.strftime('%y%m%d-%H%M%S')
             outfile = os.path.join(self.output, '%s.vdo' % now)
             self._out = open(outfile, 'w')
             return self._out.write
+        else:
+            return self.output.write
 
     def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:
         pass
