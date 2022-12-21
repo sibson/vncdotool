@@ -8,7 +8,7 @@ from unittest import mock
 class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
-        super(TestBuildCommandList, self).setUp()
+        super().setUp()
         self.factory = mock.Mock()
         self.client = command.VNCDoCLIClient
         self.deferred = self.factory.deferred

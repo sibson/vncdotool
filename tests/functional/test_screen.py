@@ -67,7 +67,7 @@ class TestVNCCapture(TestCase):
         f2 = self.mktemp()
 
         self.run_server(SERVER)
-        self.run_vncdo('move 150 100 capture %s capture %s' % (f1, f2))
+        self.run_vncdo(f'move 150 100 capture {f1} capture {f2}')
         self.assertFilesEqual(f1, EXAMPLE_PNG)
         self.assertFilesEqual(f2, f1)
 

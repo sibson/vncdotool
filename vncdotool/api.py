@@ -45,7 +45,7 @@ def shutdown():
     _THREAD.join()
 
 
-class ThreadedVNCClientProxy(object):
+class ThreadedVNCClientProxy:
 
     def __init__(self, factory, timeout=60 * 60):
         self.factory = factory

@@ -105,7 +105,7 @@ PAD_PKCS5 = 2
 # http://www.faqs.org/rfcs/rfc1423.html
 
 # The base class shared by des and triple des.
-class _baseDes(object):
+class _baseDes:
 	def __init__(self, mode=ECB, IV=None, pad=None, padmode=PAD_NORMAL):
 		if IV:
 			IV = self._guardAgainstUnicode(IV)

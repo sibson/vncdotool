@@ -21,7 +21,7 @@ TYPE_LEN = {
     5: 6,
 }
 
-REVERSE_MAP = dict((v, n) for (n, v) in KEYMAP.items())
+REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
 
 
 class RFBServer(Protocol):
@@ -121,7 +121,7 @@ class RFBServer(Protocol):
         pass
 
 
-class NullTransport(object):
+class NullTransport:
 
     def write(self, data):
         return

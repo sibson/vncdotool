@@ -235,7 +235,7 @@ class RFBClient(Protocol):
             self.expect(self._handleConnFailed, 4)
 
     def _handleSecurityTypes(self, block):
-        types = unpack("!%dB" % len(block), block)
+        types = unpack(f"!{len(block)}B", block)
         SUPPORTED_TYPES = (1, 2, 30)
         valid_types = [sec_type for sec_type in types if sec_type in SUPPORTED_TYPES]
         if valid_types:
@@ -251,7 +251,7 @@ class RFBClient(Protocol):
             elif sec_type == 30: # Apple Remote Desktop
                 self.expect(self._handleAppleAuth, 4)
         else:
-            log.msg("unknown security types: %s" % repr(types))
+            log.msg(f"unknown security types: {types!r}")
 
     def _handleAuth(self, block):
         (auth,) = unpack("!I", block)
@@ -264,14 +264,14 @@ class RFBClient(Protocol):
         elif auth == 2:
             self.expect(self._handleVNCAuth, 16)
         else:
-            log.msg("unknown auth response (%d)" % auth)
+            log.msg(f"unknown auth response ({auth})")
 
     def _handleConnFailed(self, block):
         (waitfor,) = unpack("!I", block)
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block):
-        log.msg("Connection refused: %r" % block)
+        log.msg(f"Connection refused: {block!r}")
 
     def _handleVNCAuth(self, block):
         self._challenge = block
@@ -279,7 +279,7 @@ class RFBClient(Protocol):
         self.expect(self._handleVNCAuthResult, 4)
 
     def _handleAppleAuth(self, block):
-        authMeta = unpack("!%dB" % len(block), block)
+        authMeta = unpack(f"!{len(block)}B", block)
         self.generator = authMeta[1]
         self.keyLen = authMeta[3]
         self.expect(self._handleAppleAuthKey, self.keyLen)
@@ -348,7 +348,7 @@ class RFBClient(Protocol):
             else:
                 self.expect(self._handleAuthFailed, 4)
         else:
-            log.msg("unknown auth response (%d)" % result)
+            log.msg(f"unknown auth response ({result})")
 
     def _handleAuthFailed(self, block):
         (waitfor,) = unpack("!I", block)
@@ -390,7 +390,7 @@ class RFBClient(Protocol):
         elif msgid == 3:
             self.expect(self._handleServerCutText, 7)
         else:
-            log.msg("unknown message received (id %d)" % msgid)
+            log.msg(f"unknown message received (id {msgid})")
             self.expect(self._handleConnection, 1)
 
     def _handleFramebufferUpdate(self, block):
@@ -430,7 +430,7 @@ class RFBClient(Protocol):
             elif encoding == PSEUDO_DESKTOP_SIZE_ENCODING:
                 self._handleDecodeDesktopSize(width, height)
             else:
-                log.msg("unknown encoding received (encoding %d)" % encoding)
+                log.msg(f"unknown encoding received (encoding {encoding})")
                 self._doConnection()
         else:
             self._doConnection()
@@ -465,7 +465,7 @@ class RFBClient(Protocol):
         pos = 0
         end = len(block)
         sz  = self.bypp + 8
-        format = "!%dsHHHH" % self.bypp
+        format = f"!{self.bypp}sHHHH"
         while pos < end:
             (color, x, y, width, height) = unpack(format, block[pos:pos+sz])
             self.fillRectangle(topx + x, topy + y, width, height, color)
@@ -488,7 +488,7 @@ class RFBClient(Protocol):
         pos = 0
         end = len(block)
         sz  = self.bypp + 4
-        format = "!%dsBBBB" % self.bypp
+        format = "!{self.bypp}sBBBB"
         while pos < sz:
             (color, x, y, width, height) = unpack(format, block[pos:pos+sz])
             self.fillRectangle(topx + x, topy + y, width, height, color)
@@ -697,8 +697,7 @@ class RFBClient(Protocol):
                     self.fillRectangle(tx, ty, tw, th, bytes(color))
                 else:
                     if palette_size > 16:
-                        raise ValueError(
-                            "Palette of size {0} is not allowed".format(palette_size))
+                        raise ValueError(f"Palette of size {palette_size} is not allowed")
 
                     palette = [bytearray(cpixel(it)) for _ in range(palette_size)]
                     if palette_size == 2:
@@ -759,14 +758,14 @@ class RFBClient(Protocol):
             while len(buffer) >= self._expected_len:
                 self._already_expecting = 1
                 block, buffer = buffer[:self._expected_len], buffer[self._expected_len:]
-                #~ log.msg("handle %r with %r\n" % (block, self._expected_handler.__name__))
+                #~ log.msg(f"handle {block!r} with {self._expected_handler.__name__!r}")
                 self._expected_handler(block, *self._expected_args, **self._expected_kwargs)
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
             self._already_expecting = 0
 
     def expect(self, handler, size, *args, **kwargs):
-        #~ log.msg("expect(%r, %r, %r, %r)\n" % (handler.__name__, size, args, kwargs))
+        #~ log.msg(f"expect({handler.__name__!r}, {size!r}, {args!r}, {kwargs!r})")
         self._expected_handler = handler
         self._expected_len = size
         self._expected_args = args
@@ -836,7 +835,7 @@ class RFBClient(Protocol):
     def vncAuthFailed(self, reason):
         """called when the authentication failed.
            the connection is closed."""
-        log.msg("Cannot connect %s" % reason)
+        log.msg(f"Cannot connect {reason}")
 
     def beginUpdate(self):
         """called before a series of updateRectangle(),
@@ -904,7 +903,7 @@ class RFBDes(pyDes.des):
                 if bsrc & (1 << i):
                     btgt = btgt | (1 << 7-i)
             newkey.append(chr(btgt))
-        super(RFBDes, self).setKey(newkey)
+        super().setKey(newkey)
 
 
 # --- test code only, see vncviewer.py
@@ -913,8 +912,8 @@ if __name__ == '__main__':
     class RFBTest(RFBClient):
         """dummy client"""
         def vncConnectionMade(self):
-            print("Screen format: depth=%d bytes_per_pixel=%r" % (self.depth, self.bpp))
-            print("Desktop name: %r" % self.name)
+            print(f"Screen format: depth={self.depth} bytes_per_pixel={self.bpp}")
+            print(f"Desktop name: {self.name!r}")
             self.SetEncodings([RAW_ENCODING])
             self.FramebufferUpdateRequest()
 
@@ -947,8 +946,8 @@ if __name__ == '__main__':
     try:
         o.parseOptions()
     except usage.UsageError as errortext:
-        print("%s: %s" % (sys.argv[0], errortext))
-        print("%s: Try --help for usage details." % (sys.argv[0]))
+        print(f"{sys.argv[0]}: {errortext}")
+        print(f"{sys.argv[0]}: Try --help for usage details.")
         raise SystemExit(1)
 
     logFile = sys.stdout

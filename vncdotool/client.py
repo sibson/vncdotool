@@ -113,7 +113,7 @@ try:
 except ImportError as error:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
-    class _Image(object):
+    class _Image:
         def __getattr__(self, _):
             raise ImportError(error) # noqa: F821
     Image = _Image()  # type: ignore[assignment]
@@ -296,7 +296,7 @@ class VNCDoToolClient(rfb.RFBClient):
                     sum_ += (h - e) ** 2
                 rms = math.sqrt(sum_ / len(hist))
 
-                log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
+                log.debug('rms:%d maxrms:%d', rms, maxrms)
                 if rms <= maxrms:
                     return self
 
@@ -387,7 +387,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.info('ding')
 
     def copy_text(self, text):
-        log.info('clipboard copy', repr(text))
+        log.info(f'clipboard copy {text!r}')
 
     def paste(self, message):
         self.clientCutText(message)
@@ -459,7 +459,7 @@ class VMWareClient(VNCDoToolClient):
             self.framebufferUpdateRequest()
             self._handler()
         else:
-            super(VMWareClient, self).dataReceived(data)
+            super().dataReceived(data)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):

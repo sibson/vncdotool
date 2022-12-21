@@ -76,7 +76,7 @@ class TestSendEvents(TestCase):
         self.assertDisconnect()
 
     def test_read_files(self):
-        self.run_vncdo('key x %s key y %s' % (KEYA_VDO, KEYB_VDO))
+        self.run_vncdo(f'key x {KEYA_VDO} key y {KEYB_VDO}')
         for key in 'xayb':
             self.assertKeyDown(ord(key))
             self.assertKeyUp(ord(key))

@@ -6,7 +6,6 @@ Command line interface to interact with a VNC Server
 
 MIT License
 """
-from __future__ import print_function
 
 import getpass
 import optparse
@@ -40,7 +39,7 @@ def log_exceptions(type_, value, tb):
 
 
 def log_connected(pcol):
-    log.info('connected to %s' % pcol.name)
+    log.info('connected to %s', pcol.name)
     return pcol
 
 
@@ -84,7 +83,7 @@ class ExitingProcess(protocol.ProcessProtocol):
 
 class VNCDoToolOptionParser(optparse.OptionParser):
     def format_help(self, **kwargs):
-        result = optparse.OptionParser.format_help(self, **kwargs)
+        result = super().format_help(formatter)
         result += '\n'.join(
            ['',
             'Common Commands (CMD):',
@@ -361,7 +360,7 @@ def vnclog():
     factory.password = options.password
 
     if options.viewer:
-        cmdline = '%s localhost::%s' % (options.viewer, factory.listen_port)
+        cmdline = f'{options.viewer} localhost::{factory.listen_port}'
         reactor.spawnProcess(
             ExitingProcess(),
             options.viewer,
