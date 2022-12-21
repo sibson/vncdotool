@@ -7,10 +7,7 @@ debugging is appreciated.
 import sys
 import socket
 import threading
-try:
-    import queue
-except ImportError:
-    import Queue as queue
+import queue
 import logging
 from typing import Any, List, Optional, Type, TypeVar
 
@@ -34,11 +31,6 @@ _THREAD: Optional[threading.Thread] = None
 
 class VNCDoException(Exception):
     pass
-
-
-if sys.version_info.major == 2:
-    class TimeoutError(OSError):
-        pass
 
 
 def shutdown() -> None:

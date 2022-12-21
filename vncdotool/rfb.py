@@ -493,7 +493,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         tx: Optional[int],
         ty: Optional[int],
     ) -> None:
-        #~ print "_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty), )
+        #~ print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty),))
         #coords of next tile
         #its line after line of tiles
         #finished when the last line is completly received
