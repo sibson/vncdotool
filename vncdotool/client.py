@@ -362,7 +362,7 @@ class VNCDoToolClient(rfb.RFBClient):
             )
             self.image_mode = "BGR;16"
         elif (self.truecolor and (not self.bigendian) and self.depth == 24
-                and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
+                and self.redmax == self.greenmax == self.bluemax == 255):
 
             pixel = ["X"] * self.bypp
             offsets = [offset // 8 for offset in (self.redshift, self.greenshift, self.blueshift)]
