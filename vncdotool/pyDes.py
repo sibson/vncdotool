@@ -83,15 +83,24 @@ Note: This code was not written for high-end systems needing a fast
 """
 
 import sys
+from enum import IntEnum
 from typing import Dict, List, Optional, Union
 
 # Modes of crypting / cyphering
-ECB =	0
-CBC =	1
+class Mode(IntEnum):
+	ECB = 0
+	CBC = 1
+
+ECB = Mode.ECB
+CBC = Mode.CBC
 
 # Modes of padding
-PAD_NORMAL = 1
-PAD_PKCS5 = 2
+class Padding(IntEnum):
+	NORMAL = 1
+	PKCS5 = 2
+
+PAD_NORMAL = Padding.NORMAL
+PAD_PKCS5 = Padding.PKCS5
 
 # PAD_PKCS5: is a method that will unambiguously remove all padding
 #            characters after decryption, when originally encrypted with
@@ -226,6 +235,11 @@ class _baseDes:
 					pass
 				raise ValueError("pyDes can only work with encoded strings, not Unicode.")
 		return data
+
+
+class Type(IntEnum):
+	ENCRYPT =	0x00
+	DECRYPT =	0x01
 
 #############################################################################
 # 				    DES					    #
@@ -376,8 +390,8 @@ class des(_baseDes):
 	]
 
 	# Type of crypting being done
-	ENCRYPT =	0x00
-	DECRYPT =	0x01
+	ENCRYPT = Type.ENCRYPT
+	DECRYPT = Type.DECRYPT
 
 	# Initialisation
 	def __init__(self, key: bytes, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
@@ -748,8 +762,6 @@ class triple_des(_baseDes):
 		the padmode is set to PAD_PKCS5, as bytes will then added to
 		ensure the be padded data is a multiple of 8 bytes.
 		"""
-		ENCRYPT = des.ENCRYPT
-		DECRYPT = des.DECRYPT
 		data = self._guardAgainstUnicode(data)
 		if pad is not None:
 			pad = self._guardAgainstUnicode(pad)
@@ -765,9 +777,9 @@ class triple_des(_baseDes):
 			i = 0
 			result: List[bytes] = []
 			while i < len(data):
-				block = self.__key1.crypt(data[i:i+8], ENCRYPT)
-				block = self.__key2.crypt(block, DECRYPT)
-				block = self.__key3.crypt(block, ENCRYPT)
+				block = self.__key1.crypt(data[i:i+8], des.ENCRYPT)
+				block = self.__key2.crypt(block, des.DECRYPT)
+				block = self.__key3.crypt(block, des.ENCRYPT)
 				self.__key1.setIV(block)
 				self.__key2.setIV(block)
 				self.__key3.setIV(block)
@@ -775,9 +787,9 @@ class triple_des(_baseDes):
 				i += 8
 			return b''.join(result)
 		else:
-			data = self.__key1.crypt(data, ENCRYPT)
-			data = self.__key2.crypt(data, DECRYPT)
-			return self.__key3.crypt(data, ENCRYPT)
+			data = self.__key1.crypt(data, des.ENCRYPT)
+			data = self.__key2.crypt(data, des.DECRYPT)
+			return self.__key3.crypt(data, des.ENCRYPT)
 
 	def decrypt(self, data: bytes, pad: Optional[bytes] = None, padmode: Optional[Padding] = None) -> bytes:
 		"""decrypt(data, [pad], [padmode]) -> bytes
@@ -795,8 +807,6 @@ class triple_des(_baseDes):
 		padding end markers will be removed from the data after
 		decrypting, no pad character is required for PAD_PKCS5.
 		"""
-		ENCRYPT = des.ENCRYPT
-		DECRYPT = des.DECRYPT
 		data = self._guardAgainstUnicode(data)
 		if pad is not None:
 			pad = self._guardAgainstUnicode(pad)
@@ -811,9 +821,9 @@ class triple_des(_baseDes):
 			result: List[bytes] = []
 			while i < len(data):
 				iv = data[i:i+8]
-				block = self.__key3.crypt(iv,    DECRYPT)
-				block = self.__key2.crypt(block, ENCRYPT)
-				block = self.__key1.crypt(block, DECRYPT)
+				block = self.__key3.crypt(iv,    des.DECRYPT)
+				block = self.__key2.crypt(block, des.ENCRYPT)
+				block = self.__key1.crypt(block, des.DECRYPT)
 				self.__key1.setIV(iv)
 				self.__key2.setIV(iv)
 				self.__key3.setIV(iv)
@@ -821,7 +831,7 @@ class triple_des(_baseDes):
 				i += 8
 			data = b''.join(result)
 		else:
-			data = self.__key3.crypt(data, DECRYPT)
-			data = self.__key2.crypt(data, ENCRYPT)
-			data = self.__key1.crypt(data, DECRYPT)
+			data = self.__key3.crypt(data, des.DECRYPT)
+			data = self.__key2.crypt(data, des.ENCRYPT)
+			data = self.__key1.crypt(data, des.DECRYPT)
 		return self._unpadData(data, pad, padmode)
