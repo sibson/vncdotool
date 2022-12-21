@@ -362,9 +362,12 @@ def vnclog():
 
     if options.viewer:
         cmdline = '%s localhost::%s' % (options.viewer, factory.listen_port)
-        proc = reactor.spawnProcess(ExitingProcess(),
-                                    options.viewer, cmdline.split(),
-                                    env=os.environ)
+        reactor.spawnProcess(
+            ExitingProcess(),
+            options.viewer,
+            cmdline.split(),
+            env=os.environ,
+        )
     reactor.run()
     sys.exit(reactor.exit_status)
 

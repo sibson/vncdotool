@@ -58,7 +58,7 @@ class RFBServer(Protocol):
             self._handler = self._handle_security, 1
 
     def _handle_security(self):
-        sectype = self.buffer[0]
+        # sectype = self.buffer[0]
         self.buffer = self.buffer[1:]
 
     def _handle_VNCAuthResponse(self):
@@ -66,7 +66,7 @@ class RFBServer(Protocol):
         self._handler = self._handle_clientInit, 1
 
     def _handle_clientInit(self):
-        shared = self.buffer[0]
+        # shared = self.buffer[0]
         self.buffer = self.buffer[1:]
         # XXX react to shared
         # XXX send serverInit

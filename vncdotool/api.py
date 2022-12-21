@@ -157,8 +157,6 @@ def connect(server, password=None,
 
 
 if __name__ == '__main__':
-    import sys
-
     logging.basicConfig(level=logging.DEBUG)
 
     server = sys.argv[1]
