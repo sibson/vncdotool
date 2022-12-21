@@ -295,9 +295,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
             hist = image.histogram()
             if len(hist) == len(self.expected):
-                sum_ = 0
-                for h, e in zip(hist, self.expected):
-                    sum_ += (h - e) ** 2
+                sum_ = sum((h - e) ** 2 for h, e in zip(hist, self.expected))
                 rms = math.sqrt(sum_ / len(hist))
 
                 log.debug('rms:%d maxrms:%d', rms, maxrms)
