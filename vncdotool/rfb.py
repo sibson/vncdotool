@@ -174,7 +174,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
-        self._already_expecting = 0
+        self._already_expecting = False
         self._version = None
         self._version_server = None
         self._zlib_stream = zlib.decompressobj(0)
@@ -830,12 +830,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _handleExpected(self) -> None:
         if len(self._packet) >= self._expected_len:
             while len(self._packet) >= self._expected_len:
-                self._already_expecting = 1
+                self._already_expecting = True
                 block = bytes(self._packet[:self._expected_len])
                 del self._packet[:self._expected_len]
                 #~ log.msg(f"handle {block!r} with {self._expected_handler.__name__!r}")
                 self._expected_handler(block, *self._expected_args, **self._expected_kwargs)
-            self._already_expecting = 0
+            self._already_expecting = False
 
     def expect(self, handler: Callable[..., None], size: int, *args: Any, **kwargs: Any) -> None:
         #~ log.msg(f"expect({handler.__name__!r}, {size!r}, {args!r}, {kwargs!r})")

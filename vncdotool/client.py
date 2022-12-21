@@ -180,7 +180,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('keyDown %s', key)
         keys = self._decodeKey(key)
         for k in keys:
-            self.keyEvent(k, down=1)
+            self.keyEvent(k, down=True)
 
         return self
 
@@ -188,7 +188,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('keyUp %s', key)
         keys = self._decodeKey(key)
         for k in keys:
-            self.keyEvent(k, down=0)
+            self.keyEvent(k, down=False)
 
         return self
 
@@ -288,9 +288,9 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
 
     def _expectCompare(self, data: object, box: rfb.Rect, maxrms: float) -> Deferred:
-        incremental = 0
+        incremental = False
         if self.screen:
-            incremental = 1
+            incremental = True
             image = self.screen.crop(box)
 
             hist = image.histogram()
