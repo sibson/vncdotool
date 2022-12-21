@@ -988,14 +988,10 @@ class RFBDes(pyDes.des):
            challenge sent by server with password using DES method. However,
            bits in each byte of the password are put in reverse order before
            using it as encryption key."""
-        newkey = []
-        for ki in range(len(key)):
-            bsrc = ord(key[ki])
-            btgt = 0
-            for i in range(8):
-                if bsrc & (1 << i):
-                    btgt = btgt | (1 << 7-i)
-            newkey.append(chr(btgt))
+        newkey = bytes(
+            sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8))
+            for k in key
+        )
         super().setKey(newkey)
 
 

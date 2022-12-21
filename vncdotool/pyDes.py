@@ -413,20 +413,11 @@ class des(_baseDes):
 
 	def __String_to_BitList(self, data: bytes) -> List[int]:
 		"""Turn the string data, into a list of bits (1, 0)'s"""
-		l = len(data) * 8
-		result = [0] * l
-		pos = 0
-		for ch in data:
-			i = 7
-			while i >= 0:
-				if ch & (1 << i) != 0:
-					result[pos] = 1
-				else:
-					result[pos] = 0
-				pos += 1
-				i -= 1
-
-		return result
+		return [
+			1 if ch & (128 >> i) else 0
+			for ch in data
+			for i in range(8)
+		]
 
 	def __BitList_to_String(self, data: List[int]) -> bytes:
 		"""Turn the list of bits -> data, into a string"""
@@ -442,7 +433,7 @@ class des(_baseDes):
 
 	def __permutate(self, table: List[int], block: List[int]) -> List[int]:
 		"""Permutate this block with the specified table"""
-		return list(map(lambda x: block[x], table))
+		return [block[x] for x in table]
 
 	# Transform the secret key, so that it is ready for data processing
 	# Create the 16 subkeys, K[1] - K[16]
@@ -488,7 +479,7 @@ class des(_baseDes):
 			self.R = self.__permutate(des.__expansion_table, self.R)
 
 			# Exclusive or R[i - 1] with K[i], create B[1] to B[8] whilst here
-			self.R = list(map(lambda x, y: x ^ y, self.R, self.Kn[iteration]))
+			self.R = [r ^ k for r, k in zip(self.R, self.Kn[iteration])]
 			B = [self.R[:6], self.R[6:12], self.R[12:18], self.R[18:24], self.R[24:30], self.R[30:36], self.R[36:42], self.R[42:]]
 			# Optimization: Replaced below commented code with above
 			#j = 0
@@ -522,7 +513,7 @@ class des(_baseDes):
 			self.R = self.__permutate(des.__p, Bn)
 
 			# Xor with L[i - 1]
-			self.R = list(map(lambda x, y: x ^ y, self.R, self.L))
+			self.R = [r ^ l for r, l in zip(self.R, self.L)]
 			# Optimization: This now replaces the below commented code
 			#for j, (l, r) in enumerate(zip(self.L, self.R)):
 			#	self.R[j] = r ^ l
@@ -581,14 +572,14 @@ class des(_baseDes):
 			# Xor with IV if using CBC mode
 			if self.getMode() == CBC:
 				if crypt_type == des.ENCRYPT:
-					block = list(map(lambda x, y: x ^ y, block, iv))
+					block = [b ^ y for b, y in zip(block, iv)]
 					#for j in range(len(block)):
 					#	block[j] = block[j] ^ iv[j]
 
 				processed_block = self.__des_crypt(block, crypt_type)
 
 				if crypt_type == des.DECRYPT:
-					processed_block = list(map(lambda x, y: x ^ y, processed_block, iv))
+					processed_block = [x ^ y for x, y in zip(processed_block, iv)]
 					#for j in range(len(processed_block)):
 					#	processed_block[j] = processed_block[j] ^ iv[j]
 					iv = block
