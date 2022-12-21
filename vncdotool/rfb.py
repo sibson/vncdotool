@@ -708,12 +708,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
         data = self._zlib_stream.decompress(block)
         it = iter(data)
 
-        def cpixel(i):
-            yield next(i)
-            yield next(i)
-            yield next(i)
-            # Alpha channel
-            yield 0xff
+        def cpixel(i: Iterator[int]) -> bytearray:
+            return bytearray((
+                next(i),
+                next(i),
+                next(i),
+                0xff,
+            ))
 
         for subencoding in it:
             # calc tile size
@@ -744,12 +745,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 if palette_size == 0:
                     # plain RLE
                     while num_pixels < pixels_in_tile:
-                        color = bytearray(cpixel(it))
+                        color = cpixel(it)
                         num_pixels += do_rle(color)
                     if num_pixels != pixels_in_tile:
                         raise ValueError("too many pixels")
                 else:
-                    palette = [bytearray(cpixel(it)) for p in range(palette_size)]
+                    palette = [cpixel(it) for p in range(palette_size)]
 
                     while num_pixels < pixels_in_tile:
                         palette_index = next(it)
@@ -769,17 +770,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 # No RLE
                 if palette_size == 0:
                     # Raw pixel data
-                    pixel_data = b''.join(bytes(cpixel(it)) for _ in range(pixels_in_tile))
+                    for _ in range(pixels_in_tile):
+                        pixel_data.extend(cpixel(it))
                     self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
                 elif palette_size == 1:
                     # Fill tile with plain color
-                    color = bytearray(cpixel(it))
+                    color = cpixel(it)
                     self.fillRectangle(tx, ty, tw, th, bytes(color))
+                elif palette_size > 16:
+                    raise ValueError(f"Palette of size {palette_size} is not allowed")
                 else:
-                    if palette_size > 16:
-                        raise ValueError(f"Palette of size {palette_size} is not allowed")
-
-                    palette = [bytearray(cpixel(it)) for _ in range(palette_size)]
+                    palette = [cpixel(it) for _ in range(palette_size)]
                     if palette_size == 2:
                         next_index = _zrle_next_bit(it, pixels_in_tile)
                     elif palette_size == 3 or palette_size == 4:
