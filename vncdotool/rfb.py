@@ -291,7 +291,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.expect(self._handleVNCAuthResult, 4)
 
     def _encryptArd(self) -> None:
-        userStruct = self.factory.username + ("\0" * (64 - len(self.factory.username))) + self.factory.password + ("\0" * (64 - len(self.factory.password)))
+        userStruct = f"{self.factory.username:\0<64}{self.factory.password:\0<64}"
 
         s = bytes_to_long(os.urandom(512))
         g = self.generator
@@ -318,7 +318,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def sendPassword(self, password: str) -> None:
         """send password"""
-        pw = (password + '\0' * 8)[:8]        #make sure its 8 chars long, zero padded
+        pw = f"{password:\0<8.8}"        #make sure its 8 chars long, zero padded
         des = RFBDes(pw.encode("ASCII"))  #unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
         response = des.encrypt(self._challenge)
         self.transport.write(response)
