@@ -2,6 +2,8 @@
 .DEFAULT: help
 
 VERSION_FILE?=vncdotool/__init__.py
+PYTHON?=.venv/bin/python
+
 
 help:
 	@echo "test:		run tests"
@@ -21,7 +23,6 @@ version-%:
 	git ci $(VERSION_FILE) -m"bump version to $*"
 
 release: release-test release-tag upload
-
 release-test: test
 
 release-tag: VERSION:=$(shell python setup.py --version)
@@ -30,11 +31,15 @@ release-tag:
 	git push --tags
 
 upload:
-	python setup.py sdist
+	$(PYTHON) setup.py sdist
 	twine upload dist/$(shell python setup.py --fullname).*
 
 docs:
 		$(MAKE) -C docs/ html
 
+venv: $(PYTHON)
+.venv: requirements.txt requirements-dev.txt
+	python3 -m virtualenv .venv
+
 test:
-	nosetests tests/unit
+	$(PYTHON) -m unittest discover tests/unit
