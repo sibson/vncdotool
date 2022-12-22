@@ -37,4 +37,4 @@ docs:
 		$(MAKE) -C docs/ html
 
 test:
-	nosetests tests/unit
+	python -m unittest discover tests/unit

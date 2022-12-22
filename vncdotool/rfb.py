@@ -113,8 +113,8 @@ KEY_Sys_Req =   0xFF15
 KEY_Num_Lock =  0xFF7F
 KEY_Caps_Lock = 0xFFE5
 KEY_Pause =     0xFF13
-KEY_Super_L =   0xFFEB
-KEY_Super_R =   0xFFEC
+KEY_Super_L =   0xFFEB  # windows-key, apple command key
+KEY_Super_R =   0xFFEC  # windows-key, apple command key
 KEY_Hyper_L =   0xFFED
 KEY_Hyper_R =   0xFFEE
 
