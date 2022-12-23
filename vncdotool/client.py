@@ -9,11 +9,16 @@ MIT License
 from . import rfb
 from twisted.internet.defer import Deferred
 from twisted.internet import reactor
+from twisted.python.failure import Failure
+from twisted.internet.interfaces import IConnector
 
 import math
 import time
 import socket
 import logging
+from typing import Any, List, Optional, TypeVar
+
+TClient = TypeVar("TClient", bound="VNCDoToolClient")
 
 log = logging.getLogger('vncdotool.client')
 
@@ -113,10 +118,12 @@ try:
 except ImportError as error:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
-    class _Image(object):
-        def __getattr__(self, _):
+    class _RuntimeImportError:
+        def __getattr__(self, _: str) -> Any:
             raise ImportError(error) # noqa: F821
-    Image = _Image()  # type: ignore[assignment]
+
+    Image = _RuntimeImportError()  # type: ignore[assignment]
+    PIL = _RuntimeImportError()  # type: ignore[assignment]
 
 
 class AuthenticationError(Exception):
@@ -128,22 +135,22 @@ class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     buttons = 0
-    screen = None
+    screen: Optional[Image.Image] = None
     image_mode = "RGBX"
-    deferred = None
+    deferred: Optional[Deferred] = None
 
-    cursor = None
-    cmask = None
+    cursor: Optional[Image.Image] = None
+    cmask: Optional[Image.Image] = None
 
     SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
 
-    def connectionMade(self):
+    def connectionMade(self) -> None:
         rfb.RFBClient.connectionMade(self)
 
         if self.transport.addressFamily == socket.AF_INET:
             self.transport.setTcpNoDelay(True)
 
-    def _decodeKey(self, key):
+    def _decodeKey(self, key: str) -> List[int]:
         if self.factory.force_caps:
             if key.isupper() or key in self.SPECIAL_KEYS_US:
                 key = 'shift-%c' % key
@@ -153,16 +160,14 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             keys = key.split('-')
 
-        keys = [KEYMAP.get(k) or ord(k) for k in keys]
+        return [KEYMAP.get(k) or ord(k) for k in keys]
 
-        return keys
-
-    def pause(self, duration):
+    def pause(self, duration: float) -> Deferred:
         d = Deferred()
         reactor.callLater(duration, d.callback, self)
         return d
 
-    def keyPress(self, key):
+    def keyPress(self: TClient, key: str) -> TClient:
         """ Send a key press to the server
 
             key: string: either [a-z] or a from KEYMAP
@@ -173,23 +178,23 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def keyDown(self, key):
+    def keyDown(self: TClient, key: str) -> TClient:
         log.debug('keyDown %s', key)
         keys = self._decodeKey(key)
         for k in keys:
-            self.keyEvent(k, down=1)
+            self.keyEvent(k, down=True)
 
         return self
 
-    def keyUp(self, key):
+    def keyUp(self: TClient, key: str) -> TClient:
         log.debug('keyUp %s', key)
         keys = self._decodeKey(key)
         for k in keys:
-            self.keyEvent(k, down=0)
+            self.keyEvent(k, down=False)
 
         return self
 
-    def mousePress(self, button):
+    def mousePress(self: TClient, button: int) -> TClient:
         """ Send a mouse click at the last set position
 
             button: int: [1-n]
@@ -201,7 +206,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def mouseDown(self, button):
+    def mouseDown(self: TClient, button: int) -> TClient:
         """ Send a mouse button down at the last set position
 
             button: int: [1-n]
@@ -213,7 +218,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def mouseUp(self, button):
+    def mouseUp(self: TClient, button: int) -> TClient:
         """ Send mouse button released at the last set position
 
             button: int: [1-n]
@@ -225,39 +230,40 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, filename, incremental=0):
+    def captureScreen(self, filename: str, incremental: bool = False) -> Deferred:
         """ Save the current display to filename
         """
         log.debug('captureScreen %s', filename)
         return self._capture(filename, incremental)
 
-    def captureRegion(self, filename, x, y, w, h, incremental=0):
+    def captureRegion(self, filename: str, x: int, y: int, w: int, h: int, incremental: bool = False) -> Deferred:
         """ Save a region of the current display to filename
         """
         log.debug('captureRegion %s', filename)
         return self._capture(filename, incremental, x, y, x+w, y+h)
 
-    def refreshScreen(self, incremental=0):
+    def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, filename, incremental, *args):
+    def _capture(self, filename: str, incremental: bool, *args: int) -> Deferred:
         d = self.refreshScreen(incremental)
         d.addCallback(self._captureSave, filename, *args)
         return d
 
-    def _captureSave(self, data, filename, *args):
+    def _captureSave(self: TClient, data: object, filename: str, *args: int) -> TClient:
         log.debug('captureSave %s', filename)
+        assert self.screen is not None
         if args:
-            capture = self.screen.crop(args)
+            capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
         capture.save(filename)
 
         return self
 
-    def expectScreen(self, filename, maxrms=0):
+    def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
         """ Wait until the display matches a target image
 
             filename: an image file to read and compare against
@@ -267,7 +273,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('expectScreen %s', filename)
         return self._expectFramebuffer(filename, 0, 0, maxrms)
 
-    def expectRegion(self, filename, x, y, maxrms=0):
+    def expectRegion(self, filename: str, x: int, y: int, maxrms: float = 0) -> Deferred:
         """ Wait until a portion of the screen matches the target image
 
             The region compared is defined by the box
@@ -276,27 +282,25 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug('expectRegion %s (%s, %s)', filename, x, y)
         return self._expectFramebuffer(filename, x, y, maxrms)
 
-    def _expectFramebuffer(self, filename, x, y, maxrms):
+    def _expectFramebuffer(self, filename: str, x: int, y: int, maxrms: float) -> Deferred:
         image = Image.open(filename)
         w, h = image.size
         self.expected = image.histogram()
 
         return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
 
-    def _expectCompare(self, data, box, maxrms):
-        incremental = 0
+    def _expectCompare(self, data: object, box: rfb.Rect, maxrms: float) -> Deferred:
+        incremental = False
         if self.screen:
-            incremental = 1
+            incremental = True
             image = self.screen.crop(box)
 
             hist = image.histogram()
             if len(hist) == len(self.expected):
-                sum_ = 0
-                for h, e in zip(hist, self.expected):
-                    sum_ += (h - e) ** 2
+                sum_ = sum((h - e) ** 2 for h, e in zip(hist, self.expected))
                 rms = math.sqrt(sum_ / len(hist))
 
-                log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
+                log.debug('rms:%d maxrms:%d', rms, maxrms)
                 if rms <= maxrms:
                     return self
 
@@ -306,7 +310,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self.deferred
 
-    def mouseMove(self, x, y):
+    def mouseMove(self: TClient, x: int, y: int) -> TClient:
         """ Move the mouse pointer to position (x, y)
         """
         log.debug('mouseMove %d,%d', x, y)
@@ -314,19 +318,19 @@ class VNCDoToolClient(rfb.RFBClient):
         self.pointerEvent(x, y, self.buttons)
         return self
 
-    def mouseDrag(self, x, y, step=1):
+    def mouseDrag(self: TClient, x: int, y: int, step: int = 1) -> TClient:
         """ Move the mouse point to position (x, y) in increments of step
         """
         log.debug('mouseDrag %d,%d', x, y)
         if x < self.x:
-            xsteps = [self.x - i for i in range(step, self.x - x + 1, step)]
+            xsteps = range(self.x - step, x, -step)
         else:
-            xsteps = range(self.x, x, step)
+            xsteps = range(self.x + step, x, step)
 
         if y < self.y:
-            ysteps = [self.y - i for i in range(step, self.y - y + 1, step)]
+            ysteps = range(self.y - step, y, -step)
         else:
-            ysteps = range(self.y, y, step)
+            ysteps = range(self.y + step, y, step)
 
         for ypos in ysteps:
             self.mouseMove(self.x, ypos)
@@ -342,18 +346,25 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def setImageMode(self):
+    def setImageMode(self) -> None:
         """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
         """
-        if self._version_server == 3.889:
+        if self._version_server == (3, 889):
             self.setPixelFormat(
-                    bpp = 16, depth = 16, bigendian = 0, truecolor = 1,
-                    redmax = 31, greenmax = 63, bluemax = 31,
-                    redshift = 11, greenshift = 5, blueshift = 0
-                    )
+                bpp=16,
+                depth=16,
+                bigendian=False,
+                truecolor=True,
+                redmax=31,
+                greenmax=63,
+                bluemax=31,
+                redshift=11,
+                greenshift=5,
+                blueshift=0,
+            )
             self.image_mode = "BGR;16"
         elif (self.truecolor and (not self.bigendian) and self.depth == 24
-                and self.redmax == 255 and self.greenmax == 255 and self.bluemax == 255):
+                and self.redmax == self.greenmax == self.bluemax == 255):
 
             pixel = ["X"] * self.bypp
             offsets = [offset // 8 for offset in (self.redshift, self.greenshift, self.blueshift)]
@@ -366,14 +377,14 @@ class VNCDoToolClient(rfb.RFBClient):
     #
     # base customizations
     #
-    def vncRequestPassword(self):
+    def vncRequestPassword(self) -> None:
         if self.factory.password is None:
             self.transport.loseConnection()
             self.factory.clientConnectionFailed(self, AuthenticationError('password required, but none provided'))
             return
         self.sendPassword(self.factory.password)
 
-    def vncConnectionMade(self):
+    def vncConnectionMade(self) -> None:
         self.setImageMode()
         encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
@@ -383,17 +394,17 @@ class VNCDoToolClient(rfb.RFBClient):
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
-    def bell(self):
+    def bell(self) -> None:
         log.info('ding')
 
-    def copy_text(self, text):
-        log.info('clipboard copy', repr(text))
+    def copy_text(self, text: str) -> None:
+        log.info(f'clipboard copy {text!r}')
 
-    def paste(self, message):
+    def paste(self: TClient, message: str) -> TClient:
         self.clientCutText(message)
         return self
 
-    def updateRectangle(self, x, y, width, height, data):
+    def updateRectangle(self, x: int, y: int, width: int, height: int, data: bytes) -> None:
         # ignore empty updates
         if not data:
             return
@@ -416,13 +427,13 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.drawCursor()
 
-    def commitUpdate(self, rectangles):
+    def commitUpdate(self, rectangles: Optional[List[rfb.Rect]] = None) -> None:
         if self.deferred:
             d = self.deferred
             self.deferred = None
             d.callback(self)
 
-    def updateCursor(self, x, y, width, height, image, mask):
+    def updateCursor(self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes) -> None:
         if self.factory.nocursor:
             return
 
@@ -434,7 +445,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.cfocus = x, y
         self.drawCursor()
 
-    def drawCursor(self):
+    def drawCursor(self) -> None:
         if not self.cursor:
             return
 
@@ -445,7 +456,7 @@ class VNCDoToolClient(rfb.RFBClient):
         y = self.y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
-    def updateDesktopSize(self, width, height):
+    def updateDesktopSize(self, width: int, height: int) -> None:
         new_screen = Image.new("RGB", (width, height), "black")
         if self.screen:
             new_screen.paste(self.screen, (0, 0))
@@ -453,18 +464,18 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VMWareClient(VNCDoToolClient):
-    def dataReceived(self, data):
+    def dataReceived(self, data: bytes) -> None:
         single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
         if len(data) == 20 and int(data[0]) == 0 and data[2:16] == single_pixel_update:
             self.framebufferUpdateRequest()
             self._handler()
         else:
-            super(VMWareClient, self).dataReceived(data)
+            super().dataReceived(data)
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
-    username = None
-    password = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
     protocol = VNCDoToolClient
     shared = True
@@ -474,16 +485,16 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudodesktop = True
     force_caps = False
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.deferred = Deferred()
 
-    def clientConnectionLost(self, connector, reason):
+    def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
         self.deferred.errback(reason)
 
-    def clientConnectionFailed(self, connector, reason):
+    def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
         self.deferred.errback(reason)
 
-    def clientConnectionMade(self, protocol):
+    def clientConnectionMade(self, protocol: VNCDoToolClient) -> None:
         self.deferred.callback(protocol)
 
 
@@ -491,7 +502,7 @@ class VMWareFactory(VNCDoToolFactory):
     protocol = VMWareClient
 
 
-def factory_connect(factory, host, port, family):
+def factory_connect(factory: VNCDoToolFactory, host: str, port: int, family: socket.AddressFamily) -> None:
     if family == socket.AF_INET:
         reactor.connectTCP(host, port, factory)
     elif family == socket.AF_UNIX:

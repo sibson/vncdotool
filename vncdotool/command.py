@@ -6,7 +6,6 @@ Command line interface to interact with a VNC Server
 
 MIT License
 """
-from __future__ import print_function
 
 import getpass
 import optparse
@@ -16,13 +15,16 @@ import shlex
 import socket
 import logging
 import logging.handlers
+from types import TracebackType
+from typing import List, Optional, Tuple, Type
 
 from twisted.python.log import PythonLoggingObserver
 from twisted.internet import reactor, protocol
 from twisted.internet.error import ConnectionDone
+from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolFactory, VNCDoToolClient, factory_connect
+from .client import TClient, VNCDoToolFactory, VNCDoToolClient, factory_connect
 from .loggingproxy import VNCLoggingServerFactory
 
 
@@ -35,17 +37,17 @@ class TimeoutError(RuntimeError):
     pass
 
 
-def log_exceptions(type_, value, tb):
+def log_exceptions(type_: Type[BaseException], value: BaseException, tb: Optional[TracebackType]) -> None:
     log.critical('Unhandled exception:', exc_info=(type_, value, tb))
 
 
-def log_connected(pcol):
-    log.info('connected to %s' % pcol.name)
+def log_connected(pcol: TClient) -> TClient:
+    log.info('connected to %s', pcol.name)
     return pcol
 
 
 class VNCDoCLIClient(VNCDoToolClient):
-    def vncRequestPassword(self):
+    def vncRequestPassword(self) -> None:
         if self.factory.password is None:
             self.factory.password = getpass.getpass('VNC password:')
 
@@ -55,36 +57,36 @@ class VNCDoCLIClient(VNCDoToolClient):
 class VNCDoCLIFactory(VNCDoToolFactory):
     protocol = VNCDoCLIClient
 
-    def clientConnectionLost(self, connector, reason):
+    def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
         if reason.type == ConnectionDone:
             self.done(0)
         else:
             self.error(reason)
 
-    def clientConnectionFailed(self, connector, reason):
+    def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
         self.error(reason)
 
-    def error(self, reason):
+    def error(self, reason: Failure) -> None:
         log.critical(reason.getErrorMessage())
         self.done(10)
 
-    def done(self, exit_code):
+    def done(self, exit_code: int) -> None:
         reactor.exit_status = exit_code
         reactor.callLater(0.1, reactor.stop)
 
 
-class ExitingProcess(protocol.ProcessProtocol):
+class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
 
-    def processExited(self, reason):
+    def processExited(self, reason: Failure) -> None:
         reactor.callLater(0.1, reactor.stop)
 
-    def errReceived(self, data):
+    def errReceived(self, data: bytes) -> None:
         print(data)
 
 
 class VNCDoToolOptionParser(optparse.OptionParser):
-    def format_help(self, **kwargs):
-        result = optparse.OptionParser.format_help(self, **kwargs)
+    def format_help(self, formatter: Optional[optparse.HelpFormatter] = None) -> str:
+        result = super().format_help(formatter)
         result += '\n'.join(
            ['',
             'Common Commands (CMD):',
@@ -113,7 +115,17 @@ class VNCDoToolOptionParser(optparse.OptionParser):
         return result
 
 
-def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshes=False):
+class CommandParseError(RuntimeError):
+    pass
+
+
+def build_command_list(
+    factory: VNCDoCLIFactory,
+    args: List[str],
+    delay: Optional[float] = None,
+    warp: float = 1.0,
+    incremental_refreshes: bool = False,
+) -> None:
     client = VNCDoCLIClient
 
     if delay:
@@ -168,11 +180,8 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             filename = args.pop(0)
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
-                print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
-                sys.exit(1)
-            else:
-                factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
+                raise CommandParseError(f'unsupported image format "{imgformat}", choose one of {SUPPORTED_FORMATS}')
+            factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
         elif cmd == 'expect':
             filename = args.pop(0)
             rms = int(args.pop(0))
@@ -185,11 +194,8 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             h = int(args.pop(0))
             imgformat = os.path.splitext(filename)[1][1:]
             if imgformat not in SUPPORTED_FORMATS:
-                print('unsupported image format "%s", choose one of %s' % (
-                        imgformat, SUPPORTED_FORMATS), file=sys.stderr)
-                sys.exit(1)
-            else:
-                factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
+                raise CommandParseError(f'unsupported image format "{imgformat}", choose one of {SUPPORTED_FORMATS}')
+            factory.deferred.addCallback(client.captureRegion, filename, x, y, w, h)
         elif cmd == 'rexpect':
             filename = args.pop(0)
             x = int(args.pop(0))
@@ -207,14 +213,13 @@ def build_command_list(factory, args, delay=None, warp=1.0, incremental_refreshe
             lex.whitespace_split = True
             args = list(lex) + args
         else:
-            print('unknown cmd "%s"' % cmd, file=sys.stderr)
-            sys.exit(1)
+            raise CommandParseError('unknown cmd "%s"' % cmd)
 
         if delay and args:
             factory.deferred.addCallback(client.pause, delay)
 
 
-def build_tool(options, args):
+def build_tool(options: optparse.Values, args: List[str]) -> VNCDoCLIFactory:
     factory = VNCDoCLIFactory()
 
     if options.verbose:
@@ -225,7 +230,11 @@ def build_tool(options, args):
         lex.whitespace_split = True
         args = list(lex)
 
-    build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
+    try:
+        build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
+    except CommandParseError as e:
+        print(e.msg)
+        sys.exit(1)
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
@@ -236,7 +245,7 @@ def build_tool(options, args):
     return factory
 
 
-def build_proxy(options):
+def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
     port = reactor.listenTCP(options.listen, factory)
@@ -246,7 +255,7 @@ def build_proxy(options):
     return factory
 
 
-def add_standard_options(parser):
+def add_standard_options(parser: optparse.OptionParser) -> optparse.OptionParser:
     parser.disable_interspersed_args()
 
     parser.add_option('-p', '--password', action='store', metavar='PASSWORD',
@@ -268,7 +277,7 @@ def add_standard_options(parser):
     return parser
 
 
-def setup_logging(options):
+def setup_logging(options: optparse.Values) -> None:
     # route Twisted log messages via stdlib logging
     if options.logfile:
         handler = logging.handlers.RotatingFileHandler(options.logfile,
@@ -285,7 +294,7 @@ def setup_logging(options):
     PythonLoggingObserver().start()
 
 
-def parse_server(server):
+def parse_server(server: str) -> Tuple[socket.AddressFamily, str, int]:
     split = server.split(':')
 
     if not split[0]:
@@ -308,7 +317,7 @@ def parse_server(server):
     return address_family, host, port
 
 
-def vnclog():
+def vnclog() -> None:
     from vncdotool import __version__
 
     usage = '%prog [options] OUTPUT'
@@ -360,15 +369,18 @@ def vnclog():
     factory.password = options.password
 
     if options.viewer:
-        cmdline = '%s localhost::%s' % (options.viewer, factory.listen_port)
-        proc = reactor.spawnProcess(ExitingProcess(),
-                                    options.viewer, cmdline.split(),
-                                    env=os.environ)
+        cmdline = f'{options.viewer} localhost::{factory.listen_port}'
+        reactor.spawnProcess(
+            ExitingProcess(),
+            options.viewer,
+            cmdline.split(),
+            env=os.environ,
+        )
     reactor.run()
     sys.exit(reactor.exit_status)
 
 
-def vncdo():
+def vncdo() -> None:
     from vncdotool import __version__
 
     usage = '%prog [options] CMD CMDARGS|-|filename'

@@ -1,9 +1,13 @@
+from shutil import which
+from unittest import skipUnless
+
 from vncdotool import api
 
 from pyvirtualdisplay import Display
 import tempfile
 
 
+@skipUnless(which("xvnc"), reason="requires Xvnc")
 def test_color_xvnc():
     with tempfile.NamedTemporaryFile(prefix="vnc_", suffix=".png") as png:
 

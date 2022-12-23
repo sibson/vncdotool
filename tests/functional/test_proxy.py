@@ -1,11 +1,13 @@
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 import sys
+from shutil import which
 
 import pexpect
 
 from vncdotool import rfb
 
 
+@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
 class TestLogEvents(TestCase):
     def setUp(self):
         cmd = 'vncev -rfbport 5999 -rfbwait 1000'
@@ -29,11 +31,11 @@ class TestLogEvents(TestCase):
         assert retval == 0, (retval, str(vnc))
 
     def assertKeyDown(self, key):
-        down = '^.*down:\s+\(%s\)\r' % hex(key)
+        down = r'^.*down:\s+\(%s\)\r' % hex(key)
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = '^.*up:\s+\(%s\)\r'  % hex(key)
+        up = r'^.*up:\s+\(%s\)\r'  % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):

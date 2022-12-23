@@ -2,24 +2,16 @@ from vncdotool import command
 
 import socket
 import unittest
-import mock
-from .helpers import isolate
+from unittest import mock
 
 
 class TestBuildCommandList(unittest.TestCase):
 
     def setUp(self):
-        super(TestBuildCommandList, self).setUp()
-        self.isolation = isolate.object(command.build_command_list)
-        self.isolation.start()
+        super().setUp()
         self.factory = mock.Mock()
         self.client = command.VNCDoCLIClient
         self.deferred = self.factory.deferred
-
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
 
     def assertCalled(self, fn, *args):
         self.deferred.addCallback.assert_called_with(fn, *args)
@@ -50,7 +42,7 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('move 100 200')
         self.assertCalled(self.client.mouseMove, 100, 200)
 
-    def test_move(self):
+    def test_mousemove(self):
         self.call_build_commands_list('mousemove 100 200')
         self.assertCalled(self.client.mouseMove, 100, 200)
 
@@ -82,8 +74,9 @@ class TestBuildCommandList(unittest.TestCase):
     def test_capture_not_supported(self):
         command.SUPPORTED_FORMATS = ('png',)
         command.os.path.splitext.return_value = 'capture', '.mpeg'
-        self.call_build_commands_list('capture foo.mpeg')
-        assert not self.deferred.addCallback.called
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('capture foo.mpeg')
+        self.assertFalse(self.deferred.addCallback.called)
 
     def test_capture_missing_filename(self):
         pass
@@ -143,7 +136,6 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
 
-
     def test_insert_delay(self):
         self.call_build_commands_list('click 1 key a', delay=100)
         expected = [ mock.call(self.client.mousePress, 1),
@@ -153,22 +145,7 @@ class TestBuildCommandList(unittest.TestCase):
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 
 
-class TestParseServer(object):
-    def setUp(self):
-        self.isolation = isolate.object(command.parse_server)
-        self.isolation.start()
-        self.options = mock.Mock()
-        self.options.server = '127.0.0.1'
-        parse_args = command.VNCDoToolOptionParser.return_value.parse_args
-        parse_args.return_value = (self.options, [])
-        command.socket.AF_INET = socket.AF_INET
-        command.socket.AF_UNIX = socket.AF_UNIX
-        command.os.path.exists.return_value = False
-
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
+class TestParseServer(unittest.TestCase):
 
     def test_default(self):
         family, host, port = command.parse_server('')
@@ -206,8 +183,9 @@ class TestParseServer(object):
         assert host == '127.0.0.1'
         assert port == 1111
 
-    def test_unix_socket(self):
-        command.os.path.exists.return_value = True
+    @mock.patch("os.path.exists")
+    def test_unix_socket(self, exists):
+        exists.return_value = True
         family, host, port = command.parse_server('/some/path/unix.skt')
         assert family == socket.AF_UNIX
         assert host == '/some/path/unix.skt'
@@ -217,17 +195,11 @@ class TestParseServer(object):
 class TestVNCDoCLIClient(unittest.TestCase):
 
     def setUp(self):
-        self.isolation = isolate.object(command.VNCDoCLIClient)
-        self.isolation.start()
         self.client = command.VNCDoCLIClient()
         self.client.factory = mock.Mock()
 
-    def tearDown(self):
-        if self.isolation:
-            self.isolation.stop()
-            self.isolation = None
-
-    def test_vncRequestPassword_prompt(self):
+    @mock.patch('getpass.getpass')
+    def test_vncRequestPassword_prompt(self, getpass):
         cli = self.client
         cli.factory.password = None
         cli.sendPassword = mock.Mock()

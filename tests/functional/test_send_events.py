@@ -1,6 +1,7 @@
-from unittest import TestCase
+from unittest import TestCase, skipUnless
 import sys
 import os.path
+from shutil import which
 
 import pexpect
 
@@ -9,6 +10,7 @@ KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 
 
+@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
 class TestSendEvents(TestCase):
 
     def setUp(self):
@@ -19,11 +21,11 @@ class TestSendEvents(TestCase):
         self.server.terminate(force=True)
 
     def assertKeyDown(self, key):
-        down = '^.*down:\s+\(%s\)\r' % hex(key)
+        down = r'^.*down:\s+\(%s\)\r' % hex(key)
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = '^.*up:\s+\(%s\)\r' % hex(key)
+        up = r'^.*up:\s+\(%s\)\r' % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):
@@ -74,7 +76,7 @@ class TestSendEvents(TestCase):
         self.assertDisconnect()
 
     def test_read_files(self):
-        self.run_vncdo('key x %s key y %s' % (KEYA_VDO, KEYB_VDO))
+        self.run_vncdo(f'key x {KEYA_VDO} key y {KEYB_VDO}')
         for key in 'xayb':
             self.assertKeyDown(ord(key))
             self.assertKeyUp(ord(key))

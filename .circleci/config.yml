@@ -12,12 +12,11 @@ jobs:
             else
               pip install -r requirements-dev.txt
             fi
-            pip install nose
           name: Install Test Dependencies
       - python/save-cache
       - run:
           command: |
-              nosetests --with-xunit --xunit-file="$CIRCLE_TEST_REPORTS/nosetests.xml" tests/unit
+              python -m unittest discover tests/unit
 
 orbs:
   python: circleci/python@0.1

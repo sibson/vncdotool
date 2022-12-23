@@ -3,8 +3,6 @@
 from setuptools import setup
 from vncdotool import __version__
 
-README = open('README.rst', 'rt').read()
-
 setup(
     name='vncdotool',
     version=__version__,
@@ -12,9 +10,9 @@ setup(
     install_requires=[
         'Twisted',
         "Pillow",
+        "PyCryptodome",
     ],
     tests_require=[
-        'nose',
         'pexpect',
     ],
     url='http://github.com/sibson/vncdotool',
@@ -42,8 +40,11 @@ setup(
           'Operating System :: Microsoft :: Windows',
           'Operating System :: POSIX',
           'Programming Language :: Python',
-          'Programming Language :: Python :: 2.7',
-          'Programming Language :: Python :: 3',
+          'Programming Language :: Python :: 3.7',
+          'Programming Language :: Python :: 3.8',
+          'Programming Language :: Python :: 3.9',
+          'Programming Language :: Python :: 3.10',
+          'Programming Language :: Python :: 3.11',
           'Topic :: Multimedia :: Graphics :: Viewers',
           'Topic :: Software Development :: Testing',
     ],
