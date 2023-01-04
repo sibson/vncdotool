@@ -3,19 +3,29 @@
 Running Tests
 ------------------------
 
-unit tests are run with::
+Unit tests can be quickly run with the following commands::
 
     make venv
+    source .venv/bin/activate
+
     make test
 
 The functional tests require libvncserver/examples to be on your path before
-running::
+running.  You can either manually configure and update your path or use the provided makefile target::
 
+    make test-func
+
+    OR
+
+    make libvnc-examples
+    export PATH=$PATH:/tmp/vncdo/libvncserver/examples
     python -m unittest discover tests/functional
+
 
 The RFB/VNC Protocol
 ------------------------
 There is a community effort to document the protcol, _rfbproto_.
+
 
 Preparing a Release
 ------------------------

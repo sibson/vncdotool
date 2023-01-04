@@ -4,8 +4,10 @@
 
 VERSION_FILE?=vncdotool/__init__.py
 
+
 help:
-	@echo "test:		run tests"
+	@echo "test:		run unit tests"
+	@echo "test-func:	run functional tests"
 	@echo "docs:		build documentation"
 	@echo ""
 	@echo "version:	show current version"
@@ -23,7 +25,7 @@ version-%:
 
 release: release-test release-tag upload
 
-release-test: test
+release-test: test-unit test-func
 
 release-tag: VERSION:=$(shell python setup.py --version)
 release-tag:
@@ -37,5 +39,12 @@ upload:
 docs:
 	$(MAKE) -C docs/ html
 
-test:
+test: test-unit
+testall: test-unit test-func
+
+test-unit:
 	python -m unittest discover tests/unit
+
+include libvncserver.mk
+
+test-func: libvnc-examples test-libvnc
