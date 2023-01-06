@@ -1,5 +1,6 @@
 LIBVNCSERVER_VERSION?=0.9.14
 BUILD_DIR?=/tmp/vncdo
+PYTHON?=python3
 
 
 
@@ -44,4 +45,4 @@ $(LIBVNCSERVER_EXAMPLES): $(LIBVNCSERVER_EXAMPLES_SRCS)
 
 test-libvnc: export PATH:=$(PATH):$(LIBVNCSERVER_DIR)/examples
 test-libvnc:
-	python -m unittest discover tests/functional
+	$(PYTHON) -m unittest discover tests/functional

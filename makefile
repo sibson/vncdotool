@@ -3,6 +3,7 @@
 .DEFAULT: help
 
 VERSION_FILE?=vncdotool/__init__.py
+PYTHON?=python3
 
 
 help:
@@ -15,9 +16,9 @@ help:
 	@echo "release:	upload a release to pypi"
 
 version:
-	python setup.py --version
+	$(PYTHON) setup.py --version
 
-version-%: OLDVERSION:=$(shell python setup.py --version)
+version-%: OLDVERSION:=$(shell $(PYTHON) setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
 	sed -i '' -e s/$(OLDVERSION)/$(NEWVERSION)/ $(VERSION_FILE)
@@ -27,14 +28,14 @@ release: release-test release-tag upload
 
 release-test: test-unit test-func
 
-release-tag: VERSION:=$(shell python setup.py --version)
+release-tag: VERSION:=$(shell $(PYTHON) setup.py --version)
 release-tag:
 	git tag -a v$(VERSION) -m"release version $(VERSION)"
 	git push --tags
 
 upload:
-	python setup.py sdist
-	twine upload dist/$(shell python setup.py --fullname).*
+	$(PYTHON) setup.py sdist
+	twine upload dist/$(shell $(PYTHON) setup.py --fullname).*
 
 docs:
 	$(MAKE) -C docs/ html
@@ -43,7 +44,7 @@ test: test-unit
 testall: test-unit test-func
 
 test-unit:
-	python -m unittest discover tests/unit
+	$(PYTHON) -m unittest discover tests/unit
 
 include libvncserver.mk
 
