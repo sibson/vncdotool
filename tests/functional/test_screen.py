@@ -38,12 +38,12 @@ class TestVNCCapture(TestCase):
     def run_server(self, server):
         cmd = '%s -rfbport 5910 -rfbwait 1000' % server
         self.server = pexpect.spawn(cmd, timeout=2)
-        self.server.logfile_read = sys.stdout
+        self.server.logfile_read = sys.stdout.buffer
 
     def run_vncdo(self, commands, exitcode=0):
         cmd = 'vncdo -s :10 ' + commands
         vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
-        vnc.logfile_read = sys.stdout
+        vnc.logfile_read = sys.stdout.buffer
         vnc.expect(pexpect.EOF)
         if vnc.isalive():
             vnc.wait()
