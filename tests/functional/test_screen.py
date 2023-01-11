@@ -51,8 +51,10 @@ class TestVNCCapture(TestCase):
         assert vnc.exitstatus == exitcode, vnc.exitstatus
 
     def assertFilesEqual(self, filename, othername):
-        content = open(filename, 'rb').read()
-        othercontent = open(othername, 'rb').read()
+        with open(filename, 'rb') as fd:
+            content = fd.read()
+        with open(othername, 'rb') as fd:
+            othercontent = fd.read()
 
         assert content == othercontent
 
