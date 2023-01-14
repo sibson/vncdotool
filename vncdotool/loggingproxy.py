@@ -246,8 +246,12 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     protocol = VNCLoggingServerProxy
     shared = True
+
     pseudocursor = False
     nocursor = False
+    pseudodesktop = True
+    force_caps = False
+
     password_required = False
 
     output: Union[IO[str], str] = sys.stdout
