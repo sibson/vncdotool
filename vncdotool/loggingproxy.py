@@ -30,7 +30,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
     _handler: Tuple[Callable[..., None], int] = (lambda data: None, 0)
 
     def connectionMade(self) -> None:
-        Protocol.connectionMade(self)
+        super().connectionMade()
         self.transport.setTcpNoDelay(True)
 
         self.buffer = bytearray()
@@ -167,7 +167,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
     def dataReceived(self, data: bytes) -> None:
-        portforward.ProxyClient.dataReceived(self, data)
+        super().dataReceived(data)
         if self.vnclog:
             self.vnclog.dataReceived(data)
 
@@ -190,19 +190,19 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 
     def connectionMade(self) -> None:
         log.info('new connection from %s', self.transport.getPeer().host)
-        portforward.ProxyServer.connectionMade(self)
+        super().connectionMade()
         RFBServer.connectionMade(self)
         self.mouse: Tuple[Optional[int], Optional[int]] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
 
     def connectionLost(self, reason: Failure) -> None:
-        portforward.ProxyServer.connectionLost(self, reason)
+        super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data: bytes) -> None:
         RFBServer.dataReceived(self, data)
-        portforward.ProxyServer.dataReceived(self, data)
+        super().dataReceived(data)
 
     def _handle_clientInit(self) -> None:
         RFBServer._handle_clientInit(self)

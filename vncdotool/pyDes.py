@@ -396,7 +396,7 @@ class des(_baseDes):
 		# Sanity checking of arguments.
 		if len(key) != 8:
 			raise ValueError("Invalid DES key size. Key must be exactly 8 bytes long.")
-		_baseDes.__init__(self, mode, IV, pad, padmode)
+		super().__init__(mode, IV, pad, padmode)
 		self.key_size = 8
 
 		self.L: List[int] = []
@@ -408,7 +408,7 @@ class des(_baseDes):
 
 	def setKey(self, key: bytes) -> None:
 		"""Will set the crypting key for this object. Must be 8 bytes."""
-		_baseDes.setKey(self, key)
+		super().setKey(key)
 		self.__create_sub_keys()
 
 	def __String_to_BitList(self, data: bytes) -> List[int]:
@@ -668,7 +668,7 @@ class triple_des(_baseDes):
 		with this instance.
 	"""
 	def __init__(self, key: bytes, mode: Mode = ECB, IV: Optional[bytes] = None, pad: Optional[bytes] = None, padmode: Padding = PAD_NORMAL) -> None:
-		_baseDes.__init__(self, mode, IV, pad, padmode)
+		super().__init__(mode, IV, pad, padmode)
 		self.setKey(key)
 
 	def setKey(self, key: bytes) -> None:
@@ -689,31 +689,31 @@ class triple_des(_baseDes):
 			self.__key3 = self.__key1
 		else:
 			self.__key3 = des(key[16:], self._mode, self._iv, self._padding, self._padmode)
-		_baseDes.setKey(self, key)
+		super().setKey(key)
 
 	# Override setter methods to work on all 3 keys.
 
 	def setMode(self, mode: Mode) -> None:
 		"""Sets the type of crypting mode, pyDes.ECB or pyDes.CBC"""
-		_baseDes.setMode(self, mode)
+		super().setMode(mode)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setMode(mode)
 
 	def setPadding(self, pad: bytes) -> None:
 		"""setPadding() -> bytes of length 1. Padding character."""
-		_baseDes.setPadding(self, pad)
+		super().setPadding(pad)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setPadding(pad)
 
 	def setPadMode(self, mode: Padding) -> None:
 		"""Sets the type of padding mode, pyDes.PAD_NORMAL or pyDes.PAD_PKCS5"""
-		_baseDes.setPadMode(self, mode)
+		super().setPadMode(mode)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setPadMode(mode)
 
 	def setIV(self, IV: bytes) -> None:
 		"""Will set the Initial Value, used in conjunction with CBC mode"""
-		_baseDes.setIV(self, IV)
+		super().setIV(IV)
 		for key in (self.__key1, self.__key2, self.__key3):
 			key.setIV(IV)
 
