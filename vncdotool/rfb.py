@@ -249,7 +249,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
-        #~ print "auth:", auth
+        #~ print(f"{auth=}")
         if auth == 0:
             self.expect(self._handleConnFailed, 4)
         elif auth == 1:
@@ -325,7 +325,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleVNCAuthResult(self, block: bytes) -> None:
         (result,) = unpack("!I", block)
-        #~ print "auth:", auth
+        #~ print(f"{auth=}")
         if result == 0:     #OK
             self._doClientInitialization()
             return
@@ -455,7 +455,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doConnection()
 
     def _handleRRESubRectangles(self, block: bytes, topx: int, topy: int) -> None:
-        #~ print "_handleRRESubRectangle"
+        #~ print("_handleRRESubRectangle")
         pos = 0
         end = len(block)
         sz  = self.bypp + 8
@@ -478,7 +478,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doConnection()
 
     def _handleDecodeCORRERectangles(self, block: bytes, topx: int, topy: int) -> None:
-        #~ print "_handleDecodeCORRERectangle"
+        #~ print("_handleDecodeCORRERectangle")
         pos = 0
         end = len(block)
         sz  = self.bypp + 4
@@ -587,7 +587,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             # In python2, block : string, block[pos] : string, ord(block[pos]) : int
             # In python3, block : byte,   block[pos] : int,    ord(block[pos]) : error
             subrects = block[pos]
-        #~ print subrects
+        #~ print(subrects)
         if subrects:
             if subencoding & 16:    #SubrectsColoured
                 self.expect(self._handleDecodeHextileSubrectsColoured, (self.bypp + 2)*subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th)
@@ -828,7 +828,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     #------------------------------------------------------
     def dataReceived(self, data: bytes) -> None:
         #~ sys.stdout.write(repr(data) + '\n')
-        #~ print len(data), ", ", len(self._packet)
+        #~ print(f"{len(data), {len(self._packet)}")
         self._packet.extend(data)
         self._handler()
 
@@ -875,7 +875,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
         self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
         self.bypp = self.bpp // 8        #calc bytes per pixel
-        #~ print self.bypp
+        #~ print(self.bypp)
 
     def setEncodings(self, list_of_encodings: List[int]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))

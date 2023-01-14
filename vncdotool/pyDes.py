@@ -69,8 +69,8 @@ from pyDes import *
 data = b"Please encrypt my data"
 k = des(b"DESCRYPT", CBC, b"\0\0\0\0\0\0\0\0", pad=None, padmode=PAD_PKCS5)
 d = k.encrypt(data)
-print "Encrypted: %r" % d
-print "Decrypted: %r" % k.decrypt(d)
+print(f"Encrypted: {d!r}")
+print(f"Decrypted: {k.decrypt(d)!r}")
 assert k.decrypt(d, padmode=PAD_PKCS5) == data
 
 
@@ -542,7 +542,7 @@ class des(_baseDes):
 			if not pad:
 				raise ValueError(f"Invalid data length, data must be a multiple of {self.BLOCK_SIZE} bytes\n. Try setting the optional padding character")
 			data += pad * (-len(data) % self.BLOCK_SIZE)
-			# print "Len of data: %f" % (len(data) / self.BLOCK_SIZE)
+			# print(f"Len of data: {len(data) / self.BLOCK_SIZE}")
 
 		if self.getMode() == CBC:
 			iv_ = self.getIV()
@@ -561,7 +561,7 @@ class des(_baseDes):
 			# Test code for caching encryption results
 			#lines += 1
 			#if dict.has_key(data[i:i+8]):
-				#print "Cached result for: %s" % data[i:i+8]
+			#	print(f"Cached result for: {data[i:i+8]!r}")
 			#	cached += 1
 			#	result.append(dict[data[i:i+8]])
 			#	i += 8
@@ -596,7 +596,7 @@ class des(_baseDes):
 			#dict[data[i:i+8]] = d
 			i += 8
 
-		# print "Lines: %d, cached: %d" % (lines, cached)
+		# print(f"Lines: {lines}, cached: {cached}")
 
 		# Return the full crypted string
 		return b''.join(result)
