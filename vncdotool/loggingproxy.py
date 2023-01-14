@@ -61,6 +61,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
     def _handle_security(self) -> None:
         # sectype = self.buffer[0]
         del self.buffer[:1]
+        self._handler = self._handle_clientInit, 1
 
     def _handle_VNCAuthResponse(self) -> None:
         del self.buffer[:16]
