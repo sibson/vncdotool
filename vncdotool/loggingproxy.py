@@ -150,7 +150,7 @@ class VNCLoggingClient(VNCDoToolClient):
 class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
     """ Accept data from a server and forward to logger and downstream client
 
-    vnc server -> VNCLoggingClientProxy -> vnc client
+    VNC server -> VNCLoggingClientProxy -> VNC client
                                         -> VNCLoggingClient
     """
     vnclog: Optional[VNCLoggingClient] = None
@@ -177,9 +177,9 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[m
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore[misc]
-    """ Proxy in the Middle, decodes and logs RFB messages before sending them upstream
+    """ Proxy in the middle, decodes and logs RFB messages before sending them upstream
 
-    vnc client -> VNCLoggingServerProxy -> vnc server
+    VNC client -> VNCLoggingServerProxy -> VNC server
                                         -> RFBServer
     """
     clientProtocolFactory = VNCLoggingClientFactory
