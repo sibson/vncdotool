@@ -3,6 +3,7 @@ import sys
 import time
 import os.path
 import logging
+import socket
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
 from twisted.protocols import portforward
@@ -124,6 +125,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
 
 class NullTransport:
+    addressFamily = socket.AF_UNSPEC
 
     def write(self, data: bytes) -> None:
         return
