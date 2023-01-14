@@ -5,8 +5,8 @@ Running Tests
 
 Unit tests can be quickly run with the following commands::
 
-    make venv
-    source .venv/bin/activate
+    virtualenv venv
+    . venv/bin/activate
 
     make test
 

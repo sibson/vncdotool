@@ -3,6 +3,7 @@ import sys
 import time
 import os.path
 import logging
+import socket
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
 from twisted.protocols import portforward
@@ -30,7 +31,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
     _handler: Tuple[Callable[..., None], int] = (lambda data: None, 0)
 
     def connectionMade(self) -> None:
-        Protocol.connectionMade(self)
+        super().connectionMade()
         self.transport.setTcpNoDelay(True)
 
         self.buffer = bytearray()
@@ -61,6 +62,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
     def _handle_security(self) -> None:
         # sectype = self.buffer[0]
         del self.buffer[:1]
+        self._handler = self._handle_clientInit, 1
 
     def _handle_VNCAuthResponse(self) -> None:
         del self.buffer[:16]
@@ -123,6 +125,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
 
 class NullTransport:
+    addressFamily = socket.AF_UNSPEC
 
     def write(self, data: bytes) -> None:
         return
@@ -150,7 +153,7 @@ class VNCLoggingClient(VNCDoToolClient):
 class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
     """ Accept data from a server and forward to logger and downstream client
 
-    vnc server -> VNCLoggingClientProxy -> vnc client
+    VNC server -> VNCLoggingClientProxy -> VNC client
                                         -> VNCLoggingClient
     """
     vnclog: Optional[VNCLoggingClient] = None
@@ -167,7 +170,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
     def dataReceived(self, data: bytes) -> None:
-        portforward.ProxyClient.dataReceived(self, data)
+        super().dataReceived(data)
         if self.vnclog:
             self.vnclog.dataReceived(data)
 
@@ -177,9 +180,9 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[m
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore[misc]
-    """ Proxy in the Middle, decodes and logs RFB messages before sending them upstream
+    """ Proxy in the middle, decodes and logs RFB messages before sending them upstream
 
-    vnc client -> VNCLoggingServerProxy -> vnc server
+    VNC client -> VNCLoggingServerProxy -> VNC server
                                         -> RFBServer
     """
     clientProtocolFactory = VNCLoggingClientFactory
@@ -190,19 +193,19 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 
     def connectionMade(self) -> None:
         log.info('new connection from %s', self.transport.getPeer().host)
-        portforward.ProxyServer.connectionMade(self)
+        super().connectionMade()
         RFBServer.connectionMade(self)
         self.mouse: Tuple[Optional[int], Optional[int]] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
 
     def connectionLost(self, reason: Failure) -> None:
-        portforward.ProxyServer.connectionLost(self, reason)
+        super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
 
     def dataReceived(self, data: bytes) -> None:
         RFBServer.dataReceived(self, data)
-        portforward.ProxyServer.dataReceived(self, data)
+        super().dataReceived(data)
 
     def _handle_clientInit(self) -> None:
         RFBServer._handle_clientInit(self)
@@ -243,8 +246,12 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     protocol = VNCLoggingServerProxy
     shared = True
+
     pseudocursor = False
     nocursor = False
+    pseudodesktop = True
+    force_caps = False
+
     password_required = False
 
     output: Union[IO[str], str] = sys.stdout

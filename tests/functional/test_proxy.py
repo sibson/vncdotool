@@ -12,11 +12,11 @@ class TestLogEvents(TestCase):
     def setUp(self):
         cmd = 'vncev -rfbport 5999 -rfbwait 1000'
         self.server = pexpect.spawn(cmd, timeout=2)
-        self.server.logfile_read = sys.stdout
+        self.server.logfile_read = sys.stdout.buffer
 
         cmd = 'vnclog --listen 1842 -s :99 -'
         self.recorder = pexpect.spawn(cmd, timeout=2)
-        self.recorder.logfile_read = sys.stdout
+        self.recorder.logfile_read = sys.stdout.buffer
 
     def tearDown(self):
         self.server.terminate(force=True)
@@ -26,7 +26,7 @@ class TestLogEvents(TestCase):
     def run_vncdo(self, commands):
         cmd = 'vncdo -s localhost::1842 ' + commands
         vnc = pexpect.spawn(cmd, timeout=2)
-        vnc.logfile_read = sys.stdout
+        vnc.logfile_read = sys.stdout.buffer
         retval = vnc.wait()
         assert retval == 0, (retval, str(vnc))
 

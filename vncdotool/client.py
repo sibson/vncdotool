@@ -145,7 +145,7 @@ class VNCDoToolClient(rfb.RFBClient):
     SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
 
     def connectionMade(self) -> None:
-        rfb.RFBClient.connectionMade(self)
+        super().connectionMade()
 
         if self.transport.addressFamily == socket.AF_INET:
             self.transport.setTcpNoDelay(True)

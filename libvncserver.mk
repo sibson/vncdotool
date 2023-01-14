@@ -1,5 +1,6 @@
 LIBVNCSERVER_VERSION?=0.9.14
 BUILD_DIR?=/tmp/vncdo
+PYTHON?=python3
 
 
 
@@ -19,9 +20,11 @@ LIBVNCSERVER_EXAMPLES_SRCS=$(addsuffix .c, $(LIBVNCSERVER_EXAMPLES))
 
 libvnc-examples: $(LIBVNCSERVER_EXAMPLES)
 
+.PHONY: veryclean
 veryclean:
 	rm -rf $(BUILD_DIR)
 
+.PHONY: clean
 clean:
 	rm -f $(LIBVNCSERVER_EXAMPLES)
 
@@ -42,6 +45,7 @@ $(LIBVNCSERVER_EXAMPLES_SRCS): $(LIBVNCSERVER_DIR) $(LIBVNCSERVER_MAKEFILE)
 $(LIBVNCSERVER_EXAMPLES): $(LIBVNCSERVER_EXAMPLES_SRCS)
 	$(MAKE) -C $(LIBVNCSERVER_DIR)
 
+.PHONY: test-libvnc
 test-libvnc: export PATH:=$(PATH):$(LIBVNCSERVER_DIR)/examples
 test-libvnc:
-	python -m unittest discover tests/functional
+	$(PYTHON) -m unittest discover tests/functional
