@@ -145,6 +145,7 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask: Optional[Image.Image] = None
 
     SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
+    MAX_DESKTOP_SIZE = 0x10000
 
     def connectionMade(self) -> None:
         super().connectionMade()
@@ -459,6 +460,8 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def updateDesktopSize(self, width: int, height: int) -> None:
+        if not (0 <= width < self.MAX_DESKTOP_SIZE and 0 <= height < self.MAX_DESKTOP_SIZE):
+            raise ValueError((width, height))
         new_screen = Image.new("RGB", (width, height), "black")
         if self.screen:
             new_screen.paste(self.screen, (0, 0))
