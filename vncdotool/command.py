@@ -231,9 +231,8 @@ def build_tool(options: optparse.Values, args: List[str]) -> VNCDoCLIFactory:
 
     try:
         build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
-    except CommandParseError as e:
-        print(e.msg)
-        sys.exit(1)
+    except CommandParseError as exc:
+        sys,exit(exc)
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
