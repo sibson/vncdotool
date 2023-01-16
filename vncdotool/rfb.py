@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import zlib
+from enum import IntEnum
 from struct import pack, unpack
 from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple, TypeVar
 
@@ -40,20 +41,21 @@ Ver = Tuple[int, int]
 
 #~ from twisted.internet import reactor
 
-#encoding-type
-#for SetEncodings()
-RAW_ENCODING =                  0
-COPY_RECTANGLE_ENCODING =       1
-RRE_ENCODING =                  2
-CORRE_ENCODING =                4
-HEXTILE_ENCODING =              5
-ZLIB_ENCODING =                 6
-TIGHT_ENCODING =                7
-ZLIBHEX_ENCODING =              8
-ZRLE_ENCODING =                 16
-#0xffffff00 to 0xffffffff tight options
-PSEUDO_CURSOR_ENCODING =        -239
-PSEUDO_DESKTOP_SIZE_ENCODING =  -223
+class Encoding(IntEnum):
+    """encoding-type for SetEncodings()"""
+    RAW = 0
+    COPY_RECTANGLE = 1
+    RRE = 2
+    CORRE = 4
+    HEXTILE = 5
+    ZLIB = 6
+    TIGHT = 7
+    ZLIBHEX = 8
+    ZRLE = 16
+    #0xffffff00 to 0xffffffff tight options
+    PSEUDO_DESKTOP_SIZE =  -223
+    PSEUDO_CURSOR = -239
+
 
 #keycodes
 #for KeyEvent()
@@ -403,23 +405,23 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append( (x, y, width, height) )
-            if encoding == COPY_RECTANGLE_ENCODING:
+            if encoding == Encoding.COPY_RECTANGLE:
                 self.expect(self._handleDecodeCopyrect, 4, x, y, width, height)
-            elif encoding == RAW_ENCODING:
+            elif encoding == Encoding.RAW:
                 self.expect(self._handleDecodeRAW, width*height*self.bypp, x, y, width, height)
-            elif encoding == HEXTILE_ENCODING:
+            elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
-            elif encoding == CORRE_ENCODING:
+            elif encoding == Encoding.CORRE:
                 self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == RRE_ENCODING:
+            elif encoding == Encoding.RRE:
                 self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == ZRLE_ENCODING:
+            elif encoding == Encoding.ZRLE:
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
-            elif encoding == PSEUDO_CURSOR_ENCODING:
+            elif encoding == Encoding.PSEUDO_CURSOR:
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
-            elif encoding == PSEUDO_DESKTOP_SIZE_ENCODING:
+            elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
                 self._handleDecodeDesktopSize(width, height)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
@@ -875,7 +877,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.bypp = self.bpp // 8        #calc bytes per pixel
         #~ print(self.bypp)
 
-    def setEncodings(self, list_of_encodings: Collection[int]) -> None:
+    def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
             self.transport.write(pack("!i", encoding))
@@ -1007,7 +1009,7 @@ if __name__ == '__main__':
         def vncConnectionMade(self) -> None:
             print(f"Screen format: depth={self.depth} bytes_per_pixel={self.bpp}")
             print(f"Desktop name: {self.name!r}")
-            self.SetEncodings([RAW_ENCODING])
+            self.SetEncodings([Encoding.RAW])
             self.FramebufferUpdateRequest()
 
         def updateRectangle(self, x: int, y: int, width: int, height: int, data: bytes) -> None:

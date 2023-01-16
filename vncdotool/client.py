@@ -133,7 +133,7 @@ class AuthenticationError(Exception):
 
 
 class VNCDoToolClient(rfb.RFBClient):
-    encoding = rfb.RAW_ENCODING
+    encoding = rfb.Encoding.RAW
     x = 0
     y = 0
     buttons = 0
@@ -391,9 +391,9 @@ class VNCDoToolClient(rfb.RFBClient):
         self.setImageMode()
         encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
-            encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
+            encodings.append(rfb.Encoding.PSEUDO_CURSOR)
         if self.factory.pseudodesktop:
-            encodings.append(rfb.PSEUDO_DESKTOP_SIZE_ENCODING)
+            encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
