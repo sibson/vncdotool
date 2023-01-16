@@ -57,6 +57,14 @@ class Encoding(IntEnum):
     PSEUDO_CURSOR = -239
 
 
+class AuthTypes(IntEnum):
+    """RFC 6143 §7.1.2. Security Handshake."""
+    INVALID = 0
+    NONE = 1
+    VNC_AUTHENTICATION = 2
+    DIFFIE_HELLMAN = 30
+
+
 #keycodes
 #for KeyEvent()
 KEY_BackSpace = 0xff08
@@ -183,10 +191,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (3, 8),
         (3, 889),  # Apple Remote Desktop
     }
-    SUPPORTED_TYPES = {
-        1,
-        2,  # VNC Auth
-        30,  # Diffie-Hellman
+    SUPPORTED_AUTHS = {
+        AuthTypes.NONE,
+        AuthTypes.VNC_AUTHENTICATION,
+        AuthTypes.DIFFIE_HELLMAN,
     }
 
     def __init__(self) -> None:
@@ -233,18 +241,18 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleSecurityTypes(self, block: bytes) -> None:
         types = unpack(f"!{len(block)}B", block)
-        valid_types = set(types) & self.SUPPORTED_TYPES
+        valid_types = set(types) & self.SUPPORTED_AUTHS
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
-            if sec_type == 1:
+            if sec_type == AuthTypes.NONE:
                 if self._version < (3, 8):
                     self._doClientInitialization()
                 else:
                     self.expect(self._handleVNCAuthResult, 4)
-            elif sec_type == 2:
+            elif sec_type == AuthTypes.VNC_AUTHENTICATION:
                 self.expect(self._handleVNCAuth, 16)
-            elif sec_type == 30:
+            elif sec_type == AuthTypes.DIFFIE_HELLMAN:
                 self.expect(self._handleDHAuth, 4)
         else:
             log.msg(f"unknown security types: {types!r}")
@@ -252,12 +260,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
         #~ print(f"{auth=}")
-        if auth == 0:
+        if auth == AuthTypes.INVALID:
             self.expect(self._handleConnFailed, 4)
-        elif auth == 1:
+        elif auth == AuthTypes.NONE:
             self._doClientInitialization()
             return
-        elif auth == 2:
+        elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
             log.msg(f"unknown auth response ({auth})")
