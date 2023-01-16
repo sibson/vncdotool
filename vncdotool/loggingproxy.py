@@ -3,6 +3,7 @@ import os.path
 import socket
 import sys
 import time
+from enum import IntEnum
 from struct import unpack
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
@@ -15,12 +16,22 @@ from .rfb import Rect
 
 log = logging.getLogger('proxy')
 
+class MsgC2S(IntEnum):
+    """RFC 6143 §7.5. Client-to-Server Messages."""
+    SET_PIXEL_FORMAT = 0
+    SET_ENCODING = 2
+    FRAMEBUFFER_UPDATE_REQUEST = 3
+    KEY_EVENT = 4
+    POINTER_EVENT = 5
+    CLIENT_CUT_TEXT = 6
+
+
 TYPE_LEN = {
-    0: 20,
-    2: 4,
-    3: 10,
-    4: 8,
-    5: 6,
+    MsgC2S.SET_PIXEL_FORMAT: 20,
+    MsgC2S.SET_ENCODING: 4,
+    MsgC2S.FRAMEBUFFER_UPDATE_REQUEST: 10,
+    MsgC2S.KEY_EVENT: 8,
+    MsgC2S.POINTER_EVENT: 6,
 }
 
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
@@ -83,25 +94,25 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
         block = bytes(self.buffer[1:nbytes])
         del self.buffer[:nbytes]
-        if ptype == 0:
+        if ptype == MsgC2S.SET_PIXEL_FORMAT:
             args = unpack('!xxxBBBBHHHBBBxxx', block)
             self.handle_setPixelFormat(*args)
-        elif ptype == 2:
+        elif ptype == MsgC2S.SET_ENCODING:
             nencodings = unpack('!xH', block)[0]
             nbytes = 4 * nencodings
             encodings = unpack('!' + 'I' * nencodings, self.buffer[:nbytes])
             del self.buffer[:nbytes]
             self.handle_setEncodings(encodings)
-        elif ptype == 3:
+        elif ptype == MsgC2S.FRAMEBUFFER_UPDATE_REQUEST:
             inc, x, y, w, h = unpack('!BHHHH', block)
             self.handle_framebufferUpdate(x, y, w, h, inc)
-        elif ptype == 4:
+        elif ptype == MsgC2S.KEY_EVENT:
             down, key = unpack('!BxxI', block)
             self.handle_keyEvent(key, down)
-        elif ptype == 5:
+        elif ptype == MsgC2S.POINTER_EVENT:
             buttonmask, x, y = unpack('!BHH', block)
             self.handle_pointerEvent(x, y, buttonmask)
-        elif ptype == 6:
+        elif ptype == MsgC2S.CLIENT_CUT_TEXT:
             self.handle_clientCutText(block)
 
     def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:

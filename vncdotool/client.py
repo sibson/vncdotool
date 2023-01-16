@@ -471,7 +471,7 @@ class VNCDoToolClient(rfb.RFBClient):
 class VMWareClient(VNCDoToolClient):
     def dataReceived(self, data: bytes) -> None:
         single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
-        if len(data) == 20 and int(data[0]) == 0 and data[2:16] == single_pixel_update:
+        if len(data) == 20 and int(data[0]) == rfb.MsgS2C.FRAMEBUFFER_UPDATE and data[2:16] == single_pixel_update:
             self.framebufferUpdateRequest()
             self._handler()
         else:

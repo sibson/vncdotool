@@ -65,6 +65,14 @@ class AuthTypes(IntEnum):
     DIFFIE_HELLMAN = 30
 
 
+class MsgS2C(IntEnum):
+    """RFC 6143 §7.6. Server-to-Client Messages."""
+    FRAMEBUFFER_UPDATE = 0
+    SET_COLUOR_MAP_ENTRIES = 1
+    BELL = 2
+    SERVER_CUT_TEXT = 3
+
+
 #keycodes
 #for KeyEvent()
 KEY_BackSpace = 0xff08
@@ -384,12 +392,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
     #------------------------------------------------------
     def _handleConnection(self, block: bytes) -> None:
         (msgid,) = unpack("!B", block)
-        if msgid == 0:
+        if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
-        elif msgid == 2:
+        elif msgid == MsgS2C.BELL:
             self.bell()
             self.expect(self._handleConnection, 1)
-        elif msgid == 3:
+        elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
             log.msg(f"unknown message received (id {msgid})")
