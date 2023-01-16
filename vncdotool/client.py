@@ -6,17 +6,18 @@ Twisted based VNC client protocol and factory
 MIT License
 """
 
-from . import rfb
-from twisted.internet.defer import Deferred
-from twisted.internet import reactor
-from twisted.python.failure import Failure
-from twisted.internet.interfaces import IConnector
-
-import math
-import time
-import socket
 import logging
+import math
+import socket
+import time
 from typing import Any, List, Optional, TypeVar
+
+from twisted.internet import reactor
+from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IConnector
+from twisted.python.failure import Failure
+
+from . import rfb
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
 
@@ -111,6 +112,7 @@ KEYMAP = {
 # move.
 try:
     from PIL import Image
+
     # Init PIL to make sure it will not try to import plugin libraries
     # in a thread.
     Image.preinit()

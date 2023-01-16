@@ -1,7 +1,6 @@
 from unittest import TestCase, mock
 
-from vncdotool import client
-from vncdotool import rfb
+from vncdotool import client, rfb
 
 
 class TestVNCDoToolClient(TestCase):

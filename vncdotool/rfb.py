@@ -13,27 +13,27 @@ MIT License
 """
 # flake8: noqa
 
-import sys
-import math
-import zlib
 import getpass
+import math
 import os
 import re
+import sys
+import zlib
+from struct import pack, unpack
 from typing import Any, Callable, Iterator, List, Optional, Tuple, TypeVar
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
-from Crypto.Util.Padding import pad
 from Crypto.Util.number import bytes_to_long, long_to_bytes
-from struct import pack, unpack
-from . import pyDes
-from twisted.python import usage, log
-from twisted.python.failure import Failure
-from twisted.internet.protocol import Protocol
-from twisted.internet.interfaces import IConnector
-from twisted.internet import protocol
+from Crypto.Util.Padding import pad
 from twisted.application import internet, service
+from twisted.internet import protocol
+from twisted.internet.interfaces import IConnector
+from twisted.internet.protocol import Protocol
+from twisted.python import log, usage
+from twisted.python.failure import Failure
 
+from . import pyDes
 
 Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]

@@ -1,6 +1,6 @@
-from unittest import TestCase, skipUnless
 import sys
 from shutil import which
+from unittest import TestCase, skipUnless
 
 import pexpect
 

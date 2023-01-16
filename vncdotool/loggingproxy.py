@@ -1,18 +1,17 @@
-from struct import unpack
+import logging
+import os.path
+import socket
 import sys
 import time
-import os.path
-import logging
-import socket
+from struct import unpack
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
-from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
+from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolClient, KEYMAP
+from .client import KEYMAP, VNCDoToolClient
 from .rfb import Rect
-
 
 log = logging.getLogger('proxy')
 

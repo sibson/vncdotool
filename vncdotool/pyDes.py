@@ -86,6 +86,7 @@ import sys
 from enum import IntEnum
 from typing import Dict, List, Optional, Union
 
+
 # Modes of crypting / cyphering
 class Mode(IntEnum):
 	ECB = 0
