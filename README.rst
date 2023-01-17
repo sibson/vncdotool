@@ -32,6 +32,10 @@ The `vncserver` argument needs to be in the format `address[:display|::port]`. F
     # connect to myvncserver.com on port 5902 (two colons needed)
     vncdo -s myvncserver.com::5902 type "hello world"
 
+    # connect via IPv6 to localhost on display :3 (port 5903)
+    vncdo -s '[::1]:3' type "hello IPv6"
+    #         ^   ^ mind those square brackets around the IPv6 address
+
 You can also take a screen capture with::
 
     vncdo -s vncserver capture screen.png
