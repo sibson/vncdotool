@@ -20,7 +20,7 @@ import re
 import sys
 import zlib
 from struct import pack, unpack
-from typing import Any, Callable, Iterator, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple, TypeVar
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
@@ -875,7 +875,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.bypp = self.bpp // 8        #calc bytes per pixel
         #~ print(self.bypp)
 
-    def setEncodings(self, list_of_encodings: List[int]) -> None:
+    def setEncodings(self, list_of_encodings: Collection[int]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
             self.transport.write(pack("!i", encoding))
