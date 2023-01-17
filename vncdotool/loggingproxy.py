@@ -4,7 +4,7 @@ import socket
 import sys
 import time
 from enum import IntEnum
-from struct import unpack
+from struct import unpack, unpack_from
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
 from twisted.internet.protocol import Protocol
@@ -118,7 +118,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
         self._handler = self._handle_protocol, 1
 
     def _handle_protocol(self) -> None:
-        ptype, = unpack('!B', self.buffer[:1])
+        ptype, = unpack_from('!B', self.buffer)
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
             self._handler = self._handle_protocol, nbytes + 1
@@ -130,9 +130,9 @@ class RFBServer(Protocol):  # type: ignore[misc]
             args = unpack('!xxxBBBBHHHBBBxxx', block)
             self.handle_setPixelFormat(*args)
         elif ptype == MsgC2S.SET_ENCODING:
-            nencodings = unpack('!xH', block)[0]
+            nencodings, = unpack('!xH', block)
             nbytes = 4 * nencodings
-            encodings = unpack('!' + 'I' * nencodings, self.buffer[:nbytes])
+            encodings = unpack_from('!' + 'I' * nencodings, self.buffer)
             del self.buffer[:nbytes]
             self.handle_setEncodings(encodings)
         elif ptype == MsgC2S.FRAMEBUFFER_UPDATE_REQUEST:
