@@ -58,12 +58,19 @@ class MsgC2S(IntEnum):
     QEMU_CLIENT_MESSAGE = 255
 
 
+class QemuClientMessage(IntEnum):
+    """https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message"""
+    EXTENDED_KEY_EVENT = 0
+    AUDIO = 1
+
+
 TYPE_LEN = {
     MsgC2S.SET_PIXEL_FORMAT: 20,
     MsgC2S.SET_ENCODING: 4,
     MsgC2S.FRAMEBUFFER_UPDATE_REQUEST: 10,
     MsgC2S.KEY_EVENT: 8,
     MsgC2S.POINTER_EVENT: 6,
+    MsgC2S.QEMU_CLIENT_MESSAGE: 1,
 }
 
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
@@ -146,8 +153,20 @@ class RFBServer(Protocol):  # type: ignore[misc]
             self.handle_pointerEvent(x, y, buttonmask)
         elif ptype == MsgC2S.CLIENT_CUT_TEXT:
             self.handle_clientCutText(block)
+        elif ptype == MsgC2S.QEMU_CLIENT_MESSAGE:
+            subtype, = unpack('!B', block)
+            if subtype == QemuClientMessage.EXTENDED_KEY_EVENT:
+                self._handler = self._handle_qemuExtendedKeyEvent, 10
+            else:
+                raise ProtocolError(subtype)
         else:
             raise ProtocolError(ptype)
+
+    def _handle_qemuExtendedKeyEvent(self) -> None:
+        down_flag, keysym, keycode = unpack_from("!HII", self.buffer)
+        del self.buffer[:12]
+        self.handle_keyEventExtended(keysym, down_flag, keycode)
+        self._handler = self._handle_protocol, 1
 
     def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:
         pass
@@ -166,6 +185,9 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
     def handle_clientCutText(self, block: bytes) -> None:
         pass
+
+    def handle_keyEventExtended(self, keysym: int, down: bool, keycode: int) -> None:
+        self.handle_keyEvent(keysym, down)
 
 
 class NullTransport:
@@ -294,6 +316,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     pseudocursor = False
     nocursor = False
     pseudodesktop = True
+    qemu_extended_key = True
     force_caps = False
 
     password_required = False

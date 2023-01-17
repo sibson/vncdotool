@@ -378,6 +378,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.ZRLE,
         Encoding.PSEUDO_CURSOR,
         Encoding.PSEUDO_DESKTOP_SIZE,
+        Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
     def __init__(self) -> None:
@@ -387,6 +388,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
         self._zlib_stream = zlib.decompressobj(0)
+        self.negotiated_encodings = {
+            Encoding.RAW,
+        }
 
     #------------------------------------------------------
     # states used on connection startup
@@ -614,6 +618,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
                 self._handleDecodeDesktopSize(width, height)
+            elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
+                self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+                self.expect(self._handleConnection, 1)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
                 self._doConnection()
