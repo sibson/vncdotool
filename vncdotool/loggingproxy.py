@@ -16,6 +16,11 @@ from .rfb import Rect
 
 log = logging.getLogger('proxy')
 
+
+class ProtocolError(Exception):
+    """ VNC Protocol error """
+
+
 class MsgC2S(IntEnum):
     """RFC 6143 §7.5. Client-to-Server Messages."""
     SET_PIXEL_FORMAT = 0
@@ -141,6 +146,8 @@ class RFBServer(Protocol):  # type: ignore[misc]
             self.handle_pointerEvent(x, y, buttonmask)
         elif ptype == MsgC2S.CLIENT_CUT_TEXT:
             self.handle_clientCutText(block)
+        else:
+            raise ProtocolError(ptype)
 
     def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:
         pass
