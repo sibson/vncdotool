@@ -369,6 +369,16 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.VNC_AUTHENTICATION,
         AuthTypes.DIFFIE_HELLMAN,
     }
+    SUPPORTED_ENCODINGS = {
+        Encoding.RAW,
+        Encoding.COPY_RECTANGLE,
+        Encoding.RRE,
+        Encoding.CORRE,
+        Encoding.HEXTILE,
+        Encoding.ZRLE,
+        Encoding.PSEUDO_CURSOR,
+        Encoding.PSEUDO_DESKTOP_SIZE,
+    }
 
     def __init__(self) -> None:
         self._packet = bytearray()
