@@ -4,17 +4,17 @@ This feature is under development, your help testing and
 debugging is appreciated.
 """
 
-import sys
-import socket
-import threading
-import queue
 import logging
+import queue
+import socket
+import sys
+import threading
 from typing import Any, List, Optional, Type, TypeVar
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred, maybeDeferred
-from twisted.python.log import PythonLoggingObserver
 from twisted.python.failure import Failure
+from twisted.python.log import PythonLoggingObserver
 
 from . import command
 from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect

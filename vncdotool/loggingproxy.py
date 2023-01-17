@@ -1,27 +1,76 @@
-from struct import unpack
+import logging
+import os.path
+import socket
 import sys
 import time
-import os.path
-import logging
-import socket
+from enum import IntEnum
+from struct import unpack, unpack_from
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
-from twisted.protocols import portforward
 from twisted.internet.protocol import Protocol
+from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
-from .client import VNCDoToolClient, KEYMAP
+from .client import KEYMAP, VNCDoToolClient
 from .rfb import Rect
-
 
 log = logging.getLogger('proxy')
 
+
+class ProtocolError(Exception):
+    """ VNC Protocol error """
+
+
+class MsgC2S(IntEnum):
+    """RFC 6143 §7.5. Client-to-Server Messages."""
+    SET_PIXEL_FORMAT = 0
+    SET_ENCODING = 2
+    FRAMEBUFFER_UPDATE_REQUEST = 3
+    KEY_EVENT = 4
+    POINTER_EVENT = 5
+    CLIENT_CUT_TEXT = 6
+    FILE_TRANSFER = 7
+    SET_SCALE = 8
+    SET_SERVER_INPUT = 9
+    SET_SW = 10
+    TEXT_CHAT = 11
+    KEY_FRAME_REquest = 12
+    KEEP_ALIVE = 13
+    ULTRA_14 = 14
+    SET_SCALE_FACTOR = 15
+    ULTRA_16 = 16
+    ULTRA_17 = 17
+    ULTRA_18 = 18
+    ULTRA_19 = 19
+    REQUEST_SESSION = 20
+    SET_SESSION = 21
+    NOTIFY_PLUGIN_STREAMING = 80
+    VMWARE_127 = 127
+    CAR_CONNECTIVITY = 128
+    ENABLE_CONTINUOUS_UPDATES = 150
+    CLIENT_FENCE = 248
+    OLIVE_CALL_CONTROL = 249
+    XVP_CLIENT_MESSAGE = 250
+    SET_DESKTOP_SIZE = 251
+    TIGHT = 252
+    GII_CLIENT_MESSAGE = 253  # General Input Interface
+    VMWARE_254 = 254
+    QEMU_CLIENT_MESSAGE = 255
+
+
+class QemuClientMessage(IntEnum):
+    """https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message"""
+    EXTENDED_KEY_EVENT = 0
+    AUDIO = 1
+
+
 TYPE_LEN = {
-    0: 20,
-    2: 4,
-    3: 10,
-    4: 8,
-    5: 6,
+    MsgC2S.SET_PIXEL_FORMAT: 20,
+    MsgC2S.SET_ENCODING: 4,
+    MsgC2S.FRAMEBUFFER_UPDATE_REQUEST: 10,
+    MsgC2S.KEY_EVENT: 8,
+    MsgC2S.POINTER_EVENT: 6,
+    MsgC2S.QEMU_CLIENT_MESSAGE: 1,
 }
 
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
@@ -76,7 +125,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
         self._handler = self._handle_protocol, 1
 
     def _handle_protocol(self) -> None:
-        ptype, = unpack('!B', self.buffer[:1])
+        ptype, = unpack_from('!B', self.buffer)
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
             self._handler = self._handle_protocol, nbytes + 1
@@ -84,26 +133,40 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
         block = bytes(self.buffer[1:nbytes])
         del self.buffer[:nbytes]
-        if ptype == 0:
+        if ptype == MsgC2S.SET_PIXEL_FORMAT:
             args = unpack('!xxxBBBBHHHBBBxxx', block)
             self.handle_setPixelFormat(*args)
-        elif ptype == 2:
-            nencodings = unpack('!xH', block)[0]
+        elif ptype == MsgC2S.SET_ENCODING:
+            nencodings, = unpack('!xH', block)
             nbytes = 4 * nencodings
-            encodings = unpack('!' + 'I' * nencodings, self.buffer[:nbytes])
+            encodings = unpack_from('!' + 'I' * nencodings, self.buffer)
             del self.buffer[:nbytes]
             self.handle_setEncodings(encodings)
-        elif ptype == 3:
+        elif ptype == MsgC2S.FRAMEBUFFER_UPDATE_REQUEST:
             inc, x, y, w, h = unpack('!BHHHH', block)
             self.handle_framebufferUpdate(x, y, w, h, inc)
-        elif ptype == 4:
+        elif ptype == MsgC2S.KEY_EVENT:
             down, key = unpack('!BxxI', block)
             self.handle_keyEvent(key, down)
-        elif ptype == 5:
+        elif ptype == MsgC2S.POINTER_EVENT:
             buttonmask, x, y = unpack('!BHH', block)
             self.handle_pointerEvent(x, y, buttonmask)
-        elif ptype == 6:
+        elif ptype == MsgC2S.CLIENT_CUT_TEXT:
             self.handle_clientCutText(block)
+        elif ptype == MsgC2S.QEMU_CLIENT_MESSAGE:
+            subtype, = unpack('!B', block)
+            if subtype == QemuClientMessage.EXTENDED_KEY_EVENT:
+                self._handler = self._handle_qemuExtendedKeyEvent, 10
+            else:
+                raise ProtocolError(subtype)
+        else:
+            raise ProtocolError(ptype)
+
+    def _handle_qemuExtendedKeyEvent(self) -> None:
+        down_flag, keysym, keycode = unpack_from("!HII", self.buffer)
+        del self.buffer[:12]
+        self.handle_keyEventExtended(keysym, down_flag, keycode)
+        self._handler = self._handle_protocol, 1
 
     def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:
         pass
@@ -122,6 +185,9 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
     def handle_clientCutText(self, block: bytes) -> None:
         pass
+
+    def handle_keyEventExtended(self, keysym: int, down: bool, keycode: int) -> None:
+        self.handle_keyEvent(keysym, down)
 
 
 class NullTransport:
@@ -250,6 +316,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     pseudocursor = False
     nocursor = False
     pseudodesktop = True
+    qemu_extended_key = True
     force_caps = False
 
     password_required = False

@@ -8,25 +8,24 @@ MIT License
 """
 
 import getpass
+import logging
+import logging.handlers
 import optparse
-import sys
 import os
 import shlex
 import socket
-import logging
-import logging.handlers
+import sys
 from types import TracebackType
 from typing import List, Optional, Tuple, Type
 
-from twisted.python.log import PythonLoggingObserver
-from twisted.internet import reactor, protocol
+from twisted.internet import protocol, reactor
 from twisted.internet.error import ConnectionDone
 from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
+from twisted.python.log import PythonLoggingObserver
 
-from .client import TClient, VNCDoToolFactory, VNCDoToolClient, factory_connect
+from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
 from .loggingproxy import VNCLoggingServerFactory
-
 
 log = logging.getLogger()
 
@@ -232,9 +231,8 @@ def build_tool(options: optparse.Values, args: List[str]) -> VNCDoCLIFactory:
 
     try:
         build_command_list(factory, args, options.delay, options.warp, options.incremental_refreshes)
-    except CommandParseError as e:
-        print(e.msg)
-        sys.exit(1)
+    except CommandParseError as exc:
+        sys,exit(exc)
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1

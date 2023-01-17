@@ -1,11 +1,10 @@
-from unittest import TestCase, skipUnless
-import sys
 import os.path
+import sys
 import tempfile
 from shutil import which
+from unittest import TestCase, skipUnless
 
 import pexpect
-
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 SIMPLE_PNG  = os.path.join(DATADIR, 'simple.png')

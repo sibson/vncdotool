@@ -1,8 +1,8 @@
-from vncdotool import command
-
 import socket
 import unittest
 from unittest import mock
+
+from vncdotool import command
 
 
 class TestBuildCommandList(unittest.TestCase):

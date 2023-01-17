@@ -13,47 +13,230 @@ MIT License
 """
 # flake8: noqa
 
-import sys
-import math
-import zlib
 import getpass
+import math
 import os
 import re
-from typing import Any, Callable, Iterator, List, Optional, Tuple, TypeVar
+import sys
+import zlib
+from enum import IntEnum
+from struct import pack, unpack
+from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple, TypeVar
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
-from Crypto.Util.Padding import pad
 from Crypto.Util.number import bytes_to_long, long_to_bytes
-from struct import pack, unpack
-from . import pyDes
-from twisted.python import usage, log
-from twisted.python.failure import Failure
-from twisted.internet.protocol import Protocol
-from twisted.internet.interfaces import IConnector
-from twisted.internet import protocol
+from Crypto.Util.Padding import pad
 from twisted.application import internet, service
+from twisted.internet import protocol
+from twisted.internet.interfaces import IConnector
+from twisted.internet.protocol import Protocol
+from twisted.python import log, usage
+from twisted.python.failure import Failure
 
+from . import pyDes
 
 Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
 
 #~ from twisted.internet import reactor
 
-#encoding-type
-#for SetEncodings()
-RAW_ENCODING =                  0
-COPY_RECTANGLE_ENCODING =       1
-RRE_ENCODING =                  2
-CORRE_ENCODING =                4
-HEXTILE_ENCODING =              5
-ZLIB_ENCODING =                 6
-TIGHT_ENCODING =                7
-ZLIBHEX_ENCODING =              8
-ZRLE_ENCODING =                 16
-#0xffffff00 to 0xffffffff tight options
-PSEUDO_CURSOR_ENCODING =        -239
-PSEUDO_DESKTOP_SIZE_ENCODING =  -223
+class Encoding(IntEnum):
+    """encoding-type for SetEncodings()"""
+
+    def __new__(cls, value: int) -> "Encoding":
+        # Convert to signed32
+        if value >= 0x8000_0000:
+            value = value - 0x1_0000_0000
+        return int.__new__(cls, value)
+
+    RAW = 0
+    COPY_RECTANGLE = 1
+    RRE = 2
+    CORRE = 4
+    HEXTILE = 5
+    ZLIB = 6
+    TIGHT = 7
+    ZLIBHEX = 8
+    ULTRA = 9
+    ULTRA2 = 10
+    TRLE = 15
+    ZRLE = 16
+    HITACHI_ZYWRLE = 17
+    H264 = 20
+    JPEG = 21
+    JRLE = 22
+    OPEN_H264 = 50
+    APPLE_1000 = 1000
+    APPLE_1001 = 1001
+    APPLE_1002 = 1002
+    APPLE_1011 = 1011
+    REAL_1024 = 1024  # ... 1099
+    APPLE_1100 = 1100
+    APPLE_1101 = 1101
+    APPLE_1102 = 1102
+    APPLE_1103 = 1103
+    APPLE_1104 = 1104
+    APPLE_1105 = 1105
+    TIGHT_1 = -1  # ... -22
+    JPEG_23 = -23
+    JPEG_24 = -24
+    JPEG_25 = -25
+    JPEG_26 = -26
+    JPEG_27 = -27
+    JPEG_28 = -28
+    JPEG_29 = -29
+    JPEG_30 = -30
+    JPEG_31 = -31
+    JPEG_32 = -32
+    TIGHT_33 = -33  # ... -218
+    LIBVNCSERVER_219 = -219  # historical
+    LIBVNCSERVER_220 = -220  # historical
+    LIBVNCSERVER_221 = -221  # historical
+    LIBVNCSERVER_222 = -222  # historical
+    PSEUDO_DESKTOP_SIZE =  -223
+    PSEUDO_LAST_RECT = -224
+    POINTER_POS = -225
+    TIGHT_226 = -226  # ... -238
+    PSEUDO_CURSOR = -239
+    PSEUDO_X_CURSOR = -240
+    TIGHT_241 = -241  # ... -246
+    PSEUDO_COMPRESSION_LEVEL_247 = -247
+    PSEUDO_COMPRESSION_LEVEL_248 = -248
+    PSEUDO_COMPRESSION_LEVEL_249 = -249
+    PSEUDO_COMPRESSION_LEVEL_250 = -250
+    PSEUDO_COMPRESSION_LEVEL_251 = -251
+    PSEUDO_COMPRESSION_LEVEL_252 = -252
+    PSEUDO_COMPRESSION_LEVEL_253 = -253
+    PSEUDO_COMPRESSION_LEVEL_254 = -254
+    PSEUDO_COMPRESSION_LEVEL_255 = -255
+    PSEUDO_COMPRESSION_LEVEL_256 = -256
+    PSEUDO_QEMU_POINTER_MODTION_CHANGE = -257
+    PSEUDO_QEMU_EXTENDED_KEY_EVENT = -258
+    PSEUDO_QEMU_AUDIO = -259
+    TIGHT_PNG = -260
+    PSEUDO_QEMU_LED_STATE = -261
+    QEMU_262 = -262  # ...-272
+    VMWARE_273 = -273  # ... -304
+    PSEUDO_GII = -305
+    POPA = -306
+    PSEUDO_DESKTOP_NAME = -307
+    PSEUDO_EXTENDED_DESKTOP_SIZE = -308
+    PSEUDO_XVO = -309
+    OLIVE_CALL_CONTROL = -310
+    CLIENT_REDIRECT = -311
+    PSEUDO_FENCE = -312
+    PSEUDO_CONTINUOUS_UPDATES = -313
+    PSEUDO_CURSOR_WITH_ALPHA = -314
+    PSEUDO_JPEG_FINE_GRAINED_QUALITY_LEVEL = -412  # ... -512
+    CAR_CONNECTIVITY_523 = -523  # ... -528
+    PSEUDO_JPEG_SUBSAMLING_LEVEL = -763  # ... -768
+    VA_H264 = 0x48323634
+    VMWARE_0X574D5600 = 0x574d5600  # ... 0x574d56ff
+    PSEUDO_VMWARE_CURSOR = 0x574d5664
+    PSEUDO_VMWARE_CURSOR_STATE = 0x574d5665
+    PSEUDO_VMWARE_CURSOR_POSITION = 0x574d5666
+    PSEUDO_VMWARE_KEY_REPEAT = 0x574d5667
+    PSEUDO_VMWARE_LED_STATE = 0x574d5668
+    PSEUDO_VMWARE_DISPLAY_MODE_CHANGE = 0x574d5669
+    PSEUDO_VMWARE_VIRTUAL_MACHINE_STATE = 0x574d566a
+    PSEUDO_EXTENDED_CLIPBOARD = 0xc0a1e5ce
+    PLUGIN_STREAMING = 0xc0a1e5cf
+    KEYBOARD_LED_STATE = 0xfffe0000
+    SUPPORTED_MESSAGES = 0xfffe0001
+    SUPPORTED_ENCODINGS = 0xfffe0002
+    SERVER_IDENTITY = 0xfffe0003
+    LIBVNCSERVER_0XFFFE0004 = 0xfffe0004  # ... 0xfffe00ff
+    CACHE = 0xffff0000
+    CACHE_ENABLE = 0xffff0001
+    XOR_ZLIB = 0xffff0002
+    XOR_MONO_RECT_ZLIB = 0xffff0003
+    XOR_MULTI_COLOR_ZLIB = 0xffff0004
+    SOLID_COLOR = 0xffff0005
+    XOR_ENABLE = 0xffff0006
+    CACHE_ZIP = 0xffff0007
+    SOL_MONO_ZIP = 0xffff0008
+    ULTRA_ZIP = 0xffff0009
+    SERVER_STATE = 0xffff8000
+    ENABLE_KEEP_ALIVE = 0xffff8001
+    FTP_PROTOCOl_VERSION = 0xffff8002
+    SESSION = 0xffff8003
+
+
+class AuthTypes(IntEnum):
+    """RFC 6143 §7.1.2. Security Handshake."""
+    INVALID = 0
+    NONE = 1
+    VNC_AUTHENTICATION = 2
+    REALVNC_3 = 3
+    REALVNC_4 = 4
+    RSA_AES = 5
+    RSA_AES_UNENCRYPTED = 6
+    REALVNC_7 = 7
+    REALVNC_8 = 8
+    REALVNC_9 = 9
+    REALVNC_10 = 10
+    REALVNC_11 = 11
+    REALVNC_12 = 12
+    RSA_AES_2STEP = 13
+    REALVNC_14 = 14
+    REALVNC_15 = 15
+    TIGHT = 16
+    ULTRA = 17
+    TLS = 18
+    VENCRYPT = 19
+    SASL = 20
+    MD5 = 21
+    XVP = 22
+    SECURE_TUNNEL = 23
+    INTEGRATED_SSH = 24
+    DIFFIE_HELLMAN = 30
+    APPLE_31 = 31
+    APPLE_32 = 32
+    APPLE_33 = 33
+    APPLE_34 = 34
+    APPLE_35 = 35
+    MSLOGON2 = 113
+    REALVNC_128 = 128
+    RSA_AES256 = 129
+    RSA_AES256_UNENCRYPTED = 130
+    REALVNC_131 = 131
+    REALVNC_132 = 132
+    RSA_AES256_2STEP = 133
+    REALVNC_134 = 134
+    REALVNC_192 = 192
+
+
+class MsgS2C(IntEnum):
+    """RFC 6143 §7.6. Server-to-Client Messages."""
+    FRAMEBUFFER_UPDATE = 0
+    SET_COLUOR_MAP_ENTRIES = 1
+    BELL = 2
+    SERVER_CUT_TEXT = 3
+    RESIZE_FRAME_BUFFER_4 = 4
+    KEY_FRAME_UPDATE = 5
+    ULTRA_6 = 6
+    FILE_TRANSFER = 7
+    ULTRA_8 = 8
+    ULTRA_9 = 9
+    ULTRA_10 = 10
+    TEXT_CHAT = 11
+    ULTRA_12 = 12
+    KEEP_ALIVE = 13
+    ULTRA_14 = 14
+    RESIZE_FRAME_BUFFER_15 = 15
+    VMWARE_127 = 127
+    CAR_CONNECTIVITY = 128
+    END_OF_CONTINUOUS_UPDATES = 150
+    SERVER_STATE = 173
+    SERVER_FENCE = 248
+    OLIVE_CALL_CONTROL = 249
+    XVP_SERVER_MESSAGE = 250
+    TIGHT = 252
+    GII_SERVER_MESSAGE = 253  # General Input Interface
+    VMWARE_254 = 254
+    QEMU_SERVER_MESSAGE = 255
+
 
 #keycodes
 #for KeyEvent()
@@ -181,10 +364,21 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (3, 8),
         (3, 889),  # Apple Remote Desktop
     }
-    SUPPORTED_TYPES = {
-        1,
-        2,  # VNC Auth
-        30,  # Apple Remote Desktop
+    SUPPORTED_AUTHS = {
+        AuthTypes.NONE,
+        AuthTypes.VNC_AUTHENTICATION,
+        AuthTypes.DIFFIE_HELLMAN,
+    }
+    SUPPORTED_ENCODINGS = {
+        Encoding.RAW,
+        Encoding.COPY_RECTANGLE,
+        Encoding.RRE,
+        Encoding.CORRE,
+        Encoding.HEXTILE,
+        Encoding.ZRLE,
+        Encoding.PSEUDO_CURSOR,
+        Encoding.PSEUDO_DESKTOP_SIZE,
+        Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
     def __init__(self) -> None:
@@ -194,6 +388,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
         self._zlib_stream = zlib.decompressobj(0)
+        self.negotiated_encodings = {
+            Encoding.RAW,
+        }
 
     #------------------------------------------------------
     # states used on connection startup
@@ -231,31 +428,31 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleSecurityTypes(self, block: bytes) -> None:
         types = unpack(f"!{len(block)}B", block)
-        valid_types = set(types) & self.SUPPORTED_TYPES
+        valid_types = set(types) & self.SUPPORTED_AUTHS
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
-            if sec_type == 1:
+            if sec_type == AuthTypes.NONE:
                 if self._version < (3, 8):
                     self._doClientInitialization()
                 else:
                     self.expect(self._handleVNCAuthResult, 4)
-            elif sec_type == 2:
+            elif sec_type == AuthTypes.VNC_AUTHENTICATION:
                 self.expect(self._handleVNCAuth, 16)
-            elif sec_type == 30: # Apple Remote Desktop
-                self.expect(self._handleAppleAuth, 4)
+            elif sec_type == AuthTypes.DIFFIE_HELLMAN:
+                self.expect(self._handleDHAuth, 4)
         else:
             log.msg(f"unknown security types: {types!r}")
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
         #~ print(f"{auth=}")
-        if auth == 0:
+        if auth == AuthTypes.INVALID:
             self.expect(self._handleConnFailed, 4)
-        elif auth == 1:
+        elif auth == AuthTypes.NONE:
             self._doClientInitialization()
             return
-        elif auth == 2:
+        elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
             log.msg(f"unknown auth response ({auth})")
@@ -272,17 +469,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.vncRequestPassword()
         self.expect(self._handleVNCAuthResult, 4)
 
-    def _handleAppleAuth(self, block: bytes) -> None:
-        authMeta = unpack(f"!{len(block)}B", block)
-        self.generator = authMeta[1]
-        self.keyLen = authMeta[3]
-        self.expect(self._handleAppleAuthKey, self.keyLen)
+    def _handleDHAuth(self, block: bytes) -> None:
+        self.generator, self.keyLen = unpack(f"!HH", block)
+        self.expect(self._handleDHAuthKey, self.keyLen)
 
-    def _handleAppleAuthKey(self, block: bytes) -> None:
+    def _handleDHAuthKey(self, block: bytes) -> None:
         self.modulus = block
-        self.expect(self._handleAppleAuthCert, self.keyLen)
+        self.expect(self._handleDHAuthCert, self.keyLen)
 
-    def _handleAppleAuthCert(self, block: bytes) -> None:
+    def _handleDHAuthCert(self, block: bytes) -> None:
         self.serverKey = block
 
         self.ardRequestCredentials()
@@ -312,9 +507,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
-            self.factory.username = input('Apple username: ')
+            self.factory.username = input('DH username: ')
         if self.factory.password is None:
-            self.factory.password = getpass.getpass('Apple password:')
+            self.factory.password = getpass.getpass('DH password:')
 
     def sendPassword(self, password: str) -> None:
         """send password"""
@@ -376,12 +571,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
     #------------------------------------------------------
     def _handleConnection(self, block: bytes) -> None:
         (msgid,) = unpack("!B", block)
-        if msgid == 0:
+        if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
-        elif msgid == 2:
+        elif msgid == MsgS2C.BELL:
             self.bell()
             self.expect(self._handleConnection, 1)
-        elif msgid == 3:
+        elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
             log.msg(f"unknown message received (id {msgid})")
@@ -405,24 +600,27 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append( (x, y, width, height) )
-            if encoding == COPY_RECTANGLE_ENCODING:
+            if encoding == Encoding.COPY_RECTANGLE:
                 self.expect(self._handleDecodeCopyrect, 4, x, y, width, height)
-            elif encoding == RAW_ENCODING:
+            elif encoding == Encoding.RAW:
                 self.expect(self._handleDecodeRAW, width*height*self.bypp, x, y, width, height)
-            elif encoding == HEXTILE_ENCODING:
+            elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
-            elif encoding == CORRE_ENCODING:
+            elif encoding == Encoding.CORRE:
                 self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == RRE_ENCODING:
+            elif encoding == Encoding.RRE:
                 self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == ZRLE_ENCODING:
+            elif encoding == Encoding.ZRLE:
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
-            elif encoding == PSEUDO_CURSOR_ENCODING:
+            elif encoding == Encoding.PSEUDO_CURSOR:
                 length = width * height * self.bypp
                 length += int(math.floor((width + 7.0) / 8)) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
-            elif encoding == PSEUDO_DESKTOP_SIZE_ENCODING:
+            elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
                 self._handleDecodeDesktopSize(width, height)
+            elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
+                self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+                self.expect(self._handleConnection, 1)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
                 self._doConnection()
@@ -877,7 +1075,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.bypp = self.bpp // 8        #calc bytes per pixel
         #~ print(self.bypp)
 
-    def setEncodings(self, list_of_encodings: List[int]) -> None:
+    def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
             self.transport.write(pack("!i", encoding))
@@ -1009,7 +1207,7 @@ if __name__ == '__main__':
         def vncConnectionMade(self) -> None:
             print(f"Screen format: depth={self.depth} bytes_per_pixel={self.bpp}")
             print(f"Desktop name: {self.name!r}")
-            self.SetEncodings([RAW_ENCODING])
+            self.SetEncodings([Encoding.RAW])
             self.FramebufferUpdateRequest()
 
         def updateRectangle(self, x: int, y: int, width: int, height: int, data: bytes) -> None:

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from setuptools import setup
+
 from vncdotool import __version__
 
 setup(

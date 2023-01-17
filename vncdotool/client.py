@@ -6,17 +6,19 @@ Twisted based VNC client protocol and factory
 MIT License
 """
 
-from . import rfb
-from twisted.internet.defer import Deferred
-from twisted.internet import reactor
-from twisted.python.failure import Failure
-from twisted.internet.interfaces import IConnector
-
-import math
-import time
-import socket
 import logging
+import math
+import socket
+import time
+from struct import pack
 from typing import Any, List, Optional, TypeVar
+
+from twisted.internet import reactor
+from twisted.internet.defer import Deferred
+from twisted.internet.interfaces import IConnector
+from twisted.python.failure import Failure
+
+from . import rfb
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
 
@@ -111,6 +113,7 @@ KEYMAP = {
 # move.
 try:
     from PIL import Image
+
     # Init PIL to make sure it will not try to import plugin libraries
     # in a thread.
     Image.preinit()
@@ -131,7 +134,7 @@ class AuthenticationError(Exception):
 
 
 class VNCDoToolClient(rfb.RFBClient):
-    encoding = rfb.RAW_ENCODING
+    encoding = rfb.Encoding.RAW
     x = 0
     y = 0
     buttons = 0
@@ -143,6 +146,7 @@ class VNCDoToolClient(rfb.RFBClient):
     cmask: Optional[Image.Image] = None
 
     SPECIAL_KEYS_US = "~!@#$%^&*()_+{}|:\"<>?"
+    MAX_DESKTOP_SIZE = 0x10000
 
     def connectionMade(self) -> None:
         super().connectionMade()
@@ -388,9 +392,11 @@ class VNCDoToolClient(rfb.RFBClient):
         self.setImageMode()
         encodings = [self.encoding]
         if self.factory.pseudocursor or self.factory.nocursor:
-            encodings.append(rfb.PSEUDO_CURSOR_ENCODING)
+            encodings.append(rfb.Encoding.PSEUDO_CURSOR)
         if self.factory.pseudodesktop:
-            encodings.append(rfb.PSEUDO_DESKTOP_SIZE_ENCODING)
+            encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
+        if self.factory.qemu_extended_key:
+            encodings.append(rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
@@ -457,6 +463,8 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def updateDesktopSize(self, width: int, height: int) -> None:
+        if not (0 <= width < self.MAX_DESKTOP_SIZE and 0 <= height < self.MAX_DESKTOP_SIZE):
+            raise ValueError((width, height))
         new_screen = Image.new("RGB", (width, height), "black")
         if self.screen:
             new_screen.paste(self.screen, (0, 0))
@@ -464,9 +472,24 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VMWareClient(VNCDoToolClient):
+    SINGLE_PIXLE_UPDATE = pack(
+        "!BxHHHHHixxxx",
+        rfb.MsgS2C.FRAMEBUFFER_UPDATE,  # message-type
+        # padding
+        1,  # number-of-rectangles
+        0,  # x-position
+        0,  # y.position
+        1,  # width
+        1,  # height
+        rfb.Encoding.RAW,  # encoding-type
+        # pixel-data
+    )
+
     def dataReceived(self, data: bytes) -> None:
-        single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
-        if len(data) == 20 and int(data[0]) == 0 and data[2:16] == single_pixel_update:
+        # BUG: TCP is a *stream* orianted protocol with no *framing*.
+        # Therefore there is no guarantee that these 20 bytes will arrive in one single chunk.
+        # This might also match inside any other sequence if fragmentation by chance puts it at be start of a new packet.
+        if len(data) == 20 and data[0] == self.SINGLE_PIXEL_UPDATE[0] and data[2:16] == self.SINGLE_PIXEL_UPDATE[2:16]:
             self.framebufferUpdateRequest()
             self._handler()
         else:
@@ -483,6 +506,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudocursor = False
     nocursor = False
     pseudodesktop = True
+    qemu_extended_key = True
     force_caps = False
 
     def __init__(self) -> None:

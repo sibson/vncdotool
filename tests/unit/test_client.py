@@ -1,7 +1,6 @@
 from unittest import TestCase, mock
 
-from vncdotool import client
-from vncdotool import rfb
+from vncdotool import client, rfb
 
 
 class TestVNCDoToolClient(TestCase):
@@ -26,9 +25,11 @@ class TestVNCDoToolClient(TestCase):
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
         self.client.setEncodings.assert_called_once_with([
-            client.rfb.RAW_ENCODING,
-            client.rfb.PSEUDO_CURSOR_ENCODING,
-            client.rfb.PSEUDO_DESKTOP_SIZE_ENCODING])
+            client.rfb.Encoding.RAW,
+            client.rfb.Encoding.PSEUDO_CURSOR,
+            client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
+            client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+        ])
 
     def test_keyPress_single_alpha(self):
         cli = self.client

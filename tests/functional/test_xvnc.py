@@ -1,10 +1,10 @@
+import tempfile
 from shutil import which
 from unittest import skipUnless
 
-from vncdotool import api
-
 from pyvirtualdisplay import Display
-import tempfile
+
+from vncdotool import api
 
 
 @skipUnless(which("xvnc"), reason="requires Xvnc")
