@@ -168,7 +168,43 @@ class AuthTypes(IntEnum):
     INVALID = 0
     NONE = 1
     VNC_AUTHENTICATION = 2
+    REALVNC_3 = 3
+    REALVNC_4 = 4
+    RSA_AES = 5
+    RSA_AES_UNENCRYPTED = 6
+    REALVNC_7 = 7
+    REALVNC_8 = 8
+    REALVNC_9 = 9
+    REALVNC_10 = 10
+    REALVNC_11 = 11
+    REALVNC_12 = 12
+    RSA_AES_2STEP = 13
+    REALVNC_14 = 14
+    REALVNC_15 = 15
+    TIGHT = 16
+    ULTRA = 17
+    TLS = 18
+    VENCRYPT = 19
+    SASL = 20
+    MD5 = 21
+    XVP = 22
+    SECURE_TUNNEL = 23
+    INTEGRATED_SSH = 24
     DIFFIE_HELLMAN = 30
+    APPLE_31 = 31
+    APPLE_32 = 32
+    APPLE_33 = 33
+    APPLE_34 = 34
+    APPLE_35 = 35
+    MSLOGON2 = 113
+    REALVNC_128 = 128
+    RSA_AES256 = 129
+    RSA_AES256_UNENCRYPTED = 130
+    REALVNC_131 = 131
+    REALVNC_132 = 132
+    RSA_AES256_2STEP = 133
+    REALVNC_134 = 134
+    REALVNC_192 = 192
 
 
 class MsgS2C(IntEnum):
