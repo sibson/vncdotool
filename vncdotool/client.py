@@ -10,6 +10,7 @@ import logging
 import math
 import socket
 import time
+from struct import pack
 from typing import Any, List, Optional, TypeVar
 
 from twisted.internet import reactor
@@ -469,9 +470,24 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VMWareClient(VNCDoToolClient):
+    SINGLE_PIXLE_UPDATE = pack(
+        "!BxHHHHHixxxx",
+        rfb.MsgS2C.FRAMEBUFFER_UPDATE,  # message-type
+        # padding
+        1,  # number-of-rectangles
+        0,  # x-position
+        0,  # y.position
+        1,  # width
+        1,  # height
+        rfb.Encoding.RAW,  # encoding-type
+        # pixel-data
+    )
+
     def dataReceived(self, data: bytes) -> None:
-        single_pixel_update = b'\x00\x01\x00\x00\x00\x00\x00\x01\x00\x01\x00\x00\x00\x00'
-        if len(data) == 20 and int(data[0]) == rfb.MsgS2C.FRAMEBUFFER_UPDATE and data[2:16] == single_pixel_update:
+        # BUG: TCP is a *stream* orianted protocol with no *framing*.
+        # Therefore there is no guarantee that these 20 bytes will arrive in one single chunk.
+        # This might also match inside any other sequence if fragmentation by chance puts it at be start of a new packet.
+        if len(data) == 20 and data[0] == self.SINGLE_PIXEL_UPDATE[0] and data[2:16] == self.SINGLE_PIXEL_UPDATE[2:16]:
             self.framebufferUpdateRequest()
             self._handler()
         else:
