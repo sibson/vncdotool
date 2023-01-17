@@ -184,7 +184,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     SUPPORTED_TYPES = {
         1,
         2,  # VNC Auth
-        30,  # Apple Remote Desktop
+        30,  # Diffie-Hellman
     }
 
     def __init__(self) -> None:
@@ -242,8 +242,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
                     self.expect(self._handleVNCAuthResult, 4)
             elif sec_type == 2:
                 self.expect(self._handleVNCAuth, 16)
-            elif sec_type == 30: # Apple Remote Desktop
-                self.expect(self._handleAppleAuth, 4)
+            elif sec_type == 30:
+                self.expect(self._handleDHAuth, 4)
         else:
             log.msg(f"unknown security types: {types!r}")
 
@@ -272,17 +272,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.vncRequestPassword()
         self.expect(self._handleVNCAuthResult, 4)
 
-    def _handleAppleAuth(self, block: bytes) -> None:
-        authMeta = unpack(f"!{len(block)}B", block)
-        self.generator = authMeta[1]
-        self.keyLen = authMeta[3]
-        self.expect(self._handleAppleAuthKey, self.keyLen)
+    def _handleDHAuth(self, block: bytes) -> None:
+        self.generator, self.keyLen = unpack(f"!HH", block)
+        self.expect(self._handleDHAuthKey, self.keyLen)
 
-    def _handleAppleAuthKey(self, block: bytes) -> None:
+    def _handleDHAuthKey(self, block: bytes) -> None:
         self.modulus = block
-        self.expect(self._handleAppleAuthCert, self.keyLen)
+        self.expect(self._handleDHAuthCert, self.keyLen)
 
-    def _handleAppleAuthCert(self, block: bytes) -> None:
+    def _handleDHAuthCert(self, block: bytes) -> None:
         self.serverKey = block
 
         self.ardRequestCredentials()
@@ -312,9 +310,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
-            self.factory.username = input('Apple username: ')
+            self.factory.username = input('DH username: ')
         if self.factory.password is None:
-            self.factory.password = getpass.getpass('Apple password:')
+            self.factory.password = getpass.getpass('DH password:')
 
     def sendPassword(self, password: str) -> None:
         """send password"""
