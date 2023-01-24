@@ -620,7 +620,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._handleDecodeDesktopSize(width, height)
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
-                self.expect(self._handleConnection, 1)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
                 self._doConnection()
