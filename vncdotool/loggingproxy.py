@@ -317,6 +317,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     nocursor = False
     pseudodesktop = True
     qemu_extended_key = True
+    last_rect = True
     force_caps = False
 
     password_required = False
