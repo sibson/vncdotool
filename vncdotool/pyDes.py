@@ -425,7 +425,7 @@ class des(_baseDes):
 		result: List[int] = []
 		c = 0
 		for pos, ch in enumerate(data):
-			c += ch << (-pos % 8)
+			c += 128 >> (pos % 8) if ch else 0
 			if (pos % 8) == 7:
 				result.append(c)
 				c = 0
