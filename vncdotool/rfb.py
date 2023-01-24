@@ -507,9 +507,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
-            self.factory.username = input('DH username: ')
+            self.factory.username = input('username: ')
         if self.factory.password is None:
-            self.factory.password = getpass.getpass('DH password:')
+            self.factory.password = getpass.getpass('password:')
 
     def sendPassword(self, password: str) -> None:
         """send password"""
@@ -620,7 +620,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._handleDecodeDesktopSize(width, height)
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
-                self.expect(self._handleConnection, 1)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
                 self._doConnection()
