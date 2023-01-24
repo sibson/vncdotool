@@ -378,6 +378,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.ZRLE,
         Encoding.PSEUDO_CURSOR,
         Encoding.PSEUDO_DESKTOP_SIZE,
+        Encoding.PSEUDO_LAST_RECT,
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
@@ -597,6 +598,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
+        if encoding == Encoding.PSEUDO_LAST_RECT:
+            self.rectangles = 0
+
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append( (x, y, width, height) )

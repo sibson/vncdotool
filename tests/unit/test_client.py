@@ -28,6 +28,7 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
+            client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
         ])
 
