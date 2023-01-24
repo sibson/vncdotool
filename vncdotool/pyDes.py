@@ -185,10 +185,11 @@ class _baseDes:
 			raise ValueError("Cannot use a pad character with PAD_PKCS5")
 
 		pad_len = -len(data) % self.BLOCK_SIZE
-		if pad_len == 0:
-			# No padding required.
-			pass
-		elif padmode == PAD_NORMAL:
+		if padmode == PAD_NORMAL:
+			if pad_len == 0:
+				# No padding required.
+				return data
+
 			if not pad:
 				# Get the default padding.
 				pad = self.getPadding()
@@ -196,6 +197,7 @@ class _baseDes:
 				raise ValueError(f"Data must be a multiple of {self.BLOCK_SIZE} bytes in length. Use padmode=PAD_PKCS5 or set the pad character.")
 			data += pad * pad_len
 		elif padmode == PAD_PKCS5:
+			pad_len = pad_len or self.BLOCK_SIZE
 			data += bytes([pad_len] * pad_len)
 
 		return data
