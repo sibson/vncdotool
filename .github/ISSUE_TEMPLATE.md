@@ -1,5 +1,14 @@
- Have you included the following information?
+Please include the following information:
 
- - [ ] VNC server and version
- - [ ] vncdotool version
- - [ ] steps to reproduce
+**vncdotool version**
+
+**VNC server and version**
+
+**Steps to reproduce**
+-
+
+**Expected result**
+
+**Which erroneous result did you get instead**
+
+**Additional information**
