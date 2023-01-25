@@ -532,5 +532,5 @@ class VMWareFactory(VNCDoToolFactory):
 def factory_connect(factory: VNCDoToolFactory, host: str, port: int, family: socket.AddressFamily) -> None:
     if family == socket.AF_INET:
         reactor.connectTCP(host, port, factory)
-    elif family == socket.AF_UNIX:
+    elif hasattr(socket, "AF_UNIX") and family == socket.AF_UNIX:
         reactor.connectUNIX(host, factory)

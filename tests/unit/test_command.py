@@ -1,6 +1,6 @@
 import socket
 import unittest
-from unittest import mock
+from unittest import mock, skipUnless
 
 from vncdotool import command
 
@@ -183,6 +183,7 @@ class TestParseServer(unittest.TestCase):
         assert host == '127.0.0.1'
         assert port == 1111
 
+    @skipUnless(hasattr(socket, "AF_UNIX"), reason="AF_UNIX not supported by old Windows")
     @mock.patch("os.path.exists")
     def test_unix_socket(self, exists):
         exists.return_value = True
