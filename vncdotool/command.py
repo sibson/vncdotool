@@ -300,7 +300,7 @@ def parse_server(server: str) -> Tuple[socket.AddressFamily, str, int]:
     else:
         host = split[0]
 
-    if os.path.exists(host):
+    if hasattr(socket, "AF_UNIX") and os.path.exists(host):
         address_family = socket.AF_UNIX
     else:
         address_family = socket.AF_INET
