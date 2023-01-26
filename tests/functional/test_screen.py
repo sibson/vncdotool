@@ -42,7 +42,7 @@ class TestVNCCapture(TestCase):
 
     def run_vncdo(self, commands: str, exitcode: int = 0) -> None:
         cmd = f'vncdo -s :10 {commands}'
-        vnc = pexpect.spawn(cmd, logfile=sys.stdout, timeout=5)
+        vnc = pexpect.spawn(cmd, logfile=sys.stdout.buffer, timeout=5)
         vnc.logfile_read = sys.stdout.buffer
         vnc.expect(pexpect.EOF)
         if vnc.isalive():
