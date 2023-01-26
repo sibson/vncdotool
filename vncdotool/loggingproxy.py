@@ -14,7 +14,7 @@ from twisted.python.failure import Failure
 from .client import KEYMAP, VNCDoToolClient
 from .rfb import Rect
 
-log = logging.getLogger('proxy')
+log = logging.getLogger(__name__)
 
 
 class ProtocolError(Exception):

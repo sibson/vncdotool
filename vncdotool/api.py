@@ -24,7 +24,7 @@ TProxy = TypeVar("TProxy", bound="ThreadedVNCClientProxy")
 
 __all__ = ['connect']
 
-log = logging.getLogger('vncdotool.api')
+log = logging.getLogger(__name__)
 
 _THREAD: Optional[threading.Thread] = None
 
