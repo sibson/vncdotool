@@ -5,16 +5,16 @@ from vncdotool import client, rfb
 
 class TestVNCDoToolClient(TestCase):
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
 
         # mock out a bunch of base class functions
-        self.client.framebufferUpdateRequest = mock.Mock()
-        self.client.pointerEvent = mock.Mock()
-        self.client.keyEvent = mock.Mock()
-        self.client.setEncodings = mock.Mock()
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
+        self.client.pointerEvent = mock.Mock()  # type: ignore[assignment]
+        self.client.keyEvent = mock.Mock()  # type: ignore[assignment]
+        self.client.setEncodings = mock.Mock()  # type: ignore[assignment]
 
     def test_vncConnectionMade(self):
         cli = self.client
@@ -63,7 +63,7 @@ class TestVNCDoToolClient(TestCase):
         d.addCallback.assert_called_once_with(cli._captureSave, fname)
         assert cli.framebufferUpdateRequest.called
 
-    def test_captureSave(self):
+    def test_captureSave(self) -> None:
         cli = self.client
         cli.screen = mock.Mock()
         fname = 'foo.png'
@@ -92,7 +92,7 @@ class TestVNCDoToolClient(TestCase):
         assert cli.expected == client.Image.open.return_value.histogram.return_value
         Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
 
-    def test_expectCompareSuccess(self):
+    def test_expectCompareSuccess(self) -> None:
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
@@ -102,7 +102,7 @@ class TestVNCDoToolClient(TestCase):
         result = cli._expectCompare(cli, None, 5)
         assert result == cli
 
-    def test_expectCompareExactSuccess(self):
+    def test_expectCompareExactSuccess(self) -> None:
         cli = self.client
         cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
@@ -177,7 +177,7 @@ class TestVNCDoToolClient(TestCase):
         paste = cli.screen.paste
         paste.assert_called_once_with(client.Image.frombytes.return_value, (20, 10))
 
-    def test_commitUpdate(self):
+    def test_commitUpdate(self) -> None:
         rects = mock.Mock()
         self.deferred = mock.Mock()
         self.client.deferred = self.deferred
@@ -195,13 +195,13 @@ class TestVNCDoToolClient(TestCase):
 
 class TestVNCDoToolFactory(TestCase):
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.factory = client.VNCDoToolFactory()
 
-    def test_init(self):
+    def test_init(self) -> None:
         assert self.factory.deferred
 
-    def test_clientConnectionMade(self):
+    def test_clientConnectionMade(self) -> None:
         deferred = mock.Mock()
         protocol = mock.Mock()
         self.factory.deferred = deferred
@@ -210,7 +210,7 @@ class TestVNCDoToolFactory(TestCase):
 
         deferred.callback.assert_called_once_with(protocol)
 
-    def test_clientConnectionFailed(self):
+    def test_clientConnectionFailed(self) -> None:
         deferred = mock.Mock()
         self.factory.deferred = deferred
         reason = mock.Mock()
