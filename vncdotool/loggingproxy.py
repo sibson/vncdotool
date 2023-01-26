@@ -205,6 +205,9 @@ class NullTransport:
     def setTcpNoDelay(self, enabled: bool) -> None:
         return
 
+    def loseConnection(self) -> None:
+        return
+
 
 class VNCLoggingClient(VNCDoToolClient):
     """ Specialization of a VNCDoToolClient that will save screen captures
