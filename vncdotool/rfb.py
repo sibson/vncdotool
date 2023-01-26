@@ -455,6 +455,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.negotiated_encodings = {
             Encoding.RAW,
         }
+        self.pixel_format = PixelFormat()
+
+    @property
+    def bypp(self) -> int:
+        return self.pixel_format.bypp
 
     # ------------------------------------------------------
     # states used on connection startup
@@ -618,12 +623,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleServerInit(self, block: bytes) -> None:
         (self.width, self.height, pixformat, namelen) = unpack("!HH16sI", block)
-        (
-            self.bpp, self.depth, self.bigendian, self.truecolor,
-            self.redmax, self.greenmax, self.bluemax,
-            self.redshift, self.greenshift, self.blueshift,
-        ) = unpack("!BBBBHHHBBBxxx", pixformat)
-        self.bypp = self.bpp // 8  # calc bytes per pixel
+        self.pixel_format = PixelFormat.from_bytes(pixformat)
+        log.msg(f"Native {self.pixel_format} bytes={self.pixel_format.bypp}")
         self.expect(self._handleServerName, namelen)
 
     def _handleServerName(self, block: bytes) -> None:
@@ -663,6 +664,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
+        log.msg(f"x={x} y={y} w={width} h={height} {Encoding.lookup(encoding)!r}")
         if encoding == Encoding.PSEUDO_LAST_RECT:
             self.rectangles = 0
 
@@ -1133,27 +1135,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # client -> server messages
     # ------------------------------------------------------
 
-    def setPixelFormat(
-        self,
-        bpp: int = 32,
-        depth: int = 24,
-        bigendian: bool = False,
-        truecolor: bool = True,
-        redmax: int = 255,
-        greenmax: int = 255,
-        bluemax: int = 255,
-        redshift: int = 0,
-        greenshift: int = 8,
-        blueshift: int = 16
-    ) -> None:
-        pixformat = pack("!BBBBHHHBBBxxx", bpp, depth, bigendian, truecolor, redmax, greenmax, bluemax, redshift, greenshift, blueshift)
+    def setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        pixformat = pixel_format.to_bytes()
         self.transport.write(pack("!Bxxx16s", 0, pixformat))
-        # rember these settings
-        self.bpp, self.depth, self.bigendian, self.truecolor = bpp, depth, bigendian, truecolor
-        self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
-        self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
-        self.bypp = self.bpp // 8  # calc bytes per pixel
-        #~ print(self.bypp)
+        self.pixel_format = pixel_format
 
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
@@ -1289,7 +1274,7 @@ if __name__ == '__main__':
     class RFBTest(RFBClient):
         """dummy client"""
         def vncConnectionMade(self) -> None:
-            print(f"Screen format: depth={self.depth} bytes_per_pixel={self.bpp}")
+            print(f"Screen format: {self.pixel_format}")
             print(f"Desktop name: {self.name!r}")
             self.SetEncodings([Encoding.RAW])
             self.FramebufferUpdateRequest()

@@ -134,13 +134,25 @@ class AuthenticationError(Exception):
     """ VNC Server requires Authentication """
 
 
+RGB32 = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16)
+RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
+BGR16 = rfb.PixelFormat(16, 16, False, True, 31, 63, 31, 11, 5, 0)
+PF2IM = {
+    RGB24: "RGB",
+    RGB32: "RGBX",
+    BGR16: "BGR;16",
+    rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR;24",
+    rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR;32",
+}
+
+
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
     x = 0
     y = 0
     buttons = 0
     screen: Optional[Image.Image] = None
-    image_mode = "RGBX"
+    image_mode = PF2IM[rfb.PixelFormat()]
     deferred: Optional[Deferred] = None
 
     cursor: Optional[Image.Image] = None
@@ -356,32 +368,18 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def setImageMode(self) -> None:
-        """ Extracts color ordering and 24 vs. 32 bpp info out of the pixel format information
+        """ Check support for PixelFormats announced by server or select client supported alternative.
         """
-        if self._version_server == (3, 889):
-            self.setPixelFormat(
-                bpp=16,
-                depth=16,
-                bigendian=False,
-                truecolor=True,
-                redmax=31,
-                greenmax=63,
-                bluemax=31,
-                redshift=11,
-                greenshift=5,
-                blueshift=0,
-            )
-            self.image_mode = "BGR;16"
-        elif (self.truecolor and (not self.bigendian) and self.depth == 24
-                and self.redmax == self.greenmax == self.bluemax == 255):
+        try:
+            self.image_mode = PF2IM[self.pixel_format]
+        except LookupError:
+            if self._version_server == (3, 889):  # Apple Remote Desktop
+                pixel_format = BGR16
+            else:
+                pixel_format = RGB32
 
-            pixel = ["X"] * self.bypp
-            offsets = [offset // 8 for offset in (self.redshift, self.greenshift, self.blueshift)]
-            for offset, color in zip(offsets, "RGB"):
-                pixel[offset] = color
-            self.image_mode = "".join(pixel)
-        else:
-            self.setPixelFormat()
+            self.setPixelFormat(pixel_format)
+            self.image_mode = PF2IM[pixel_format]
 
     #
     # base customizations

@@ -11,7 +11,7 @@ from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
 from .client import KEYMAP, VNCDoToolClient
-from .rfb import AuthTypes, IntEnumLookup, Rect
+from .rfb import AuthTypes, IntEnumLookup, PixelFormat, Rect
 
 log = logging.getLogger(__name__)
 
@@ -135,8 +135,9 @@ class RFBServer(Protocol):  # type: ignore[misc]
         block = bytes(self.buffer[1:nbytes])
         del self.buffer[:nbytes]
         if ptype == MsgC2S.SET_PIXEL_FORMAT:
-            args = unpack('!xxxBBBBHHHBBBxxx', block)
-            self.handle_setPixelFormat(*args)
+            (args,) = unpack('!xxx16s', block)
+            pixel_fomat = PixelFormat.from_bytes(args)
+            self.handle_setPixelFormat(pixel_fomat)
         elif ptype == MsgC2S.SET_ENCODING:
             nencodings, = unpack('!xH', block)
             nbytes = 4 * nencodings
@@ -171,7 +172,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
         self.handle_keyEventExtended(keysym, down_flag, keycode)
         self._handler = self._handle_protocol, 1
 
-    def handle_setPixelFormat(self, bbp: int, depth: int, bigendian: bool, truecolor: bool, rmax: int, gmax: int, bmax: int, rshift: int, gshift: int, bshift: int) -> None:
+    def handle_setPixelFormat(self, pixel_format: PixelFormat) -> None:
         pass
 
     def handle_setEncodings(self, encodings: Sequence[int]) -> None:
