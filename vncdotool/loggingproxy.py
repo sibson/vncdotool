@@ -3,7 +3,6 @@ import os.path
 import socket
 import sys
 import time
-from enum import IntEnum
 from struct import unpack, unpack_from
 from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
 
@@ -12,7 +11,7 @@ from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
 from .client import KEYMAP, VNCDoToolClient
-from .rfb import Rect
+from .rfb import AuthTypes, IntEnumLookup, Rect
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ class ProtocolError(Exception):
     """ VNC Protocol error """
 
 
-class MsgC2S(IntEnum):
+class MsgC2S(IntEnumLookup):
     """RFC 6143 §7.5. Client-to-Server Messages."""
     SET_PIXEL_FORMAT = 0
     SET_ENCODING = 2
@@ -58,7 +57,7 @@ class MsgC2S(IntEnum):
     QEMU_CLIENT_MESSAGE = 255
 
 
-class QemuClientMessage(IntEnum):
+class QemuClientMessage(IntEnumLookup):
     """https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message"""
     EXTENDED_KEY_EVENT = 0
     AUDIO = 1
@@ -109,7 +108,8 @@ class RFBServer(Protocol):  # type: ignore[misc]
             self._handler = self._handle_security, 1
 
     def _handle_security(self) -> None:
-        # sectype = self.buffer[0]
+        sectype = self.buffer[0]
+        log.debug("Client selected %r", AuthTypes.lookup(sectype))
         del self.buffer[:1]
         self._handler = self._handle_clientInit, 1
 
@@ -118,7 +118,8 @@ class RFBServer(Protocol):  # type: ignore[misc]
         self._handler = self._handle_clientInit, 1
 
     def _handle_clientInit(self) -> None:
-        # shared = self.buffer[0]
+        shared = self.buffer[0]
+        log.debug("Shared server: %s", shared)
         del self.buffer[:1]
         # XXX react to shared
         # XXX send serverInit
@@ -158,8 +159,10 @@ class RFBServer(Protocol):  # type: ignore[misc]
             if subtype == QemuClientMessage.EXTENDED_KEY_EVENT:
                 self._handler = self._handle_qemuExtendedKeyEvent, 10
             else:
+                log.debug("Unhandled subtype %r", QemuClientMessage.lookup(subtype))
                 raise ProtocolError(subtype)
         else:
+            log.debug("Unhandled response %r", MsgC2S.lookup(ptype))
             raise ProtocolError(ptype)
 
     def _handle_qemuExtendedKeyEvent(self) -> None:
