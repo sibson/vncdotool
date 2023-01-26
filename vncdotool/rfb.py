@@ -18,7 +18,7 @@ import os
 import re
 import sys
 import zlib
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from struct import pack, unpack
 from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple
 
@@ -160,6 +160,15 @@ class Encoding(IntEnum):
     ENABLE_KEEP_ALIVE = 0xffff8001
     FTP_PROTOCOl_VERSION = 0xffff8002
     SESSION = 0xffff8003
+
+
+class HextileEncoding(IntFlag):
+    """RFC 6153 §7.7.4. Hextile Encoding."""
+    RAW = 1
+    BACKGROUND_SPECIFIED = 2
+    FOREGROUND_SPECIFIED = 4
+    ANY_SUBRECTS = 8
+    SUBRECTS_COLORED = 16
 
 
 class AuthTypes(IntEnum):
@@ -580,7 +589,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleServerCutText, 7)
         else:
             log.msg(f"unknown message received (id {msgid})")
-            self.expect(self._handleConnection, 1)
+            self.transport.loseConnection()
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
@@ -625,7 +634,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
-                self._doConnection()
+                self.transport.loseConnection()
         else:
             self._doConnection()
 
@@ -738,7 +747,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         tx: int,
         ty: int,
     ) -> None:
-        (subencoding,) = unpack("!B", block)
+        subencoding = HextileEncoding(block[0])
         # calc tile size
         tw = th = 16
         if x + width - tx < 16:
@@ -746,18 +755,18 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if y + height - ty < 16:
             th = y + height - ty
         # decode tile
-        if subencoding & 1:  # RAW
+        if subencoding & HextileEncoding.RAW:
             self.expect(
                 self._handleDecodeHextileRAW,
                 tw * th * self.bypp, bg, color, x, y, width, height, tx, ty, tw, th
             )
         else:
             numbytes = 0
-            if subencoding & 2:  # BackgroundSpecified
+            if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
                 numbytes += self.bypp
-            if subencoding & 4:  # ForegroundSpecified
+            if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
                 numbytes += self.bypp
-            if subencoding & 8:  # AnySubrects
+            if subencoding & HextileEncoding.ANY_SUBRECTS:
                 numbytes += 1
             if numbytes:
                 self.expect(
@@ -771,7 +780,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _handleDecodeHextileSubrect(
         self,
         block: bytes,
-        subencoding: int,
+        subencoding: HextileEncoding,
         bg: bytes,
         color: bytes,
         x: int,
@@ -785,19 +794,19 @@ class RFBClient(Protocol):  # type: ignore[misc]
     ) -> None:
         subrects = 0
         pos = 0
-        if subencoding & 2:  # BackgroundSpecified
+        if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
             bg = block[:self.bypp]
             pos += self.bypp
         self.fillRectangle(tx, ty, tw, th, bg)
-        if subencoding & 4:  # ForegroundSpecified
+        if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
             color = block[pos:pos + self.bypp]
             pos += self.bypp
-        if subencoding & 8:  # AnySubrects
+        if subencoding & HextileEncoding.ANY_SUBRECTS:
             #~ (subrects, ) = unpack("!B", block)
             subrects = block[pos]
         #~ print(subrects)
         if subrects:
-            if subencoding & 16:  # SubrectsColoured
+            if subencoding & HextileEncoding.SUBRECTS_COLORED:
                 self.expect(
                     self._handleDecodeHextileSubrectsColoured,
                     (self.bypp + 2) * subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th
