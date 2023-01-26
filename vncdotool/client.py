@@ -23,7 +23,7 @@ from . import rfb
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
 
-log = logging.getLogger('vncdotool.client')
+log = logging.getLogger(__name__)
 
 
 KEYMAP = {

@@ -40,7 +40,13 @@ Ver = Tuple[int, int]
 #~ from twisted.internet import reactor
 
 
-class Encoding(IntEnum):
+class IntEnumLookup(IntEnum):
+    @classmethod
+    def lookup(cls, value: int) -> object:
+        return cls._value2member_map_.get(value, f"<{cls.__name__}.UNKNOWN: {value:x}>")
+
+
+class Encoding(IntEnumLookup):
     """encoding-type for SetEncodings()"""
 
     def __new__(cls, value: int) -> "Encoding":
@@ -171,7 +177,7 @@ class HextileEncoding(IntFlag):
     SUBRECTS_COLORED = 16
 
 
-class AuthTypes(IntEnum):
+class AuthTypes(IntEnumLookup):
     """RFC 6143 §7.1.2. Security Handshake."""
     INVALID = 0
     NONE = 1
@@ -215,7 +221,7 @@ class AuthTypes(IntEnum):
     REALVNC_192 = 192
 
 
-class MsgS2C(IntEnum):
+class MsgS2C(IntEnumLookup):
     """RFC 6143 §7.6. Server-to-Client Messages."""
     FRAMEBUFFER_UPDATE = 0
     SET_COLUOR_MAP_ENTRIES = 1
@@ -437,6 +443,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleSecurityTypes(self, block: bytes) -> None:
         types = unpack(f"!{len(block)}B", block)
+        for sec_type in types:
+            log.msg(f"Offered {AuthTypes.lookup(sec_type)!r}")
         valid_types = set(types) & self.SUPPORTED_AUTHS
         if valid_types:
             sec_type = max(valid_types)
@@ -464,7 +472,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
-            log.msg(f"unknown auth response ({auth})")
+            log.msg(f"unknown auth response {AuthTypes.lookup(auth)!r}")
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
@@ -588,7 +596,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
-            log.msg(f"unknown message received (id {msgid})")
+            log.msg(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
@@ -633,7 +641,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
             else:
-                log.msg(f"unknown encoding received (encoding {encoding})")
+                log.msg(f"unknown encoding received {Encoding.lookup(encoding)!r}")
                 self.transport.loseConnection()
         else:
             self._doConnection()
@@ -1101,6 +1109,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
+            log.msg(f"Offering {encoding!r}")
             self.transport.write(pack("!i", encoding))
 
     def framebufferUpdateRequest(
