@@ -1,3 +1,24 @@
+1.1.0 (unreleased)
+----------------------
+Huge thanks to @pmhahn for single handedly driving conversion to modern Python3, as well
+as cleaning up a ton of outstanding issues.
+
+  - [BREAKING] drop python 2.x support, thanks @pmhahn
+  - Use built-in Unittest and mock for testing
+  - PEP-484 type hinting, thanks @pmhahn
+  - Doc improvements, thanks @luke-jr, @pmhahn, @samiraguiar 
+  - Test for byte handling, thanks @ponty, refs #177
+
+  - Support for Apple Remote Desktop (ARD), thanks @andywgrant, @pmhahn
+  - Support for pseudo-encoding LastRec, thanks @pmhahn
+  - Support for Extended QEMU Key Events
+  - Support IPv6 addresses for server connection, thanks @pmhahn
+
+  - Bugfix, use configured log outputs over stdout, thanks @pevogam
+  - Bugfix, handle invalid password, thanks @dozysun
+  - Bugfixes for loggingproxy, thanks @joachimmetz, @pmhahn, @guicho271828 
+
+
 1.0.0 (2020-04-10)
 ----------------------
   - add ZRLE encoding, thanks Adrian Weiler
