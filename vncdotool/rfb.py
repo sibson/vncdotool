@@ -850,8 +850,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         while pos < end:
             pos2 = pos + self.bypp
             color = block[pos:pos2]
-            xy = ord(block[pos2])
-            wh = ord(block[pos2 + 1])
+            xy = block[pos2]
+            wh = block[pos2 + 1]
             sx = xy >> 4
             sy = xy & 0xf
             sw = (wh >> 4) + 1
