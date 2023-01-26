@@ -453,7 +453,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if not width or not height:
             self.cursor = None
 
-        self.cursor = Image.frombytes('RGBX', (width, height), image)
+        self.cursor = Image.frombytes('RGB', (width, height), image, "raw", self.image_mode)
         self.cmask = Image.frombytes('1', (width, height), mask)
         self.cfocus = x, y
         self.drawCursor()
