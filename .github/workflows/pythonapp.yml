@@ -1,13 +1,11 @@
 name: VNCDo CI
 
-on: 
+on:
   push:
-    branches: 
-      - 'main'
-  pull_request:
     branches:
-      - 'main'
-
+      - main
+    tags:
+  pull_request:
 
 jobs:
   build:
