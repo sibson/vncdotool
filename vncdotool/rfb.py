@@ -794,8 +794,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             pos += self.bypp
         if subencoding & 8:  # AnySubrects
             #~ (subrects, ) = unpack("!B", block)
-            # In python2, block : string, block[pos] : string, ord(block[pos]) : int
-            # In python3, block : byte,   block[pos] : int,    ord(block[pos]) : error
             subrects = block[pos]
         #~ print(subrects)
         if subrects:
