@@ -8,7 +8,7 @@ from vncdotool import api
 
 
 @skipUnless(which("xvnc"), reason="requires Xvnc")
-def test_color_xvnc():
+def test_color_xvnc() -> None:
     with tempfile.NamedTemporaryFile(prefix="vnc_", suffix=".png") as png:
 
         with Display(backend="xvnc", rfbport=5900 + 9876):

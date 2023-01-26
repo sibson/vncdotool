@@ -11,7 +11,6 @@ http://www.realvnc.com/docs/rfbproto.pdf
 
 MIT License
 """
-# flake8: noqa
 
 import getpass
 import math
@@ -19,14 +18,13 @@ import os
 import re
 import sys
 import zlib
-from enum import IntEnum
+from enum import IntEnum, IntFlag
 from struct import pack, unpack
-from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple, TypeVar
+from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
 from Crypto.Util.number import bytes_to_long, long_to_bytes
-from Crypto.Util.Padding import pad
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector
@@ -40,6 +38,7 @@ Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
 
 #~ from twisted.internet import reactor
+
 
 class Encoding(IntEnum):
     """encoding-type for SetEncodings()"""
@@ -94,7 +93,7 @@ class Encoding(IntEnum):
     LIBVNCSERVER_220 = -220  # historical
     LIBVNCSERVER_221 = -221  # historical
     LIBVNCSERVER_222 = -222  # historical
-    PSEUDO_DESKTOP_SIZE =  -223
+    PSEUDO_DESKTOP_SIZE = -223
     PSEUDO_LAST_RECT = -224
     POINTER_POS = -225
     TIGHT_226 = -226  # ... -238
@@ -161,6 +160,15 @@ class Encoding(IntEnum):
     ENABLE_KEEP_ALIVE = 0xffff8001
     FTP_PROTOCOl_VERSION = 0xffff8002
     SESSION = 0xffff8003
+
+
+class HextileEncoding(IntFlag):
+    """RFC 6153 §7.7.4. Hextile Encoding."""
+    RAW = 1
+    BACKGROUND_SPECIFIED = 2
+    FOREGROUND_SPECIFIED = 4
+    ANY_SUBRECTS = 8
+    SUBRECTS_COLORED = 16
 
 
 class AuthTypes(IntEnum):
@@ -238,76 +246,76 @@ class MsgS2C(IntEnum):
     QEMU_SERVER_MESSAGE = 255
 
 
-#keycodes
-#for KeyEvent()
+# keycodes
+# for KeyEvent()
 KEY_BackSpace = 0xff08
-KEY_Tab =       0xff09
-KEY_Return =    0xff0d
-KEY_Escape =    0xff1b
-KEY_Insert =    0xff63
-KEY_Delete =    0xffff
-KEY_Home =      0xff50
-KEY_End =       0xff57
-KEY_PageUp =    0xff55
-KEY_PageDown =  0xff56
-KEY_Left =      0xff51
-KEY_Up =        0xff52
-KEY_Right =     0xff53
-KEY_Down =      0xff54
-KEY_F1 =        0xffbe
-KEY_F2 =        0xffbf
-KEY_F3 =        0xffc0
-KEY_F4 =        0xffc1
-KEY_F5 =        0xffc2
-KEY_F6 =        0xffc3
-KEY_F7 =        0xffc4
-KEY_F8 =        0xffc5
-KEY_F9 =        0xffc6
-KEY_F10 =       0xffc7
-KEY_F11 =       0xffc8
-KEY_F12 =       0xffc9
-KEY_F13 =       0xFFCA
-KEY_F14 =       0xFFCB
-KEY_F15 =       0xFFCC
-KEY_F16 =       0xFFCD
-KEY_F17 =       0xFFCE
-KEY_F18 =       0xFFCF
-KEY_F19 =       0xFFD0
-KEY_F20 =       0xFFD1
+KEY_Tab = 0xff09
+KEY_Return = 0xff0d
+KEY_Escape = 0xff1b
+KEY_Insert = 0xff63
+KEY_Delete = 0xffff
+KEY_Home = 0xff50
+KEY_End = 0xff57
+KEY_PageUp = 0xff55
+KEY_PageDown = 0xff56
+KEY_Left = 0xff51
+KEY_Up = 0xff52
+KEY_Right = 0xff53
+KEY_Down = 0xff54
+KEY_F1 = 0xffbe
+KEY_F2 = 0xffbf
+KEY_F3 = 0xffc0
+KEY_F4 = 0xffc1
+KEY_F5 = 0xffc2
+KEY_F6 = 0xffc3
+KEY_F7 = 0xffc4
+KEY_F8 = 0xffc5
+KEY_F9 = 0xffc6
+KEY_F10 = 0xffc7
+KEY_F11 = 0xffc8
+KEY_F12 = 0xffc9
+KEY_F13 = 0xFFCA
+KEY_F14 = 0xFFCB
+KEY_F15 = 0xFFCC
+KEY_F16 = 0xFFCD
+KEY_F17 = 0xFFCE
+KEY_F18 = 0xFFCF
+KEY_F19 = 0xFFD0
+KEY_F20 = 0xFFD1
 KEY_ShiftLeft = 0xffe1
 KEY_ShiftRight = 0xffe2
 KEY_ControlLeft = 0xffe3
 KEY_ControlRight = 0xffe4
-KEY_MetaLeft =  0xffe7
+KEY_MetaLeft = 0xffe7
 KEY_MetaRight = 0xffe8
-KEY_AltLeft =   0xffe9
-KEY_AltRight =  0xffea
+KEY_AltLeft = 0xffe9
+KEY_AltRight = 0xffea
 
 KEY_Scroll_Lock = 0xFF14
-KEY_Sys_Req =   0xFF15
-KEY_Num_Lock =  0xFF7F
+KEY_Sys_Req = 0xFF15
+KEY_Num_Lock = 0xFF7F
 KEY_Caps_Lock = 0xFFE5
-KEY_Pause =     0xFF13
-KEY_Super_L =   0xFFEB  # windows-key, apple command key
-KEY_Super_R =   0xFFEC  # windows-key, apple command key
-KEY_Hyper_L =   0xFFED
-KEY_Hyper_R =   0xFFEE
+KEY_Pause = 0xFF13
+KEY_Super_L = 0xFFEB  # windows-key, apple command key
+KEY_Super_R = 0xFFEC  # windows-key, apple command key
+KEY_Hyper_L = 0xFFED
+KEY_Hyper_R = 0xFFEE
 
-KEY_KP_0 =      0xFFB0
-KEY_KP_1 =      0xFFB1
-KEY_KP_2 =      0xFFB2
-KEY_KP_3 =      0xFFB3
-KEY_KP_4 =      0xFFB4
-KEY_KP_5 =      0xFFB5
-KEY_KP_6 =      0xFFB6
-KEY_KP_7 =      0xFFB7
-KEY_KP_8 =      0xFFB8
-KEY_KP_9 =      0xFFB9
-KEY_KP_Enter =  0xFF8D
+KEY_KP_0 = 0xFFB0
+KEY_KP_1 = 0xFFB1
+KEY_KP_2 = 0xFFB2
+KEY_KP_3 = 0xFFB3
+KEY_KP_4 = 0xFFB4
+KEY_KP_5 = 0xFFB5
+KEY_KP_6 = 0xFFB6
+KEY_KP_7 = 0xFFB7
+KEY_KP_8 = 0xFFB8
+KEY_KP_9 = 0xFFB9
+KEY_KP_Enter = 0xFF8D
 
 KEY_ForwardSlash = 0x002F
 KEY_BackSlash = 0x005C
-KEY_SpaceBar=   0x0020
+KEY_SpaceBar = 0x0020
 
 
 # ZRLE helpers
@@ -393,15 +401,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
             Encoding.RAW,
         }
 
-    #------------------------------------------------------
+    # ------------------------------------------------------
     # states used on connection startup
-    #------------------------------------------------------
+    # ------------------------------------------------------
 
     def _handleInitial(self) -> None:
         m = self.RE_HANDSHAKE.match(self._packet)
         if m:
             version_server = (int(m[1]), int(m[2]))
-            if version_server == (3, 889): # Apple Remote Desktop
+            if version_server == (3, 889):  # Apple Remote Desktop
                 version_server = (3, 8)
             if version_server in self.SUPPORTED_VERSIONS:
                 version = version_server
@@ -471,7 +479,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.expect(self._handleVNCAuthResult, 4)
 
     def _handleDHAuth(self, block: bytes) -> None:
-        self.generator, self.keyLen = unpack(f"!HH", block)
+        self.generator, self.keyLen = unpack("!HH", block)
         self.expect(self._handleDHAuthKey, self.keyLen)
 
     def _handleDHAuthKey(self, block: bytes) -> None:
@@ -491,12 +499,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         s = bytes_to_long(os.urandom(512))
         g = self.generator
-        kl = self.keyLen
         m = bytes_to_long(self.modulus)
         sk = bytes_to_long(self.serverKey)
 
-        key = long_to_bytes(pow(g,s,m))
-        shared = long_to_bytes(pow(sk,s,m))
+        key = long_to_bytes(pow(g, s, m))
+        shared = long_to_bytes(pow(sk, s, m))
 
         h = MD5.new()
         h.update(shared)
@@ -504,7 +511,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         cipher = AES.new(keyDigest, AES.MODE_ECB)
         ciphertext = cipher.encrypt(userStruct.encode('utf-8'))
-        self.transport.write(ciphertext+key)
+        self.transport.write(ciphertext + key)
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
@@ -514,24 +521,24 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def sendPassword(self, password: str) -> None:
         """send password"""
-        pw = f"{password:\0<8.8}"        #make sure its 8 chars long, zero padded
-        des = RFBDes(pw.encode("ASCII"))  #unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
+        pw = f"{password:\0<8.8}"  # make sure its 8 chars long, zero padded
+        des = RFBDes(pw.encode("ASCII"))  # unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
         response = des.encrypt(self._challenge)
         self.transport.write(response)
 
     def _handleVNCAuthResult(self, block: bytes) -> None:
         (result,) = unpack("!I", block)
         #~ print(f"{auth=}")
-        if result == 0:     #OK
+        if result == 0:  # OK
             self._doClientInitialization()
             return
-        elif result == 1:   #failed
+        elif result == 1:  # failed
             if self._version < (3, 8):
                 self.vncAuthFailed("authentication failed")
                 self.transport.loseConnection()
             else:
                 self.expect(self._handleAuthFailed, 4)
-        elif result == 2:   #too many
+        elif result == 2:  # too many
             if self._version < (3, 8):
                 self.vncAuthFailed("too many tries to log in")
                 self.transport.loseConnection()
@@ -554,22 +561,23 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleServerInit(self, block: bytes) -> None:
         (self.width, self.height, pixformat, namelen) = unpack("!HH16sI", block)
-        (self.bpp, self.depth, self.bigendian, self.truecolor,
-         self.redmax, self.greenmax, self.bluemax,
-         self.redshift, self.greenshift, self.blueshift) = \
-           unpack("!BBBBHHHBBBxxx", pixformat)
-        self.bypp = self.bpp // 8        #calc bytes per pixel
+        (
+            self.bpp, self.depth, self.bigendian, self.truecolor,
+            self.redmax, self.greenmax, self.bluemax,
+            self.redshift, self.greenshift, self.blueshift,
+        ) = unpack("!BBBBHHHBBBxxx", pixformat)
+        self.bypp = self.bpp // 8  # calc bytes per pixel
         self.expect(self._handleServerName, namelen)
 
     def _handleServerName(self, block: bytes) -> None:
         self.name = block
-        #callback:
+        # callback:
         self.vncConnectionMade()
         self.expect(self._handleConnection, 1)
 
-    #------------------------------------------------------
+    # ------------------------------------------------------
     # Server to client messages
-    #------------------------------------------------------
+    # ------------------------------------------------------
     def _handleConnection(self, block: bytes) -> None:
         (msgid,) = unpack("!B", block)
         if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
@@ -581,7 +589,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleServerCutText, 7)
         else:
             log.msg(f"unknown message received (id {msgid})")
-            self.expect(self._handleConnection, 1)
+            self.transport.loseConnection()
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
@@ -603,11 +611,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         if self.rectangles:
             self.rectangles -= 1
-            self.rectanglePos.append( (x, y, width, height) )
+            self.rectanglePos.append((x, y, width, height))
             if encoding == Encoding.COPY_RECTANGLE:
                 self.expect(self._handleDecodeCopyrect, 4, x, y, width, height)
             elif encoding == Encoding.RAW:
-                self.expect(self._handleDecodeRAW, width*height*self.bypp, x, y, width, height)
+                self.expect(self._handleDecodeRAW, width * height * self.bypp, x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.CORRE:
@@ -626,14 +634,14 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
             else:
                 log.msg(f"unknown encoding received (encoding {encoding})")
-                self._doConnection()
+                self.transport.loseConnection()
         else:
             self._doConnection()
 
     # ---  RAW Encoding
 
     def _handleDecodeRAW(self, block: bytes, x: int, y: int, width: int, height: int) -> None:
-        #TODO convert pixel format?
+        # TODO convert pixel format?
         self.updateRectangle(x, y, width, height, block)
         self._doConnection()
 
@@ -659,10 +667,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         #~ print("_handleRRESubRectangle")
         pos = 0
         end = len(block)
-        sz  = self.bypp + 8
+        sz = self.bypp + 8
         format = f"!{self.bypp}sHHHH"
         while pos < end:
-            (color, x, y, width, height) = unpack(format, block[pos:pos+sz])
+            (color, x, y, width, height) = unpack(format, block[pos:pos + sz])
             self.fillRectangle(topx + x, topy + y, width, height, color)
             pos += sz
         self._doConnection()
@@ -674,18 +682,20 @@ class RFBClient(Protocol):  # type: ignore[misc]
         color = block[4:]
         self.fillRectangle(x, y, width, height, color)
         if subrects:
-            self.expect(self._handleDecodeCORRERectangles, (4 + self.bypp)*subrects, x, y)
+            self.expect(
+                self._handleDecodeCORRERectangles,
+                (4 + self.bypp) * subrects, x, y
+            )
         else:
             self._doConnection()
 
     def _handleDecodeCORRERectangles(self, block: bytes, topx: int, topy: int) -> None:
         #~ print("_handleDecodeCORRERectangle")
         pos = 0
-        end = len(block)
-        sz  = self.bypp + 4
+        sz = self.bypp + 4
         format = "!{self.bypp}sBBBB"
         while pos < sz:
-            (color, x, y, width, height) = unpack(format, block[pos:pos+sz])
+            (color, x, y, width, height) = unpack(format, block[pos:pos + sz])
             self.fillRectangle(topx + x, topy + y, width, height, color)
             pos += sz
         self._doConnection()
@@ -704,14 +714,14 @@ class RFBClient(Protocol):  # type: ignore[misc]
         ty: Optional[int],
     ) -> None:
         #~ print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty),))
-        #coords of next tile
-        #its line after line of tiles
-        #finished when the last line is completly received
+        # coords of next tile
+        # its line after line of tiles
+        # finished when the last line is completly received
 
-        #dont inc the first time
+        # dont inc the first time
         if tx is not None:
             assert ty is not None
-            #calc next subrect pos
+            # calc next subrect pos
             tx += 16
             if tx >= x + width:
                 tx = x
@@ -719,7 +729,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         else:
             tx = x
             ty = y
-        #more tiles?
+        # more tiles?
         if ty >= y + height:
             self._doConnection()
         else:
@@ -737,24 +747,32 @@ class RFBClient(Protocol):  # type: ignore[misc]
         tx: int,
         ty: int,
     ) -> None:
-        (subencoding,) = unpack("!B", block)
-        #calc tile size
+        subencoding = HextileEncoding(block[0])
+        # calc tile size
         tw = th = 16
-        if x + width - tx < 16:   tw = x + width - tx
-        if y + height - ty < 16:  th = y + height- ty
-        #decode tile
-        if subencoding & 1:     #RAW
-            self.expect(self._handleDecodeHextileRAW, tw*th*self.bypp, bg, color, x, y, width, height, tx, ty, tw, th)
+        if x + width - tx < 16:
+            tw = x + width - tx
+        if y + height - ty < 16:
+            th = y + height - ty
+        # decode tile
+        if subencoding & HextileEncoding.RAW:
+            self.expect(
+                self._handleDecodeHextileRAW,
+                tw * th * self.bypp, bg, color, x, y, width, height, tx, ty, tw, th
+            )
         else:
             numbytes = 0
-            if subencoding & 2:     #BackgroundSpecified
+            if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
                 numbytes += self.bypp
-            if subencoding & 4:     #ForegroundSpecified
+            if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
                 numbytes += self.bypp
-            if subencoding & 8:     #AnySubrects
+            if subencoding & HextileEncoding.ANY_SUBRECTS:
                 numbytes += 1
             if numbytes:
-                self.expect(self._handleDecodeHextileSubrect, numbytes, subencoding, bg, color, x, y, width, height, tx, ty, tw, th)
+                self.expect(
+                    self._handleDecodeHextileSubrect,
+                    numbytes, subencoding, bg, color, x, y, width, height, tx, ty, tw, th
+                )
             else:
                 self.fillRectangle(tx, ty, tw, th, bg)
                 self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
@@ -762,7 +780,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _handleDecodeHextileSubrect(
         self,
         block: bytes,
-        subencoding: int,
+        subencoding: HextileEncoding,
         bg: bytes,
         color: bytes,
         x: int,
@@ -776,27 +794,30 @@ class RFBClient(Protocol):  # type: ignore[misc]
     ) -> None:
         subrects = 0
         pos = 0
-        if subencoding & 2:     #BackgroundSpecified
+        if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
             bg = block[:self.bypp]
             pos += self.bypp
         self.fillRectangle(tx, ty, tw, th, bg)
-        if subencoding & 4:     #ForegroundSpecified
-            color = block[pos:pos+self.bypp]
+        if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
+            color = block[pos:pos + self.bypp]
             pos += self.bypp
-        if subencoding & 8:     #AnySubrects
+        if subencoding & HextileEncoding.ANY_SUBRECTS:
             #~ (subrects, ) = unpack("!B", block)
-            # In python2, block : string, block[pos] : string, ord(block[pos]) : int
-            # In python3, block : byte,   block[pos] : int,    ord(block[pos]) : error
             subrects = block[pos]
         #~ print(subrects)
         if subrects:
-            if subencoding & 16:    #SubrectsColoured
-                self.expect(self._handleDecodeHextileSubrectsColoured, (self.bypp + 2)*subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th)
+            if subencoding & HextileEncoding.SUBRECTS_COLORED:
+                self.expect(
+                    self._handleDecodeHextileSubrectsColoured,
+                    (self.bypp + 2) * subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th
+                )
             else:
-                self.expect(self._handleDecodeHextileSubrectsFG, 2*subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th)
+                self.expect(
+                    self._handleDecodeHextileSubrectsFG,
+                    2 * subrects, bg, color, subrects, x, y, width, height, tx, ty, tw, th
+                )
         else:
             self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
 
     def _handleDecodeHextileRAW(
         self,
@@ -838,8 +859,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         while pos < end:
             pos2 = pos + self.bypp
             color = block[pos:pos2]
-            xy = ord(block[pos2])
-            wh = ord(block[pos2+1])
+            xy = block[pos2]
+            wh = block[pos2 + 1]
             sx = xy >> 4
             sy = xy & 0xf
             sw = (wh >> 4) + 1
@@ -868,7 +889,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         end = len(block)
         while pos < end:
             xy = block[pos]
-            wh = block[pos+1]
+            wh = block[pos + 1]
             sx = xy >> 4
             sy = xy & 0xf
             sw = (wh >> 4) + 1
@@ -876,7 +897,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.fillRectangle(tx + sx, ty + sy, sw, sh, color)
             pos += 2
         self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
 
     # ---  ZRLE Encoding
     def _handleDecodeZRLE(
@@ -1024,9 +1044,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.copy_text(block.decode("iso-8859-1"))
         self.expect(self._handleConnection, 1)
 
-    #------------------------------------------------------
+    # ------------------------------------------------------
     # incomming data redirector
-    #------------------------------------------------------
+    # ------------------------------------------------------
     def dataReceived(self, data: bytes) -> None:
         #~ sys.stdout.write(repr(data) + '\n')
         #~ print(f"{len(data), {len(self._packet)}")
@@ -1050,11 +1070,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._expected_args = args
         self._expected_kwargs = kwargs
         if not self._already_expecting:
-            self._handleExpected()   #just in case that there is already enough data
+            self._handleExpected()   # just in case that there is already enough data
 
-    #------------------------------------------------------
+    # ------------------------------------------------------
     # client -> server messages
-    #------------------------------------------------------
+    # ------------------------------------------------------
 
     def setPixelFormat(
         self,
@@ -1071,11 +1091,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
     ) -> None:
         pixformat = pack("!BBBBHHHBBBxxx", bpp, depth, bigendian, truecolor, redmax, greenmax, bluemax, redshift, greenshift, blueshift)
         self.transport.write(pack("!Bxxx16s", 0, pixformat))
-        #rember these settings
+        # rember these settings
         self.bpp, self.depth, self.bigendian, self.truecolor = bpp, depth, bigendian, truecolor
         self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
         self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
-        self.bypp = self.bpp // 8        #calc bytes per pixel
+        self.bypp = self.bpp // 8  # calc bytes per pixel
         #~ print(self.bypp)
 
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
@@ -1091,8 +1111,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         height: Optional[int] = None,
         incremental: bool = False,
     ) -> None:
-        if width  is None: width  = self.width - x
-        if height is None: height = self.height - y
+        if width is None:
+            width = self.width - x
+        if height is None:
+            height = self.height - y
         self.transport.write(pack("!BBHHHH", 3, incremental, x, y, width, height))
 
     def keyEvent(self, key: int, down: bool = True) -> None:
@@ -1114,10 +1136,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         data = message.encode("iso-8859-1")
         self.transport.write(pack("!BxxxI", 6, len(data)) + data)
 
-    #------------------------------------------------------
+    # ------------------------------------------------------
     # callbacks
     # override these in your application
-    #------------------------------------------------------
+    # ------------------------------------------------------
     def vncConnectionMade(self) -> None:
         """connection is initialized and ready.
            typicaly, the pixel format is set here."""
@@ -1159,8 +1181,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def fillRectangle(self, x: int, y: int, width: int, height: int, color: bytes) -> None:
         """fill the area with the color. the color is a string in
            the pixel format set up earlier"""
-        #fallback variant, use update recatngle
-        #override with specialized function for better performance
+        # fallback variant, use update recatngle
+        # override with specialized function for better performance
         self.updateRectangle(x, y, width, height, color * width * height)
 
     def updateCursor(self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes) -> None:
@@ -1188,6 +1210,7 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
     def __init__(self, password: Optional[str] = None, shared: bool = False) -> None:
         self.password = password
         self.shared = shared
+
 
 class RFBDes(pyDes.des):
     def setKey(self, key: bytes) -> None:
@@ -1219,6 +1242,7 @@ if __name__ == '__main__':
     class RFBTestFactory(protocol.ClientFactory):  # type: ignore[misc]
         """test factory"""
         protocol = RFBTest
+
         def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
             print(reason)
             from twisted.internet import reactor
@@ -1233,9 +1257,9 @@ if __name__ == '__main__':
     class Options(usage.Options):  # type: ignore[misc]
         """command line options"""
         optParameters = [
-            ['display',     'd', '0',               'VNC display'],
-            ['host',        'h', 'localhost',       'remote hostname'],
-            ['outfile',     'o', None,              'Logfile [default: sys.stdout]'],
+            ['display', 'd', '0', 'VNC display'],
+            ['host', 'h', 'localhost', 'remote hostname'],
+            ['outfile', 'o', None, 'Logfile [default: sys.stdout]'],
         ]
 
     o = Options()
@@ -1254,10 +1278,10 @@ if __name__ == '__main__':
     host = o.opts['host']
     port = int(o.opts['display']) + 5900
 
-    application = service.Application("rfb test") # create Application
+    application = service.Application("rfb test")  # create Application
 
     # connect to this host and port, and reconnect if we get disconnected
-    vncClient = internet.TCPClient(host, port, RFBFactory()) # create the service
+    vncClient = internet.TCPClient(host, port, RFBFactory())  # create the service
     vncClient.setServiceParent(application)
 
     # this file should be run as 'twistd -y rfb.py' but it didn't work -

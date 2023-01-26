@@ -87,31 +87,30 @@ class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
 class VNCDoToolOptionParser(optparse.OptionParser):
     def format_help(self, formatter: Optional[optparse.HelpFormatter] = None) -> str:
         result = super().format_help(formatter)
-        result += '\n'.join(
-           ['',
-            'Common Commands (CMD):',
-            '  key KEY\t\tsend KEY to server, alphanumeric or keysym: ctrl-c, del',
-            '  type TEXT\t\tsend alphanumeric string of TEXT',
-            '  typefile FILENAME\t\ttype out the contents of FILENAME',
-            '  move X Y\t\tmove the mouse cursor to position X,Y',
-            '  click BUTTON\t\tsend a mouse BUTTON click',
-            '  capture FILE\t\tsave current screen as FILE',
-            '  expect FILE FUZZ\twait until screen matches FILE',
-            '  pause SECONDS\t\twait SECONDS before sending next command',
-            '',
-            'Other Commands (CMD):',
-            '  keyup KEY\t\tsend KEY released',
-            '  keydown KEY\t\tsend KEY pressed',
-            '  mousedown BUTTON\tsend BUTTON down',
-            '  mousemove X Y\t\talias for move',
-            '  mouseup BUTTON\tsend BUTTON up',
-            '  drag X Y\t\tmove the mouse to X,Y in small steps',
-            '  rcapture FILE X Y W H\tcapture a region of the screen',
-            '  rexpect FILE X Y FUZZ\texpect that matches a region of the screen',
-            '',
-            'If a filename is given commands will be read from it, or stdin `-`',
-            '',
-           ])
+        result += (
+            '\n'
+            'Common Commands (CMD):\n'
+            '  key KEY\t\tsend KEY to server, alphanumeric or keysym: ctrl-c, del\n'
+            '  type TEXT\t\tsend alphanumeric string of TEXT\n'
+            '  typefile FILENAME\t\ttype out the contents of FILENAME\n'
+            '  move X Y\t\tmove the mouse cursor to position X,Y\n'
+            '  click BUTTON\t\tsend a mouse BUTTON click\n'
+            '  capture FILE\t\tsave current screen as FILE\n'
+            '  expect FILE FUZZ\twait until screen matches FILE\n'
+            '  pause SECONDS\t\twait SECONDS before sending next command\n'
+            '\n'
+            'Other Commands (CMD):\n'
+            '  keyup KEY\t\tsend KEY released\n'
+            '  keydown KEY\t\tsend KEY pressed\n'
+            '  mousedown BUTTON\tsend BUTTON down\n'
+            '  mousemove X Y\t\talias for move\n'
+            '  mouseup BUTTON\tsend BUTTON up\n'
+            '  drag X Y\t\tmove the mouse to X,Y in small steps\n'
+            '  rcapture FILE X Y W H\tcapture a region of the screen\n'
+            '  rexpect FILE X Y FUZZ\texpect that matches a region of the screen\n'
+            '\n'
+            'If a filename is given commands will be read from it, or stdin `-`\n'
+        )
         return result
 
 
@@ -257,30 +256,45 @@ def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
 def add_standard_options(parser: optparse.OptionParser) -> optparse.OptionParser:
     parser.disable_interspersed_args()
 
-    parser.add_option('-p', '--password', action='store', metavar='PASSWORD',
-        help='use password to access server')
-
-    parser.add_option('-u', '--username', action='store', metavar='USERNAME',
-        help='use username to access server')
-
-    parser.add_option('-s', '--server', action='store', metavar='SERVER',
+    parser.add_option(
+        '-p',
+        '--password',
+        help='use password to access server',
+    )
+    parser.add_option(
+        '-u',
+        '--username',
+        help='use username to access server',
+    )
+    parser.add_option(
+        '-s',
+        '--server',
         default='127.0.0.1',
-        help='connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%default]')
-
-    parser.add_option('--logfile', action='store', metavar='FILE',
-        help='output logging information to FILE')
-
-    parser.add_option('-v', '--verbose', action='count', default=0,
-        help='increase verbosity, use multiple times')
-
+        help='connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%default]',
+    )
+    parser.add_option(
+        '--logfile',
+        metavar='FILE',
+        help='output logging information to FILE',
+    )
+    parser.add_option(
+        '-v',
+        '--verbose',
+        action='count',
+        default=0,
+        help='increase verbosity, use multiple times',
+    )
     return parser
 
 
 def setup_logging(options: optparse.Values) -> None:
     # route Twisted log messages via stdlib logging
     if options.logfile:
-        handler = logging.handlers.RotatingFileHandler(options.logfile,
-                                      maxBytes=5*1024*1024, backupCount=5)
+        handler = logging.handlers.RotatingFileHandler(
+            options.logfile,
+            maxBytes=5 << 20,
+            backupCount=5
+        )
         logging.getLogger().addHandler(handler)
         sys.excepthook = log_exceptions
 
@@ -339,21 +353,30 @@ def vnclog() -> None:
 
     op = optparse.OptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
-
-    op.add_option('--listen', metavar='PORT', type='int',
-        help='listen for client connections on PORT [%default]')
-    op.set_defaults(listen=5902)
-
-    op.add_option('--forever', action='store_true',
-        help='continually accept new connections')
-
-    op.add_option('--viewer', action='store', metavar='CMD',
-        help='launch an interactive client using CMD [%default]')
-
+    op.add_option(
+        '--listen',
+        metavar='PORT',
+        default=5902,
+        type='int',
+        help='listen for client connections on PORT [%default]',
+    )
+    op.add_option(
+        '--forever',
+        action='store_true',
+        help='continually accept new connections',
+    )
+    op.add_option(
+        '--viewer',
+        metavar='CMD',
+        help='launch an interactive client using CMD [%default]',
+    )
     # ideally we wouldn't need this, VNCLoggingClient should sniff and set this properly
-    op.add_option('--password-required', action='store_true', default=False,
-        help='a VNC password is required to connect to the server')
-
+    op.add_option(
+        '--password-required',
+        action='store_true',
+        default=False,
+        help='a VNC password is required to connect to the server',
+    )
     options, args = op.parse_args()
 
     setup_logging(options)
@@ -403,31 +426,55 @@ def vncdo() -> None:
     op = VNCDoToolOptionParser(usage=usage, description=description, version=version)
     add_standard_options(op)
 
-    op.add_option('--delay', action='store', metavar='MILLISECONDS',
-        default=os.environ.get('VNCDOTOOL_DELAY', 10), type='int',
-        help='delay MILLISECONDS between actions [%defaultms]')
-
-    op.add_option('--force-caps', action='store_true',
-        help='for non-compliant servers, send shift-LETTER, ensures capitalization works')
-
-    op.add_option('--localcursor', action='store_true',
-        help='mouse pointer drawn client-side, useful when server does not include cursor')
-
-    op.add_option('--nocursor', action='store_true',
-        help='no mouse pointer in screen captures')
-
-    op.add_option('--disable-desktop-resizing', action='store_true',
-        help='disable desktop resizing, this was default behaviour < 0.11')
-
-    op.add_option('-t', '--timeout', action='store', type='float', metavar='TIMEOUT',
-        help='abort if unable to complete all actions within TIMEOUT seconds')
-
-    op.add_option('-w', '--warp', action='store', type='float',
-        metavar='FACTOR', default=1.0,
-        help='pause time is accelerated by FACTOR [x%default]')
-
-    op.add_option('-i', '--incremental-refreshes', action='store_true', default=False,
-        help='set the "incremental" flag')
+    op.add_option(
+        '--delay',
+        metavar='MILLISECONDS',
+        default=os.environ.get('VNCDOTOOL_DELAY', 10),
+        type='int',
+        help='delay MILLISECONDS between actions [%defaultms]',
+    )
+    op.add_option(
+        '--force-caps',
+        action='store_true',
+        help='for non-compliant servers, send shift-LETTER, ensures capitalization works',
+    )
+    op.add_option(
+        '--localcursor',
+        action='store_true',
+        help='mouse pointer drawn client-side, useful when server does not include cursor',
+    )
+    op.add_option(
+        '--nocursor',
+        action='store_true',
+        help='no mouse pointer in screen captures',
+    )
+    op.add_option(
+        '--disable-desktop-resizing',
+        action='store_true',
+        help='disable desktop resizing, this was default behaviour < 0.11',
+    )
+    op.add_option(
+        '-t',
+        '--timeout',
+        type='float',
+        metavar='SECONDS',
+        help='abort if unable to complete all actions within TIMEOUT seconds',
+    )
+    op.add_option(
+        '-w',
+        '--warp',
+        type='float',
+        metavar='FACTOR',
+        default=1.0,
+        help='pause time is accelerated by FACTOR [x%default]',
+    )
+    op.add_option(
+        '-i',
+        '--incremental-refreshes',
+        action='store_true',
+        default=False,
+        help='set the "incremental" flag',
+    )
 
     options, args = op.parse_args()
     if not len(args):

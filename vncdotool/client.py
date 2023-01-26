@@ -119,15 +119,15 @@ try:
     # in a thread.
     Image.preinit()
     Image.init()
-except ImportError as error:
+except ImportError:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
     class _RuntimeImportError:
         def __getattr__(self, _: str) -> Any:
-            raise ImportError(error) # noqa: F821
+            raise ImportError("PIL")
 
     Image = _RuntimeImportError()  # type: ignore[assignment]
-    PIL = _RuntimeImportError()  # type: ignore[assignment]
+    PIL = _RuntimeImportError()
 
 
 class AuthenticationError(Exception):
@@ -249,7 +249,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """ Save a region of the current display to filename
         """
         log.debug('captureRegion %s', filename)
-        return self._capture(filename, incremental, x, y, x+w, y+h)
+        return self._capture(filename, incremental, x, y, x + w, y + h)
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
@@ -429,8 +429,8 @@ class VNCDoToolClient(rfb.RFBClient):
         # track upward screen resizes, often occurs during os boot of VMs
         # When the screen is sent in chunks (as observed on VMWare ESXi), the canvas
         # needs to be resized to fit all existing contents and the update.
-        elif self.screen.size[0] < (x+width) or self.screen.size[1] < (y+height):
-            new_size = (max(x+width, self.screen.size[0]), max(y+height, self.screen.size[1]))
+        elif self.screen.size[0] < (x + width) or self.screen.size[1] < (y + height):
+            new_size = (max(x + width, self.screen.size[0]), max(y + height, self.screen.size[1]))
             new_screen = Image.new("RGB", new_size, "black")
             new_screen.paste(self.screen, (0, 0))
             new_screen.paste(update, (x, y))
