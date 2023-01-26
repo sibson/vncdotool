@@ -15,7 +15,8 @@ from typing import Any, List, Optional, TypeVar
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
-from twisted.internet.interfaces import IConnector
+from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
+from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
 from . import rfb
@@ -151,8 +152,12 @@ class VNCDoToolClient(rfb.RFBClient):
     def connectionMade(self) -> None:
         super().connectionMade()
 
-        if self.transport.addressFamily == socket.AF_INET:
+        if isinstance(self.transport, ITCPTransport):
             self.transport.setTcpNoDelay(True)
+
+    def connectionLost(self, reason: Failure) -> None:
+        super().connectionLost(reason)
+        self.factory.clientConnectionLost(self, reason)
 
     def _decodeKey(self, key: str) -> List[int]:
         if self.factory.force_caps:
@@ -530,7 +535,13 @@ class VMWareFactory(VNCDoToolFactory):
 
 
 def factory_connect(factory: VNCDoToolFactory, host: str, port: int, family: socket.AddressFamily) -> None:
-    if family == socket.AF_INET:
-        reactor.connectTCP(host, port, factory)
+    if family in {socket.AF_UNSPEC, socket.AF_INET, socket.AF_INET6}:
+        ep = HostnameEndpoint(reactor, host, port)
     elif hasattr(socket, "AF_UNIX") and family == socket.AF_UNIX:
-        reactor.connectUNIX(host, factory)
+        ep = UNIXClientEndpoint(reactor, host)
+    else:
+        raise ValueError(family)
+
+    conn = ep.connect(factory)
+    # conn.addCallback(factory.clientConnectionMade) already called by VNCDoToolClient.vncConnectionMade()
+    conn.addErrback(lambda reason: factory.clientConnectionFailed(None, reason))

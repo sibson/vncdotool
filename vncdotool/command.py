@@ -8,6 +8,7 @@ MIT License
 """
 
 import getpass
+import ipaddress
 import logging
 import logging.handlers
 import optparse
@@ -293,24 +294,38 @@ def setup_logging(options: optparse.Values) -> None:
 
 
 def parse_server(server: str) -> Tuple[socket.AddressFamily, str, int]:
-    split = server.split(':')
-
-    if not split[0]:
-        host = '127.0.0.1'
+    if server.startswith("["):
+        host, sep, server = server[1:].partition("]")
+        if not sep:
+            raise ValueError(server)
+        ipaddress.IPv6Address(host)
+        split = server.split(':')
+        address_family = socket.AF_INET6
     else:
-        host = split[0]
+        split = server.split(':')
+        if not split[0]:
+            host = '127.0.0.1'
+        else:
+            host = split[0]
 
-    if hasattr(socket, "AF_UNIX") and os.path.exists(host):
-        address_family = socket.AF_UNIX
-    else:
-        address_family = socket.AF_INET
+        if hasattr(socket, "AF_UNIX") and os.path.exists(host):
+            address_family = socket.AF_UNIX
+        else:
+            try:
+                ipaddress.IPv4Address(host)
+            except ipaddress.AddressValueError:
+                address_family = socket.AF_UNSPEC
+            else:
+                address_family = socket.AF_INET
 
     if len(split) == 3:  # ::port
         port = int(split[2])
     elif len(split) == 2:  # :display
         port = int(split[1]) + 5900
-    else:
+    elif len(split) == 1:  # default
         port = 5900
+    else:
+        raise ValueError(server)
 
     return address_family, host, port
 

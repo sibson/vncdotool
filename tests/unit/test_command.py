@@ -177,11 +177,45 @@ class TestParseServer(unittest.TestCase):
         assert host == '127.0.0.1'
         assert port == 5910
 
+    def test_missing_display(self):
+        with self.assertRaises(ValueError):
+            command.parse_server(":")
+
+    def test_missing_port(self):
+        with self.assertRaises(ValueError):
+            command.parse_server("::")
+
+    def test_invalid(self):
+        with self.assertRaises(ValueError):
+            command.parse_server(":::")
+
     def test_just_port(self):
         family, host, port = command.parse_server('::1111')
         assert family == socket.AF_INET
         assert host == '127.0.0.1'
         assert port == 1111
+
+    def test_ipv6_host_display(self):
+        family, host, port = command.parse_server('[::1]:10')
+        assert family == socket.AF_INET6
+        assert host == '::1'
+        assert port == 5910
+
+    def test_ipv6_host_port(self):
+        family, host, port = command.parse_server('[::1]::4444')
+        assert family == socket.AF_INET6
+        assert host == '::1'
+        assert port == 4444
+
+    def test_ipv6_just_host(self):
+        family, host, port = command.parse_server('[::1]')
+        assert family == socket.AF_INET6
+        assert host == '::1'
+        assert port == 5900
+
+    def test_ipv6_broken(self):
+        with self.assertRaises(ValueError):
+            command.parse_server("[::1")
 
     @skipUnless(hasattr(socket, "AF_UNIX"), reason="AF_UNIX not supported by old Windows")
     @mock.patch("os.path.exists")
@@ -190,6 +224,12 @@ class TestParseServer(unittest.TestCase):
         family, host, port = command.parse_server('/some/path/unix.skt')
         assert family == socket.AF_UNIX
         assert host == '/some/path/unix.skt'
+        assert port == 5900
+
+    def test_dns_name(self):
+        family, host, port = command.parse_server('localhost')
+        assert family == socket.AF_UNSPEC
+        assert host == 'localhost'
         assert port == 5900
 
 
