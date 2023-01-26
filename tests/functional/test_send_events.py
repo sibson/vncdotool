@@ -21,15 +21,15 @@ class TestSendEvents(TestCase):
         self.server.terminate(force=True)
 
     def assertKeyDown(self, key):
-        down = r'^.*down:\s+\(%s\)\r' % hex(key)
+        down = rf'^.*down:\s+\({key:#x}\)\r'
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = r'^.*up:\s+\(%s\)\r' % hex(key)
+        up = rf'^.*up:\s+\({key:#x}\)\r'
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):
-        output = '^.*Ptr: mouse button mask %s at %d,%d' % (hex(buttonmask), x, y)
+        output = f'^.*Ptr: mouse button mask {buttonmask:#x} at {x},{y}'
         self.server.expect(output)
 
     def assertDisconnect(self):
