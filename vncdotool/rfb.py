@@ -13,7 +13,6 @@ MIT License
 """
 
 import getpass
-import math
 import os
 import re
 import sys
@@ -639,7 +638,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == Encoding.PSEUDO_CURSOR:
                 length = width * height * self.bypp
-                length += int(math.floor((width + 7.0) / 8)) * height
+                length += ((width + 7) // 8) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
                 self._handleDecodeDesktopSize(width, height)
