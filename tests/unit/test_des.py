@@ -1,4 +1,5 @@
 from unittest import TestCase
+
 from vncdotool import pyDes
 
 ZERO6 = b"\x00" * 6
