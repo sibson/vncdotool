@@ -7,7 +7,7 @@ from unittest import TestCase, skipUnless
 import pexpect
 
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
-SIMPLE_PNG  = os.path.join(DATADIR, 'simple.png')
+SIMPLE_PNG = os.path.join(DATADIR, 'simple.png')
 EXAMPLE_PNG = os.path.join(DATADIR, 'example.png')
 EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
 

@@ -138,9 +138,11 @@ class TestBuildCommandList(unittest.TestCase):
 
     def test_insert_delay(self):
         self.call_build_commands_list('click 1 key a', delay=100)
-        expected = [ mock.call(self.client.mousePress, 1),
-                     mock.call(self.client.pause, 0.1),
-                     mock.call(self.client.keyPress, 'a')]
+        expected = [
+            mock.call(self.client.mousePress, 1),
+            mock.call(self.client.pause, 0.1),
+            mock.call(self.client.keyPress, 'a'),
+        ]
 
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 

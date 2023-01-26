@@ -35,7 +35,7 @@ class TestLogEvents(TestCase):
         self.server.expect(down)
 
     def assertKeyUp(self, key):
-        up = r'^.*up:\s+\(%s\)\r'  % hex(key)
+        up = r'^.*up:\s+\(%s\)\r' % hex(key)
         self.server.expect(up)
 
     def assertMouse(self, x, y, buttonmask):

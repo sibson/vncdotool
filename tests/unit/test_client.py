@@ -81,10 +81,10 @@ class TestVNCDoToolClient(TestCase):
         cli.vncConnectionMade()
         fname = 'something.png'
 
-        region = (0 ,0, 11, 22)
+        region = (0, 0, 11, 22)
         client.Image.open.return_value.size = region[2:]
 
-        d = cli.expectScreen(fname, 5)
+        _ = cli.expectScreen(fname, 5)
         assert cli.framebufferUpdateRequest.called
 
         image_open.assert_called_once_with(fname)
@@ -94,7 +94,7 @@ class TestVNCDoToolClient(TestCase):
 
     def test_expectCompareSuccess(self):
         cli = self.client
-        d = cli.deferred = mock.Mock()
+        cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
         cli.screen = mock.Mock()
         cli.screen.histogram.return_value = [1, 2, 3]
@@ -104,7 +104,7 @@ class TestVNCDoToolClient(TestCase):
 
     def test_expectCompareExactSuccess(self):
         cli = self.client
-        d = cli.deferred = mock.Mock()
+        cli.deferred = mock.Mock()
         cli.expected = [2, 2, 2]
         cli.screen = mock.Mock()
         cli.screen.histogram.return_value = [2, 2, 2]
