@@ -13,14 +13,14 @@ MIT License
 """
 
 import getpass
-import math
 import os
 import re
 import sys
 import zlib
+from dataclasses import astuple, dataclass
 from enum import IntEnum, IntFlag
-from struct import pack, unpack
-from typing import Any, Callable, Collection, Iterator, List, Optional, Tuple
+from struct import Struct, pack, unpack
+from typing import Any, Callable, ClassVar, Collection, Iterator, List, Optional, Tuple, cast
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
@@ -49,11 +49,16 @@ class IntEnumLookup(IntEnum):
 class Encoding(IntEnumLookup):
     """encoding-type for SetEncodings()"""
 
+    @staticmethod
+    def s32(value: int) -> int:
+        return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
+
     def __new__(cls, value: int) -> "Encoding":
-        # Convert to signed32
-        if value >= 0x8000_0000:
-            value = value - 0x1_0000_0000
-        return int.__new__(cls, value)
+        return int.__new__(cls, cls.s32(value))
+
+    @classmethod
+    def lookup(cls, value: int) -> object:
+        return super().lookup(cls.s32(value))
 
     RAW = 0
     COPY_RECTANGLE = 1
@@ -324,6 +329,50 @@ KEY_BackSlash = 0x005C
 KEY_SpaceBar = 0x0020
 
 
+@dataclass(frozen=True)
+class PixelFormat:
+    """RFC 6143 §7.4. Pixel Format Data Structure"""
+
+    bpp: int = 32  # u8: bits-per-pixel
+    depth: int = 24  # u8
+    bigendian: bool = False  # u8
+    truecolor: bool = True  # u8
+    redmax: int = 255  # u16
+    greenmax: int = 255  # u16
+    bluemax: int = 255  # u16
+    redshift: int = 0  # u8
+    greenshift: int = 8  # u8
+    blueshift: int = 16  # u8
+
+    STRUCT: ClassVar = Struct("!BB??HHHBBBxxx")
+    VALIDATE: ClassVar = False
+
+    def __post_init__(self) -> None:
+        if not self.VALIDATE:
+            return
+        assert self.bpp in {8, 16, 24, 32}, f"bpp={self.bpp}"
+        assert 1 <= self.depth <= self.bpp, f"depth={self.depth} <= bpp={self.bpp}"
+        if self.truecolor:
+            for max, shift in zip(
+                (self.redmax, self.greenmax, self.bluemax),
+                (self.redshift, self.greenshift, self.blueshift),
+            ):
+                assert 1 <= max <= 0xffff, f"1 <= max={max} <= 0xffff"
+                assert max & (max + 1) == 0, f"max={max} not a 2**n-1"
+                assert 0 <= shift <= self.bpp - max.bit_length(), f"shift={shift} not in bpp={self.bpp}"
+
+    @property
+    def bypp(self) -> int:  # bytes-per-pixel
+        return (7 + self.bpp) // 8
+
+    @classmethod
+    def from_bytes(cls, block: bytes) -> "PixelFormat":
+        return cls(*cls.STRUCT.unpack(block))
+
+    def to_bytes(self) -> bytes:
+        return cast(bytes, self.STRUCT.pack(*astuple(self)))
+
+
 # ZRLE helpers
 def _zrle_next_bit(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
     num_pixels = 0
@@ -406,6 +455,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.negotiated_encodings = {
             Encoding.RAW,
         }
+        self.pixel_format = PixelFormat()
+
+    @property
+    def bypp(self) -> int:
+        return self.pixel_format.bypp
 
     # ------------------------------------------------------
     # states used on connection startup
@@ -569,12 +623,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleServerInit(self, block: bytes) -> None:
         (self.width, self.height, pixformat, namelen) = unpack("!HH16sI", block)
-        (
-            self.bpp, self.depth, self.bigendian, self.truecolor,
-            self.redmax, self.greenmax, self.bluemax,
-            self.redshift, self.greenshift, self.blueshift,
-        ) = unpack("!BBBBHHHBBBxxx", pixformat)
-        self.bypp = self.bpp // 8  # calc bytes per pixel
+        self.pixel_format = PixelFormat.from_bytes(pixformat)
+        log.msg(f"Native {self.pixel_format} bytes={self.pixel_format.bypp}")
         self.expect(self._handleServerName, namelen)
 
     def _handleServerName(self, block: bytes) -> None:
@@ -614,6 +664,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
+        log.msg(f"x={x} y={y} w={width} h={height} {Encoding.lookup(encoding)!r}")
         if encoding == Encoding.PSEUDO_LAST_RECT:
             self.rectangles = 0
 
@@ -634,7 +685,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == Encoding.PSEUDO_CURSOR:
                 length = width * height * self.bypp
-                length += int(math.floor((width + 7.0) / 8)) * height
+                length += ((width + 7) // 8) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
                 self._handleDecodeDesktopSize(width, height)
@@ -1084,27 +1135,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # client -> server messages
     # ------------------------------------------------------
 
-    def setPixelFormat(
-        self,
-        bpp: int = 32,
-        depth: int = 24,
-        bigendian: bool = False,
-        truecolor: bool = True,
-        redmax: int = 255,
-        greenmax: int = 255,
-        bluemax: int = 255,
-        redshift: int = 0,
-        greenshift: int = 8,
-        blueshift: int = 16
-    ) -> None:
-        pixformat = pack("!BBBBHHHBBBxxx", bpp, depth, bigendian, truecolor, redmax, greenmax, bluemax, redshift, greenshift, blueshift)
+    def setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        pixformat = pixel_format.to_bytes()
         self.transport.write(pack("!Bxxx16s", 0, pixformat))
-        # rember these settings
-        self.bpp, self.depth, self.bigendian, self.truecolor = bpp, depth, bigendian, truecolor
-        self.redmax, self.greenmax, self.bluemax = redmax, greenmax, bluemax
-        self.redshift, self.greenshift, self.blueshift = redshift, greenshift, blueshift
-        self.bypp = self.bpp // 8  # calc bytes per pixel
-        #~ print(self.bypp)
+        self.pixel_format = pixel_format
 
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
@@ -1240,7 +1274,7 @@ if __name__ == '__main__':
     class RFBTest(RFBClient):
         """dummy client"""
         def vncConnectionMade(self) -> None:
-            print(f"Screen format: depth={self.depth} bytes_per_pixel={self.bpp}")
+            print(f"Screen format: {self.pixel_format}")
             print(f"Desktop name: {self.name!r}")
             self.SetEncodings([Encoding.RAW])
             self.FramebufferUpdateRequest()

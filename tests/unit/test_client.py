@@ -5,6 +5,14 @@ from vncdotool import client, rfb
 
 class TestVNCDoToolClient(TestCase):
 
+    MSG_HANDSHAKE = b"RFB 003.003\n"
+    MSG_INIT = (
+        b"\x00\x00"  # width
+        b"\x00\x00"  # height
+        b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
+        b"\x00\x00\x00\x00"  # server-name-len
+    )
+
     def setUp(self) -> None:
         self.client = client.VNCDoToolClient()
         self.client.transport = mock.Mock()
@@ -18,10 +26,9 @@ class TestVNCDoToolClient(TestCase):
 
     def test_vncConnectionMade(self):
         cli = self.client
-        cli._packet = bytearray(b"RFB 003.003\n")
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
         cli._handleInitial()
-        cli._handleServerInit(b" " * 24)
-        cli.vncConnectionMade()
+        cli._handleServerInit(self.MSG_INIT)
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
         self.client.setEncodings.assert_called_once_with([
@@ -53,9 +60,9 @@ class TestVNCDoToolClient(TestCase):
     @mock.patch('vncdotool.client.Deferred')
     def test_captureScreen(self, Deferred):
         cli = self.client
-        cli._packet = bytearray(b"RFB 003.003\n")
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
         cli._handleInitial()
-        cli._handleServerInit(b" " * 24)
+        cli._handleServerInit(self.MSG_INIT)
         cli.vncConnectionMade()
         fname = 'foo.png'
 
@@ -75,9 +82,9 @@ class TestVNCDoToolClient(TestCase):
     @mock.patch('vncdotool.client.Deferred')
     def test_expectScreen(self, Deferred, image_open):
         cli = self.client
-        cli._packet = bytearray(b"RFB 003.003\n")
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
         cli._handleInitial()
-        cli._handleServerInit(b" " * 24)
+        cli._handleServerInit(self.MSG_INIT)
         cli.vncConnectionMade()
         fname = 'something.png'
 
