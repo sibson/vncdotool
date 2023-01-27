@@ -49,11 +49,16 @@ class IntEnumLookup(IntEnum):
 class Encoding(IntEnumLookup):
     """encoding-type for SetEncodings()"""
 
+    @staticmethod
+    def s32(value: int) -> int:
+        return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
+
     def __new__(cls, value: int) -> "Encoding":
-        # Convert to signed32
-        if value >= 0x8000_0000:
-            value = value - 0x1_0000_0000
-        return int.__new__(cls, value)
+        return int.__new__(cls, cls.s32(value))
+
+    @classmethod
+    def lookup(cls, value: int) -> object:
+        return super().lookup(cls.s32(value))
 
     RAW = 0
     COPY_RECTANGLE = 1
