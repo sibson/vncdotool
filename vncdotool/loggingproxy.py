@@ -11,7 +11,7 @@ from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
 from .client import KEYMAP, VNCDoToolClient
-from .rfb import AuthTypes, IntEnumLookup, PixelFormat, Rect
+from .rfb import AuthTypes, Encoding, IntEnumLookup, PixelFormat, Rect
 
 log = logging.getLogger(__name__)
 
@@ -119,7 +119,7 @@ class RFBServer(Protocol):  # type: ignore[misc]
 
     def _handle_clientInit(self) -> None:
         shared = self.buffer[0]
-        log.debug("Shared server: %s", shared)
+        log.debug("Client shares: %s", shared)
         del self.buffer[:1]
         # XXX react to shared
         # XXX send serverInit
@@ -143,6 +143,8 @@ class RFBServer(Protocol):  # type: ignore[misc]
             nbytes = 4 * nencodings
             encodings = unpack_from('!' + 'I' * nencodings, self.buffer)
             del self.buffer[:nbytes]
+            for encoding in encodings:
+                log.debug(f"Client announces {Encoding.lookup(encoding)!r}")
             self.handle_setEncodings(encodings)
         elif ptype == MsgC2S.FRAMEBUFFER_UPDATE_REQUEST:
             inc, x, y, w, h = unpack('!BHHHH', block)
