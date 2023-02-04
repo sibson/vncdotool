@@ -183,7 +183,7 @@ def build_command_list(
             factory.deferred.addCallback(client.captureScreen, filename, int(incremental_refreshes))
         elif cmd == 'expect':
             filename = args.pop(0)
-            rms = int(args.pop(0))
+            rms = float(args.pop(0))
             factory.deferred.addCallback(client.expectScreen, filename, rms)
         elif cmd == 'rcapture':
             filename = args.pop(0)
@@ -199,7 +199,7 @@ def build_command_list(
             filename = args.pop(0)
             x = int(args.pop(0))
             y = int(args.pop(0))
-            rms = int(args.pop(0))
+            rms = float(args.pop(0))
             factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
         elif cmd in ('pause', 'sleep'):
             duration = float(args.pop(0)) / warp
