@@ -141,8 +141,8 @@ PF2IM = {
     RGB24: "RGB",
     RGB32: "RGBX",
     BGR16: "BGR;16",
-    rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR;24",
-    rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR;32",
+    rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR",
+    rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0): "BGRX",
 }
 
 
