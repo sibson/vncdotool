@@ -659,7 +659,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.expect(self._handleRectangle, 12)
         else:
-            self.commitUpdate(self.rectanglePos)
+            if self.rectanglePos:
+                self.commitUpdate(self.rectanglePos)
             self.expect(self._handleConnection, 1)
 
     def _handleRectangle(self, block: bytes) -> None:
@@ -691,6 +692,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._handleDecodeDesktopSize(width, height)
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+                del self.rectanglePos[-1]  # undo append as this is no real update
+                self._doConnection()
             else:
                 log.msg(f"unknown encoding received {Encoding.lookup(encoding)!r}")
                 self.transport.loseConnection()
