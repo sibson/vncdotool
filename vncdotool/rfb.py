@@ -18,7 +18,7 @@ import sys
 import zlib
 from dataclasses import astuple, dataclass
 from enum import IntEnum, IntFlag
-from struct import Struct, pack, unpack
+from struct import Struct, pack, unpack, unpack_from
 from typing import Any, Callable, ClassVar, Collection, Dict, Iterator, List, Optional, Tuple, cast
 
 from Crypto.Cipher import AES
@@ -228,7 +228,7 @@ class AuthTypes(IntEnumLookup):
 class MsgS2C(IntEnumLookup):
     """RFC 6143 §7.6. Server-to-Client Messages."""
     FRAMEBUFFER_UPDATE = 0
-    SET_COLUOR_MAP_ENTRIES = 1
+    SET_COLOUR_MAP_ENTRIES = 1
     BELL = 2
     SERVER_CUT_TEXT = 3
     RESIZE_FRAME_BUFFER_4 = 4
@@ -654,6 +654,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (msgid,) = unpack("!B", block)
         if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
+        elif msgid == MsgS2C.SET_COLOUR_MAP_ENTRIES:
+            self.expect(self._handleColourMapEntries, 5)
         elif msgid == MsgS2C.BELL:
             self.bell()
             self.expect(self._handleConnection, 1)
@@ -1112,6 +1114,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     # ---  other server messages
 
+    def _handleColourMapEntries(self, block: bytes) -> None:
+        (first_color, number_of_colors) = unpack("!xHH", block)
+        self.expect(self._handleColourMapEntriesValue, 6 * number_of_colors, first_color)
+
+    def _handleColourMapEntriesValue(self, block: bytes, first_color: int) -> None:
+        colors = [unpack_from("!HHH", block, offset) for offset in range(0, len(block), 6)]
+        self.set_color_map(first_color, cast(List[Tuple[int, int, int]], colors))
+        self.expect(self._handleConnection, 1)
+
     def _handleServerCutText(self, block: bytes) -> None:
         (length, ) = unpack("!xxxI", block)
         self.expect(self._handleServerCutTextValue, length)
@@ -1251,6 +1262,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         """ New desktop size of width*height. """
+
+    def set_color_map(self, first: int, colors: List[Tuple[int, int, int]]) -> None:
+        """The server is using a new color map."""
 
     def bell(self) -> None:
         """bell"""
