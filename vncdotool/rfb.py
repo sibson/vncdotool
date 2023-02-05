@@ -14,7 +14,6 @@ MIT License
 
 import getpass
 import os
-import re
 import sys
 import zlib
 from dataclasses import astuple, dataclass
@@ -418,7 +417,6 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 
 class RFBClient(Protocol):  # type: ignore[misc]
 
-    RE_HANDSHAKE = re.compile(b"^RFB[ ]([0-9]{3})[.]([0-9]{3})[\n]")
     # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
     SUPPORTED_SERVER_VERSIONS = {
         (3, 3),
@@ -449,6 +447,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
+    _HEADER = b'RFB 000.000\n'
+    _HEADER_TRANSLATE = bytes.maketrans(b'0123456789', b'0' * 10)
+
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
@@ -473,9 +474,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # ------------------------------------------------------
 
     def _handleInitial(self) -> None:
-        m = self.RE_HANDSHAKE.match(self._packet)
-        if m:
-            version_server = (int(m[1]), int(m[2]))
+        head = self._packet[:12]
+        norm = head.translate(self._HEADER_TRANSLATE)
+        if norm == self._HEADER:
+            version_server = (int(head[4:7]), int(head[8:11]))
             if version_server not in self.SUPPORTED_SERVER_VERSIONS:
                 log.msg("Protocol version %d.%d not supported" % version_server)
 
@@ -493,6 +495,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleAuth, 4)
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
+        elif not self._HEADER.startswith(norm):
+            log.msg(f"invalid initial server response {head!r}")
+            self.transport.loseConnection()
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
         (num_types,) = unpack("!B", block)
