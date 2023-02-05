@@ -525,6 +525,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleDHAuth, 4)
         else:
             log.msg(f"unknown security types: {types!r}")
+            self.transport.loseConnection()
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
@@ -533,11 +534,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleConnFailed, 4)
         elif auth == AuthTypes.NONE:
             self._doClientInitialization()
-            return
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
             log.msg(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+            self.transport.loseConnection()
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
@@ -545,6 +546,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleConnMessage(self, block: bytes) -> None:
         log.msg(f"Connection refused: {block!r}")
+        self.transport.loseConnection()
 
     def _handleVNCAuth(self, block: bytes) -> None:
         self._challenge = block
@@ -619,6 +621,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleAuthFailed, 4)
         else:
             log.msg(f"unknown auth response ({result})")
+            self.transport.loseConnection()
 
     def _handleAuthFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
