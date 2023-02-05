@@ -20,7 +20,7 @@ import zlib
 from dataclasses import astuple, dataclass
 from enum import IntEnum, IntFlag
 from struct import Struct, pack, unpack
-from typing import Any, Callable, ClassVar, Collection, Iterator, List, Optional, Tuple, cast
+from typing import Any, Callable, ClassVar, Collection, Dict, Iterator, List, Optional, Tuple, cast
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
@@ -452,6 +452,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
+        self._expected_len = 12
+        self._expected_args: Tuple[Any, ...] = ()
+        self._expected_kwargs: Dict[str, Any] = {}
         self._already_expecting = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
