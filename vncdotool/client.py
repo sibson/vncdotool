@@ -10,8 +10,9 @@ import logging
 import math
 import socket
 import time
+from pathlib import Path
 from struct import pack
-from typing import Any, List, Optional, TypeVar
+from typing import IO, Any, List, Optional, TypeVar, Union
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
@@ -22,6 +23,7 @@ from twisted.python.failure import Failure
 from . import rfb
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
+TFile = Union[str, Path, IO[bytes]]
 
 log = logging.getLogger(__name__)
 
@@ -251,36 +253,36 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, filename: str, incremental: bool = False) -> Deferred:
+    def captureScreen(self, fp: TFile, incremental: bool = False) -> Deferred:
         """ Save the current display to filename
         """
-        log.debug('captureScreen %s', filename)
-        return self._capture(filename, incremental)
+        log.debug('captureScreen %s', fp)
+        return self._capture(fp, incremental)
 
-    def captureRegion(self, filename: str, x: int, y: int, w: int, h: int, incremental: bool = False) -> Deferred:
+    def captureRegion(self, fp: TFile, x: int, y: int, w: int, h: int, incremental: bool = False) -> Deferred:
         """ Save a region of the current display to filename
         """
-        log.debug('captureRegion %s', filename)
-        return self._capture(filename, incremental, x, y, x + w, y + h)
+        log.debug('captureRegion %s', fp)
+        return self._capture(fp, incremental, x, y, x + w, y + h)
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, filename: str, incremental: bool, *args: int) -> Deferred:
+    def _capture(self, fp: TFile, incremental: bool, *args: int) -> Deferred:
         d = self.refreshScreen(incremental)
-        d.addCallback(self._captureSave, filename, *args)
+        d.addCallback(self._captureSave, fp, *args)
         return d
 
-    def _captureSave(self: TClient, data: object, filename: str, *args: int) -> TClient:
-        log.debug('captureSave %s', filename)
+    def _captureSave(self: TClient, data: object, fp: TFile, *args: int) -> TClient:
+        log.debug('captureSave %s', fp)
         assert self.screen is not None
         if args:
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
-        capture.save(filename)
+        capture.save(fp)
 
         return self
 
