@@ -420,13 +420,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     RE_HANDSHAKE = re.compile(b"^RFB[ ]([0-9]{3})[.]([0-9]{3})[\n]")
     # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
-    SUPPORTED_VERSIONS = {
+    SUPPORTED_SERVER_VERSIONS = {
         (3, 3),
         # (3, 5),
         (3, 7),
         (3, 8),
         (3, 889),  # Apple Remote Desktop
+        (4, 0),  # Intel AMT KVM
+        (4, 1),  # RealVNC 4.6
+        (5, 0),  # RealVNC 5.3
     }
+    MAX_CLIENT_VERSION = (3, 8)
     SUPPORTED_AUTHS = {
         AuthTypes.NONE,
         AuthTypes.VNC_AUTHENTICATION,
@@ -469,13 +473,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
         m = self.RE_HANDSHAKE.match(self._packet)
         if m:
             version_server = (int(m[1]), int(m[2]))
-            if version_server == (3, 889):  # Apple Remote Desktop
-                version_server = (3, 8)
-            if version_server in self.SUPPORTED_VERSIONS:
-                version = version_server
-            else:
+            if version_server not in self.SUPPORTED_SERVER_VERSIONS:
                 log.msg("Protocol version %d.%d not supported" % version_server)
-                version = max(x for x in self.SUPPORTED_VERSIONS if x <= version_server)
+
+            version = max(v for v in self.SUPPORTED_SERVER_VERSIONS if v <= version_server)
+            if version > self.MAX_CLIENT_VERSION:
+                version = self.MAX_CLIENT_VERSION
 
             del self._packet[0:12]
             log.msg("Using protocol version %d.%d" % version)
