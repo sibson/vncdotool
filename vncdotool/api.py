@@ -117,11 +117,11 @@ class ThreadedVNCClientProxy:
 
 def connect(
     server: str,
-    username: Optional[str] = None,
     password: Optional[str] = None,
     factory_class: Type[VNCDoToolFactory] = VNCDoToolFactory,
     proxy: Type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
     timeout: Optional[float] = None,
+    username: Optional[str] = None,
 ) -> ThreadedVNCClientProxy:
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
