@@ -14,13 +14,12 @@ MIT License
 
 import getpass
 import os
-import re
 import sys
 import zlib
 from dataclasses import astuple, dataclass
 from enum import IntEnum, IntFlag
-from struct import Struct, pack, unpack
-from typing import Any, Callable, ClassVar, Collection, Iterator, List, Optional, Tuple, cast
+from struct import Struct, pack, unpack, unpack_from
+from typing import Any, Callable, ClassVar, Collection, Dict, Iterator, List, Optional, Tuple, cast
 
 from Crypto.Cipher import AES
 from Crypto.Hash import MD5
@@ -229,7 +228,7 @@ class AuthTypes(IntEnumLookup):
 class MsgS2C(IntEnumLookup):
     """RFC 6143 §7.6. Server-to-Client Messages."""
     FRAMEBUFFER_UPDATE = 0
-    SET_COLUOR_MAP_ENTRIES = 1
+    SET_COLOUR_MAP_ENTRIES = 1
     BELL = 2
     SERVER_CUT_TEXT = 3
     RESIZE_FRAME_BUFFER_4 = 4
@@ -418,7 +417,6 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
 
 class RFBClient(Protocol):  # type: ignore[misc]
 
-    RE_HANDSHAKE = re.compile(b"^RFB[ ]([0-9]{3})[.]([0-9]{3})[\n]")
     # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
     SUPPORTED_SERVER_VERSIONS = {
         (3, 3),
@@ -449,9 +447,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
+    _HEADER = b'RFB 000.000\n'
+    _HEADER_TRANSLATE = bytes.maketrans(b'0123456789', b'0' * 10)
+
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
+        self._expected_len = 12
+        self._expected_args: Tuple[Any, ...] = ()
+        self._expected_kwargs: Dict[str, Any] = {}
         self._already_expecting = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
@@ -470,9 +474,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # ------------------------------------------------------
 
     def _handleInitial(self) -> None:
-        m = self.RE_HANDSHAKE.match(self._packet)
-        if m:
-            version_server = (int(m[1]), int(m[2]))
+        head = self._packet[:12]
+        norm = head.translate(self._HEADER_TRANSLATE)
+        if norm == self._HEADER:
+            version_server = (int(head[4:7]), int(head[8:11]))
             if version_server not in self.SUPPORTED_SERVER_VERSIONS:
                 log.msg("Protocol version %d.%d not supported" % version_server)
 
@@ -490,6 +495,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleAuth, 4)
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
+        elif not self._HEADER.startswith(norm):
+            log.msg(f"invalid initial server response {head!r}")
+            self.transport.loseConnection()
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
         (num_types,) = unpack("!B", block)
@@ -517,6 +525,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleDHAuth, 4)
         else:
             log.msg(f"unknown security types: {types!r}")
+            self.transport.loseConnection()
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
@@ -525,11 +534,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleConnFailed, 4)
         elif auth == AuthTypes.NONE:
             self._doClientInitialization()
-            return
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
             log.msg(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+            self.transport.loseConnection()
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
@@ -537,6 +546,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleConnMessage(self, block: bytes) -> None:
         log.msg(f"Connection refused: {block!r}")
+        self.transport.loseConnection()
 
     def _handleVNCAuth(self, block: bytes) -> None:
         self._challenge = block
@@ -611,6 +621,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self.expect(self._handleAuthFailed, 4)
         else:
             log.msg(f"unknown auth response ({result})")
+            self.transport.loseConnection()
 
     def _handleAuthFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
@@ -643,6 +654,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (msgid,) = unpack("!B", block)
         if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
+        elif msgid == MsgS2C.SET_COLOUR_MAP_ENTRIES:
+            self.expect(self._handleColourMapEntries, 5)
         elif msgid == MsgS2C.BELL:
             self.bell()
             self.expect(self._handleConnection, 1)
@@ -1101,6 +1114,15 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     # ---  other server messages
 
+    def _handleColourMapEntries(self, block: bytes) -> None:
+        (first_color, number_of_colors) = unpack("!xHH", block)
+        self.expect(self._handleColourMapEntriesValue, 6 * number_of_colors, first_color)
+
+    def _handleColourMapEntriesValue(self, block: bytes, first_color: int) -> None:
+        colors = [unpack_from("!HHH", block, offset) for offset in range(0, len(block), 6)]
+        self.set_color_map(first_color, cast(List[Tuple[int, int, int]], colors))
+        self.expect(self._handleConnection, 1)
+
     def _handleServerCutText(self, block: bytes) -> None:
         (length, ) = unpack("!xxxI", block)
         self.expect(self._handleServerCutTextValue, length)
@@ -1240,6 +1262,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         """ New desktop size of width*height. """
+
+    def set_color_map(self, first: int, colors: List[Tuple[int, int, int]]) -> None:
+        """The server is using a new color map."""
 
     def bell(self) -> None:
         """bell"""
