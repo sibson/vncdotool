@@ -121,6 +121,7 @@ def connect(
     factory_class: Type[VNCDoToolFactory] = VNCDoToolFactory,
     proxy: Type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
     timeout: Optional[float] = None,
+    username: Optional[str] = None,
 ) -> ThreadedVNCClientProxy:
     """ Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
@@ -150,6 +151,9 @@ def connect(
         observer.start()
 
     factory = factory_class()
+
+    if username is not None:
+        factory.username = username
 
     if password is not None:
         factory.password = password
