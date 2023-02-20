@@ -26,12 +26,3 @@ https://github.com/techtonik/python-vnc-viewer
 Released under the MIT License.
 
 You're free to use it for commercial and noncommercial application, modify and redistribute it as long as the copyright notices are intact. There are no warranties, not even that it does what it says to do ;
-
-
-pyDes.py
------------
-https://github.com/twhiteman/pyDes/
-
-Public Domain - free to do as you wish
-
-Note: the latest version is now MIT License, but as imported into vncdotool it was Public Domain
