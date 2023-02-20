@@ -21,7 +21,7 @@ from enum import IntEnum, IntFlag
 from struct import Struct, pack, unpack, unpack_from
 from typing import Any, Callable, ClassVar, Collection, Dict, Iterator, List, Optional, Tuple, cast
 
-from Cryptodome.Cipher import AES
+from Cryptodome.Cipher import AES, DES
 from Cryptodome.Hash import MD5
 from Cryptodome.Util.number import bytes_to_long, long_to_bytes
 from twisted.application import internet, service
@@ -30,8 +30,6 @@ from twisted.internet.interfaces import IConnector
 from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
-
-from . import pyDes
 
 Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
@@ -596,8 +594,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def sendPassword(self, password: str) -> None:
         """send password"""
-        pw = f"{password:\0<8.8}"  # make sure its 8 chars long, zero padded
-        des = RFBDes(pw.encode("ASCII"))  # unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
+        key = _vnc_des(password)
+        des = DES.new(key, DES.MODE_ECB)
         response = des.encrypt(self._challenge)
         self.transport.write(response)
 
@@ -1286,17 +1284,18 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
         self.shared = shared
 
 
-class RFBDes(pyDes.des):
-    def setKey(self, key: bytes) -> None:
-        """RFB protocol for authentication requires client to encrypt
-           challenge sent by server with password using DES method. However,
-           bits in each byte of the password are put in reverse order before
-           using it as encryption key."""
-        newkey = bytes(
-            sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8))
-            for k in key
-        )
-        super().setKey(newkey)
+def _vnc_des(password: str) -> bytes:
+    """RFB protocol for authentication requires client to encrypt
+        challenge sent by server with password using DES method. However,
+        bits in each byte of the password are put in reverse order before
+        using it as encryption key."""
+    pw = f"{password:\0<8.8}"  # make sure its 8 chars long, zero padded
+    key = pw.encode("ASCII")  # unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
+    key = bytes(
+        sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8))
+        for k in key
+    )
+    return key
 
 
 # --- test code only, see vncviewer.py
