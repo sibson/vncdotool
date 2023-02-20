@@ -21,9 +21,9 @@ from enum import IntEnum, IntFlag
 from struct import Struct, pack, unpack, unpack_from
 from typing import Any, Callable, ClassVar, Collection, Dict, Iterator, List, Optional, Tuple, cast
 
-from Crypto.Cipher import AES
-from Crypto.Hash import MD5
-from Crypto.Util.number import bytes_to_long, long_to_bytes
+from Cryptodome.Cipher import AES
+from Cryptodome.Hash import MD5
+from Cryptodome.Util.number import bytes_to_long, long_to_bytes
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector
