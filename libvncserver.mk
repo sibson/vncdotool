@@ -9,8 +9,8 @@ LIBVNCSERVER_TGZ?=LibVNCServer-$(LIBVNCSERVER_VERSION).tar.gz
 LIBVNCSERVER_URL?=https://github.com/LibVNC/libvncserver/archive/refs/tags/$(LIBVNCSERVER_TGZ)
 
 LIBVNCSERVER_DIR?=$(BUILD_DIR)/libvncserver-LibVNCServer-$(LIBVNCSERVER_VERSION)
-LIBVNCSERVER_MAKEFILE=$(BUILD_DIR)/$(LIBVNCSERVER_DIR)/Makefile
-LIBVNCSERVER_MAKEFILE_SRCS=$(wildcard $(BUILD_DIR)/$(LIBVNCSERVER_DIR)/*.cmake)
+LIBVNCSERVER_MAKEFILE=$(LIBVNCSERVER_DIR)/Makefile
+LIBVNCSERVER_MAKEFILE_SRCS=$(wildcard $(LIBVNCSERVER_DIR)/*.cmake)
 
 
 LIBVNCSERVER_EXAMPLES=vncev
@@ -48,4 +48,4 @@ $(LIBVNCSERVER_EXAMPLES): $(LIBVNCSERVER_EXAMPLES_SRCS)
 .PHONY: test-libvnc
 test-libvnc: export PATH:=$(PATH):$(LIBVNCSERVER_DIR)/examples
 test-libvnc:
-	$(PYTHON) -m unittest discover tests/functional
+	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) tests/functional
