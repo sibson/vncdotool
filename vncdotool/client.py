@@ -9,6 +9,7 @@ MIT License
 from . import rfb
 from twisted.internet.defer import Deferred
 from twisted.internet import reactor
+from twisted.python.failure import Failure
 
 import math
 import time
@@ -305,8 +306,11 @@ class VNCDoToolClient(rfb.RFBClient):
             if rms <= maxrms:
                 return self
 
+        # FIXME: this gets into a tight loop
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, maxrms)
+        # FIXME: this is a hack to get a timeout if the expected image is not found
+        self.deferred.addTimeout(30, reactor, Failure)
         self.framebufferUpdateRequest(incremental=1)  # use box ~(x, y, w - x, h - y)?
 
         return self.deferred
