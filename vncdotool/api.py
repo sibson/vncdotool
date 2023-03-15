@@ -97,14 +97,19 @@ class ThreadedVNCClientProxy(object):
             return d
 
         def proxy_call(*args, **kwargs):
+            # print(f"proxy_call: {args} {kwargs} self.queue:{self.queue}")
             reactor.callFromThread(self.factory.deferred.addCallbacks,
                                    callback, errback, args, kwargs)
             try:
                 result = self.queue.get(timeout=self._timeout)
+                # print(f"proxy_call: result: {result}  {self.queue}")
             except queue.Empty:
+                # print(f"proxy_call: queue.Empty: {self.queue}")
                 raise TimeoutError("Timeout while waiting for client response")
 
             if isinstance(result, Failure):
+                # print(f"isinstance(result, Failure): {result}")
+                # self.queue = queue.Queue()
                 raise VNCDoException(result)
 
             return result

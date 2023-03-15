@@ -284,6 +284,15 @@ class VNCDoToolClient(rfb.RFBClient):
         # FIXME: this is a hack to convert RGB
         image = image.convert("RGB")
         w, h = image.size
+        log.info(
+            "expected frame buffer: filename: %s, (x: %d, y: %d, w: %d, h: %d), maximum rms: %s",
+            filename,
+            x,
+            y,
+            w,
+            h,
+            int(maxrms),
+        )
         self.expected = image.histogram()
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, (x, y, x + w, y + h), maxrms)
@@ -291,6 +300,9 @@ class VNCDoToolClient(rfb.RFBClient):
         return self.deferred
 
     def _expectCompare(self, data, box, maxrms):
+        """
+        :param: box: (x, y, w, h) of the region to compare x,y point then width and height
+        """
         image = self.screen.crop(box)
         # FIXME: this is a hack to convert RGB
         image = image.convert("RGB")
@@ -302,7 +314,12 @@ class VNCDoToolClient(rfb.RFBClient):
                 sum_ += (h - e) ** 2
             rms = math.sqrt(sum_ / len(hist))
 
-            log.debug('rms:%s maxrms: %s', int(rms), int(maxrms))
+            log.info(
+                "expected image compare: actual rms: %s, maximum rms: %s",
+                int(rms),
+                int(maxrms),
+            )
+            # print('_expectCompare: rms:{} maxrms: {}'.format(int(rms), int(maxrms)))
             if rms <= maxrms:
                 return self
 
