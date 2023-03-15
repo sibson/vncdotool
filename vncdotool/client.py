@@ -280,6 +280,8 @@ class VNCDoToolClient(rfb.RFBClient):
     def _expectFramebuffer(self, filename, x, y, maxrms):
         self.framebufferUpdateRequest(incremental=1)
         image = Image.open(filename)
+        # FIXME: this is a hack to convert RGB
+        image = image.convert("RGB")
         w, h = image.size
         self.expected = image.histogram()
         self.deferred = Deferred()
@@ -289,6 +291,8 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _expectCompare(self, data, box, maxrms):
         image = self.screen.crop(box)
+        # FIXME: this is a hack to convert RGB
+        image = image.convert("RGB")
 
         hist = image.histogram()
         if len(hist) == len(self.expected):
