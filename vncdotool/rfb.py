@@ -27,7 +27,21 @@ from twisted.application import internet, service
 
 # Python3 compatibility replacement for ord(str) as ord(byte)
 if not isinstance(b' ', str):
-    def ord(x): return x
+    original_ord = ord
+
+    def ord(x):
+        # in python 2, there are two possible cases ord is used.
+        # * string of length > 1, --(index access)--> string of length 1 --(ord)--> int
+        # * string of length 1 --(ord)--> int
+        # however in python3, this usage morphs into
+        # * byte of length > 1, --(index access)--> int --(ord)--> Error
+        # * byte of length 1 --(ord)--> int
+        if isinstance(x, int):
+            return x
+        elif isinstance(x, bytes) or isinstance(x, str):
+            return original_ord(x)
+        else:
+            raise TypeError("ord takes an int, a byte, or a str. Got f{type(x)} : f{x}")
 
 #encoding-type
 #for SetEncodings()
