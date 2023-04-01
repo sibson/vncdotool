@@ -1,3 +1,4 @@
 -r requirements.txt
 pexpect==4.8.0
 pyvirtualdisplay==3.0
+twine
