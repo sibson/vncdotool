@@ -89,7 +89,7 @@ class ThreadedVNCClientProxy:
             d.addBoth(result_callback)
             return d
 
-        def errback_not_connected(reason: Failure, *args: Any, **kwargs: Any) -> None:
+        def errback_not_connected(reason: Failure, *args: Any, **kwargs: Any) -> Failure:
             self.queue.put(reason)
             return reason
 
