@@ -132,7 +132,11 @@ except ImportError:
     PIL = _RuntimeImportError()
 
 
-class AuthenticationError(Exception):
+class VNCDoException(Exception):
+    pass
+
+
+class AuthenticationError(VNCDoException):
     """ VNC Server requires Authentication """
 
 
@@ -521,7 +525,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
         self.deferred = Deferred()
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
-        self.deferred.errback(reason)
+        pass
 
     def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
         self.deferred.errback(reason)

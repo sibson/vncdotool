@@ -1,4 +1,4 @@
-1.1.0 (unreleased)
+1.1.0 (2023-04-01)
 ----------------------
 Huge thanks to @pmhahn for single handedly driving conversion to modern Python3, as well
 as cleaning up a ton of outstanding issues.
