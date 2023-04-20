@@ -161,8 +161,6 @@ def connect(
         )
         _THREAD.daemon = True
         _THREAD.name = 'Twisted Reactor'
-
-
         _THREAD.start()
 
         observer = PythonLoggingObserver()
