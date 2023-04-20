@@ -142,9 +142,6 @@ def connect(
     http://twistedmatrix.com/documents/13.0.0/core/howto/choosing-reactor.html
     for a better method of intergrating vncdotool.
     """
-
-
-
     if not reactor.running:
 
         # For api.shutdown to kill reactor threads before trying to exit due to an Exception
