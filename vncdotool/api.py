@@ -94,12 +94,13 @@ class ThreadedVNCClientProxy:
             return reason
 
         def callable_threaded_proxy(*args: Any, **kwargs: Any) -> Any:
-            reactor.callFromThread(
-                    self.factory.deferred.addCallbacks, # ensure we're connected
-                                   threaded_call,
-                                   errback_not_connected,
-                                   args,
-                                   kwargs)
+        reactor.callFromThread(
+            self.factory.deferred.addCallbacks,  # ensure we're connected
+            threaded_call,
+            errback_not_connected,
+            args,
+            kwargs,
+        )
             try:
                 result = self.queue.get(timeout=self._timeout)
             except queue.Empty:
