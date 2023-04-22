@@ -9,6 +9,7 @@ import queue
 import socket
 import sys
 import threading
+from types import TracebackType
 from typing import Any, List, Optional, Type, TypeVar
 
 from twisted.internet import reactor
@@ -29,17 +30,16 @@ log = logging.getLogger(__name__)
 _THREAD: Optional[threading.Thread] = None
 
 
-class VNCDoException(Exception):
-    pass
-
 
 def shutdown() -> None:
     if not reactor.running:
         return
 
     reactor.callFromThread(reactor.stop)
+    global _THREAD
     if _THREAD is not None:
         _THREAD.join()
+        _THREAD = None
 
 
 class ThreadedVNCClientProxy:
@@ -82,10 +82,7 @@ class ThreadedVNCClientProxy:
     def __getattr__(self, attr: str) -> Any:
         method = getattr(self.factory.protocol, attr)
 
-        def errback(reason: Failure, *args: Any, **kwargs: Any) -> None:
-            self.queue.put(Failure(reason))
-
-        def callback(protocol: VNCDoToolClient, *args: Any, **kwargs: Any) -> Deferred:
+        def threaded_call(protocol: VNCDoToolClient, *args: Any, **kwargs: Any) -> Deferred:
             def result_callback(result: V) -> V:
                 self.queue.put(result)
                 return result
@@ -93,21 +90,30 @@ class ThreadedVNCClientProxy:
             d.addBoth(result_callback)
             return d
 
-        def proxy_call(*args: Any, **kwargs: Any) -> Any:
-            reactor.callFromThread(self.factory.deferred.addCallbacks,
-                                   callback, errback, args, kwargs)
+        def errback_not_connected(reason: Failure, *args: Any, **kwargs: Any) -> Failure:
+            self.queue.put(reason)
+            return reason
+
+        def callable_threaded_proxy(*args: Any, **kwargs: Any) -> Any:
+            reactor.callFromThread(
+                self.factory.deferred.addCallbacks,  # ensure we're connected
+                threaded_call,
+                errback_not_connected,
+                args,
+                kwargs,
+            )
             try:
                 result = self.queue.get(timeout=self._timeout)
             except queue.Empty:
                 raise TimeoutError("Timeout while waiting for client response")
 
             if isinstance(result, Failure):
-                raise VNCDoException(result)
+                result.raiseException()
 
             return result
 
         if callable(method):
-            return proxy_call
+            return callable_threaded_proxy
         else:
             return getattr(self.protocol, attr)
 
@@ -138,6 +144,15 @@ def connect(
     for a better method of intergrating vncdotool.
     """
     if not reactor.running:
+        # ensure we kill reactor threads before trying to exit due to an Exception
+        sys_excepthook = sys.excepthook
+
+        def ensure_reactor_stopped(etype: Type[BaseException], value: BaseException, traceback: TracebackType) -> None:
+            shutdown()
+            sys_excepthook(etype, value, traceback)
+
+        sys.excepthook = ensure_reactor_stopped
+
         global _THREAD
         _THREAD = threading.Thread(
             target=reactor.run,
@@ -145,6 +160,7 @@ def connect(
             kwargs={'installSignalHandlers': False},
         )
         _THREAD.daemon = True
+        _THREAD.name = 'Twisted Reactor'
         _THREAD.start()
 
         observer = PythonLoggingObserver()
