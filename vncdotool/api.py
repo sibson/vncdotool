@@ -94,13 +94,13 @@ class ThreadedVNCClientProxy:
             return reason
 
         def callable_threaded_proxy(*args: Any, **kwargs: Any) -> Any:
-        reactor.callFromThread(
-            self.factory.deferred.addCallbacks,  # ensure we're connected
-            threaded_call,
-            errback_not_connected,
-            args,
-            kwargs,
-        )
+            reactor.callFromThread(
+                self.factory.deferred.addCallbacks,  # ensure we're connected
+                threaded_call,
+                errback_not_connected,
+                args,
+                kwargs,
+            )
             try:
                 result = self.queue.get(timeout=self._timeout)
             except queue.Empty:
@@ -143,12 +143,13 @@ def connect(
     for a better method of intergrating vncdotool.
     """
     if not reactor.running:
-
-        # For api.shutdown to kill reactor threads before trying to exit due to an Exception
+        # ensure we kill reactor threads before trying to exit due to an Exception
         sys_excepthook = sys.excepthook
+
         def ensure_reactor_stopped(etype, value, traceback):
             shutdown()
             sys_excepthook(etype, value, traceback)
+
         sys.excepthook = ensure_reactor_stopped
 
         global _THREAD
