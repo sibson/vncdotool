@@ -9,6 +9,7 @@ import queue
 import socket
 import sys
 import threading
+from types import TracebackType
 from typing import Any, List, Optional, Type, TypeVar
 
 from twisted.internet import reactor
@@ -146,7 +147,7 @@ def connect(
         # ensure we kill reactor threads before trying to exit due to an Exception
         sys_excepthook = sys.excepthook
 
-        def ensure_reactor_stopped(etype, value, traceback):
+        def ensure_reactor_stopped(etype: Type[BaseException], value: BaseException, traceback: TracebackType) -> None:
             shutdown()
             sys_excepthook(etype, value, traceback)
 
