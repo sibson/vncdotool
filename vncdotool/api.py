@@ -23,12 +23,11 @@ from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
 V = TypeVar("V")
 TProxy = TypeVar("TProxy", bound="ThreadedVNCClientProxy")
 
-__all__ = ['connect']
+__all__ = ["connect"]
 
 log = logging.getLogger(__name__)
 
 _THREAD: Optional[threading.Thread] = None
-
 
 
 def shutdown() -> None:
@@ -43,8 +42,9 @@ def shutdown() -> None:
 
 
 class ThreadedVNCClientProxy:
-
-    def __init__(self, factory: Type[VNCDoToolFactory], timeout: Optional[float] = 60 * 60) -> None:
+    def __init__(
+        self, factory: Type[VNCDoToolFactory], timeout: Optional[float] = 60 * 60
+    ) -> None:
         self.factory = factory
         self.queue: queue.Queue[Any] = queue.Queue()
         self._timeout = timeout
@@ -66,31 +66,39 @@ class ThreadedVNCClientProxy:
         """Timeout in seconds for API requests."""
         self._timeout = timeout
 
-    def connect(self, host: str, port: int = 5900, family: socket.AddressFamily = socket.AF_INET) -> None:
+    def connect(
+        self, host: str, port: int = 5900, family: socket.AddressFamily = socket.AF_INET
+    ) -> None:
         def capture_protocol(protocol: TClient) -> TClient:
             self.protocol = protocol
             return protocol
+
         self.factory.deferred.addCallback(capture_protocol)
-        reactor.callWhenRunning(
-            factory_connect, self.factory, host, port, family)
+        reactor.callWhenRunning(factory_connect, self.factory, host, port, family)
 
     def disconnect(self) -> None:
         def disconnector(protocol: VNCDoToolClient) -> None:
             protocol.transport.loseConnection()
+
         reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
 
     def __getattr__(self, attr: str) -> Any:
         method = getattr(self.factory.protocol, attr)
 
-        def threaded_call(protocol: VNCDoToolClient, *args: Any, **kwargs: Any) -> Deferred:
+        def threaded_call(
+            protocol: VNCDoToolClient, *args: Any, **kwargs: Any
+        ) -> Deferred:
             def result_callback(result: V) -> V:
                 self.queue.put(result)
                 return result
+
             d = maybeDeferred(method, protocol, *args, **kwargs)
             d.addBoth(result_callback)
             return d
 
-        def errback_not_connected(reason: Failure, *args: Any, **kwargs: Any) -> Failure:
+        def errback_not_connected(
+            reason: Failure, *args: Any, **kwargs: Any
+        ) -> Failure:
             self.queue.put(reason)
             return reason
 
@@ -129,7 +137,7 @@ def connect(
     timeout: Optional[float] = None,
     username: Optional[str] = None,
 ) -> ThreadedVNCClientProxy:
-    """ Connect to a VNCServer and return a Client instance that is usable
+    """Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
 
     >>> from vncdotool import api
@@ -147,7 +155,9 @@ def connect(
         # ensure we kill reactor threads before trying to exit due to an Exception
         sys_excepthook = sys.excepthook
 
-        def ensure_reactor_stopped(etype: Type[BaseException], value: BaseException, traceback: TracebackType) -> None:
+        def ensure_reactor_stopped(
+            etype: Type[BaseException], value: BaseException, traceback: TracebackType
+        ) -> None:
             shutdown()
             sys_excepthook(etype, value, traceback)
 
@@ -156,11 +166,11 @@ def connect(
         global _THREAD
         _THREAD = threading.Thread(
             target=reactor.run,
-            name='Twisted',
-            kwargs={'installSignalHandlers': False},
+            name="Twisted",
+            kwargs={"installSignalHandlers": False},
         )
         _THREAD.daemon = True
-        _THREAD.name = 'Twisted Reactor'
+        _THREAD.name = "Twisted Reactor"
         _THREAD.start()
 
         observer = PythonLoggingObserver()
@@ -181,7 +191,7 @@ def connect(
     return client
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
 
     server = sys.argv[1]
@@ -189,12 +199,12 @@ if __name__ == '__main__':
     client1 = connect(server, password)
     client2 = connect(server, password)
 
-    client1.captureScreen('screenshot.png')
+    client1.captureScreen("screenshot.png")
 
-    for key in 'username':
+    for key in "username":
         client2.keyPress(key)
 
-    for key in 'passw0rd':
+    for key in "passw0rd":
         client1.keyPress(key)
 
     client1.disconnect()
