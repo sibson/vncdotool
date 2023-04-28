@@ -1,4 +1,11 @@
-.. image:: https://img.shields.io/pypi/v/vncdotool   :alt: PyPI
+.. image:: https://img.shields.io/pypi/v/vncdotool
+    :target: https://pypi.org/project/vncdotool/
+    :alt: PyPi Package Repository
+
+.. image:: https://img.shields.io/badge/code%20style-black-000000.svg
+    :target: https://github.com/psf/black
+    :alt: Black Code Formatter
+
 
 vncdotool
 ===========
