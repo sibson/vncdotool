@@ -1,10 +1,27 @@
+.. image:: https://img.shields.io/pypi/pyversions/vncdotool.svg
+   :target: https://pypi.python.org/pypi/vncdotool
+   :alt: Python Versions
+
 .. image:: https://img.shields.io/pypi/v/vncdotool
     :target: https://pypi.org/project/vncdotool/
-    :alt: PyPi Package Repository
+    :alt: PyPi Package
+
+.. image:: https://img.shields.io/pypi/pyversions/vncdotool.svg
+   :target: https://pypi.python.org/pypi/vncdotool
+   :alt: Python Versions
+
+.. image:: https://github.com/sibson/vncdotool/workflows/VNCDo%20CI/badge.svg
+   :target: https://github.com/sibson/vndotool/actions
+   :alt: Actions Status
+
+.. image:: https://readthedocs.org/projects/vncdotool/badge/?version=latest&style=flat
+   :target: https://vncdotool.readthedocs.io/en/latest/
+   :alt: ReadTheDocs
 
 .. image:: https://img.shields.io/badge/code%20style-black-000000.svg
-    :target: https://github.com/psf/black
-    :alt: Black Code Formatter
+   :target: https://github.com/psf/black
+   :alt: Code style: black
+
 
 
 vncdotool
