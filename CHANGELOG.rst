@@ -1,3 +1,7 @@
+1.2.0 (2023-06-06)
+----------------------
+  - fixes for api.shutdown and disconnect raise exceptions, #256
+
 1.1.0 (2023-04-01)
 ----------------------
 Huge thanks to @pmhahn for single handedly driving conversion to modern Python3, as well
