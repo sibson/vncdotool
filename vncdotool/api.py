@@ -74,6 +74,8 @@ class ThreadedVNCClientProxy:
 
     def __getattr__(self, attr: str) -> Any:
         method = getattr(self.factory.protocol, attr)
+        if not callable(method):
+            return getattr(self.protocol, attr)
 
         def threaded_call(
             protocol: VNCDoToolClient, *args: Any, **kwargs: Any
@@ -110,10 +112,7 @@ class ThreadedVNCClientProxy:
 
             return result
 
-        if callable(method):
-            return callable_threaded_proxy
-        else:
-            return getattr(self.protocol, attr)
+        return callable_threaded_proxy
 
     def __dir__(self) -> List[str]:
         return dir(self.__class__) + dir(self.factory.protocol)
