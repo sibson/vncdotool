@@ -195,23 +195,26 @@ class VNCDoToolClient(rfb.RFBClient):
 
         key: string: either [a-z] or a from KEYMAP
         """
-        log.debug("keyPress %s", key)
-        self.keyDown(key)
-        self.keyUp(key)
+        keys = self._decodeKey(key)
+        log.debug("keyPress %s", keys)
+        for k in keys:
+            self.keyEvent(k, down=True)
+        for k in reversed(keys):
+            self.keyEvent(k, down=False)
 
         return self
 
     def keyDown(self: TClient, key: str) -> TClient:
-        log.debug("keyDown %s", key)
         keys = self._decodeKey(key)
+        log.debug("keyDown %s", keys)
         for k in keys:
             self.keyEvent(k, down=True)
 
         return self
 
     def keyUp(self: TClient, key: str) -> TClient:
-        log.debug("keyUp %s", key)
         keys = self._decodeKey(key)
+        log.debug("keyUp %s", keys)
         for k in keys:
             self.keyEvent(k, down=False)
 

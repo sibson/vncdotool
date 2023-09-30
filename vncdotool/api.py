@@ -47,7 +47,7 @@ class ThreadedVNCClientProxy:
     ) -> None:
         self.factory = factory
         self.queue: queue.Queue[Any] = queue.Queue()
-        self._timeout = timeout
+        self.timeout = timeout
         self.protocol: Optional[VNCDoToolClient] = None
 
     def __enter__(self: TProxy) -> TProxy:
@@ -55,16 +55,6 @@ class ThreadedVNCClientProxy:
 
     def __exit__(self, *_: Any) -> None:
         self.disconnect()
-
-    @property
-    def timeout(self) -> Optional[float]:
-        """Timeout in seconds for API requests."""
-        return self._timeout
-
-    @timeout.setter
-    def timeout(self, timeout: float) -> None:
-        """Timeout in seconds for API requests."""
-        self._timeout = timeout
 
     def connect(
         self, host: str, port: int = 5900, family: socket.AddressFamily = socket.AF_INET
@@ -84,6 +74,8 @@ class ThreadedVNCClientProxy:
 
     def __getattr__(self, attr: str) -> Any:
         method = getattr(self.factory.protocol, attr)
+        if not callable(method):
+            return getattr(self.protocol, attr)
 
         def threaded_call(
             protocol: VNCDoToolClient, *args: Any, **kwargs: Any
@@ -111,7 +103,7 @@ class ThreadedVNCClientProxy:
                 kwargs,
             )
             try:
-                result = self.queue.get(timeout=self._timeout)
+                result = self.queue.get(timeout=self.timeout)
             except queue.Empty:
                 raise TimeoutError("Timeout while waiting for client response")
 
@@ -120,10 +112,7 @@ class ThreadedVNCClientProxy:
 
             return result
 
-        if callable(method):
-            return callable_threaded_proxy
-        else:
-            return getattr(self.protocol, attr)
+        return callable_threaded_proxy
 
     def __dir__(self) -> List[str]:
         return dir(self.__class__) + dir(self.factory.protocol)
