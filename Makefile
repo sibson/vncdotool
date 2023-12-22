@@ -2,8 +2,7 @@
 .DEFAULT: help
 
 VERSION_FILE?=vncdotool/__init__.py
-PYTHON?=python3
-
+REQUIREMENTS_TXT?=requirements-dev.txt
 
 .PHONY: help
 help:
@@ -17,9 +16,9 @@ help:
 
 .PHONY: version
 version:
-	$(PYTHON) setup.py --version
+	./setup.py --version
 
-version-%: OLDVERSION:=$(shell $(PYTHON) setup.py --version)
+version-%: OLDVERSION:=$(shell ./setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
 	sed -i '' -e s/$(OLDVERSION)/$(NEWVERSION)/ $(VERSION_FILE)
@@ -32,30 +31,28 @@ release: release-test release-tag upload
 release-test: test-unit #test-func
 
 .PHONY: release-tag
-release-tag: VERSION:=$(shell $(PYTHON) setup.py --version)
+release-tag: VERSION:=$(shell ./setup.py --version)
 release-tag:
 	git tag -a v$(VERSION) -m"release version $(VERSION)"
 	git push --tags
 
 .PHONY: upload
 upload:
-	$(PYTHON) setup.py sdist
-	twine upload dist/$(shell $(PYTHON) setup.py --fullname).*
+	./setup.py sdist
+	twine upload dist/$(shell ./setup.py --fullname).*
 
 .PHONY: docs
 docs:
 	$(MAKE) -C docs/ html
 
-.PHONY: test
+.PHONY: test testall test-unit test-func
 test: test-unit
-.PHONY: testall
 testall: test-unit test-func
-
-.PHONY: test-unit
 test-unit:
-	$(PYTHON) -m unittest discover tests/unit
+	$(VENV)/python -m unittest discover tests/unit
 
 include libvncserver.mk
 
-.PHONY: test-func
 test-func: libvnc-examples test-libvnc
+
+include Makefile.venv
