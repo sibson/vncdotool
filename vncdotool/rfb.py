@@ -32,9 +32,9 @@ from typing import (
     cast,
 )
 
-from Cryptodome.Cipher import AES, DES
-from Cryptodome.Hash import MD5
-from Cryptodome.Util.number import bytes_to_long, long_to_bytes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.asymmetric import dh
+from cryptography.hazmat.primitives import hashes
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector
@@ -587,21 +587,28 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _encryptArd(self) -> None:
         userStruct = f"{self.factory.username:\0<64}{self.factory.password:\0<64}"
 
-        s = bytes_to_long(os.urandom(512))
-        g = self.generator
-        m = bytes_to_long(self.modulus)
-        sk = bytes_to_long(self.serverKey)
+        p = int.from_bytes(self.modulus, "big")
+        sk = int.from_bytes(self.serverKey, "big")
+        param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
+        server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
 
-        key = long_to_bytes(pow(g, s, m))
-        shared = long_to_bytes(pow(sk, s, m))
+        params = param_nums.parameters()
+        private_key = params.generate_private_key()
+        shared_key = private_key.exchange(server_key)
 
-        h = MD5.new()
-        h.update(shared)
-        keyDigest = h.digest()
+        h = hashes.Hash(hashes.MD5())
+        h.update(shared_key)
+        key_digest = h.finalize()
 
-        cipher = AES.new(keyDigest, AES.MODE_ECB)
-        ciphertext = cipher.encrypt(userStruct.encode("utf-8"))
-        self.transport.write(ciphertext + key)
+        cipher = Cipher(algorithms.AES(key_digest), modes.ECB())
+        encryptor = cipher.encryptor()
+        ciphertext = encryptor.update(userStruct.encode("utf-8"))
+        ciphertext += encryptor.finalize()
+
+        public_key = private_key.public_key()
+        y = public_key.public_numbers().y.to_bytes(self.keyLen, "big")
+
+        self.transport.write(ciphertext + y)
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
@@ -612,8 +619,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def sendPassword(self, password: str) -> None:
         """send password"""
         key = _vnc_des(password)
-        des = DES.new(key, DES.MODE_ECB)
-        response = des.encrypt(self._challenge)
+        # Triple-DES with the same 56-bit key repeated three times is
+        # equivalent to single-DES
+        des = Cipher(algorithms.TripleDES(key * 3), modes.ECB())
+        encryptor = des.encryptor()
+        response = encryptor.update(self._challenge) + encryptor.finalize()
         self.transport.write(response)
 
     def _handleVNCAuthResult(self, block: bytes) -> None:
