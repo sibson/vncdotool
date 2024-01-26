@@ -279,7 +279,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, x, y, maxrms)
 
     def _expectFramebuffer(self, filename, x, y, maxrms):
-        self.framebufferUpdateRequest(incremental=1)
+        self.framebufferUpdateRequest(incremental=0)
         image = Image.open(filename)
         # FIXME: this is a hack to convert RGB
         image = image.convert("RGB")
