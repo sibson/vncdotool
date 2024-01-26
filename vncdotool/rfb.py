@@ -22,6 +22,10 @@ from twisted.python import usage, log
 from twisted.internet.protocol import Protocol
 from twisted.internet import protocol
 from twisted.application import internet, service
+import logging
+
+logger = logging.getLogger('vncdotool.rfb')
+
 
 #~ from twisted.internet import reactor
 
@@ -342,6 +346,7 @@ class RFBClient(Protocol):
 
     def _handleFramebufferUpdate(self, block):
         (self.rectangles,) = unpack("!xH", block)
+        logger.debug("handling frame buffer update (rectangles=%s)", self.rectangles)
         self.rectanglePos = []
         self.beginUpdate()
         self._doConnection()
@@ -704,7 +709,7 @@ class RFBClient(Protocol):
             while len(buffer) >= self._expected_len:
                 self._already_expecting = 1
                 block, buffer = buffer[:self._expected_len], buffer[self._expected_len:]
-                #~ log.msg("handle %r with %r\n" % (block, self._expected_handler.__name__))
+                logger.debug("Handling %s bytes with %s", len(block), self._expected_handler.__name__)
                 self._expected_handler(block, *self._expected_args, **self._expected_kwargs)
             self._packet[:] = [buffer]
             self._packet_len = len(buffer)
@@ -734,6 +739,7 @@ class RFBClient(Protocol):
         #~ print self.bypp
 
     def setEncodings(self, list_of_encodings):
+        logger.debug("Sending setEncodings %s", list_of_encodings)
         self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
         for encoding in list_of_encodings:
             self.transport.write(pack("!i", encoding))
@@ -741,6 +747,7 @@ class RFBClient(Protocol):
     def framebufferUpdateRequest(self, x=0, y=0, width=None, height=None, incremental=0):
         if width  is None: width  = self.width - x
         if height is None: height = self.height - y
+        logger.debug("Sending framebufferUpdateRequest (x=%s, y=%s, width=%s, height=%s, incremental=%s)", x, y, width, height, incremental)
         self.transport.write(pack("!BBHHHH", 3, incremental, x, y, width, height))
 
     def keyEvent(self, key, down=1):

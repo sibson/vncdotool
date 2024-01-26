@@ -294,7 +294,7 @@ class VNCDoToolClient(rfb.RFBClient):
             int(maxrms),
         )
         self.expected = image.histogram()
-        self.deferred = Deferred()
+        self.deferred = Deferred()  # fired by self.commitUpdate
         self.deferred.addCallback(self._expectCompare, (x, y, x + w, y + h), maxrms)
 
         return self.deferred
@@ -423,7 +423,6 @@ class VNCDoToolClient(rfb.RFBClient):
         # ignore empty updates
         if not data:
             return
-
         size = (width, height)
         update = Image.frombytes('RGB', size, data, 'raw', self.image_mode)
         if not self.screen:
