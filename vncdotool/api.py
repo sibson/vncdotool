@@ -110,7 +110,7 @@ class ThreadedVNCClientProxy(object):
             if isinstance(result, Failure):
                 # print(f"isinstance(result, Failure): {result}")
                 # self.queue = queue.Queue()
-                raise VNCDoException(result)
+                raise VNCDoException(result) from result
 
             return result
 
