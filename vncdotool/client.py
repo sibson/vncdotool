@@ -5,13 +5,15 @@ Twisted based VNC client protocol and factory.
 #
 # MIT License
 
+from __future__ import annotations
+
 import logging
 import math
 import socket
 import time
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, List, Optional, TypeVar, Union
+from typing import IO, Any, TypeVar, Union
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred
@@ -152,12 +154,12 @@ class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     buttons = 0
-    screen: Optional[Image.Image] = None
+    screen: Image.Image | None = None
     image_mode = PF2IM[rfb.PixelFormat()]
-    deferred: Optional[Deferred] = None
+    deferred: Deferred | None = None
 
-    cursor: Optional[Image.Image] = None
-    cmask: Optional[Image.Image] = None
+    cursor: Image.Image | None = None
+    cmask: Image.Image | None = None
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -172,7 +174,7 @@ class VNCDoToolClient(rfb.RFBClient):
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self, reason)
 
-    def _decodeKey(self, key: str) -> List[int]:
+    def _decodeKey(self, key: str) -> list[int]:
         if self.factory.force_caps:
             if key.isupper() or key in self.SPECIAL_KEYS_US:
                 key = "shift-%c" % key
@@ -448,7 +450,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.drawCursor()
 
-    def commitUpdate(self, rectangles: Optional[List[rfb.Rect]] = None) -> None:
+    def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
         if self.deferred:
             d = self.deferred
             self.deferred = None
@@ -522,8 +524,8 @@ class VMWareClient(VNCDoToolClient):
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
     protocol = VNCDoToolClient
     shared = True

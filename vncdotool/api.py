@@ -5,13 +5,15 @@
     This feature is under development, your help testing and debugging is appreciated.
 """
 
+from __future__ import annotations
+
 import logging
 import queue
 import socket
 import sys
 import threading
 from types import TracebackType
-from typing import Any, List, Optional, Type, TypeVar
+from typing import Any, TypeVar, overload
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred, maybeDeferred
@@ -28,7 +30,7 @@ __all__ = ["shutdown", "connect"]
 
 log = logging.getLogger(__name__)
 
-_THREAD: Optional[threading.Thread] = None
+_THREAD: threading.Thread | None = None
 
 
 def shutdown() -> None:
@@ -45,12 +47,12 @@ def shutdown() -> None:
 
 class ThreadedVNCClientProxy:
     def __init__(
-        self, factory: Type[VNCDoToolFactory], timeout: Optional[float] = 60 * 60
+        self, factory: type[VNCDoToolFactory], timeout: float | None = 60 * 60
     ) -> None:
         self.factory = factory
         self.queue: queue.Queue[Any] = queue.Queue()
         self.timeout = timeout
-        self.protocol: Optional[VNCDoToolClient] = None
+        self.protocol: VNCDoToolClient | None = None
 
     def __enter__(self: TProxy) -> TProxy:
         return self
@@ -116,17 +118,29 @@ class ThreadedVNCClientProxy:
 
         return callable_threaded_proxy
 
-    def __dir__(self) -> List[str]:
+    def __dir__(self) -> list[str]:
         return dir(self.__class__) + dir(self.factory.protocol)
 
 
+@overload
+def connect(server: str) -> ThreadedVNCClientProxy: ...
+@overload
+def connect(server: str, password: str | None) -> ThreadedVNCClientProxy: ...
+@overload
+def connect(server: str, password: str | None, factory_class: type[VNCDoToolFactory]) -> ThreadedVNCClientProxy: ...
+@overload
+def connect(server: str, password: str | None, factory_class: type[VNCDoToolFactory], proxy: type[TProxy]) -> TProxy: ...
+@overload
+def connect(server: str, password: str | None, factory_class: type[VNCDoToolFactory], proxy: type[TProxy], timeout: float | None) -> TProxy: ...
+@overload
+def connect(server: str, password: str | None, factory_class: type[VNCDoToolFactory], proxy: type[TProxy], timeout: float | None, username: str | None) -> TProxy: ...
 def connect(
     server: str,
-    password: Optional[str] = None,
-    factory_class: Type[VNCDoToolFactory] = VNCDoToolFactory,
-    proxy: Type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
-    timeout: Optional[float] = None,
-    username: Optional[str] = None,
+    password: str | None = None,
+    factory_class: type[VNCDoToolFactory] = VNCDoToolFactory,
+    proxy: type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
+    timeout: float | None = None,
+    username: str | None = None,
 ) -> ThreadedVNCClientProxy:
     """Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications,
@@ -148,7 +162,9 @@ def connect(
         sys_excepthook = sys.excepthook
 
         def ensure_reactor_stopped(
-            etype: Type[BaseException], value: BaseException, traceback: TracebackType
+            etype: type[BaseException],
+            value: BaseException,
+            traceback: TracebackType | None,
         ) -> None:
             shutdown()
             sys_excepthook(etype, value, traceback)

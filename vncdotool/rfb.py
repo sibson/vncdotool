@@ -11,6 +11,8 @@ http://www.realvnc.com/docs/rfbproto.pdf
 #
 # MIT License
 
+from __future__ import annotations
+
 import getpass
 import os
 import sys
@@ -23,10 +25,8 @@ from typing import (
     Callable,
     ClassVar,
     Collection,
-    Dict,
     Iterator,
     List,
-    Optional,
     Tuple,
     cast,
 )
@@ -60,7 +60,7 @@ class Encoding(IntEnumLookup):
     def s32(value: int) -> int:
         return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
 
-    def __new__(cls, value: int) -> "Encoding":
+    def __new__(cls, value: int) -> Encoding:
         return int.__new__(cls, cls.s32(value))
 
     @classmethod
@@ -378,7 +378,7 @@ class PixelFormat:
         return (7 + self.bpp) // 8
 
     @classmethod
-    def from_bytes(cls, block: bytes) -> "PixelFormat":
+    def from_bytes(cls, block: bytes) -> PixelFormat:
         return cls(*cls.STRUCT.unpack(block))
 
     def to_bytes(self) -> bytes:
@@ -466,8 +466,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._packet = bytearray()
         self._handler = self._handleInitial
         self._expected_len = 12
-        self._expected_args: Tuple[Any, ...] = ()
-        self._expected_kwargs: Dict[str, Any] = {}
+        self._expected_args: tuple[Any, ...] = ()
+        self._expected_kwargs: dict[str, Any] = {}
         self._already_expecting = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
@@ -681,7 +681,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
-        self.rectanglePos: List[Rect] = []
+        self.rectanglePos: list[Rect] = []
         self.beginUpdate()
         self._doConnection()
 
@@ -810,14 +810,14 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _doNextHextileSubrect(
         self,
-        bg: Optional[bytes],
-        color: Optional[bytes],
+        bg: bytes | None,
+        color: bytes | None,
         x: int,
         y: int,
         width: int,
         height: int,
-        tx: Optional[int],
-        ty: Optional[int],
+        tx: int | None,
+        ty: int | None,
     ) -> None:
         # ~ print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty),))
         # coords of next tile
@@ -991,8 +991,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _handleDecodeHextileSubrectsColoured(
         self,
         block: bytes,
-        bg: Optional[bytes],
-        color: Optional[bytes],
+        bg: bytes | None,
+        color: bytes | None,
         subrects: int,
         x: int,
         y: int,
@@ -1263,8 +1263,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self,
         x: int = 0,
         y: int = 0,
-        width: Optional[int] = None,
-        height: Optional[int] = None,
+        width: int | None = None,
+        height: int | None = None,
         incremental: bool = False,
     ) -> None:
         if width is None:
@@ -1318,7 +1318,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """called before a series of :meth:`updateRectangle`,
         :meth:`copyRectangle` or :meth:`fillRectangle`."""
 
-    def commitUpdate(self, rectangles: Optional[List[Rect]] = None) -> None:
+    def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
         """called after a series of :meth:`updateRectangle`, :meth:`copyRectangle`
         or :meth:`fillRectangle` are finished.
 
@@ -1361,7 +1361,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def updateDesktopSize(self, width: int, height: int) -> None:
         """New desktop size of width*height."""
 
-    def set_color_map(self, first: int, colors: List[Tuple[int, int, int]]) -> None:
+    def set_color_map(self, first: int, colors: list[tuple[int, int, int]]) -> None:
         """The server is using a new color map."""
 
     def bell(self) -> None:
@@ -1379,7 +1379,7 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
     # should be overriden by application to use a derrived class
     protocol = RFBClient
 
-    def __init__(self, password: Optional[str] = None, shared: bool = False) -> None:
+    def __init__(self, password: str | None = None, shared: bool = False) -> None:
         self.password = password
         self.shared = shared
 

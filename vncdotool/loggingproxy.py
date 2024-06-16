@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import logging
 import os.path
 import socket
 import sys
 import time
 from struct import unpack, unpack_from
-from typing import IO, Callable, List, Optional, Sequence, Tuple, Union
+from typing import IO, Callable, Sequence
 
 from twisted.internet.protocol import Protocol
 from twisted.protocols import portforward
@@ -81,7 +83,7 @@ REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
 
 
 class RFBServer(Protocol):  # type: ignore[misc]
-    _handler: Tuple[Callable[..., None], int] = (lambda data: None, 0)
+    _handler: tuple[Callable[..., None], int] = (lambda data: None, 0)
 
     def connectionMade(self) -> None:
         super().connectionMade()
@@ -222,9 +224,9 @@ class NullTransport:
 class VNCLoggingClient(VNCDoToolClient):
     """Specialization of a :class:`VNCDoToolClient` that will save screen captures."""
 
-    capture_file: Optional[str] = None
+    capture_file: str | None = None
 
-    def commitUpdate(self, rectangles: Optional[List[Rect]] = None) -> None:
+    def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
         if self.capture_file:
             assert self.screen is not None
             self.screen.save(self.capture_file)
@@ -241,10 +243,10 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
                                             -> VNCLoggingClient
     """
 
-    vnclog: Optional[VNCLoggingClient] = None
+    vnclog: VNCLoggingClient | None = None
     ncaptures = 0
 
-    def startLogging(self, peer: "VNCLoggingServerProxy") -> None:
+    def startLogging(self, peer: VNCLoggingServerProxy) -> None:
         self.vnclog = VNCLoggingClient()
         self.vnclog.transport = NullTransport()
         self.vnclog.factory = self.peer.factory
@@ -275,15 +277,15 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 
     clientProtocolFactory = VNCLoggingClientFactory
 
-    server: Optional[str] = None
+    server: str | None = None
     buttons = 0
-    recorder: Optional[Callable[[str], int]] = None
+    recorder: Callable[[str], int] | None = None
 
     def connectionMade(self) -> None:
         log.info("new connection from %s", self.transport.getPeer().host)
         super().connectionMade()
         RFBServer.connectionMade(self)
-        self.mouse: Tuple[Optional[int], Optional[int]] = (None, None)
+        self.mouse: tuple[int | None, int | None] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
 
@@ -344,8 +346,8 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
 
     password_required = False
 
-    output: Union[IO[str], str] = sys.stdout
-    _out: Optional[IO[str]] = None
+    output: IO[str] | str = sys.stdout
+    _out: IO[str] | None = None
 
     def getRecorder(self) -> Callable[[str], int]:
         if isinstance(self.output, str):
