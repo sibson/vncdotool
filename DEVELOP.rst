@@ -18,7 +18,7 @@ running.  You can either manually configure and update your path or use the prov
     OR
 
     make libvnc-examples
-    export PATH=$PATH:/tmp/vncdo/libvncserver/examples
+    export PATH="$PATH:.vncdo/libvncserver-LibVNCServer-0.9.14/examples"
     python -m unittest discover tests/functional
 
 
