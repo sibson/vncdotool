@@ -29,7 +29,7 @@ mousedown BUTTON
 ------------------
 
 mousemove X Y
------------
+---------------
 
 mouseup BUTTON
 -----------------

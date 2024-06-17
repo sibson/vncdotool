@@ -1,16 +1,15 @@
 """
 RFB protocol implementattion, client side.
 
-Override RFBClient and RFBFactory in your application.
+Override :class:`RFBClient` and :class:`RFBFactory` in your application.
 See vncviewer.py for an example.
 
 Reference:
 http://www.realvnc.com/docs/rfbproto.pdf
-
-(C) 2003 cliechti@gmx.net
-
-MIT License
 """
+# (C) 2003 cliechti@gmx.net
+#
+# MIT License
 
 import getpass
 import os
@@ -55,7 +54,7 @@ class IntEnumLookup(IntEnum):
 
 
 class Encoding(IntEnumLookup):
-    """encoding-type for SetEncodings()"""
+    """encoding-type for :meth:`setEncodings`."""
 
     @staticmethod
     def s32(value: int) -> int:
@@ -182,7 +181,7 @@ class Encoding(IntEnumLookup):
 
 
 class HextileEncoding(IntFlag):
-    """RFC 6153 §7.7.4. Hextile Encoding."""
+    """:rfc:`6153` §7.7.4. Hextile Encoding."""
 
     RAW = 1
     BACKGROUND_SPECIFIED = 2
@@ -192,7 +191,7 @@ class HextileEncoding(IntFlag):
 
 
 class AuthTypes(IntEnumLookup):
-    """RFC 6143 §7.1.2. Security Handshake."""
+    """:rfc:`6143` §7.1.2. Security Handshake."""
 
     INVALID = 0
     NONE = 1
@@ -237,7 +236,7 @@ class AuthTypes(IntEnumLookup):
 
 
 class MsgS2C(IntEnumLookup):
-    """RFC 6143 §7.6. Server-to-Client Messages."""
+    """:rfc:`6143` §7.6. Server-to-Client Messages."""
 
     FRAMEBUFFER_UPDATE = 0
     SET_COLOUR_MAP_ENTRIES = 1
@@ -342,7 +341,7 @@ KEY_SpaceBar = 0x0020
 
 @dataclass(frozen=True)
 class PixelFormat:
-    """RFC 6143 §7.4. Pixel Format Data Structure"""
+    """:rfc:`6143` §7.4. Pixel Format Data Structure."""
 
     bpp: int = 32  # u8: bits-per-pixel
     depth: int = 24  # u8
@@ -1061,8 +1060,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
     ) -> None:
         """
         Handle ZRLE encoding.
-        See https://tools.ietf.org/html/rfc6143#section-7.7.6 (ZRLE)
-        and https://tools.ietf.org/html/rfc6143#section-7.7.5 (TRLE)
+        See `ZRLW <https://tools.ietf.org/html/rfc6143#section-7.7.6>`_
+        and `TRLE <https://tools.ietf.org/html/rfc6143#section-7.7.5>`_
         """
         (compressed_bytes,) = unpack("!L", block)
         self.expect(self._handleDecodeZRLEdata, compressed_bytes, x, y, width, height)
@@ -1276,7 +1275,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def keyEvent(self, key: int, down: bool = True) -> None:
         """For most ordinary keys, the "keysym" is the same as the corresponding ASCII value.
-        Other common keys are shown in the KEY_ constants."""
+        Other common keys are shown in the ``KEY_`` constants."""
         self.transport.write(pack("!BBxxI", 4, down, key))
 
     def pointerEvent(self, x: int, y: int, buttonmask: int = 0) -> None:
@@ -1302,7 +1301,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         typicaly, the pixel format is set here."""
 
     def vncRequestPassword(self) -> None:
-        """a password is needed to log on, use sendPassword() to
+        """a password is needed to log on, use :meth:`sendPassword` to
         send one."""
         if self.factory.password is None:
             log.msg("need a password")
@@ -1316,22 +1315,26 @@ class RFBClient(Protocol):  # type: ignore[misc]
         log.msg(f"Cannot connect {reason}")
 
     def beginUpdate(self) -> None:
-        """called before a series of updateRectangle(),
-        copyRectangle() or fillRectangle()."""
+        """called before a series of :meth:`updateRectangle`,
+        :meth:`copyRectangle` or :meth:`fillRectangle`."""
 
     def commitUpdate(self, rectangles: Optional[List[Rect]] = None) -> None:
-        """called after a series of updateRectangle(), copyRectangle()
-        or fillRectangle() are finished.
-        typicaly, here is the place to request the next screen
-        update with FramebufferUpdateRequest(incremental=1).
-        argument is a list of tuples (x,y,w,h) with the updated
-        rectangles."""
+        """called after a series of :meth:`updateRectangle`, :meth:`copyRectangle`
+        or :meth:`fillRectangle` are finished.
+
+        Typicaly, here is the place to request the next screen
+        update with :meth:`framebufferUpdateRequest` with ``incremental=True``.
+
+        :param rectangles: a list of tuples (x,y,w,h) with the updated rectangles.
+        """
 
     def updateRectangle(
         self, x: int, y: int, width: int, height: int, data: bytes
     ) -> None:
-        """new bitmap data. data is a string in the pixel format set
-        up earlier."""
+        """new bitmap data.
+
+        :param data: bytes in the pixel format set up earlier.
+        """
 
     def copyRectangle(
         self, srcx: int, srcy: int, x: int, y: int, width: int, height: int
@@ -1342,8 +1345,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def fillRectangle(
         self, x: int, y: int, width: int, height: int, color: bytes
     ) -> None:
-        """fill the area with the color. the color is a string in
-        the pixel format set up earlier"""
+        """fill the area with the color.
+
+        :param color: bytes in the pixel format set up earlier.
+        """
         # fallback variant, use update recatngle
         # override with specialized function for better performance
         self.updateRectangle(x, y, width, height, color * width * height)
@@ -1380,7 +1385,9 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
 
 
 def _vnc_des(password: str) -> bytes:
-    """RFB protocol for authentication requires client to encrypt
+    """Custom DES variant for RFB protocol.
+
+    RFB protocol for authentication requires client to encrypt
     challenge sent by server with password using DES method. However,
     bits in each byte of the password are put in reverse order before
     using it as encryption key."""
@@ -1402,8 +1409,8 @@ if __name__ == "__main__":
         def vncConnectionMade(self) -> None:
             print(f"Screen format: {self.pixel_format}")
             print(f"Desktop name: {self.name!r}")
-            self.SetEncodings([Encoding.RAW])
-            self.FramebufferUpdateRequest()
+            self.setEncodings([Encoding.RAW])
+            self.framebufferUpdateRequest()
 
         def updateRectangle(
             self, x: int, y: int, width: int, height: int, data: bytes

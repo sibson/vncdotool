@@ -1,7 +1,8 @@
 """ Helpers to allow vncdotool to be intergrated into other applications.
 
-This feature is under development, your help testing and
-debugging is appreciated.
+.. warning::
+    EXPERIMENTAL.
+    This feature is under development, your help testing and debugging is appreciated.
 """
 
 import logging
@@ -127,7 +128,7 @@ def connect(
     username: Optional[str] = None,
 ) -> ThreadedVNCClientProxy:
     """Connect to a VNCServer and return a Client instance that is usable
-    in the main thread of non-Twisted Python Applications, EXPERIMENTAL.
+    in the main thread of non-Twisted Python Applications,
 
     >>> from vncdotool import api
     >>> with api.connect('host') as client
@@ -137,7 +138,8 @@ def connect(
     application code.
 
     If you are using a GUI toolkit or other major async library please read
-    http://twistedmatrix.com/documents/13.0.0/core/howto/choosing-reactor.html
+    `Choosing a Reactor and GUI Toolkit Integration
+    <https://docs.twistedmatrix.com/en/stable/core/howto/choosing-reactor.html>`_
     for a better method of intergrating vncdotool.
     """
     if not reactor.running:

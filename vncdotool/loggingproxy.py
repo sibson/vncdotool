@@ -21,7 +21,7 @@ class ProtocolError(Exception):
 
 
 class MsgC2S(IntEnumLookup):
-    """RFC 6143 §7.5. Client-to-Server Messages."""
+    """:rfc:`6143` §7.5. Client-to-Server Messages."""
 
     SET_PIXEL_FORMAT = 0
     SET_ENCODING = 2
@@ -59,7 +59,10 @@ class MsgC2S(IntEnumLookup):
 
 
 class QemuClientMessage(IntEnumLookup):
-    """https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message"""
+    """
+    `QEMU Client Message
+    <https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message>`_
+    """
 
     EXTENDED_KEY_EVENT = 0
     AUDIO = 1
@@ -217,7 +220,7 @@ class NullTransport:
 
 
 class VNCLoggingClient(VNCDoToolClient):
-    """Specialization of a VNCDoToolClient that will save screen captures"""
+    """Specialization of a :class:`VNCDoToolClient` that will save screen captures."""
 
     capture_file: Optional[str] = None
 
@@ -230,10 +233,12 @@ class VNCLoggingClient(VNCDoToolClient):
 
 
 class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
-    """Accept data from a server and forward to logger and downstream client
+    """Accept data from a server and forward to logger and downstream client.
 
-    VNC server -> VNCLoggingClientProxy -> VNC client
-                                        -> VNCLoggingClient
+    ::
+
+        VNC server -> VNCLoggingClientProxy -> VNC client
+                                            -> VNCLoggingClient
     """
 
     vnclog: Optional[VNCLoggingClient] = None
@@ -260,10 +265,12 @@ class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[m
 
 
 class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore[misc]
-    """Proxy in the middle, decodes and logs RFB messages before sending them upstream
+    """Proxy in the middle, decodes and logs RFB messages before sending them upstream.
 
-    VNC client -> VNCLoggingServerProxy -> VNC server
-                                        -> RFBServer
+    ::
+
+        VNC client -> VNCLoggingServerProxy -> VNC server
+                                            -> RFBServer
     """
 
     clientProtocolFactory = VNCLoggingClientFactory

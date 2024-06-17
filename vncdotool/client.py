@@ -1,10 +1,9 @@
 """
-Twisted based VNC client protocol and factory
-
-(c) 2010 Marc Sibson
-
-MIT License
+Twisted based VNC client protocol and factory.
 """
+# (c) 2010-2024 Marc Sibson
+#
+# MIT License
 
 import logging
 import math
@@ -193,7 +192,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def keyPress(self: TClient, key: str) -> TClient:
         """Send a key press to the server
 
-        key: string: either [a-z] or a from KEYMAP
+        :param key: either [a-z] or a from :const:`KEYMAP`.
         """
         keys = self._decodeKey(key)
         log.debug("keyPress %s", keys)
@@ -223,8 +222,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mousePress(self: TClient, button: int) -> TClient:
         """Send a mouse click at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mousePress %s", button)
         self.mouseDown(button)
@@ -235,8 +233,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseDown(self: TClient, button: int) -> TClient:
         """Send a mouse button down at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mouseDown %s", button)
         self.buttons |= 1 << (button - 1)
@@ -247,8 +244,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseUp(self: TClient, button: int) -> TClient:
         """Send mouse button released at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mouseUp %s", button)
         self.buttons &= ~(1 << (button - 1))
@@ -292,9 +288,8 @@ class VNCDoToolClient(rfb.RFBClient):
     def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
         """Wait until the display matches a target image
 
-        filename: an image file to read and compare against
-        maxrms: the maximum root mean square between histograms of the
-                screen and target image
+        :param filename: an image file to read and compare against.
+        :param maxrms: the maximum root mean square between histograms of the screen and target image.
         """
         log.debug("expectScreen %s", filename)
         return self._expectFramebuffer(filename, 0, 0, maxrms)
