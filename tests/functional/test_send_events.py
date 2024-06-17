@@ -52,8 +52,8 @@ class TestSendEvents(TestCase):
         self.run_vncdo('key ctrl-a')
         self.assertKeyDown(int(0xffe3))
         self.assertKeyDown(ord('a'))
-        self.assertKeyUp(int(0xffe3))
         self.assertKeyUp(ord('a'))
+        self.assertKeyUp(int(0xffe3))
         self.assertDisconnect()
 
     def test_type(self) -> None:

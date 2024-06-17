@@ -55,8 +55,8 @@ class TestLogEvents(TestCase):
         self.run_vncdo('key ctrl-a')
         self.assertKeyDown(rfb.KEY_ControlLeft)
         self.assertKeyDown(ord('a'))
-        self.assertKeyUp(rfb.KEY_ControlLeft)
         self.assertKeyUp(ord('a'))
+        self.assertKeyUp(rfb.KEY_ControlLeft)
 
     def test_mouse(self) -> None:
         self.run_vncdo('move 111 222 click 1')

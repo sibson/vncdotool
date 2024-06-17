@@ -1,3 +1,7 @@
+1.3.0 (UNRELEASED)
+----------------------
+  - Fix functional test suite (@phahn)
+
 1.2.0 (2023-06-06)
 ----------------------
   - fixes for api.shutdown and disconnect raise exceptions, #256
