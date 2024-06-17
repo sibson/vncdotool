@@ -10,13 +10,12 @@ from __future__ import annotations
 import logging
 import math
 import socket
-import time
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, TypeVar, Union
+from typing import IO, Any, Iterator, TypeVar, Union
 
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
 from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
@@ -346,32 +345,20 @@ class VNCDoToolClient(rfb.RFBClient):
         self.pointerEvent(x, y, self.buttons)
         return self
 
-    def mouseDrag(self: TClient, x: int, y: int, step: int = 1) -> TClient:
+    @inlineCallbacks
+    def mouseDrag(self: TClient, x: int, y: int, step: int = 1) -> Iterator[Deferred]:
         """Move the mouse point to position (x, y) in increments of step"""
         log.debug("mouseDrag %d,%d", x, y)
-        if x < self.x:
-            xsteps = range(self.x - step, x, -step)
-        else:
-            xsteps = range(self.x + step, x, step)
-
-        if y < self.y:
-            ysteps = range(self.y - step, y, -step)
-        else:
-            ysteps = range(self.y + step, y, step)
-
-        for ypos in ysteps:
-            self.mouseMove(self.x, ypos)
-            reactor.doPoll(timeout=5)
-            time.sleep(0.2)
-
-        for xpos in xsteps:
-            self.mouseMove(xpos, self.y)
-            reactor.doPoll(timeout=5)
-            time.sleep(0.2)
+        ox, oy = self.x, self.y
+        dx, dy = x - ox, y - oy
+        dmax = max(abs(dx), abs(dy))
+        for s in range(0, dmax, step):
+            self.mouseMove(ox + dx * s // dmax, oy + dy * s // dmax)
+            yield self.pause(0.2)
 
         self.mouseMove(x, y)
 
-        return self
+        returnValue(self)
 
     def setImageMode(self) -> None:
         """Check support for PixelFormats announced by server or select client supported alternative."""
