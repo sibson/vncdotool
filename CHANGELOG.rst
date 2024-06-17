@@ -1,6 +1,7 @@
 1.3.0 (UNRELEASED)
 ----------------------
   - Fix functional test suite (@phahn)
+  - Python 3.12 is supported (@phahn)
 
 1.2.0 (2023-06-06)
 ----------------------
