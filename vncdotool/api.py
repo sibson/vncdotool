@@ -24,7 +24,7 @@ from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
 V = TypeVar("V")
 TProxy = TypeVar("TProxy", bound="ThreadedVNCClientProxy")
 
-__all__ = ["connect"]
+__all__ = ["shutdown", "connect"]
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +32,7 @@ _THREAD: Optional[threading.Thread] = None
 
 
 def shutdown() -> None:
+    """Shutdown background thread running Twisted reactor."""
     if not reactor.running:
         return
 
@@ -134,7 +135,7 @@ def connect(
     >>> with api.connect('host') as client
     >>>     client.keyPress('c')
 
-    You may then call any regular VNCDoToolClient method on client from your
+    You may then call any regular :py:class:`VNCDoToolClient` method on client from your
     application code.
 
     If you are using a GUI toolkit or other major async library please read

@@ -4,6 +4,16 @@ vncdotool is built with the Twisted_ framework, as such it best integrates with 
 Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatibility layer.
 It uses a separate thread to run the Twisted reactor and communicates with the main program using a thread-safe Queue.
 
+..  warning::
+
+    While the Twisted reactor runs as a *daemon* thread, the reactor itself will start additional *worker threads*, which are *no daemon threads*.
+    Therefore the Reactor must be shut down explicitly by calling :func:`vncdotool.api.shutdown`.
+    Otherwise your application will not terminate as those worker threads remain running in the background.
+
+    This also applied when using the API as a context manager:
+    As the reactor cannot be restarted, it is a design decision to not shut it down as the end of the context.
+    That would prevent the API from being used multiple times in the same process.
+
 To use the synchronous API you can do the following::
 
     from vncdotool import api
