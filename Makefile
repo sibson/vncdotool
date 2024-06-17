@@ -21,8 +21,8 @@ version:
 version-%: OLDVERSION:=$(shell ./setup.py --version)
 version-%: NEWVERSION=$(subst -,.,$*)
 version-%:
-	sed -i '' -e s/$(OLDVERSION)/$(NEWVERSION)/ $(VERSION_FILE)
-	git ci $(VERSION_FILE) -m"bump version to $*"
+	sed -e "s/$(OLDVERSION)/$(NEWVERSION)/" -i "$(VERSION_FILE)"
+	git ci -m"bump version to $*" -- "$(VERSION_FILE)"
 
 .PHONY: release
 release: release-test release-tag upload
@@ -33,13 +33,13 @@ release-test: test-unit #test-func
 .PHONY: release-tag
 release-tag: VERSION:=$(shell ./setup.py --version)
 release-tag:
-	git tag -a v$(VERSION) -m"release version $(VERSION)"
+	git tag -a "v$(VERSION)" -m"release version $(VERSION)"
 	git push --tags
 
 .PHONY: upload
 upload:
 	./setup.py sdist
-	twine upload dist/$(shell ./setup.py --fullname).*
+	twine upload dist/"$(shell ./setup.py --fullname)".*
 
 .PHONY: docs
 docs:
