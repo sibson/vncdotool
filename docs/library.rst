@@ -1,15 +1,26 @@
 Embedding in Python Applications
 ===================================
-vncdotool is built with the Twisted_ framework, as such it best intergrates with other Twisted Applications
+vncdotool is built with the Twisted_ framework, as such it best integrates with other Twisted Applications.
 Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatibility layer.
-It uses a separate thread to run the Twisted reactor and communicates with the main program using a threadsafe Queue.
+It uses a separate thread to run the Twisted reactor and communicates with the main program using a thread-safe Queue.
+
+..  warning::
+
+    While the Twisted reactor runs as a *daemon* thread, the reactor itself will start additional *worker threads*, which are *no daemon threads*.
+    Therefore the Reactor must be shut down explicitly by calling :func:`vncdotool.api.shutdown`.
+    Otherwise your application will not terminate as those worker threads remain running in the background.
+
+    This also applied when using the API as a context manager:
+    As the reactor cannot be restarted, it is a design decision to not shut it down as the end of the context.
+    That would prevent the API from being used multiple times in the same process.
 
 To use the synchronous API you can do the following::
 
     from vncdotool import api
     client = api.connect('vncserver', password=None)
 
-The first argument passed to the `connect` method is the VNC server to connect to, and it needs to be in the format `address[:display|::port]`. For example::
+The first argument passed to the :func:`~vncdotool.api.connect` method is the VNC server to connect to, and it needs to be in the format ``address[:display|::port]``.
+For example::
 
     # connect to 192.168.1.1 on default port 5900
     client = api.connect('192.168.1.1', password=None)
@@ -38,7 +49,7 @@ It is possible to set a per-client timeout in seconds to prevent calls from bloc
     except TimeoutError:
         print('Timeout when capturing screen')
 
-In case of too many timeout errors, it is recommended to reset the client connection via the `disconnect` and `connect` methods.
+In case of too many timeout errors, it is recommended to reset the client connection via the `disconnect` and :func:`~vncdotool.api.connect` methods.
 
 The :class:`vncdotool.client.VNCDoToolClient` supports the context manager protocol.
 

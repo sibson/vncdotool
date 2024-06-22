@@ -6,6 +6,8 @@ vncdotool.egg-info
 .coverage
 .tox
 docs/_build
+.venv/
+.vncdo/
 
 *~
 #*

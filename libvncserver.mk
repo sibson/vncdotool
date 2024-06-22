@@ -1,5 +1,5 @@
 LIBVNCSERVER_VERSION?=0.9.14
-BUILD_DIR?=/tmp/vncdo
+BUILD_DIR?=.vncdo
 PYTHON?=python3
 
 
@@ -21,11 +21,11 @@ LIBVNCSERVER_EXAMPLES_SRCS=$(addsuffix .c, $(LIBVNCSERVER_EXAMPLES))
 libvnc-examples: $(LIBVNCSERVER_EXAMPLES)
 
 .PHONY: veryclean
-veryclean:
+veryclean::
 	rm -rf $(BUILD_DIR)
 
 .PHONY: clean
-clean:
+clean::
 	rm -f $(LIBVNCSERVER_EXAMPLES)
 
 
@@ -35,6 +35,7 @@ $(BUILD_DIR)/$(LIBVNCSERVER_TGZ):
 
 $(LIBVNCSERVER_DIR): $(BUILD_DIR)/$(LIBVNCSERVER_TGZ)
 	tar xfzv $< -C $(BUILD_DIR)
+	sed -e '/^\s*if(buttonMask)\s*{$/s/buttonMask/1/' -i "$(LIBVNCSERVER_DIR)/examples/vncev.c"
 
 $(LIBVNCSERVER_MAKEFILE): $(LIBVNCSERVER_MAKEFILE_SRCS)
 	cd $(LIBVNCSERVER_DIR) && cmake .

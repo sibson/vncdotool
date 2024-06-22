@@ -69,9 +69,9 @@ More documentation can be found on `Read the Docs`_.
 
 Feedback
 --------------------------------
-If you need help getting VNCDoTool working try the community at `_Stackoverflow`
+If you need help getting VNCDoTool working try the community at Stackoverflow_\ .
 
-Patches, and ideas for improvements are welcome and appreciated, via `_GitHub` issues.
+Patches, and ideas for improvements are welcome and appreciated, via GitHub_ issues.
 If you are reporting a bug or issue please include the version of both vncdotool
 and the VNC server you are using it with.
 
@@ -87,5 +87,4 @@ Also, to the TigerVNC_ project for creating a community focus RFB specification 
 .. _Read The Docs: http://vncdotool.readthedocs.org
 .. _GitHub: http://github.com/sibson/vncdotool
 .. _TigerVNC: http://sourceforge.net/apps/mediawiki/tigervnc/index.php?title=Main_Page
-.. _python-vnc-viewer: http://code.google.com/p/python-vnc-viewer
 .. _Stackoverflow: https://stackoverflow.com/questions/ask?tags=vncdotool

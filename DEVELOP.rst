@@ -18,7 +18,7 @@ running.  You can either manually configure and update your path or use the prov
     OR
 
     make libvnc-examples
-    export PATH=$PATH:/tmp/vncdo/libvncserver/examples
+    export PATH="$PATH:.vncdo/libvncserver-LibVNCServer-0.9.14/examples"
     python -m unittest discover tests/functional
 
 
@@ -30,9 +30,8 @@ There is a community effort to document the protcol, _rfbproto_.
 Preparing a Release
 ------------------------
   1. ensure CHANGELOG.rst contains correct version
-  1. make version-new-version-number
-  6. add new section to CHANGELOG.rst
-  7. update vncdotool/__init__.py version
-  8. blog post/twitter
+  1. ``make version-new-version-number``
+  1. ``make release``
+  1. blog post/twitter
 
 .. _rfbproto: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst

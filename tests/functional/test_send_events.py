@@ -52,8 +52,8 @@ class TestSendEvents(TestCase):
         self.run_vncdo('key ctrl-a')
         self.assertKeyDown(int(0xffe3))
         self.assertKeyDown(ord('a'))
-        self.assertKeyUp(int(0xffe3))
         self.assertKeyUp(ord('a'))
+        self.assertKeyUp(int(0xffe3))
         self.assertDisconnect()
 
     def test_type(self) -> None:
@@ -65,9 +65,15 @@ class TestSendEvents(TestCase):
         self.assertDisconnect()
 
     def test_mouse_move(self) -> None:
-        # vncev only prints click events, but will include the position
         self.run_vncdo('move 10 20 click 1')
         self.assertMouse(10, 20, 0x1)
+        self.assertDisconnect()
+
+    def test_mouse_drag(self) -> None:
+        self.run_vncdo('move 10 20 drag 30 30 click 1')
+        self.assertMouse(10, 20, 0x0)
+        self.assertMouse(20, 25, 0x0)
+        self.assertMouse(30, 30, 0x1)
         self.assertDisconnect()
 
     def test_mouse_click_button_two(self) -> None:

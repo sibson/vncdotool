@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """
-Command line interface to interact with a VNC Server
-
-(c) 2010 Marc Sibson
-
-MIT License
+Command line interface to interact with a VNC Server.
 """
+# (c) 2010-2024 Marc Sibson
+#
+# MIT License
+
+from __future__ import annotations
 
 import getpass
 import ipaddress
@@ -17,7 +18,6 @@ import shlex
 import socket
 import sys
 from types import TracebackType
-from typing import List, Optional, Tuple, Type
 
 from twisted.internet import protocol, reactor
 from twisted.internet.error import ConnectionDone
@@ -38,7 +38,7 @@ class TimeoutError(RuntimeError):
 
 
 def log_exceptions(
-    type_: Type[BaseException], value: BaseException, tb: Optional[TracebackType]
+    type_: type[BaseException], value: BaseException, tb: TracebackType | None
 ) -> None:
     log.critical("Unhandled exception:", exc_info=(type_, value, tb))
 
@@ -86,7 +86,7 @@ class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
 
 
 class VNCDoToolOptionParser(optparse.OptionParser):
-    def format_help(self, formatter: Optional[optparse.HelpFormatter] = None) -> str:
+    def format_help(self, formatter: optparse.HelpFormatter | None = None) -> str:
         result = super().format_help(formatter)
         result += (
             "\n"
@@ -121,8 +121,8 @@ class CommandParseError(RuntimeError):
 
 def build_command_list(
     factory: VNCDoCLIFactory,
-    args: List[str],
-    delay: Optional[float] = None,
+    args: list[str],
+    delay: float | None = None,
     warp: float = 1.0,
     incremental_refreshes: bool = False,
 ) -> None:
@@ -225,7 +225,7 @@ def build_command_list(
             factory.deferred.addCallback(client.pause, delay)
 
 
-def build_tool(options: optparse.Values, args: List[str]) -> VNCDoCLIFactory:
+def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
     factory = VNCDoCLIFactory()
 
     if options.verbose:
@@ -241,7 +241,7 @@ def build_tool(options: optparse.Values, args: List[str]) -> VNCDoCLIFactory:
             factory, args, options.delay, options.warp, options.incremental_refreshes
         )
     except CommandParseError as exc:
-        sys.exit(exc)
+        sys.exit(str(exc))
 
     factory_connect(factory, options.host, options.port, options.address_family)
     reactor.exit_status = 1
@@ -314,7 +314,7 @@ def setup_logging(options: optparse.Values) -> None:
     PythonLoggingObserver().start()
 
 
-def parse_server(server: str) -> Tuple[socket.AddressFamily, str, int]:
+def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
     if server.startswith("["):
         host, sep, server = server[1:].partition("]")
         if not sep:

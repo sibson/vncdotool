@@ -5,7 +5,7 @@ vncdotool is available on PyPI_, so in most cases you should be able to simply r
 
     pip install vncdotool
 
-vncdotool relies on a number of libraries, the two major ones are PIL_, the Python Imaging Library and
+vncdotool relies on a number of libraries, the two major ones are Pillow_, the Python Imaging Library and
 Twisted_, an asynchronous networking library.
 While vncdotool should work with any recent version of these libraries sometimes things break.
 If you are having issues getting things to work you can try using a stable set of libraries
@@ -50,15 +50,13 @@ If you are not familiar with Python, the most reliable way to install vncdotool 
 
     5. If Hello World shows up on the remote machine that has a VNC server running then its time to celebrate.
        Otherwise, first check you can connect from your local machine to the remote using a normal GUI VNC Client.
-       Once you get the normal GUI client working try vncdotool again and if you still have problems try the community at `_Stackoverflow`.
+       Once you get the normal GUI client working try vncdotool again and if you still have problems try the community at Stackoverflow_\ .
 
 .. _PyPI: https://pypi.python.org/pypi
-.. _PIL: http://www.pythonware.com/products/pil/
-.. _PIL Downloads: http://www.pythonware.com/products/pil/
-.. _Official Python: http://python.org/downloads/
-.. _Twisted: http://twistedmatrix.com/
-.. _Twisted Downloads: http://twistedmatrix.com/trac/wiki/Downloads
-.. _virtualenv: http://www.virtualenv.org/
-.. _ez_setup.py: https://bitbucket.org/pypa/setuptools/raw/bootstrap/ez_setup.py
-.. _get_pip.py: https://raw.github.com/pypa/pip/master/contrib/get-pip.py
+.. _Pillow: https://python-pillow.org/
+.. _PIL Downloads: https://pypi.org/project/pillow/
+.. _Official Python: https://python.org/downloads/
+.. _Twisted: https://twistedmatrix.com/
+.. _Twisted Downloads: https://pypi.org/project/Twisted/
+.. _virtualenv: https://virtualenv.pypa.io/
 .. _Stackoverflow: https://stackoverflow.com/questions/ask?tags=vncdotool
