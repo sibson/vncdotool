@@ -253,10 +253,12 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, fp: TFile, incremental: bool = False) -> Deferred:
+    def captureScreen(
+        self, fp: TFile, incremental: bool = False, format: str | None = None
+    ) -> Deferred:
         """Save the current display to filename"""
         log.debug("captureScreen %s", fp)
-        return self._capture(fp, incremental)
+        return self._capture(fp, incremental, format=format)
 
     def captureRegion(
         self, fp: TFile, x: int, y: int, w: int, h: int, incremental: bool = False
@@ -270,19 +272,24 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, fp: TFile, incremental: bool, *args: int) -> Deferred:
+    def _capture(
+        self, fp: TFile, incremental: bool, *args: int, format: str | None = None
+    ) -> Deferred:
         d = self.refreshScreen(incremental)
-        d.addCallback(self._captureSave, fp, *args)
+        kwargs = {"format": format} if format else {}
+        d.addCallback(self._captureSave, fp, *args, **kwargs)
         return d
 
-    def _captureSave(self: TClient, data: object, fp: TFile, *args: int) -> TClient:
+    def _captureSave(
+        self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
+    ) -> TClient:
         log.debug("captureSave %s", fp)
         assert self.screen is not None
         if args:
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
-        capture.save(fp)
+        capture.save(fp, format=format)
 
         return self
 
