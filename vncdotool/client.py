@@ -253,10 +253,24 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, fp: TFile, incremental: bool = False) -> Deferred:
-        """Save the current display to filename"""
+    def captureScreen(
+        self, fp: TFile, incremental: bool = False, format: str | None = None
+    ) -> Deferred:
+        """
+        Capture and save the current VNC screen display to a file.
+
+        Parameters:
+            fp (TFile): The destination where the screenshot will be saved.
+                        It can be a string path, a `pathlib.Path` object, or a file-like object opened in binary mode.
+            incremental (bool, optional):
+                - `False` (default): Captures the entire screen.
+                - `True`: Captures only the regions of the screen that have changed since the last capture.
+            format (str | None, optional):
+                - See Pillow's list of image formats: https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
+                - If set to `None`, Pillow will determine the format based on the provided file name.
+        """
         log.debug("captureScreen %s", fp)
-        return self._capture(fp, incremental)
+        return self._capture(fp, incremental, format=format)
 
     def captureRegion(
         self, fp: TFile, x: int, y: int, w: int, h: int, incremental: bool = False
@@ -270,19 +284,24 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, fp: TFile, incremental: bool, *args: int) -> Deferred:
+    def _capture(
+        self, fp: TFile, incremental: bool, *args: int, format: str | None = None
+    ) -> Deferred:
         d = self.refreshScreen(incremental)
-        d.addCallback(self._captureSave, fp, *args)
+        kwargs = {"format": format} if format else {}
+        d.addCallback(self._captureSave, fp, *args, **kwargs)
         return d
 
-    def _captureSave(self: TClient, data: object, fp: TFile, *args: int) -> TClient:
+    def _captureSave(
+        self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
+    ) -> TClient:
         log.debug("captureSave %s", fp)
         assert self.screen is not None
         if args:
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
-        capture.save(fp)
+        capture.save(fp, format=format)
 
         return self
 

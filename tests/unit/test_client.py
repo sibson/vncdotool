@@ -1,4 +1,5 @@
 from unittest import TestCase, mock
+import io
 
 from vncdotool import client, rfb
 
@@ -70,12 +71,24 @@ class TestVNCDoToolClient(TestCase):
         d.addCallback.assert_called_once_with(cli._captureSave, fname)
         assert cli.framebufferUpdateRequest.called
 
+    @mock.patch("vncdotool.client.Deferred")
+    def test_captureScreen_with_format(self, Deferred):
+        cli = self.client
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+        cli.vncConnectionMade()
+        buffer = io.BytesIO()
+        d = cli.captureScreen(buffer, format="png")
+        d.addCallback.assert_called_once_with(cli._captureSave, buffer, format="png")
+        assert cli.framebufferUpdateRequest.called
+
     def test_captureSave(self) -> None:
         cli = self.client
         cli.screen = mock.Mock()
         fname = 'foo.png'
         r = cli._captureSave(cli.screen, fname)
-        cli.screen.save.assert_called_once_with(fname)
+        cli.screen.save.assert_called_once_with(fname, format=None)
         assert r == cli
 
     @mock.patch('PIL.Image.open')
