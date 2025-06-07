@@ -1,21 +1,21 @@
 """
-Twisted based VNC client protocol and factory
-
-(c) 2010 Marc Sibson
-
-MIT License
+Twisted based VNC client protocol and factory.
 """
+# (c) 2010-2024 Marc Sibson
+#
+# MIT License
+
+from __future__ import annotations
 
 import logging
 import math
 import socket
-import time
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, List, Optional, TypeVar, Union
+from typing import IO, Any, Iterator, TypeVar, Union
 
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
+from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
 from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
@@ -153,12 +153,12 @@ class VNCDoToolClient(rfb.RFBClient):
     x = 0
     y = 0
     buttons = 0
-    screen: Optional[Image.Image] = None
+    screen: Image.Image | None = None
     image_mode = PF2IM[rfb.PixelFormat()]
-    deferred: Optional[Deferred] = None
+    deferred: Deferred | None = None
 
-    cursor: Optional[Image.Image] = None
-    cmask: Optional[Image.Image] = None
+    cursor: Image.Image | None = None
+    cmask: Image.Image | None = None
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -173,7 +173,7 @@ class VNCDoToolClient(rfb.RFBClient):
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self, reason)
 
-    def _decodeKey(self, key: str) -> List[int]:
+    def _decodeKey(self, key: str) -> list[int]:
         if self.factory.force_caps:
             if key.isupper() or key in self.SPECIAL_KEYS_US:
                 key = "shift-%c" % key
@@ -193,7 +193,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def keyPress(self: TClient, key: str) -> TClient:
         """Send a key press to the server
 
-        key: string: either [a-z] or a from KEYMAP
+        :param key: either [a-z] or a from :const:`KEYMAP`.
         """
         keys = self._decodeKey(key)
         log.debug("keyPress %s", keys)
@@ -223,8 +223,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mousePress(self: TClient, button: int) -> TClient:
         """Send a mouse click at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mousePress %s", button)
         self.mouseDown(button)
@@ -235,8 +234,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseDown(self: TClient, button: int) -> TClient:
         """Send a mouse button down at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mouseDown %s", button)
         self.buttons |= 1 << (button - 1)
@@ -247,8 +245,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def mouseUp(self: TClient, button: int) -> TClient:
         """Send mouse button released at the last set position
 
-        button: int: [1-n]
-
+        :param button: [1-n]
         """
         log.debug("mouseUp %s", button)
         self.buttons &= ~(1 << (button - 1))
@@ -256,10 +253,24 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def captureScreen(self, fp: TFile, incremental: bool = False) -> Deferred:
-        """Save the current display to filename"""
+    def captureScreen(
+        self, fp: TFile, incremental: bool = False, format: str | None = None
+    ) -> Deferred:
+        """
+        Capture and save the current VNC screen display to a file.
+
+        Parameters:
+            fp (TFile): The destination where the screenshot will be saved.
+                        It can be a string path, a `pathlib.Path` object, or a file-like object opened in binary mode.
+            incremental (bool, optional):
+                - `False` (default): Captures the entire screen.
+                - `True`: Captures only the regions of the screen that have changed since the last capture.
+            format (str | None, optional):
+                - See Pillow's list of image formats: https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
+                - If set to `None`, Pillow will determine the format based on the provided file name.
+        """
         log.debug("captureScreen %s", fp)
-        return self._capture(fp, incremental)
+        return self._capture(fp, incremental, format=format)
 
     def captureRegion(
         self, fp: TFile, x: int, y: int, w: int, h: int, incremental: bool = False
@@ -273,28 +284,32 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest(incremental=incremental)
         return d
 
-    def _capture(self, fp: TFile, incremental: bool, *args: int) -> Deferred:
+    def _capture(
+        self, fp: TFile, incremental: bool, *args: int, format: str | None = None
+    ) -> Deferred:
         d = self.refreshScreen(incremental)
-        d.addCallback(self._captureSave, fp, *args)
+        kwargs = {"format": format} if format else {}
+        d.addCallback(self._captureSave, fp, *args, **kwargs)
         return d
 
-    def _captureSave(self: TClient, data: object, fp: TFile, *args: int) -> TClient:
+    def _captureSave(
+        self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
+    ) -> TClient:
         log.debug("captureSave %s", fp)
         assert self.screen is not None
         if args:
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
-        capture.save(fp)
+        capture.save(fp, format=format)
 
         return self
 
     def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
         """Wait until the display matches a target image
 
-        filename: an image file to read and compare against
-        maxrms: the maximum root mean square between histograms of the
-                screen and target image
+        :param filename: an image file to read and compare against.
+        :param maxrms: the maximum root mean square between histograms of the screen and target image.
         """
         log.debug("expectScreen %s", filename)
         return self._expectFramebuffer(filename, 0, 0, maxrms)
@@ -349,32 +364,20 @@ class VNCDoToolClient(rfb.RFBClient):
         self.pointerEvent(x, y, self.buttons)
         return self
 
-    def mouseDrag(self: TClient, x: int, y: int, step: int = 1) -> TClient:
+    @inlineCallbacks
+    def mouseDrag(self: TClient, x: int, y: int, step: int = 1) -> Iterator[Deferred]:
         """Move the mouse point to position (x, y) in increments of step"""
         log.debug("mouseDrag %d,%d", x, y)
-        if x < self.x:
-            xsteps = range(self.x - step, x, -step)
-        else:
-            xsteps = range(self.x + step, x, step)
-
-        if y < self.y:
-            ysteps = range(self.y - step, y, -step)
-        else:
-            ysteps = range(self.y + step, y, step)
-
-        for ypos in ysteps:
-            self.mouseMove(self.x, ypos)
-            reactor.doPoll(timeout=5)
-            time.sleep(0.2)
-
-        for xpos in xsteps:
-            self.mouseMove(xpos, self.y)
-            reactor.doPoll(timeout=5)
-            time.sleep(0.2)
+        ox, oy = self.x, self.y
+        dx, dy = x - ox, y - oy
+        dmax = max(abs(dx), abs(dy))
+        for s in range(0, dmax, step):
+            self.mouseMove(ox + dx * s // dmax, oy + dy * s // dmax)
+            yield self.pause(0.2)
 
         self.mouseMove(x, y)
 
-        return self
+        returnValue(self)
 
     def setImageMode(self) -> None:
         """Check support for PixelFormats announced by server or select client supported alternative."""
@@ -453,7 +456,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.drawCursor()
 
-    def commitUpdate(self, rectangles: Optional[List[rfb.Rect]] = None) -> None:
+    def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
         if self.deferred:
             d = self.deferred
             self.deferred = None
@@ -527,8 +530,8 @@ class VMWareClient(VNCDoToolClient):
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
-    username: Optional[str] = None
-    password: Optional[str] = None
+    username: str | None = None
+    password: str | None = None
 
     protocol = VNCDoToolClient
     shared = True
