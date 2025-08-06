@@ -305,6 +305,52 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
+    def captureToMemory(self, format: str = 'BMP', x1: int = 0, y1: int = 0, x2: Optional[int] = None, y2: Optional[int] = None, incremental: bool = False) -> Deferred:
+        """Capture screen or region to memory and return memory address
+        
+        Args:
+            format: Image format (e.g., 'BMP', 'PNG', 'JPEG')
+            x1, y1: Top-left corner coordinates  
+            x2, y2: Bottom-right corner coordinates (None for full screen)
+            incremental: Whether to use incremental update
+            
+        Returns:
+            Deferred that fires with tuple (memory_address, buffer_size, buffer_obj)
+        """
+        log.debug("captureToMemory format=%s region=(%s,%s,%s,%s)", format, x1, y1, x2, y2)
+        d = self.refreshScreen(incremental)
+        d.addCallback(self._captureToMemoryCallback, format, x1, y1, x2, y2)
+        return d
+
+    def _captureToMemoryCallback(self: TClient, data: object, format: str, x1: int, y1: int, x2: Optional[int], y2: Optional[int]) -> tuple:
+        """Internal callback for captureToMemory"""
+        log.debug("captureToMemoryCallback format=%s", format)
+        assert self.screen is not None
+        
+        # Determine capture region
+        if x2 is None or y2 is None:
+            # Full screen capture
+            capture = self.screen
+        else:
+            # Region capture
+            capture = self.screen.crop((x1, y1, x2, y2))
+        
+        # Save image to memory buffer
+        buffer = io.BytesIO()
+        capture.save(buffer, format=format)
+        image_data = buffer.getvalue()
+        buffer.close()
+        
+        # Create ctypes buffer and get memory address
+        ctypes_buffer = ctypes.create_string_buffer(image_data)
+        address = ctypes.addressof(ctypes_buffer)  # 返回的是整数
+        address_64 = ctypes.c_longlong(address)  # 转换为64位长整数
+        
+        log.debug("Image captured to memory: address=%s, size=%d bytes", address_64, len(image_data))
+        
+        # Return memory address, buffer size, and buffer object (to keep it alive)
+        return (address, address_64, len(image_data), ctypes_buffer)
+        
     def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
         """Wait until the display matches a target image
 
