@@ -156,6 +156,8 @@ def build_command_list(
             factory.deferred.addCallback(client.mouseUp, button)
         elif cmd == "type":
             for key in args.pop(0):
+                if key == "-":
+                    key = "minus"
                 factory.deferred.addCallback(client.keyPress, key)
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
@@ -169,6 +171,8 @@ def build_command_list(
                         key = "enter"
                     if key == "\t":
                         key = "tab"
+                    if key == "-":
+                        key = "minus"
                     factory.deferred.addCallback(client.keyPress, key)
                     if delay:
                         factory.deferred.addCallback(client.pause, delay)

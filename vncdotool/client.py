@@ -105,6 +105,7 @@ KEYMAP = {
     "kp8": rfb.KEY_KP_8,
     "kp9": rfb.KEY_KP_9,
     "kpenter": rfb.KEY_KP_Enter,
+    "minus": ord('-'), # Literal `-` will get split while decoding
 }
 
 # Enable using vncdotool without PIL. Of course capture and expect
