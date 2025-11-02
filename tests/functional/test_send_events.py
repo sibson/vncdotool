@@ -1,7 +1,7 @@
 import os.path
+import shlex
 import sys
-from shutil import which
-from unittest import TestCase, skipUnless
+from unittest import TestCase
 
 import pexpect
 
@@ -10,12 +10,25 @@ KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
 
 
-@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
+from .cli import spawn_command
+from .libvncserver import example_command
+
+
 class TestSendEvents(TestCase):
 
     def setUp(self) -> None:
-        cmd = 'vncev -rfbport 5933 -rfbwait 1000'
-        self.server = pexpect.spawn(cmd, logfile=sys.stdout.buffer, timeout=2)
+        server_cmd, server_args, server_env = example_command(
+            'vncev', '-rfbport', '5933', '-rfbwait', '1000'
+        )
+        self.server = pexpect.spawn(
+            server_cmd,
+            list(server_args),
+            logfile=sys.stdout.buffer,
+            env=server_env,
+            timeout=5,
+        )
+        self.server.logfile_read = sys.stdout.buffer
+        self.server.expect('Listening for VNC connections on TCP port')
 
     def tearDown(self) -> None:
         self.server.terminate(force=True)
@@ -37,8 +50,10 @@ class TestSendEvents(TestCase):
         self.server.expect(disco)
 
     def run_vncdo(self, commands: str) -> None:
-        cmd = 'vncdo -v -s :33 ' + commands
-        vnc = pexpect.spawn(cmd, logfile=sys.stdout.buffer, timeout=5)
+        args = shlex.split(commands)
+        vnc = spawn_command(
+            'vncdo', '-v', '-s', ':33', *args, logfile=sys.stdout.buffer, timeout=5
+        )
         retval = vnc.wait()
         assert retval == 0, retval
 

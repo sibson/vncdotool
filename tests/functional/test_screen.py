@@ -1,9 +1,9 @@
 import os.path
+import shlex
 import sys
 import tempfile
-from shutil import which
 from typing import IO, List, Optional
-from unittest import TestCase, skipUnless
+from unittest import TestCase
 
 import pexpect
 
@@ -12,10 +12,12 @@ SIMPLE_PNG = os.path.join(DATADIR, 'simple.png')
 EXAMPLE_PNG = os.path.join(DATADIR, 'example.png')
 EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
 
+from .cli import spawn_command
+from .libvncserver import example_command
+
 SERVER = "example"
 
 
-@skipUnless(which(SERVER), reason=f"requires program {SERVER!r}")
 class TestVNCCapture(TestCase):
     server: Optional[pexpect.spawn] = None
 
@@ -36,14 +38,23 @@ class TestVNCCapture(TestCase):
         return f.name
 
     def run_server(self, server: str) -> None:
-        cmd = f'{server} -rfbport 5910 -rfbwait 1000'
-        self.server = pexpect.spawn(cmd, timeout=2)
+        server_cmd, server_args, server_env = example_command(
+            server, '-rfbport', '5910', '-rfbwait', '1000'
+        )
+        self.server = pexpect.spawn(
+            server_cmd,
+            list(server_args),
+            env=server_env,
+            timeout=5,
+        )
         self.server.logfile_read = sys.stdout.buffer
+        self.server.expect('Listening for VNC connections on TCP port')
 
     def run_vncdo(self, commands: str, exitcode: int = 0) -> None:
-        cmd = f'vncdo -s :10 {commands}'
-        vnc = pexpect.spawn(cmd, logfile=sys.stdout.buffer, timeout=5)
-        vnc.logfile_read = sys.stdout.buffer
+        args = shlex.split(commands)
+        vnc = spawn_command(
+            'vncdo', '-s', ':10', *args, logfile=sys.stdout.buffer, timeout=5
+        )
         vnc.expect(pexpect.EOF)
         if vnc.isalive():
             vnc.wait()
