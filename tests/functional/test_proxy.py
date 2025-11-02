@@ -1,21 +1,27 @@
+import shlex
 import sys
-from shutil import which
-from unittest import TestCase, skipUnless
+from unittest import TestCase
 
 import pexpect
 
 from vncdotool import rfb
 
+from .cli import spawn_command
+from .libvncserver import example_command
 
-@skipUnless(which("vncev"), reason="requires https://github.com/LibVNC/libvncserver")
+
 class TestLogEvents(TestCase):
     def setUp(self) -> None:
-        cmd = 'vncev -rfbport 5999 -rfbwait 1000'
-        self.server = pexpect.spawn(cmd, timeout=2)
+        server_cmd, server_args, server_env = example_command(
+            "vncev", "-rfbport", "5999", "-rfbwait", "1000"
+        )
+        self.server = pexpect.spawn(server_cmd, list(server_args), env=server_env, timeout=5)
         self.server.logfile_read = sys.stdout.buffer
+        self.server.expect('Listening for VNC connections on TCP port')
 
-        cmd = 'vnclog --listen 1842 -s :99 -'
-        self.recorder = pexpect.spawn(cmd, timeout=2)
+        self.recorder = spawn_command(
+            "vnclog", "--listen", "1842", "-s", ":99", "-", timeout=5
+        )
         self.recorder.logfile_read = sys.stdout.buffer
 
     def tearDown(self) -> None:
@@ -24,8 +30,8 @@ class TestLogEvents(TestCase):
             self.recorder.terminate(force=True)
 
     def run_vncdo(self, commands: str) -> None:
-        cmd = 'vncdo -s localhost::1842 ' + commands
-        vnc = pexpect.spawn(cmd, timeout=2)
+        args = shlex.split(commands)
+        vnc = spawn_command("vncdo", "-s", "localhost::1842", *args, timeout=5)
         vnc.logfile_read = sys.stdout.buffer
         retval = vnc.wait()
         assert retval == 0, (retval, str(vnc))
