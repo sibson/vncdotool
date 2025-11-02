@@ -35,7 +35,8 @@ $(BUILD_DIR)/$(LIBVNCSERVER_TGZ):
 
 $(LIBVNCSERVER_DIR): $(BUILD_DIR)/$(LIBVNCSERVER_TGZ)
 	tar xfzv $< -C $(BUILD_DIR)
-	sed -e '/^\s*if(buttonMask)\s*{$/s/buttonMask/1/' -i "$(LIBVNCSERVER_DIR)/examples/vncev.c"
+	# Fix sed script to be portable across GNU/BSD sed
+	sed -i.bak -e '/^[[:space:]]*if[[:space:]]*(buttonMask)[[:space:]]*{/ s/buttonMask/1/' "$(LIBVNCSERVER_DIR)/examples/vncev.c"
 
 $(LIBVNCSERVER_MAKEFILE): $(LIBVNCSERVER_MAKEFILE_SRCS)
 	cd $(LIBVNCSERVER_DIR) && cmake .
