@@ -162,7 +162,8 @@ def build_command_list(
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
         elif cmd == "typefile":
-            with open(args.pop(0)) as f:
+            filename = args.pop(0)
+            with open(filename) if filename != "-" else sys.stdin as f:
                 content = f.read()
                 for key in content:
                     if key == "\r":
@@ -177,7 +178,8 @@ def build_command_list(
                     if delay:
                         factory.deferred.addCallback(client.pause, delay)
         elif cmd == "pastefile":
-            with open(args.pop(0)) as f:
+            filename = args.pop(0)
+            with open(filename) if filename != "-" else sys.stdin as f:
                 content = f.read().replace("\r\n", "\n")
                 factory.deferred.addCallback(client.paste, content)
         elif cmd == "capture":
