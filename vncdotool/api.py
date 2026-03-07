@@ -82,14 +82,19 @@ class ThreadedVNCClientProxy:
             return getattr(self.protocol, attr)
 
         def threaded_call(
-            protocol: VNCDoToolClient, *args: Any, **kwargs: Any
+            _previous_result: Any, *args: Any, **kwargs: Any
         ) -> Deferred:
             def result_callback(result: V) -> V:
                 self.queue.put(result)
                 return result
 
-            d = maybeDeferred(method, protocol, *args, **kwargs)
+            def restore_protocol(_result: Any) -> VNCDoToolClient | None:
+                return self.protocol
+
+            bound_method = getattr(self.protocol, attr)
+            d = maybeDeferred(bound_method, *args, **kwargs)
             d.addBoth(result_callback)
+            d.addBoth(restore_protocol)
             return d
 
         def errback_not_connected(
