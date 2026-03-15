@@ -88,12 +88,18 @@ class ThreadedVNCClientProxy(object):
         def errback(reason, *args, **kwargs):
             self.queue.put(Failure(reason))
 
-        def callback(protocol, *args, **kwargs):
+        def callback(_previous_result, *args, **kwargs):
             def result_callback(result):
                 self.queue.put(result)
                 return result
-            d = maybeDeferred(method, protocol, *args, **kwargs)
+
+            def restore_protocol(_result):
+                return self.protocol
+
+            bound_method = getattr(self.protocol, attr)
+            d = maybeDeferred(bound_method, *args, **kwargs)
             d.addBoth(result_callback)
+            d.addBoth(restore_protocol)
             return d
 
         def proxy_call(*args, **kwargs):
