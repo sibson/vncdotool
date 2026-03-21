@@ -23,6 +23,7 @@ class TestLogEvents(TestCase):
             "vnclog", "--listen", "1842", "-s", ":99", "-", timeout=5
         )
         self.recorder.logfile_read = sys.stdout.buffer
+        self.recorder.expect(r'vnclog listening on port \d+')
 
     def tearDown(self) -> None:
         self.server.terminate(force=True)

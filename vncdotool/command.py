@@ -401,6 +401,7 @@ def vnclog() -> None:
     output = args[0]
 
     factory = build_proxy(options)
+    print(f"vnclog listening on port {factory.listen_port}", file=sys.stderr, flush=True)
 
     if options.forever and os.path.isdir(output):
         factory.output = output

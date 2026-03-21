@@ -50,4 +50,4 @@ $(LIBVNCSERVER_EXAMPLES): $(LIBVNCSERVER_EXAMPLES_SRCS)
 .PHONY: test-libvnc
 test-libvnc: export PATH:=$(PATH):$(LIBVNCSERVER_DIR)/examples
 test-libvnc:
-	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) tests/functional
+	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t .
