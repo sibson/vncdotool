@@ -156,11 +156,14 @@ def build_command_list(
             factory.deferred.addCallback(client.mouseUp, button)
         elif cmd == "type":
             for key in args.pop(0):
+                if key == "-":
+                    key = "minus"
                 factory.deferred.addCallback(client.keyPress, key)
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
         elif cmd == "typefile":
-            with open(args.pop(0)) as f:
+            filename = args.pop(0)
+            with open(filename) if filename != "-" else sys.stdin as f:
                 content = f.read()
                 for key in content:
                     if key == "\r":
@@ -169,11 +172,14 @@ def build_command_list(
                         key = "enter"
                     if key == "\t":
                         key = "tab"
+                    if key == "-":
+                        key = "minus"
                     factory.deferred.addCallback(client.keyPress, key)
                     if delay:
                         factory.deferred.addCallback(client.pause, delay)
         elif cmd == "pastefile":
-            with open(args.pop(0)) as f:
+            filename = args.pop(0)
+            with open(filename) if filename != "-" else sys.stdin as f:
                 content = f.read().replace("\r\n", "\n")
                 factory.deferred.addCallback(client.paste, content)
         elif cmd == "capture":
