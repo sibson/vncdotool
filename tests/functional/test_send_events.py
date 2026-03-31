@@ -5,13 +5,12 @@ from unittest import TestCase
 
 import pexpect
 
+from .cli import spawn_command
+from .libvncserver import example_command
+
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 KEYA_VDO = os.path.join(DATADIR, 'samplea.vdo')
 KEYB_VDO = os.path.join(DATADIR, 'sampleb.vdo')
-
-
-from .cli import spawn_command
-from .libvncserver import example_command
 
 
 class TestSendEvents(TestCase):
