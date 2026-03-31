@@ -7,13 +7,13 @@ from unittest import TestCase
 
 import pexpect
 
+from .cli import spawn_command
+from .libvncserver import example_command
+
 DATADIR = os.path.join(os.path.dirname(__file__), 'data')
 SIMPLE_PNG = os.path.join(DATADIR, 'simple.png')
 EXAMPLE_PNG = os.path.join(DATADIR, 'example.png')
 EXAMPLE_NOCURSOR_PNG = os.path.join(DATADIR, 'example_nocursor.png')
-
-from .cli import spawn_command
-from .libvncserver import example_command
 
 SERVER = "example"
 
