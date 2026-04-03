@@ -14,7 +14,6 @@ http://www.realvnc.com/docs/rfbproto.pdf
 from __future__ import annotations
 
 import getpass
-import os
 import sys
 import zlib
 from dataclasses import astuple, dataclass
