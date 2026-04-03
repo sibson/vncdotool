@@ -10,13 +10,19 @@ help:
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
-VERSION := $(shell python -c "import vncdotool; print(vncdotool.__version__)")
+VERSION := $(shell python -c "import vncdotool; print(vncdotool.__version__.split('.dev')[0])")
+NEXT_VERSION := $(shell python -c "v='$(VERSION)'.split('.'); v[-1]=str(int(v[-1])+1); print('.'.join(v)+'.dev0')")
 
 .PHONY: release
 release: test-unit
 	@echo "Releasing $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
+	sed -i'' "s/__version__ = .*/__version__ = \"$(NEXT_VERSION)\"/" vncdotool/__init__.py
+	printf '$(NEXT_VERSION) (UNRELEASED)\n----------------------\n\n' | cat - CHANGELOG.rst > CHANGELOG.rst.tmp && mv CHANGELOG.rst.tmp CHANGELOG.rst
+	git add vncdotool/__init__.py CHANGELOG.rst
+	git commit -m "Bump version to $(NEXT_VERSION)"
+	git push origin main
 
 .PHONY: docs
 docs:
