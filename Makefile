@@ -8,6 +8,15 @@ help:
 	@echo "test:		run unit tests"
 	@echo "test-func:	run functional tests"
 	@echo "docs:		build documentation"
+	@echo "release:	tag and push current version to trigger PyPI release"
+
+VERSION := $(shell python -c "import vncdotool; print(vncdotool.__version__)")
+
+.PHONY: release
+release: test-unit
+	@echo "Releasing $(VERSION)"
+	git tag v$(VERSION)
+	git push origin main v$(VERSION)
 
 .PHONY: docs
 docs:
