@@ -1,10 +1,17 @@
-1.3.0 (UNRELEASED)
+1.3.0 (2026-04-03)
 ----------------------
   - Fix functional test suite (@phahn)
-  - Python 3.12 is supported (@phahn)
+  - Python 3.12 is supported, Python 3.7 support removed (@phahn)
   - Improve documentation (@phahn)
   - Improve PEP-484 type hinting (@phahn)
   - Fix mouse dragging (@phahn)
+  - Improve special key handling, fix key-down/key-up discrepancy with force_caps (@phahn, #270)
+  - Allow specifying a format with captureScreen (@erjiang, #293)
+  - Allow input literal ``-`` via ``client.keyPress`` with ``minus`` keyword (#302)
+  - Fix: typefile and pastefile now accept ``-`` as filename for stdin (#307)
+  - Switch from pycryptodomex to cryptography.io (@geofft, #278)
+  - Remove transitive dependency zope.interface (#298)
+  - Bump minimum Pillow version to 10.0.1 (#312)
 
 1.2.0 (2023-06-06)
 ----------------------
