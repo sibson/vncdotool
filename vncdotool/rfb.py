@@ -698,8 +698,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.expect(self._handleRectangle, 12)
         else:
-            if self.rectanglePos:
-                self.commitUpdate(self.rectanglePos)
+            self.commitUpdate(self.rectanglePos)
             self.expect(self._handleConnection, 1)
 
     def _handleRectangle(self, block: bytes) -> None:
