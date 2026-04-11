@@ -12,7 +12,7 @@ import math
 import socket
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, Iterator, TypeVar, Union
+from typing import IO, Any, Callable, Iterator, TypeVar, Union
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
@@ -546,9 +546,12 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def __init__(self) -> None:
         self.deferred = Deferred()
+        self._disconnect_callbacks: list[Callable[[Failure], None]] = []
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
-        pass
+        for cb in self._disconnect_callbacks:
+            cb(reason)
+        self._disconnect_callbacks.clear()
 
     def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
         self.deferred.errback(reason)
