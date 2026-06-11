@@ -40,7 +40,7 @@ from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
-from .const import Encoding, HextileEncoding, AuthTypes, MsgS2C
+from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
 from .keys import Key
 
 Rect = Tuple[int, int, int, int]
@@ -969,11 +969,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def setPixelFormat(self, pixel_format: PixelFormat) -> None:
         pixformat = pixel_format.to_bytes()
-        self.transport.write(pack("!Bxxx16s", 0, pixformat))
+        self.transport.write(pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixformat))
         self.pixel_format = pixel_format
 
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
-        self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
+        self.transport.write(pack("!BxH", MsgC2S.SET_ENCODING, len(list_of_encodings)))
         for encoding in list_of_encodings:
             log.msg(f"Offering {encoding!r}")
             self.transport.write(pack("!i", encoding))
@@ -990,26 +990,26 @@ class RFBClient(Protocol):  # type: ignore[misc]
             width = self.width - x
         if height is None:
             height = self.height - y
-        self.transport.write(pack("!BBHHHH", 3, incremental, x, y, width, height))
+        self.transport.write(pack("!BBHHHH", MsgC2S.FRAMEBUFFER_UPDATE_REQUEST, incremental, x, y, width, height))
 
     def keyEvent(self, key: Key | int, down: bool = True) -> None:
         """For most ordinary keys, the "keysym" is the same as the corresponding ASCII value.
         Other common keys are shown in the ``Key`` constants."""
-        self.transport.write(pack("!BBxxI", 4, down, key))
+        self.transport.write(pack("!BBxxI", MsgC2S.KEY_EVENT, down, key))
 
     def pointerEvent(self, x: int, y: int, buttonmask: int = 0) -> None:
         """Indicates either pointer movement or a pointer button press or release. The pointer is
         now at (x-position, y-position), and the current state of buttons 1 to 8 are represented
         by bits 0 to 7 of button-mask respectively, 0 meaning up, 1 meaning down (pressed).
         """
-        self.transport.write(pack("!BBHH", 5, buttonmask, x, y))
+        self.transport.write(pack("!BBHH", MsgC2S.POINTER_EVENT, buttonmask, x, y))
 
     def clientCutText(self, message: str) -> None:
         """The client has new ISO 8859-1 (Latin-1) text in its cut buffer.
         (aka clipboard)
         """
         data = message.encode("iso-8859-1")
-        self.transport.write(pack("!BxxxI", 6, len(data)) + data)
+        self.transport.write(pack("!BxxxI", MsgC2S.CLIENT_CUT_TEXT, len(data)) + data)
 
     # ------------------------------------------------------
     # callbacks
