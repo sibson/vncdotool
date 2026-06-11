@@ -12,62 +12,15 @@ from twisted.internet.protocol import Protocol
 from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
+from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import KEYMAP, VNCDoToolClient
-from .rfb import AuthTypes, Encoding, IntEnumLookup, PixelFormat, Rect
+from .rfb import PixelFormat, Rect
 
 log = logging.getLogger(__name__)
 
 
 class ProtocolError(Exception):
     """VNC Protocol error"""
-
-
-class MsgC2S(IntEnumLookup):
-    """:rfc:`6143` §7.5. Client-to-Server Messages."""
-
-    SET_PIXEL_FORMAT = 0
-    SET_ENCODING = 2
-    FRAMEBUFFER_UPDATE_REQUEST = 3
-    KEY_EVENT = 4
-    POINTER_EVENT = 5
-    CLIENT_CUT_TEXT = 6
-    FILE_TRANSFER = 7
-    SET_SCALE = 8
-    SET_SERVER_INPUT = 9
-    SET_SW = 10
-    TEXT_CHAT = 11
-    KEY_FRAME_REquest = 12
-    KEEP_ALIVE = 13
-    ULTRA_14 = 14
-    SET_SCALE_FACTOR = 15
-    ULTRA_16 = 16
-    ULTRA_17 = 17
-    ULTRA_18 = 18
-    ULTRA_19 = 19
-    REQUEST_SESSION = 20
-    SET_SESSION = 21
-    NOTIFY_PLUGIN_STREAMING = 80
-    VMWARE_127 = 127
-    CAR_CONNECTIVITY = 128
-    ENABLE_CONTINUOUS_UPDATES = 150
-    CLIENT_FENCE = 248
-    OLIVE_CALL_CONTROL = 249
-    XVP_CLIENT_MESSAGE = 250
-    SET_DESKTOP_SIZE = 251
-    TIGHT = 252
-    GII_CLIENT_MESSAGE = 253  # General Input Interface
-    VMWARE_254 = 254
-    QEMU_CLIENT_MESSAGE = 255
-
-
-class QemuClientMessage(IntEnumLookup):
-    """
-    `QEMU Client Message
-    <https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message>`_
-    """
-
-    EXTENDED_KEY_EVENT = 0
-    AUDIO = 1
 
 
 TYPE_LEN = {
