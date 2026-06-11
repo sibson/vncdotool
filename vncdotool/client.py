@@ -21,92 +21,12 @@ from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
 from . import rfb
+from .keys import KEYMAP
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
 TFile = Union[str, Path, IO[bytes]]
 
 log = logging.getLogger(__name__)
-
-
-KEYMAP = {
-    "bsp": rfb.KEY_BackSpace,
-    "tab": rfb.KEY_Tab,
-    "return": rfb.KEY_Return,
-    "enter": rfb.KEY_Return,
-    "esc": rfb.KEY_Escape,
-    "ins": rfb.KEY_Insert,
-    "delete": rfb.KEY_Delete,
-    "del": rfb.KEY_Delete,
-    "home": rfb.KEY_Home,
-    "end": rfb.KEY_End,
-    "pgup": rfb.KEY_PageUp,
-    "pgdn": rfb.KEY_PageDown,
-    "left": rfb.KEY_Left,
-    "up": rfb.KEY_Up,
-    "right": rfb.KEY_Right,
-    "down": rfb.KEY_Down,
-    "slash": rfb.KEY_BackSlash,
-    "bslash": rfb.KEY_BackSlash,
-    "fslash": rfb.KEY_ForwardSlash,
-    "spacebar": rfb.KEY_SpaceBar,
-    "space": rfb.KEY_SpaceBar,
-    "sb": rfb.KEY_SpaceBar,
-    "f1": rfb.KEY_F1,
-    "f2": rfb.KEY_F2,
-    "f3": rfb.KEY_F3,
-    "f4": rfb.KEY_F4,
-    "f5": rfb.KEY_F5,
-    "f6": rfb.KEY_F6,
-    "f7": rfb.KEY_F7,
-    "f8": rfb.KEY_F8,
-    "f9": rfb.KEY_F9,
-    "f10": rfb.KEY_F10,
-    "f11": rfb.KEY_F11,
-    "f12": rfb.KEY_F12,
-    "f13": rfb.KEY_F13,
-    "f14": rfb.KEY_F14,
-    "f15": rfb.KEY_F15,
-    "f16": rfb.KEY_F16,
-    "f17": rfb.KEY_F17,
-    "f18": rfb.KEY_F18,
-    "f19": rfb.KEY_F19,
-    "f20": rfb.KEY_F20,
-    "lshift": rfb.KEY_ShiftLeft,
-    "shift": rfb.KEY_ShiftLeft,
-    "rshift": rfb.KEY_ShiftRight,
-    "lctrl": rfb.KEY_ControlLeft,
-    "ctrl": rfb.KEY_ControlLeft,
-    "rctrl": rfb.KEY_ControlRight,
-    "lmeta": rfb.KEY_MetaLeft,
-    "meta": rfb.KEY_MetaLeft,
-    "rmeta": rfb.KEY_MetaRight,
-    "lalt": rfb.KEY_AltLeft,
-    "alt": rfb.KEY_AltLeft,
-    "ralt": rfb.KEY_AltRight,
-    "scrlk": rfb.KEY_Scroll_Lock,
-    "sysrq": rfb.KEY_Sys_Req,
-    "numlk": rfb.KEY_Num_Lock,
-    "caplk": rfb.KEY_Caps_Lock,
-    "pause": rfb.KEY_Pause,
-    "lsuper": rfb.KEY_Super_L,
-    "super": rfb.KEY_Super_L,
-    "rsuper": rfb.KEY_Super_R,
-    "lhyper": rfb.KEY_Hyper_L,
-    "hyper": rfb.KEY_Hyper_L,
-    "rhyper": rfb.KEY_Hyper_R,
-    "kp0": rfb.KEY_KP_0,
-    "kp1": rfb.KEY_KP_1,
-    "kp2": rfb.KEY_KP_2,
-    "kp3": rfb.KEY_KP_3,
-    "kp4": rfb.KEY_KP_4,
-    "kp5": rfb.KEY_KP_5,
-    "kp6": rfb.KEY_KP_6,
-    "kp7": rfb.KEY_KP_7,
-    "kp8": rfb.KEY_KP_8,
-    "kp9": rfb.KEY_KP_9,
-    "kpenter": rfb.KEY_KP_Enter,
-    "minus": ord('-'),  # Literal `-` will get split while decoding
-}
 
 # Enable using vncdotool without PIL. Of course capture and expect
 # won't work but at least we can still offer key, type, press and

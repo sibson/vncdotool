@@ -13,7 +13,8 @@ from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
-from .client import KEYMAP, VNCDoToolClient
+from .client import VNCDoToolClient
+from .keys import KEYMAP
 from .rfb import PixelFormat, Rect
 
 log = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ from unittest import TestCase
 
 import pexpect
 
-from vncdotool import rfb
+from vncdotool.keys import Key
 
 from .cli import spawn_command
 from .libvncserver import example_command
@@ -60,10 +60,10 @@ class TestLogEvents(TestCase):
 
     def test_key_ctrl_a(self) -> None:
         self.run_vncdo('key ctrl-a')
-        self.assertKeyDown(rfb.KEY_ControlLeft)
+        self.assertKeyDown(Key.ControlLeft)
         self.assertKeyDown(ord('a'))
         self.assertKeyUp(ord('a'))
-        self.assertKeyUp(rfb.KEY_ControlLeft)
+        self.assertKeyUp(Key.ControlLeft)
 
     def test_mouse(self) -> None:
         self.run_vncdo('move 111 222 click 1')
