@@ -456,7 +456,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_DESKTOP_SIZE,
         Encoding.PSEUDO_LAST_RECT,
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+        Encoding.PSEUDO_FENCE,
     }
+
+    FENCE_FLAG_REQUEST = 0x8000_0000
 
     _HEADER = b"RFB 000.000\n"
     _HEADER_TRANSLATE = bytes.maketrans(b"0123456789", b"0" * 10)
@@ -684,6 +687,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleConnection, 1)
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
+        elif msgid == MsgS2C.SERVER_FENCE:
+            self.expect(self._handleServerFence, 8)
         else:
             log.msg(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
@@ -1220,6 +1225,22 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.copy_text(block.decode("iso-8859-1"))
         self.expect(self._handleConnection, 1)
 
+    def _handleServerFence(self, block: bytes) -> None:
+        # 3 bytes padding + U32 flags + U8 payload-length
+        flags, length = unpack("!xxxIB", block)
+        if length:
+            self.expect(self._handleServerFencePayload, length, flags)
+        else:
+            self._doFence(flags, b"")
+
+    def _handleServerFencePayload(self, block: bytes, flags: int) -> None:
+        self._doFence(flags, block)
+
+    def _doFence(self, flags: int, payload: bytes) -> None:
+        if flags & self.FENCE_FLAG_REQUEST:
+            self.clientFence(flags & ~self.FENCE_FLAG_REQUEST, payload)
+        self.expect(self._handleConnection, 1)
+
     # ------------------------------------------------------
     # incomming data redirector
     # ------------------------------------------------------
@@ -1299,6 +1320,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """
         data = message.encode("iso-8859-1")
         self.transport.write(pack("!BxxxI", 6, len(data)) + data)
+
+    def clientFence(self, flags: int, payload: bytes = b"") -> None:
+        """Respond to or initiate a Fence synchronisation message."""
+        self.transport.write(pack("!BxxxIB", 248, flags, len(payload)) + payload)
 
     # ------------------------------------------------------
     # callbacks
