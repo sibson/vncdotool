@@ -47,7 +47,9 @@ $(LIBVNCSERVER_EXAMPLES_SRCS): $(LIBVNCSERVER_DIR) $(LIBVNCSERVER_MAKEFILE)
 $(LIBVNCSERVER_EXAMPLES): $(LIBVNCSERVER_EXAMPLES_SRCS)
 	$(MAKE) -C $(LIBVNCSERVER_DIR)
 
+UNITTEST_ARGS?=-t .
+
 .PHONY: test-libvnc
 test-libvnc: export PATH:=$(PATH):$(LIBVNCSERVER_DIR)/examples
 test-libvnc:
-	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) tests/functional
+	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) -s tests/functional

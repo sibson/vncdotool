@@ -19,7 +19,7 @@ running.  You can either manually configure and update your path or use the prov
 
     make libvnc-examples
     export PATH="$PATH:.vncdo/libvncserver-LibVNCServer-0.9.14/examples"
-    python -m unittest discover tests/functional
+    python -m unittest discover -t . -s tests/functional
 
 
 The RFB/VNC Protocol
