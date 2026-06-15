@@ -1,5 +1,6 @@
 1.3.1 (UNRELEASED)
 ----------------------
+  - Fix ``make test-func`` and documented functional test command failing with relative import error (#303)
 
 1.3.0 (2026-04-03)
 ----------------------
