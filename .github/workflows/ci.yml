@@ -70,3 +70,37 @@ jobs:
 
       - name: Run flake8
         run: flake8 --count --statistics vncdotool tests
+
+  functional:
+    name: Functional tests (LibVNCServer)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install LibVNCServer build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libssl-dev zlib1g-dev
+
+      - name: Cache LibVNCServer build
+        uses: actions/cache@v4
+        with:
+          path: .vncdo
+          key: libvncserver-${{ runner.os }}-${{ hashFiles('libvncserver.mk') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run functional tests against LibVNCServer examples
+        run: make test-func
