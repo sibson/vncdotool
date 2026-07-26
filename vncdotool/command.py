@@ -82,7 +82,8 @@ class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
         reactor.callLater(0.1, reactor.stop)
 
     def errReceived(self, data: bytes) -> None:
-        print(data)
+        sys.stderr.buffer.write(data)
+        sys.stderr.buffer.flush()
 
 
 class VNCDoToolOptionParser(optparse.OptionParser):
@@ -401,6 +402,12 @@ def vnclog() -> None:
     output = args[0]
 
     factory = build_proxy(options)
+    # stderr, because stdout may carry the recorded session (OUTPUT of `-`)
+    print(
+        f"accepting connections on ::{factory.listen_port}",
+        file=sys.stderr,
+        flush=True,
+    )
 
     if options.forever and os.path.isdir(output):
         factory.output = output
@@ -410,9 +417,6 @@ def vnclog() -> None:
         factory.output = sys.stdout
     else:
         factory.output = open(output, "w")
-
-    if options.listen == 0:
-        log.info("accepting connections on ::%d", factory.listen_port)
 
     factory.password = options.password
 
