@@ -82,7 +82,8 @@ class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
         reactor.callLater(0.1, reactor.stop)
 
     def errReceived(self, data: bytes) -> None:
-        print(data)
+        sys.stderr.buffer.write(data)
+        sys.stderr.buffer.flush()
 
 
 class VNCDoToolOptionParser(optparse.OptionParser):
