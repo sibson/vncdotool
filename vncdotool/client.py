@@ -416,6 +416,8 @@ class VNCDoToolClient(rfb.RFBClient):
             encodings.append(rfb.Encoding.PSEUDO_LAST_RECT)
         if self.factory.qemu_extended_key:
             encodings.append(rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+        if self.factory.fence:
+            encodings.append(rfb.Encoding.PSEUDO_FENCE)
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
@@ -542,6 +544,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
+    fence = True
     force_caps = False
 
     def __init__(self) -> None:

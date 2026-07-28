@@ -189,6 +189,14 @@ class HextileEncoding(IntFlag):
     SUBRECTS_COLORED = 16
 
 
+class FenceFlags(IntFlag):
+    """Client/Server fence: flags."""
+    BLOCK_BEFORE = 1 << 0
+    BLOCK_AFTER = 1 << 1
+    SYNC_NEXT = 1 << 2
+    REQUEST = 1 << 31
+
+
 class AuthTypes(IntEnumLookup):
     """:rfc:`6143` §7.1.2. Security Handshake."""
 
@@ -456,6 +464,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_DESKTOP_SIZE,
         Encoding.PSEUDO_LAST_RECT,
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+        Encoding.PSEUDO_FENCE,
     }
 
     _HEADER = b"RFB 000.000\n"
@@ -684,6 +693,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.expect(self._handleConnection, 1)
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
+        elif msgid == MsgS2C.SERVER_FENCE:
+            self.expect(self._handleServerFence, 8)
         else:
             log.msg(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
@@ -1220,6 +1231,22 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.copy_text(block.decode("iso-8859-1"))
         self.expect(self._handleConnection, 1)
 
+    def _handleServerFence(self, block: bytes) -> None:
+        # 3 bytes padding + U32 flags + U8 payload-length
+        flags, length = unpack("!xxxIB", block)
+        if length:
+            self.expect(self._handleServerFencePayload, length, flags)
+        else:
+            self._doFence(flags, b"")
+
+    def _handleServerFencePayload(self, block: bytes, flags: int) -> None:
+        self._doFence(FenceFlags(flags), block)
+
+    def _doFence(self, flags: FenceFlags, payload: bytes) -> None:
+        if flags & FenceFlags.REQUEST:
+            self.clientFence(flags & ~FenceFlags.REQUEST, payload)
+        self.expect(self._handleConnection, 1)
+
     # ------------------------------------------------------
     # incomming data redirector
     # ------------------------------------------------------
@@ -1299,6 +1326,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """
         data = message.encode("iso-8859-1")
         self.transport.write(pack("!BxxxI", 6, len(data)) + data)
+
+    def clientFence(self, flags: FenceFlags, payload: bytes = b"") -> None:
+        """Respond to or initiate a Fence synchronisation message."""
+        self.transport.write(pack("!BxxxIB", 248, flags, len(payload)) + payload)
 
     # ------------------------------------------------------
     # callbacks
