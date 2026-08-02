@@ -15,9 +15,9 @@ from __future__ import annotations
 
 import getpass
 import sys
+import warnings
 import zlib
 from dataclasses import astuple, dataclass
-from enum import IntEnum, IntFlag
 from struct import Struct, pack, unpack, unpack_from
 from typing import (
     Any,
@@ -40,302 +40,13 @@ from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
+from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
+from .keys import Key
+
 Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
 
 # ~ from twisted.internet import reactor
-
-
-class IntEnumLookup(IntEnum):
-    @classmethod
-    def lookup(cls, value: int) -> object:
-        return cls._value2member_map_.get(value, f"<{cls.__name__}.UNKNOWN: {value:x}>")
-
-
-class Encoding(IntEnumLookup):
-    """encoding-type for :meth:`setEncodings`."""
-
-    @staticmethod
-    def s32(value: int) -> int:
-        return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
-
-    def __new__(cls, value: int) -> Encoding:
-        return int.__new__(cls, cls.s32(value))
-
-    @classmethod
-    def lookup(cls, value: int) -> object:
-        return super().lookup(cls.s32(value))
-
-    RAW = 0
-    COPY_RECTANGLE = 1
-    RRE = 2
-    CORRE = 4
-    HEXTILE = 5
-    ZLIB = 6
-    TIGHT = 7
-    ZLIBHEX = 8
-    ULTRA = 9
-    ULTRA2 = 10
-    TRLE = 15
-    ZRLE = 16
-    HITACHI_ZYWRLE = 17
-    H264 = 20
-    JPEG = 21
-    JRLE = 22
-    OPEN_H264 = 50
-    APPLE_1000 = 1000
-    APPLE_1001 = 1001
-    APPLE_1002 = 1002
-    APPLE_1011 = 1011
-    REAL_1024 = 1024  # ... 1099
-    APPLE_1100 = 1100
-    APPLE_1101 = 1101
-    APPLE_1102 = 1102
-    APPLE_1103 = 1103
-    APPLE_1104 = 1104
-    APPLE_1105 = 1105
-    TIGHT_1 = -1  # ... -22
-    JPEG_23 = -23
-    JPEG_24 = -24
-    JPEG_25 = -25
-    JPEG_26 = -26
-    JPEG_27 = -27
-    JPEG_28 = -28
-    JPEG_29 = -29
-    JPEG_30 = -30
-    JPEG_31 = -31
-    JPEG_32 = -32
-    TIGHT_33 = -33  # ... -218
-    LIBVNCSERVER_219 = -219  # historical
-    LIBVNCSERVER_220 = -220  # historical
-    LIBVNCSERVER_221 = -221  # historical
-    LIBVNCSERVER_222 = -222  # historical
-    PSEUDO_DESKTOP_SIZE = -223
-    PSEUDO_LAST_RECT = -224
-    POINTER_POS = -225
-    TIGHT_226 = -226  # ... -238
-    PSEUDO_CURSOR = -239
-    PSEUDO_X_CURSOR = -240
-    TIGHT_241 = -241  # ... -246
-    PSEUDO_COMPRESSION_LEVEL_247 = -247
-    PSEUDO_COMPRESSION_LEVEL_248 = -248
-    PSEUDO_COMPRESSION_LEVEL_249 = -249
-    PSEUDO_COMPRESSION_LEVEL_250 = -250
-    PSEUDO_COMPRESSION_LEVEL_251 = -251
-    PSEUDO_COMPRESSION_LEVEL_252 = -252
-    PSEUDO_COMPRESSION_LEVEL_253 = -253
-    PSEUDO_COMPRESSION_LEVEL_254 = -254
-    PSEUDO_COMPRESSION_LEVEL_255 = -255
-    PSEUDO_COMPRESSION_LEVEL_256 = -256
-    PSEUDO_QEMU_POINTER_MODTION_CHANGE = -257
-    PSEUDO_QEMU_EXTENDED_KEY_EVENT = -258
-    PSEUDO_QEMU_AUDIO = -259
-    TIGHT_PNG = -260
-    PSEUDO_QEMU_LED_STATE = -261
-    QEMU_262 = -262  # ...-272
-    VMWARE_273 = -273  # ... -304
-    PSEUDO_GII = -305
-    POPA = -306
-    PSEUDO_DESKTOP_NAME = -307
-    PSEUDO_EXTENDED_DESKTOP_SIZE = -308
-    PSEUDO_XVO = -309
-    OLIVE_CALL_CONTROL = -310
-    CLIENT_REDIRECT = -311
-    PSEUDO_FENCE = -312
-    PSEUDO_CONTINUOUS_UPDATES = -313
-    PSEUDO_CURSOR_WITH_ALPHA = -314
-    PSEUDO_JPEG_FINE_GRAINED_QUALITY_LEVEL = -412  # ... -512
-    CAR_CONNECTIVITY_523 = -523  # ... -528
-    PSEUDO_JPEG_SUBSAMLING_LEVEL = -763  # ... -768
-    VA_H264 = 0x48323634
-    VMWARE_0X574D5600 = 0x574D5600  # ... 0x574d56ff
-    PSEUDO_VMWARE_CURSOR = 0x574D5664
-    PSEUDO_VMWARE_CURSOR_STATE = 0x574D5665
-    PSEUDO_VMWARE_CURSOR_POSITION = 0x574D5666
-    PSEUDO_VMWARE_KEY_REPEAT = 0x574D5667
-    PSEUDO_VMWARE_LED_STATE = 0x574D5668
-    PSEUDO_VMWARE_DISPLAY_MODE_CHANGE = 0x574D5669
-    PSEUDO_VMWARE_VIRTUAL_MACHINE_STATE = 0x574D566A
-    PSEUDO_EXTENDED_CLIPBOARD = 0xC0A1E5CE
-    PLUGIN_STREAMING = 0xC0A1E5CF
-    KEYBOARD_LED_STATE = 0xFFFE0000
-    SUPPORTED_MESSAGES = 0xFFFE0001
-    SUPPORTED_ENCODINGS = 0xFFFE0002
-    SERVER_IDENTITY = 0xFFFE0003
-    LIBVNCSERVER_0XFFFE0004 = 0xFFFE0004  # ... 0xfffe00ff
-    CACHE = 0xFFFF0000
-    CACHE_ENABLE = 0xFFFF0001
-    XOR_ZLIB = 0xFFFF0002
-    XOR_MONO_RECT_ZLIB = 0xFFFF0003
-    XOR_MULTI_COLOR_ZLIB = 0xFFFF0004
-    SOLID_COLOR = 0xFFFF0005
-    XOR_ENABLE = 0xFFFF0006
-    CACHE_ZIP = 0xFFFF0007
-    SOL_MONO_ZIP = 0xFFFF0008
-    ULTRA_ZIP = 0xFFFF0009
-    SERVER_STATE = 0xFFFF8000
-    ENABLE_KEEP_ALIVE = 0xFFFF8001
-    FTP_PROTOCOl_VERSION = 0xFFFF8002
-    SESSION = 0xFFFF8003
-
-
-class HextileEncoding(IntFlag):
-    """:rfc:`6153` §7.7.4. Hextile Encoding."""
-
-    RAW = 1
-    BACKGROUND_SPECIFIED = 2
-    FOREGROUND_SPECIFIED = 4
-    ANY_SUBRECTS = 8
-    SUBRECTS_COLORED = 16
-
-
-class AuthTypes(IntEnumLookup):
-    """:rfc:`6143` §7.1.2. Security Handshake."""
-
-    INVALID = 0
-    NONE = 1
-    VNC_AUTHENTICATION = 2
-    REALVNC_3 = 3
-    REALVNC_4 = 4
-    RSA_AES = 5
-    RSA_AES_UNENCRYPTED = 6
-    REALVNC_7 = 7
-    REALVNC_8 = 8
-    REALVNC_9 = 9
-    REALVNC_10 = 10
-    REALVNC_11 = 11
-    REALVNC_12 = 12
-    RSA_AES_2STEP = 13
-    REALVNC_14 = 14
-    REALVNC_15 = 15
-    TIGHT = 16
-    ULTRA = 17
-    TLS = 18
-    VENCRYPT = 19
-    SASL = 20
-    MD5 = 21
-    XVP = 22
-    SECURE_TUNNEL = 23
-    INTEGRATED_SSH = 24
-    DIFFIE_HELLMAN = 30
-    APPLE_31 = 31
-    APPLE_32 = 32
-    APPLE_33 = 33
-    APPLE_34 = 34
-    APPLE_35 = 35
-    MSLOGON2 = 113
-    REALVNC_128 = 128
-    RSA_AES256 = 129
-    RSA_AES256_UNENCRYPTED = 130
-    REALVNC_131 = 131
-    REALVNC_132 = 132
-    RSA_AES256_2STEP = 133
-    REALVNC_134 = 134
-    REALVNC_192 = 192
-
-
-class MsgS2C(IntEnumLookup):
-    """:rfc:`6143` §7.6. Server-to-Client Messages."""
-
-    FRAMEBUFFER_UPDATE = 0
-    SET_COLOUR_MAP_ENTRIES = 1
-    BELL = 2
-    SERVER_CUT_TEXT = 3
-    RESIZE_FRAME_BUFFER_4 = 4
-    KEY_FRAME_UPDATE = 5
-    ULTRA_6 = 6
-    FILE_TRANSFER = 7
-    ULTRA_8 = 8
-    ULTRA_9 = 9
-    ULTRA_10 = 10
-    TEXT_CHAT = 11
-    ULTRA_12 = 12
-    KEEP_ALIVE = 13
-    ULTRA_14 = 14
-    RESIZE_FRAME_BUFFER_15 = 15
-    VMWARE_127 = 127
-    CAR_CONNECTIVITY = 128
-    END_OF_CONTINUOUS_UPDATES = 150
-    SERVER_STATE = 173
-    SERVER_FENCE = 248
-    OLIVE_CALL_CONTROL = 249
-    XVP_SERVER_MESSAGE = 250
-    TIGHT = 252
-    GII_SERVER_MESSAGE = 253  # General Input Interface
-    VMWARE_254 = 254
-    QEMU_SERVER_MESSAGE = 255
-
-
-# keycodes
-# for KeyEvent()
-KEY_BackSpace = 0xFF08
-KEY_Tab = 0xFF09
-KEY_Return = 0xFF0D
-KEY_Escape = 0xFF1B
-KEY_Insert = 0xFF63
-KEY_Delete = 0xFFFF
-KEY_Home = 0xFF50
-KEY_End = 0xFF57
-KEY_PageUp = 0xFF55
-KEY_PageDown = 0xFF56
-KEY_Left = 0xFF51
-KEY_Up = 0xFF52
-KEY_Right = 0xFF53
-KEY_Down = 0xFF54
-KEY_F1 = 0xFFBE
-KEY_F2 = 0xFFBF
-KEY_F3 = 0xFFC0
-KEY_F4 = 0xFFC1
-KEY_F5 = 0xFFC2
-KEY_F6 = 0xFFC3
-KEY_F7 = 0xFFC4
-KEY_F8 = 0xFFC5
-KEY_F9 = 0xFFC6
-KEY_F10 = 0xFFC7
-KEY_F11 = 0xFFC8
-KEY_F12 = 0xFFC9
-KEY_F13 = 0xFFCA
-KEY_F14 = 0xFFCB
-KEY_F15 = 0xFFCC
-KEY_F16 = 0xFFCD
-KEY_F17 = 0xFFCE
-KEY_F18 = 0xFFCF
-KEY_F19 = 0xFFD0
-KEY_F20 = 0xFFD1
-KEY_ShiftLeft = 0xFFE1
-KEY_ShiftRight = 0xFFE2
-KEY_ControlLeft = 0xFFE3
-KEY_ControlRight = 0xFFE4
-KEY_MetaLeft = 0xFFE7
-KEY_MetaRight = 0xFFE8
-KEY_AltLeft = 0xFFE9
-KEY_AltRight = 0xFFEA
-
-KEY_Scroll_Lock = 0xFF14
-KEY_Sys_Req = 0xFF15
-KEY_Num_Lock = 0xFF7F
-KEY_Caps_Lock = 0xFFE5
-KEY_Pause = 0xFF13
-KEY_Super_L = 0xFFEB  # windows-key, apple command key
-KEY_Super_R = 0xFFEC  # windows-key, apple command key
-KEY_Hyper_L = 0xFFED
-KEY_Hyper_R = 0xFFEE
-
-KEY_KP_0 = 0xFFB0
-KEY_KP_1 = 0xFFB1
-KEY_KP_2 = 0xFFB2
-KEY_KP_3 = 0xFFB3
-KEY_KP_4 = 0xFFB4
-KEY_KP_5 = 0xFFB5
-KEY_KP_6 = 0xFFB6
-KEY_KP_7 = 0xFFB7
-KEY_KP_8 = 0xFFB8
-KEY_KP_9 = 0xFFB9
-KEY_KP_Enter = 0xFF8D
-
-KEY_ForwardSlash = 0x002F
-KEY_BackSlash = 0x005C
-KEY_SpaceBar = 0x0020
 
 
 @dataclass(frozen=True)
@@ -1258,11 +969,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def setPixelFormat(self, pixel_format: PixelFormat) -> None:
         pixformat = pixel_format.to_bytes()
-        self.transport.write(pack("!Bxxx16s", 0, pixformat))
+        self.transport.write(pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixformat))
         self.pixel_format = pixel_format
 
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
-        self.transport.write(pack("!BxH", 2, len(list_of_encodings)))
+        self.transport.write(pack("!BxH", MsgC2S.SET_ENCODING, len(list_of_encodings)))
         for encoding in list_of_encodings:
             log.msg(f"Offering {encoding!r}")
             self.transport.write(pack("!i", encoding))
@@ -1279,26 +990,26 @@ class RFBClient(Protocol):  # type: ignore[misc]
             width = self.width - x
         if height is None:
             height = self.height - y
-        self.transport.write(pack("!BBHHHH", 3, incremental, x, y, width, height))
+        self.transport.write(pack("!BBHHHH", MsgC2S.FRAMEBUFFER_UPDATE_REQUEST, incremental, x, y, width, height))
 
-    def keyEvent(self, key: int, down: bool = True) -> None:
+    def keyEvent(self, key: Key | int, down: bool = True) -> None:
         """For most ordinary keys, the "keysym" is the same as the corresponding ASCII value.
-        Other common keys are shown in the ``KEY_`` constants."""
-        self.transport.write(pack("!BBxxI", 4, down, key))
+        Other common keys are shown in the ``Key`` constants."""
+        self.transport.write(pack("!BBxxI", MsgC2S.KEY_EVENT, down, key))
 
     def pointerEvent(self, x: int, y: int, buttonmask: int = 0) -> None:
         """Indicates either pointer movement or a pointer button press or release. The pointer is
         now at (x-position, y-position), and the current state of buttons 1 to 8 are represented
         by bits 0 to 7 of button-mask respectively, 0 meaning up, 1 meaning down (pressed).
         """
-        self.transport.write(pack("!BBHH", 5, buttonmask, x, y))
+        self.transport.write(pack("!BBHH", MsgC2S.POINTER_EVENT, buttonmask, x, y))
 
     def clientCutText(self, message: str) -> None:
         """The client has new ISO 8859-1 (Latin-1) text in its cut buffer.
         (aka clipboard)
         """
         data = message.encode("iso-8859-1")
-        self.transport.write(pack("!BxxxI", 6, len(data)) + data)
+        self.transport.write(pack("!BxxxI", MsgC2S.CLIENT_CUT_TEXT, len(data)) + data)
 
     # ------------------------------------------------------
     # callbacks
@@ -1483,3 +1194,11 @@ if __name__ == "__main__":
 
     vncClient.startService()
     reactor.run()
+
+
+def __getattr__(name: str) -> Any:
+    _, sep, key = name.partition("KEY_")
+    if sep:
+        warnings.warn(f"Deprecated use of {name}; use Keys.key.{key}", DeprecationWarning, stacklevel=2)
+        return getattr(Key, key)
+    raise AttributeError(f"module {__name__} has no attribute {name}")

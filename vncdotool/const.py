@@ -1,0 +1,271 @@
+from __future__ import annotations
+
+from enum import IntEnum, IntFlag
+
+
+class IntEnumLookup(IntEnum):
+    @classmethod
+    def lookup(cls, value: int) -> object:
+        return cls._value2member_map_.get(value, f"<{cls.__name__}.UNKNOWN: {value:x}>")
+
+
+class Encoding(IntEnumLookup):
+    """encoding-type for :meth:`setEncodings`."""
+
+    @staticmethod
+    def s32(value: int) -> int:
+        return value - 0x1_0000_0000 if value >= 0x8000_0000 else value
+
+    def __new__(cls, value: int) -> Encoding:
+        return int.__new__(cls, cls.s32(value))
+
+    @classmethod
+    def lookup(cls, value: int) -> object:
+        return super().lookup(cls.s32(value))
+
+    RAW = 0
+    COPY_RECTANGLE = 1
+    RRE = 2
+    CORRE = 4
+    HEXTILE = 5
+    ZLIB = 6
+    TIGHT = 7
+    ZLIBHEX = 8
+    ULTRA = 9
+    ULTRA2 = 10
+    TRLE = 15
+    ZRLE = 16
+    HITACHI_ZYWRLE = 17
+    H264 = 20
+    JPEG = 21
+    JRLE = 22
+    OPEN_H264 = 50
+    APPLE_1000 = 1000
+    APPLE_1001 = 1001
+    APPLE_1002 = 1002
+    APPLE_1011 = 1011
+    REAL_1024 = 1024  # ... 1099
+    APPLE_1100 = 1100
+    APPLE_1101 = 1101
+    APPLE_1102 = 1102
+    APPLE_1103 = 1103
+    APPLE_1104 = 1104
+    APPLE_1105 = 1105
+    TIGHT_1 = -1  # ... -22
+    JPEG_23 = -23
+    JPEG_24 = -24
+    JPEG_25 = -25
+    JPEG_26 = -26
+    JPEG_27 = -27
+    JPEG_28 = -28
+    JPEG_29 = -29
+    JPEG_30 = -30
+    JPEG_31 = -31
+    JPEG_32 = -32
+    TIGHT_33 = -33  # ... -218
+    LIBVNCSERVER_219 = -219  # historical
+    LIBVNCSERVER_220 = -220  # historical
+    LIBVNCSERVER_221 = -221  # historical
+    LIBVNCSERVER_222 = -222  # historical
+    PSEUDO_DESKTOP_SIZE = -223
+    PSEUDO_LAST_RECT = -224
+    POINTER_POS = -225
+    TIGHT_226 = -226  # ... -238
+    PSEUDO_CURSOR = -239
+    PSEUDO_X_CURSOR = -240
+    TIGHT_241 = -241  # ... -246
+    PSEUDO_COMPRESSION_LEVEL_247 = -247
+    PSEUDO_COMPRESSION_LEVEL_248 = -248
+    PSEUDO_COMPRESSION_LEVEL_249 = -249
+    PSEUDO_COMPRESSION_LEVEL_250 = -250
+    PSEUDO_COMPRESSION_LEVEL_251 = -251
+    PSEUDO_COMPRESSION_LEVEL_252 = -252
+    PSEUDO_COMPRESSION_LEVEL_253 = -253
+    PSEUDO_COMPRESSION_LEVEL_254 = -254
+    PSEUDO_COMPRESSION_LEVEL_255 = -255
+    PSEUDO_COMPRESSION_LEVEL_256 = -256
+    PSEUDO_QEMU_POINTER_MODTION_CHANGE = -257
+    PSEUDO_QEMU_EXTENDED_KEY_EVENT = -258
+    PSEUDO_QEMU_AUDIO = -259
+    TIGHT_PNG = -260
+    PSEUDO_QEMU_LED_STATE = -261
+    QEMU_262 = -262  # ...-272
+    VMWARE_273 = -273  # ... -304
+    PSEUDO_GII = -305
+    POPA = -306
+    PSEUDO_DESKTOP_NAME = -307
+    PSEUDO_EXTENDED_DESKTOP_SIZE = -308
+    PSEUDO_XVO = -309
+    OLIVE_CALL_CONTROL = -310
+    CLIENT_REDIRECT = -311
+    PSEUDO_FENCE = -312
+    PSEUDO_CONTINUOUS_UPDATES = -313
+    PSEUDO_CURSOR_WITH_ALPHA = -314
+    PSEUDO_JPEG_FINE_GRAINED_QUALITY_LEVEL = -412  # ... -512
+    CAR_CONNECTIVITY_523 = -523  # ... -528
+    PSEUDO_JPEG_SUBSAMLING_LEVEL = -763  # ... -768
+    VA_H264 = 0x48323634
+    VMWARE_0X574D5600 = 0x574D5600  # ... 0x574d56ff
+    PSEUDO_VMWARE_CURSOR = 0x574D5664
+    PSEUDO_VMWARE_CURSOR_STATE = 0x574D5665
+    PSEUDO_VMWARE_CURSOR_POSITION = 0x574D5666
+    PSEUDO_VMWARE_KEY_REPEAT = 0x574D5667
+    PSEUDO_VMWARE_LED_STATE = 0x574D5668
+    PSEUDO_VMWARE_DISPLAY_MODE_CHANGE = 0x574D5669
+    PSEUDO_VMWARE_VIRTUAL_MACHINE_STATE = 0x574D566A
+    PSEUDO_EXTENDED_CLIPBOARD = 0xC0A1E5CE
+    PLUGIN_STREAMING = 0xC0A1E5CF
+    KEYBOARD_LED_STATE = 0xFFFE0000
+    SUPPORTED_MESSAGES = 0xFFFE0001
+    SUPPORTED_ENCODINGS = 0xFFFE0002
+    SERVER_IDENTITY = 0xFFFE0003
+    LIBVNCSERVER_0XFFFE0004 = 0xFFFE0004  # ... 0xfffe00ff
+    CACHE = 0xFFFF0000
+    CACHE_ENABLE = 0xFFFF0001
+    XOR_ZLIB = 0xFFFF0002
+    XOR_MONO_RECT_ZLIB = 0xFFFF0003
+    XOR_MULTI_COLOR_ZLIB = 0xFFFF0004
+    SOLID_COLOR = 0xFFFF0005
+    XOR_ENABLE = 0xFFFF0006
+    CACHE_ZIP = 0xFFFF0007
+    SOL_MONO_ZIP = 0xFFFF0008
+    ULTRA_ZIP = 0xFFFF0009
+    SERVER_STATE = 0xFFFF8000
+    ENABLE_KEEP_ALIVE = 0xFFFF8001
+    FTP_PROTOCOl_VERSION = 0xFFFF8002
+    SESSION = 0xFFFF8003
+
+
+class HextileEncoding(IntFlag):
+    """:rfc:`6153` §7.7.4. Hextile Encoding."""
+
+    RAW = 1
+    BACKGROUND_SPECIFIED = 2
+    FOREGROUND_SPECIFIED = 4
+    ANY_SUBRECTS = 8
+    SUBRECTS_COLORED = 16
+
+
+class AuthTypes(IntEnumLookup):
+    """:rfc:`6143` §7.1.2. Security Handshake."""
+
+    INVALID = 0
+    NONE = 1
+    VNC_AUTHENTICATION = 2
+    REALVNC_3 = 3
+    REALVNC_4 = 4
+    RSA_AES = 5
+    RSA_AES_UNENCRYPTED = 6
+    REALVNC_7 = 7
+    REALVNC_8 = 8
+    REALVNC_9 = 9
+    REALVNC_10 = 10
+    REALVNC_11 = 11
+    REALVNC_12 = 12
+    RSA_AES_2STEP = 13
+    REALVNC_14 = 14
+    REALVNC_15 = 15
+    TIGHT = 16
+    ULTRA = 17
+    TLS = 18
+    VENCRYPT = 19
+    SASL = 20
+    MD5 = 21
+    XVP = 22
+    SECURE_TUNNEL = 23
+    INTEGRATED_SSH = 24
+    DIFFIE_HELLMAN = 30
+    APPLE_31 = 31
+    APPLE_32 = 32
+    APPLE_33 = 33
+    APPLE_34 = 34
+    APPLE_35 = 35
+    MSLOGON2 = 113
+    REALVNC_128 = 128
+    RSA_AES256 = 129
+    RSA_AES256_UNENCRYPTED = 130
+    REALVNC_131 = 131
+    REALVNC_132 = 132
+    RSA_AES256_2STEP = 133
+    REALVNC_134 = 134
+    REALVNC_192 = 192
+
+
+class MsgS2C(IntEnumLookup):
+    """:rfc:`6143` §7.6. Server-to-Client Messages."""
+
+    FRAMEBUFFER_UPDATE = 0
+    SET_COLOUR_MAP_ENTRIES = 1
+    BELL = 2
+    SERVER_CUT_TEXT = 3
+    RESIZE_FRAME_BUFFER_4 = 4
+    KEY_FRAME_UPDATE = 5
+    ULTRA_6 = 6
+    FILE_TRANSFER = 7
+    ULTRA_8 = 8
+    ULTRA_9 = 9
+    ULTRA_10 = 10
+    TEXT_CHAT = 11
+    ULTRA_12 = 12
+    KEEP_ALIVE = 13
+    ULTRA_14 = 14
+    RESIZE_FRAME_BUFFER_15 = 15
+    VMWARE_127 = 127
+    CAR_CONNECTIVITY = 128
+    END_OF_CONTINUOUS_UPDATES = 150
+    SERVER_STATE = 173
+    SERVER_FENCE = 248
+    OLIVE_CALL_CONTROL = 249
+    XVP_SERVER_MESSAGE = 250
+    TIGHT = 252
+    GII_SERVER_MESSAGE = 253  # General Input Interface
+    VMWARE_254 = 254
+    QEMU_SERVER_MESSAGE = 255
+
+
+class MsgC2S(IntEnumLookup):
+    """:rfc:`6143` §7.5. Client-to-Server Messages."""
+
+    SET_PIXEL_FORMAT = 0
+    SET_ENCODING = 2
+    FRAMEBUFFER_UPDATE_REQUEST = 3
+    KEY_EVENT = 4
+    POINTER_EVENT = 5
+    CLIENT_CUT_TEXT = 6
+    FILE_TRANSFER = 7
+    SET_SCALE = 8
+    SET_SERVER_INPUT = 9
+    SET_SW = 10
+    TEXT_CHAT = 11
+    KEY_FRAME_REquest = 12
+    KEEP_ALIVE = 13
+    ULTRA_14 = 14
+    SET_SCALE_FACTOR = 15
+    ULTRA_16 = 16
+    ULTRA_17 = 17
+    ULTRA_18 = 18
+    ULTRA_19 = 19
+    REQUEST_SESSION = 20
+    SET_SESSION = 21
+    NOTIFY_PLUGIN_STREAMING = 80
+    VMWARE_127 = 127
+    CAR_CONNECTIVITY = 128
+    ENABLE_CONTINUOUS_UPDATES = 150
+    CLIENT_FENCE = 248
+    OLIVE_CALL_CONTROL = 249
+    XVP_CLIENT_MESSAGE = 250
+    SET_DESKTOP_SIZE = 251
+    TIGHT = 252
+    GII_CLIENT_MESSAGE = 253  # General Input Interface
+    VMWARE_254 = 254
+    QEMU_CLIENT_MESSAGE = 255
+
+
+class QemuClientMessage(IntEnumLookup):
+    """
+    `QEMU Client Message
+    <https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#qemu-client-message>`_
+    """
+
+    EXTENDED_KEY_EVENT = 0
+    AUDIO = 1

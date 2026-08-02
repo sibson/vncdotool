@@ -1,7 +1,8 @@
 from unittest import TestCase, mock
 import io
 
-from vncdotool import client, rfb
+from vncdotool import client
+from vncdotool.keys import Key
 
 
 class TestVNCDoToolClient(TestCase):
@@ -51,12 +52,12 @@ class TestVNCDoToolClient(TestCase):
         cli.keyPress('ctrl-alt-del')
 
         # XXX doesn't ensure correct order
-        cli.keyEvent.assert_any_call(rfb.KEY_ControlLeft, down=1)
-        cli.keyEvent.assert_any_call(rfb.KEY_AltLeft, down=1)
-        cli.keyEvent.assert_any_call(rfb.KEY_Delete, down=1)
-        cli.keyEvent.assert_any_call(rfb.KEY_ControlLeft, down=0)
-        cli.keyEvent.assert_any_call(rfb.KEY_AltLeft, down=0)
-        cli.keyEvent.assert_any_call(rfb.KEY_Delete, down=0)
+        cli.keyEvent.assert_any_call(Key.ControlLeft, down=1)
+        cli.keyEvent.assert_any_call(Key.AltLeft, down=1)
+        cli.keyEvent.assert_any_call(Key.Delete, down=1)
+        cli.keyEvent.assert_any_call(Key.ControlLeft, down=0)
+        cli.keyEvent.assert_any_call(Key.AltLeft, down=0)
+        cli.keyEvent.assert_any_call(Key.Delete, down=0)
 
     @mock.patch('vncdotool.client.Deferred')
     def test_captureScreen(self, Deferred):
