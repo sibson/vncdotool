@@ -104,3 +104,62 @@ jobs:
 
       - name: Run functional tests against LibVNCServer examples
         run: make test-func
+
+  servers:
+    name: Test server functional tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VNCDOTOOL_SCREENSHOT_DIR: screenshots
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Build and start the VNC test servers
+        run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
+
+      # The steps below are diagnostics and teardown, so they carry
+      # `if: always()`: when a test fails, the container status, the
+      # screenshot of what the server was actually showing, and the server
+      # logs are exactly what's needed to debug it -- skipping them on
+      # failure would throw away the evidence. `down` likewise has to run
+      # whatever happened.
+      - name: Show test server status
+        if: always()
+        run: docker compose -f tests/servers/docker-compose.yml ps
+
+      - name: Run test server functional tests
+        run: python -m unittest discover -v -s tests/functional -t . -p 'test_servers.py'
+
+      - name: Capture screenshots and build the gallery
+        if: always()
+        timeout-minutes: 3
+        run: python tests/functional/capture_screenshots.py
+
+      - name: Dump test server container logs
+        if: always()
+        run: docker compose -f tests/servers/docker-compose.yml logs
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
+      - name: Stop the VNC test servers
+        if: always()
+        run: docker compose -f tests/servers/docker-compose.yml down
