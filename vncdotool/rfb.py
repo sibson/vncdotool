@@ -1106,9 +1106,7 @@ def des_encrypt(key: bytes, data: bytes) -> bytes:
     algorithm here would simply fail to talk to any VNC server."""
     # Triple-DES with the same 56-bit key repeated three times is
     # equivalent to single-DES
-    encryptor = Cipher(  # codeql[py/weak-cryptographic-algorithm]
-        algorithms.TripleDES(key * 3), modes.ECB()
-    ).encryptor()
+    encryptor = Cipher(algorithms.TripleDES(key * 3), modes.ECB()).encryptor()
     return encryptor.update(data) + encryptor.finalize()
 
 
