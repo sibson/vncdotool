@@ -1,0 +1,40 @@
+# Docker Compose set of small, version-controlled Linux VNC servers used
+# as a compatibility test bed for vncdotool. See tests/servers/servers.mk for
+# the make targets that drive this file and tests/functional/test_servers.py
+# for the tests that exercise it.
+#
+# Every service is a stage of the shared tests/servers/Dockerfile, so the
+# images differ only by the server they install. The two TigerVNC services
+# are the same image twice, distinguished purely by VNC_PASSWORD -- naming
+# the built image keeps that a single build rather than two.
+#
+# Readiness is the HEALTHCHECK baked into the image, which makes
+# `up --wait` a reliable barrier. Every service publishes its RFB port to
+# localhost only.
+
+services:
+  tigervnc:
+    build:
+      context: .
+      target: tigervnc
+    image: vncdotool-test-tigervnc
+    ports:
+      - "127.0.0.1:5931:5900"
+
+  tigervnc-auth:
+    build:
+      context: .
+      target: tigervnc
+    image: vncdotool-test-tigervnc
+    environment:
+      VNC_PASSWORD: vncdotool
+    ports:
+      - "127.0.0.1:5932:5900"
+
+  x11vnc:
+    build:
+      context: .
+      target: x11vnc
+    image: vncdotool-test-x11vnc
+    ports:
+      - "127.0.0.1:5933:5900"

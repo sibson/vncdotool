@@ -322,8 +322,8 @@ contributing a fingerprint must be a paved road:
 `bbfd188`) holds a working proof: three in-repo Dockerfile-based services
 (`tigervnc` no-auth, `tigervnc-auth` VNC-password, `x11vnc` over Xvfb)
 defined in `tests/servers/docker-compose.yml` with `nc`-based
-healthchecks, `make servers-up`/`servers-down`/`test-fleet` wrappers, and
-a parameterized `tests/functional/test_fleet.py` that connects, types,
+healthchecks, `make servers-up`/`servers-down`/`test-servers` wrappers, and
+a parameterized `tests/functional/test_servers.py` that connects, types,
 and captures against each server. GitHub Actions run
 [31729730724](https://github.com/sibson/vncdotool/actions/runs/31729730724)
 is green end-to-end: image builds + healthcheck-gated `up --wait` in
@@ -345,6 +345,29 @@ Findings worth keeping:
   `tigervnc-tools`, needed alongside `tigervnc-standalone-server`.
 - Images stay small and layer-cached (~15–20s builds); healthchecks make
   `up --wait` a reliable barrier.
+
+Tier 1 follow-ups:
+- **Publish the screenshot gallery to GitHub Pages.** Captures currently
+  reach the web only as a zipped artifact: the job summary carries a
+  server/port/resolution table, but seeing the pixels means download →
+  unzip → open `index.html`. Actions has no inline preview for artifact
+  contents, and inlining the PNGs as `data:` URIs doesn't help — the
+  markdown sanitizer strips them. Deploying the generated gallery to
+  Pages gives a stable URL to link from the job summary (and outlives
+  artifact expiry, which matters once fixtures reference these images).
+  Needs Pages enabled on the repo, plus a decision on whether runs
+  overwrite one `latest/` gallery or are namespaced by run ID. Interim
+  option if Pages is unwanted: push captures to an orphan branch and have
+  the workflow post/update a PR comment with `raw.githubusercontent.com`
+  image links, so they render inline where review happens.
+- **Stop paying the image build tax on every run.** GitHub-hosted runners
+  start with an empty Docker cache, so layer caching only helps within a
+  run — each CI run rebuilds from scratch (~35s of the ~70s total).
+  Options: `docker/build-push-action` with `cache-from/to: type=gha`, or
+  publish the images to GHCR once and have CI pull pinned digests, which
+  folds into the digest-pinning item below.
+- Pin base images by digest and fold this workflow into the main CI one.
+- Deepen what the per-server scenario actually asserts (see Phase 0).
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow

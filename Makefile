@@ -7,6 +7,10 @@ REQUIREMENTS_TXT?=requirements-dev.txt
 help:
 	@echo "test:		run unit tests"
 	@echo "test-func:	run functional tests"
+	@echo "servers-up:	start the docker VNC test servers"
+	@echo "servers-down:	stop the docker VNC test servers"
+	@echo "test-servers:	run functional tests against the VNC test servers"
+	@echo "screenshots:	screenshot each running VNC test server into a gallery"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
@@ -40,5 +44,7 @@ test-unit:
 include libvncserver.mk
 
 test-func: libvnc-examples test-libvnc
+
+include tests/servers/servers.mk
 
 include Makefile.venv
