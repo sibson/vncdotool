@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Capture a screenshot of every running Docker Compose VNC test server.
+"""Capture a screenshot of every running VNC test server.
+
+Which servers those are is chosen by the group named on the command line:
+``docker`` (the default, the Docker Compose servers) or ``os`` (the
+OS-hosted server on this machine, i.e. UltraVNC or Apple Screen Sharing).
+See vncservers.py.
 
 Screenshots land in the screenshots directory (``tests/servers/screenshots``
 by default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) alongside a
@@ -22,21 +27,22 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional
 
 _HERE = Path(__file__).resolve().parent
-# This module's own directory, for test_servers, plus the repo root, so the
+# This module's own directory, for vncservers, plus the repo root, so the
 # script works from a checkout without vncdotool having been pip installed.
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
-from test_servers import (  # noqa: E402
+from vncservers import (  # noqa: E402
     HOST,
-    VNC_SERVERS,
     VNCServer,
+    capture_screenshot,
     port_open,
     screenshot_dir,
+    select_servers,
 )
 
 from vncdotool import api  # noqa: E402
 
-CAPTURE_TIMEOUT = 5.0
+DEFAULT_GROUP = "docker"
 
 
 class Capture(NamedTuple):
@@ -51,9 +57,7 @@ def capture(server: VNCServer, directory: Path) -> Capture:
 
     path = directory / f"{server.name}.png"
     try:
-        with api.connect(f"{HOST}::{server.port}", password=server.password) as client:
-            client.timeout = CAPTURE_TIMEOUT
-            client.captureScreen(str(path))
+        capture_screenshot(server, path)
     except Exception as exc:  # noqa: BLE001 - diagnostics must not fail the build
         return Capture(server, None, f"failed, {exc}")
 
@@ -137,9 +141,10 @@ def write_job_summary(captures: List[Capture]) -> None:
         handle.write("\n".join(rows))
 
 
-def main() -> int:
+def main(argv: List[str]) -> int:
+    group = argv[1] if len(argv) > 1 else DEFAULT_GROUP
     directory = screenshot_dir()
-    captures = [capture(server, directory) for server in VNC_SERVERS]
+    captures = [capture(server, directory) for server in select_servers(group)]
 
     # api.connect() starts a background Twisted reactor thread that outlives
     # any individual client connection -- without stopping it here this
@@ -157,4 +162,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv))

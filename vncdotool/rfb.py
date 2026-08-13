@@ -327,13 +327,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def sendPassword(self, password: str) -> None:
         """send password"""
-        key = _vnc_des(password)
-        # Triple-DES with the same 56-bit key repeated three times is
-        # equivalent to single-DES
-        des = Cipher(algorithms.TripleDES(key * 3), modes.ECB())
-        encryptor = des.encryptor()
-        response = encryptor.update(self._challenge) + encryptor.finalize()
-        self.transport.write(response)
+        self.transport.write(des_encrypt(_vnc_des(password), self._challenge))
 
     def _handleVNCAuthResult(self, block: bytes) -> None:
         (result,) = unpack("!I", block)
@@ -1103,6 +1097,32 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
         self.shared = shared
 
 
+def des_encrypt(key: bytes, data: bytes) -> bytes:
+    """Encrypt with single DES, as the VNC family's password handling uses.
+
+    Single DES in ECB is weak, and is what RFB specifies: both the
+    authentication challenge response (RFC 6143 section 7.2.2) and the
+    password file format are defined in terms of it, so a stronger
+    algorithm here would simply fail to talk to any VNC server."""
+    # Triple-DES with the same 56-bit key repeated three times is
+    # equivalent to single-DES
+    encryptor = Cipher(  # codeql[py/weak-cryptographic-algorithm]
+        algorithms.TripleDES(key * 3), modes.ECB()
+    ).encryptor()
+    return encryptor.update(data) + encryptor.finalize()
+
+
+def reverse_bits(data: bytes) -> bytes:
+    """Reverse the bit order within each byte.
+
+    The bit-reversal the VNC family applies to a DES key before using it,
+    both for the authentication challenge response here and for the
+    password obfuscation in ~/.vnc/passwd files."""
+    return bytes(
+        sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8)) for k in data
+    )
+
+
 def _vnc_des(password: str) -> bytes:
     """Custom DES variant for RFB protocol.
 
@@ -1114,8 +1134,7 @@ def _vnc_des(password: str) -> bytes:
     key = pw.encode(
         "ASCII"
     )  # unspecified https://www.rfc-editor.org/rfc/rfc6143#section-7.2.2
-    key = bytes(sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8)) for k in key)
-    return key
+    return reverse_bits(key)
 
 
 # --- test code only, see vncviewer.py
