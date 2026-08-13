@@ -1,0 +1,133 @@
+name: Spike - OS-hosted VNC servers
+
+# Viability spike: can GitHub-hosted windows-latest / macos-latest runners host
+# a live, OS-bound VNC server (UltraVNC on Windows, Apple Screen Sharing on
+# macOS) that vncdotool can connect to, drive and screenshot?
+#
+# What each server needs, and what it does and doesn't prove, is documented
+# next to the setup scripts in tests/servers/ultravnc/README.md and
+# tests/servers/screen-sharing/README.md. This file only wires those scripts
+# and tests/functional/test_os_servers.py together.
+#
+# The two jobs are deliberately independent - one OS failing must never take
+# down the other, so there is no `needs:` and no matrix.
+
+on:
+  push:
+    branches:
+      - claude/spike-os-servers
+      - claude/ultravnc-apple-screen-sharing-b04ev5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PIP_NO_PYTHON_VERSION_WARNING: '1'
+  VNCDOTOOL_SCREENSHOT_DIR: screenshots
+
+jobs:
+  windows-ultravnc:
+    name: Windows - UltraVNC
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install vncdotool
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pillow
+
+      - name: Set up the UltraVNC server
+        run: ./tests/servers/ultravnc/setup.ps1
+
+      - name: Run OS server functional tests
+        run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+
+      - name: Capture screenshots and build the gallery
+        if: always()
+        timeout-minutes: 3
+        run: python tests/functional/capture_screenshots.py os
+
+      - name: Collect UltraVNC diagnostics
+        if: always()
+        run: ./tests/servers/ultravnc/collect-diagnostics.ps1
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultravnc-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ultravnc-diagnostics
+          path: diagnostics/
+          if-no-files-found: ignore
+
+  macos-screen-sharing:
+    name: macOS - Screen Sharing
+    runs-on: macos-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install vncdotool
+        run: |
+          python -m pip install --upgrade pip
+          pip install . pillow
+
+      - name: Set up the Screen Sharing server
+        run: bash tests/servers/screen-sharing/setup.sh
+
+      - name: Run OS server functional tests
+        run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+
+      - name: Capture screenshots and build the gallery
+        if: always()
+        timeout-minutes: 3
+        run: python tests/functional/capture_screenshots.py os
+
+      - name: Collect Screen Sharing diagnostics
+        if: always()
+        run: bash tests/servers/screen-sharing/collect-diagnostics.sh
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-sharing-screenshots
+          path: screenshots/
+          if-no-files-found: ignore
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screen-sharing-diagnostics
+          path: diagnostics/
+          if-no-files-found: ignore
