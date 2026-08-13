@@ -21,7 +21,10 @@ import sys
 from pathlib import Path
 from typing import List, NamedTuple, Optional
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+_HERE = Path(__file__).resolve().parent
+# This module's own directory, for test_servers, plus the repo root, so the
+# script works from a checkout without vncdotool having been pip installed.
+sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
 from test_servers import (  # noqa: E402
     HOST,
