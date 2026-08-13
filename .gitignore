@@ -12,3 +12,6 @@ docs/_build
 *~
 #*
 tests/servers/screenshots/
+
+# issue-triage skill: per-run eval outputs, never committed
+issue-triage-workspace/
