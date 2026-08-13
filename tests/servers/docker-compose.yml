@@ -1,0 +1,45 @@
+# Docker Compose fleet of small, version-controlled Linux VNC servers used
+# as a compatibility test bed for vncdotool. See tests/servers/fleet.mk for
+# the make targets that drive this file and tests/functional/test_fleet.py
+# for the tests that exercise it.
+#
+# Each service is built from an in-repo Dockerfile (FROM debian:bookworm-slim)
+# rather than a third-party desktop image, so server versions are pinned by
+# the base image + apt rather than by whatever an upstream image happens to
+# bundle. Every service publishes its RFB port to localhost only.
+
+services:
+  tigervnc:
+    build: ./tigervnc
+    ports:
+      - "127.0.0.1:5931:5900"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5900"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+  tigervnc-auth:
+    build: ./tigervnc-auth
+    environment:
+      VNC_PASSWORD: vncdotool
+    ports:
+      - "127.0.0.1:5932:5900"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5900"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s
+
+  x11vnc:
+    build: ./x11vnc
+    ports:
+      - "127.0.0.1:5933:5900"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "5900"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+      start_period: 5s

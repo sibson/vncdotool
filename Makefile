@@ -41,4 +41,6 @@ include libvncserver.mk
 
 test-func: libvnc-examples test-libvnc
 
+include tests/servers/fleet.mk
+
 include Makefile.venv
