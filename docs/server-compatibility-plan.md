@@ -318,11 +318,37 @@ contributing a fingerprint must be a paved road:
 
 ### Spike results (Tier 1 / Tier 2 viability)
 
-*Pending — two spikes are in flight on branches
-`claude/spike-server-fleet` (compose fleet locally + ubuntu CI) and
-`claude/spike-os-servers` (UltraVNC on windows-latest, ARD on
-macos-latest). Results, including exact working recipes and per-OS
-caveats, will be recorded here.*
+**Tier 1 — VIABLE.** Branch `claude/spike-server-fleet` (commit
+`bbfd188`) holds a working proof: three in-repo Dockerfile-based services
+(`tigervnc` no-auth, `tigervnc-auth` VNC-password, `x11vnc` over Xvfb)
+defined in `tests/servers/docker-compose.yml` with `nc`-based
+healthchecks, `make servers-up`/`servers-down`/`test-fleet` wrappers, and
+a parameterized `tests/functional/test_fleet.py` that connects, types,
+and captures against each server. GitHub Actions run
+[31729730724](https://github.com/sibson/vncdotool/actions/runs/31729730724)
+is green end-to-end: image builds + healthcheck-gated `up --wait` in
+~39s, all three per-server tests pass, non-black screenshots uploaded as
+artifacts, clean teardown — ~70s total, no flakiness observed. Local
+verification ran the identical test module against natively-started
+servers on the same ports (3/3 pass; the dev sandbox's egress policy
+blocks registry pulls, a sandbox limitation, not a design one — the
+maintainer's machine with normal Docker Hub access runs the compose path
+directly).
+
+Findings worth keeping:
+- `api.connect()` leaves the Twisted reactor thread running until
+  `api.shutdown()` — without it, test processes and CI steps hang forever
+  after passing. Any harness built on the API needs a
+  `tearDownModule`-style shutdown. (Also more evidence for the Phase 1
+  "hangs instead of errors" theme.)
+- Debian/Ubuntu split TigerVNC packaging: `vncpasswd` lives in
+  `tigervnc-tools`, needed alongside `tigervnc-standalone-server`.
+- Images stay small and layer-cached (~15–20s builds); healthchecks make
+  `up --wait` a reliable barrier.
+
+**Tier 2 — pending.** Branch `claude/spike-os-servers` (UltraVNC on
+`windows-latest`, Screen Sharing/ARD on `macos-latest`) is still
+iterating; per-OS verdicts and recipes will be recorded here.
 
 ## Sequencing and effort
 
