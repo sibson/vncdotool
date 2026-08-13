@@ -246,7 +246,14 @@ them produces something that passes for the wrong reason. Knowing which is
 which is most of the skill.
 
 **9. Act.** Pick exactly one outcome from `references/decision-table.md` and
-follow its template. Read that file before writing any comment.
+follow its template. Read that file before writing any comment. When the
+investigation has proven the mechanism *and* the fix is small with an
+in-codebase precedent, suggest the fix in the comment — one paragraph, with
+the precedent cited by `file:line` — per "When the trace hands you the fix"
+in the decision table; build the fix PR only when the maintainer asks.
+Screenshots and other binary evidence follow the artifact-lifetime rules in
+the same file: logs inline and durable, images branch-scoped, nothing binary
+ever merged to `main`.
 
 **10. Leave the tree as you found it.** Delete the scratch files *this run*
 created, then check `git status`. If it is not clean, report exactly what is

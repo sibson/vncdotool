@@ -128,6 +128,64 @@ next reader doesn't restart from the title.
 
 Label: `feature`.
 
+## When the trace hands you the fix
+
+Outcome A sometimes ends with the fix in plain sight — the mechanism is fully
+traced, and the codebase itself shows the corrective pattern (#90's fix was
+"treat DesktopSize the way the QEMU pseudo-rect two branches up is already
+treated"). What to do with that depends on confidence, and the bar is all four
+of:
+
+- the mechanism is proven by an executed reproduction, not inferred;
+- the fix is small — roughly a dozen lines — and follows a precedent already
+  in the codebase, which you cite by `file:line`;
+- the full suite stays green with the fix applied and the repro test passes
+  un-marked;
+- when a wire-level repro exists, it flips from failing to passing and you
+  quote both runs.
+
+Below that bar, or when the fix involves a design choice the maintainer should
+make, say what you traced and stop.
+
+At that bar, **suggest — don't ship unasked**. Add one paragraph to the outcome
+A comment: the fix shape, the precedent line it follows, and that a fix PR is
+available on request. The triage PR stays a repro-only PR.
+
+When the maintainer asks for the fix (or the invocation says to build it):
+
+1. Branch `claude/fix-issue-NNN` off the default branch — a fresh branch, not
+   more commits on the triage branch, so the repro PR's artifacts stay intact
+   while the issue is open.
+2. Apply the fix, and land the regression test **in its permanent home** in
+   final form: moved to the topical file, `expectedFailure` marker dropped,
+   renamed for the behaviour it checks. This performs the migration the
+   triage artifact's docstring prescribes.
+3. Add the `CHANGELOG.rst` entry under `(UNRELEASED)`.
+4. Re-run everything: unit suite, lint, and the wire-level repro if one
+   exists. Quote before/after in the PR body.
+5. The fix PR body notes it supersedes the repro PR — which should be closed
+   unmerged when the fix lands, since its `expectedFailure` test would report
+   an unexpected success on a fixed tree. Recommend; the maintainer closes.
+
+## Repro artifacts, logs and images
+
+A wire-level reproduction (scripted server, `vncdo -v` logs, before/after
+screenshots) is worth building when the unit test alone could be suspected of
+mock artifacts — but its products have different lifetimes, and main never
+carries any of it:
+
+- **Logs are the durable evidence.** Quote the decisive lines inline in the
+  issue comment; the comment must stand on its own with images stripped.
+- **Images are branch-scoped illustration.** Commit them to the *triage*
+  branch (`tests/triage/issue_NNN/`, with a README naming each artifact) and
+  embed via `raw.githubusercontent.com/<repo>/<branch>/...` URLs. They go
+  dark when the branch is deleted after the fix — that is by design, not a
+  loss: once the bug is fixed, the durable record is the merged regression
+  test and the inline logs, and screenshots of a dead bug are not worth
+  carrying in main's history forever.
+- The fix PR (fresh branch) therefore contains **no** `tests/triage/`
+  directory, and merging it must not add images to main.
+
 ## When a PR is already open
 
 Step 6 turned up an open PR against this issue. The classification doesn't
