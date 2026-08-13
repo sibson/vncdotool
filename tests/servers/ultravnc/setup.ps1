@@ -23,7 +23,8 @@ param(
     # from VNCDOTOOL_OS_SERVER_PASSWORD/PORT too.
     [string]$Password = $(if ($env:VNCDOTOOL_OS_SERVER_PASSWORD) { $env:VNCDOTOOL_OS_SERVER_PASSWORD } else { 'vncspike1' }),
     [int]$Port = $(if ($env:VNCDOTOOL_OS_SERVER_PORT) { [int]$env:VNCDOTOOL_OS_SERVER_PORT } else { 5900 }),
-    [int]$WaitSeconds = 60
+    [int]$WaitSeconds = 60,
+    [int]$InstallAttempts = 3
 )
 
 Set-StrictMode -Version Latest
@@ -43,14 +44,19 @@ $PasswdScript = Join-Path $PSScriptRoot 'vnc_passwd_hex.py'
 
 function Install-UltraVNC {
     Write-Host '--- installing UltraVNC'
-    choco install ultravnc -y --no-progress
-    if ($LASTEXITCODE -ne 0) {
-        throw "choco install ultravnc failed with exit code $LASTEXITCODE"
+    # The community feed intermittently answers with something that isn't
+    # valid XML, which choco reports as "Unable to find package" and, worse,
+    # still exits 0 -- so retry, and judge success by the installed file.
+    for ($attempt = 1; $attempt -le $InstallAttempts; $attempt++) {
+        choco install ultravnc -y --no-progress
+        if (Test-Path $WinVnc) {
+            Write-Host "installed $WinVnc"
+            return
+        }
+        Write-Host "::warning::UltraVNC install attempt $attempt did not produce $WinVnc"
+        Start-Sleep -Seconds (5 * $attempt)
     }
-    if (-not (Test-Path $WinVnc)) {
-        throw "winvnc.exe not found at $WinVnc after installing UltraVNC"
-    }
-    Write-Host "installed $WinVnc"
+    throw "winvnc.exe not found at $WinVnc after $InstallAttempts install attempts"
 }
 
 function Write-UltraVncIni {

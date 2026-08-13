@@ -53,6 +53,10 @@ class VNCServer(NamedTuple):
     # flat, usually all-black, framebuffer is expected rather than a
     # failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
+    # How long to wait for the server to answer a single request. The
+    # default suits a container on loopback; an OS-hosted server sharing a
+    # busy machine's real desktop can be far slower.
+    timeout: float = CONNECT_TIMEOUT
     # How to get this server running, quoted when a test skips itself.
     how_to_start: str = "start the servers first with `make servers-up`"
 
@@ -70,6 +74,10 @@ DOCKER_SERVERS = [
 OS_SERVER_USERNAME = os.environ.get("VNCDOTOOL_OS_SERVER_USERNAME", "vncspike")
 OS_SERVER_PASSWORD = os.environ.get("VNCDOTOOL_OS_SERVER_PASSWORD", "vncspike1")
 OS_SERVER_PORT = int(os.environ.get("VNCDOTOOL_OS_SERVER_PORT", "5900"))
+# An OS-hosted server shares a real, sometimes busy, desktop session, and
+# answers input events a lot less promptly than a container does: macOS
+# Screen Sharing took over five seconds to acknowledge a key event.
+OS_SERVER_TIMEOUT = float(os.environ.get("VNCDOTOOL_OS_SERVER_TIMEOUT", "60"))
 
 ULTRAVNC = VNCServer(
     name="ultravnc",
@@ -77,6 +85,7 @@ ULTRAVNC = VNCServer(
     password=OS_SERVER_PASSWORD,
     # The Windows runner's own desktop resolution, not one we configure.
     size=None,
+    timeout=OS_SERVER_TIMEOUT,
     how_to_start="set the server up first with tests/servers/ultravnc/setup.ps1",
 )
 
@@ -93,6 +102,7 @@ SCREEN_SHARING = VNCServer(
     # framebuffer, so captures come back black even though the protocol,
     # auth and input round trip all succeeded.
     renders_desktop=False,
+    timeout=OS_SERVER_TIMEOUT,
     how_to_start="set the server up first with tests/servers/screen-sharing/setup.sh",
 )
 
@@ -133,7 +143,7 @@ def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool
         return False
 
 
-def connect(server: VNCServer, timeout: float = CONNECT_TIMEOUT) -> api.ThreadedVNCClientProxy:
+def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedVNCClientProxy:
     """Connect to one server, with whatever credentials its security type needs.
 
     Remember that the returned client is a context manager, and that
@@ -144,11 +154,11 @@ def connect(server: VNCServer, timeout: float = CONNECT_TIMEOUT) -> api.Threaded
         password=server.password,
         username=server.username,
     )
-    client.timeout = timeout
+    client.timeout = server.timeout if timeout is None else timeout
     return client
 
 
-def capture_screenshot(server: VNCServer, path: Path, timeout: float = CONNECT_TIMEOUT) -> Path:
+def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
     """Capture ``server``'s framebuffer to ``path`` as a PNG."""
     with connect(server, timeout=timeout) as client:
         client.captureScreen(str(path))

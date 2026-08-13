@@ -27,6 +27,11 @@ machine.
   demands ARD auth afterwards. Don't reach for it as a way to avoid needing
   a username.
 
+* **It answers input slowly.** A key event took over five seconds to be
+  acknowledged on a hosted runner, where a container answers in
+  milliseconds. `vncservers.py` therefore gives OS-hosted servers a much
+  longer per-request timeout (`VNCDOTOOL_OS_SERVER_TIMEOUT`, 60s).
+
 * **Screen Sharing is socket-activated on 5900.** Nothing has to be started
   beyond `kickstart -activate`; waiting for the port is enough.
 

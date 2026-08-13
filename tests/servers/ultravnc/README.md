@@ -25,6 +25,11 @@ down:
   `C:\Program Files` for `winvnc.exe` takes over five minutes on the loaded
   runner image.
 
+* **The Chocolatey feed is flaky.** It intermittently returns a response
+  that isn't valid XML, which choco reports as "Unable to find package"
+  while still exiting 0. `setup.ps1` retries, and decides success by
+  whether `winvnc.exe` exists rather than by the exit code.
+
 * **A password is mandatory.** UltraVNC refuses every incoming connection
   until one is set, regardless of `AuthRequired` — the server replies
   "Until a password is set, incoming connections cannot be accepted". There

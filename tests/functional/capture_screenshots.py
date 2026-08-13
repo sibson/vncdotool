@@ -32,7 +32,6 @@ _HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
 from vncservers import (  # noqa: E402
-    CONNECT_TIMEOUT,
     HOST,
     VNCServer,
     capture_screenshot,
@@ -58,7 +57,7 @@ def capture(server: VNCServer, directory: Path) -> Capture:
 
     path = directory / f"{server.name}.png"
     try:
-        capture_screenshot(server, path, timeout=CONNECT_TIMEOUT)
+        capture_screenshot(server, path)
     except Exception as exc:  # noqa: BLE001 - diagnostics must not fail the build
         return Capture(server, None, f"failed, {exc}")
 
