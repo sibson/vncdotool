@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
-"""Print the ``passwd=`` value ultravnc.ini needs for a given password.
+"""Compute the ``passwd=`` value ultravnc.ini needs for a given password.
+
+Run as a script it writes that hex to the file named as its second
+argument, for setup.ps1 to read back into the ini.
 
 UltraVNC refuses every incoming connection until a password is set, and it
 stores that password in ultravnc.ini using the classic VNC password-*file*
@@ -38,10 +41,16 @@ def vnc_passwd_hex(password: str) -> str:
 
 
 def main(argv: list) -> int:
-    if len(argv) != 2:
-        print(f"usage: {Path(argv[0]).name} PASSWORD", file=sys.stderr)
+    if len(argv) != 3:
+        print(f"usage: {Path(argv[0]).name} PASSWORD OUTPUT_FILE", file=sys.stderr)
         return 2
-    print(vnc_passwd_hex(argv[1]))
+
+    # Written to a file rather than printed: the hex is as good as the
+    # password to anyone who has it, and stdout of a CI step is the last
+    # place a credential should end up.
+    password, output = argv[1], Path(argv[2])
+    output.write_text(vnc_passwd_hex(password), encoding="ascii")
+    print(f"wrote the ultravnc.ini password hex to {output}")
     return 0
 
 

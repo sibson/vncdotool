@@ -1098,10 +1098,17 @@ class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
 
 
 def des_encrypt(key: bytes, data: bytes) -> bytes:
-    """Encrypt with single DES, as the VNC family's password handling uses."""
+    """Encrypt with single DES, as the VNC family's password handling uses.
+
+    Single DES in ECB is weak, and is what RFB specifies: both the
+    authentication challenge response (RFC 6143 section 7.2.2) and the
+    password file format are defined in terms of it, so a stronger
+    algorithm here would simply fail to talk to any VNC server."""
     # Triple-DES with the same 56-bit key repeated three times is
     # equivalent to single-DES
-    encryptor = Cipher(algorithms.TripleDES(key * 3), modes.ECB()).encryptor()
+    encryptor = Cipher(  # codeql[py/weak-cryptographic-algorithm]
+        algorithms.TripleDES(key * 3), modes.ECB()
+    ).encryptor()
     return encryptor.update(data) + encryptor.finalize()
 
 

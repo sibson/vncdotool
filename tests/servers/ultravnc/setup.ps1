@@ -61,10 +61,15 @@ function Install-UltraVNC {
 
 function Write-UltraVncIni {
     Write-Host '--- writing ultravnc.ini'
-    $passwdHex = python $PasswdScript $Password
-    if ($LASTEXITCODE -ne 0 -or -not $passwdHex) {
+    # The helper writes the hex to a file rather than to stdout, so the
+    # value never lands in the step log; read it back and drop the file.
+    $passwdFile = Join-Path ([System.IO.Path]::GetTempPath()) 'ultravnc-passwd.hex'
+    python $PasswdScript $Password $passwdFile
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $passwdFile)) {
         throw 'could not compute the ultravnc.ini password hex'
     }
+    $passwdHex = (Get-Content $passwdFile -Raw).Trim()
+    Remove-Item $passwdFile -Force
 
     $ini = @"
 [admin]
