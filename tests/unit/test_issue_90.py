@@ -15,13 +15,14 @@ class TestIssue90(TestCase):
     Actual:   updateDesktopSize creates a black canvas, commitUpdate fires the
               capture deferred, and the black canvas is what gets saved.
 
-    A wire-level reproduction (real vncdo CLI against a server replaying the
-    TightVNC behaviour from the issue's logs) lives in tests/triage/issue_90/.
+    A wire-level reproduction (real vncdo CLI against a scripted server
+    replaying the TightVNC behaviour from the issue's logs) is attached to
+    the issue thread:
+    https://github.com/sibson/vncdotool/issues/90#issuecomment-5287723879
 
-    TRIAGE ARTIFACT -- this file and tests/triage/issue_90/ are temporary.
-    When the fix lands, move this test into tests/unit/test_client.py, drop
-    the expectedFailure marker, rename it for the behaviour it checks, and
-    delete this file and the tests/triage/issue_90/ directory.
+    TRIAGE ARTIFACT -- this file is temporary. When the fix lands, move this
+    test into tests/unit/test_client.py, drop the expectedFailure marker,
+    rename it for the behaviour it checks, and delete this file.
     """
 
     MSG_HANDSHAKE = b"RFB 003.003\n"
