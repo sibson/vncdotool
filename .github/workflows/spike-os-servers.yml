@@ -80,9 +80,49 @@ jobs:
           "winvnc_path=$winvnc" >> $env:GITHUB_OUTPUT
           "winvnc_dir=$dir" >> $env:GITHUB_OUTPUT
 
-      - name: Write ultravnc.ini (no-auth, loopback-only variant)
+      - name: Install vncdotool
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pillow
+
+      - name: Compute UltraVNC ini password hash
+        id: pwhash
+        run: |
+          # Round 2 finding: UltraVNC hard-refuses every connection with
+          # "This server does not have a valid password enabled" regardless
+          # of AuthRequired - a password is mandatory. UltraVNC's ultravnc.ini
+          # stores it as DES-encrypted hex, using the same RFB DES-variant key
+          # transform vncdotool itself implements in rfb.py's _vnc_des(): the
+          # password's bits are reversed per byte to form a DES key, which is
+          # then used to encrypt 8 zero bytes; the ciphertext is hex-encoded
+          # with a trailing 00 update-flag byte appended.
+          $script = @'
+          from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+          def vnc_des_key(password):
+              pw = (password + "\0" * 8)[:8]
+              key = pw.encode("ascii")
+              return bytes(
+                  sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8))
+                  for k in key
+              )
+
+          password = "vncspike1"
+          key = vnc_des_key(password)
+          des = Cipher(algorithms.TripleDES(key * 3), modes.ECB()).encryptor()
+          cipher = des.update(b"\x00" * 8) + des.finalize()
+          print((cipher + b"\x00").hex())
+          '@
+          Set-Content -Path compute_passwd.py -Value $script -Encoding ASCII
+          $hash = python compute_passwd.py
+          Write-Host "Computed ultravnc.ini passwd hex: $hash"
+          "passwd_hex=$hash" >> $env:GITHUB_OUTPUT
+
+      - name: Write ultravnc.ini (DES-encrypted password)
         run: |
           $dir = "${{ steps.locate.outputs.winvnc_dir }}"
+          $passwdHex = "${{ steps.pwhash.outputs.passwd_hex }}"
           $ini = @"
           [admin]
           UseRegistry=0
@@ -90,12 +130,9 @@ jobs:
           [ultravnc]
           PortNumber=5900
           HTTPPortNumber=0
-          AuthRequired=0
-          AuthHosts=+127.0.0.1
+          passwd=$passwdHex
           AllowLoopback=1
-          LoopbackOnly=1
-          QuerySetting=0
-          QueryTimeout=0
+          AuthHosts=+127.0.0.1
           NewMSLogon=0
           RemoveWallpaper=1
           NeverShutdown=1
@@ -161,16 +198,10 @@ jobs:
           Get-ChildItem $dir | Format-Table Name,Length
           Get-EventLog -LogName Application -Source '*vnc*' -Newest 20 -ErrorAction SilentlyContinue | Format-List *
 
-      - name: Install vncdotool
-        run: |
-          python -m pip install --upgrade pip
-          pip install .
-          pip install pillow
-
-      - name: Connect and type (no-auth, verbose)
+      - name: Connect and type (VNC password auth, verbose)
         id: connect
         run: |
-          vncdo -v -v -s 127.0.0.1::5900 type hello
+          vncdo -v -v -s 127.0.0.1::5900 --password vncspike1 type hello
           if ($LASTEXITCODE -ne 0) {
             Write-Error "vncdo type failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
@@ -181,7 +212,7 @@ jobs:
         id: capture
         if: always()
         run: |
-          vncdo -v -v -s 127.0.0.1::5900 capture shot.png
+          vncdo -v -v -s 127.0.0.1::5900 --password vncspike1 capture shot.png
           if ($LASTEXITCODE -ne 0) {
             Write-Error "vncdo capture failed with exit code $LASTEXITCODE"
             exit $LASTEXITCODE
