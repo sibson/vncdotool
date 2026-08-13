@@ -91,27 +91,42 @@ jobs:
         run: |
           # Round 2 finding: UltraVNC hard-refuses every connection with
           # "This server does not have a valid password enabled" regardless
-          # of AuthRequired - a password is mandatory. UltraVNC's ultravnc.ini
-          # stores it as DES-encrypted hex, using the same RFB DES-variant key
-          # transform vncdotool itself implements in rfb.py's _vnc_des(): the
-          # password's bits are reversed per byte to form a DES key, which is
-          # then used to encrypt 8 zero bytes; the ciphertext is hex-encoded
-          # with a trailing 00 update-flag byte appended.
+          # of AuthRequired - a password is mandatory.
+          #
+          # Round 3 attempt: encrypt 8 zero bytes with a DES key derived from
+          # the password itself (the same bit-reversal transform vncdotool's
+          # rfb.py uses in _vnc_des() for the RFB auth *challenge response*).
+          # That got further - UltraVNC accepted the ini and offered
+          # VNC_AUTHENTICATION - but the server rejected the challenge
+          # response, meaning the password it decoded from our hex was not
+          # "vncspike1". The challenge-response key transform was the wrong
+          # thing to reuse for password *storage*.
+          #
+          # Round 4: use the actual classic VNC password-file obfuscation
+          # algorithm instead (the one behind ~/.vnc/passwd across the whole
+          # VNC family - TightVNC/TigerVNC/x11vnc/UltraVNC all derive from
+          # the original AT&T vncauth.c): encrypt the password bytes
+          # (null-padded to 8) as plaintext, using a DES key derived from a
+          # fixed constant key {23,82,107,6,35,78,88,7} via the same
+          # bit-reversal transform. This is the opposite pairing from round 3
+          # (fixed key encrypts the password, rather than the password
+          # deriving a key that encrypts zeros).
           $script = @'
           from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-          def vnc_des_key(password):
-              pw = (password + "\0" * 8)[:8]
-              key = pw.encode("ascii")
+          def bit_reverse_key(raw_key):
               return bytes(
                   sum((128 >> i) if (k & (1 << i)) else 0 for i in range(8))
-                  for k in key
+                  for k in raw_key
               )
 
+          FIXED_KEY = bytes([23, 82, 107, 6, 35, 78, 88, 7])
+
           password = "vncspike1"
-          key = vnc_des_key(password)
+          key = bit_reverse_key(FIXED_KEY)
+          pw = (password + "\0" * 8)[:8].encode("ascii")
           des = Cipher(algorithms.TripleDES(key * 3), modes.ECB()).encryptor()
-          cipher = des.update(b"\x00" * 8) + des.finalize()
+          cipher = des.update(pw) + des.finalize()
           print((cipher + b"\x00").hex())
           '@
           Set-Content -Path compute_passwd.py -Value $script -Encoding ASCII
