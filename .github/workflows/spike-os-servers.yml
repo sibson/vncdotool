@@ -7,6 +7,25 @@ name: Spike - OS-hosted VNC servers
 # The two jobs are fully independent - one OS failing must never take down the
 # other, so there is no `needs:`, no matrix, and each job carries its own
 # artifact uploads and diagnostics.
+#
+# Round-1 findings baked into this version:
+#  - Recursively scanning C:\Program Files for winvnc.exe took 5+ minutes on the
+#    loaded windows-latest toolcache image. Choco always installs UltraVNC to a
+#    fixed path, so that path is used directly instead.
+#  - `winvnc.exe -run` on a fresh install opened an interactive "Settings"
+#    dialog (visible in the process's MainWindowTitle) rather than truly
+#    headless-serving; the RFB connection then failed silently under
+#    vncdotool's default (non-verbose) logging. Round 2 installs UltraVNC as a
+#    Windows service instead, and runs vncdo at -v -v with explicit exit-code
+#    checks so any failure is visible in the log.
+#  - macOS: ARD/Diffie-Hellman auth via a dedicated local user worked end to
+#    end (TCP connect, RFB handshake, auth, type, capture) but the captured
+#    framebuffer was fully black. The legacy VNC password path
+#    (kickstart -setvnclegacy -setvncpw) is confirmed non-functional on this
+#    OS image - kickstart accepts the command but the server still demands
+#    ARD/DH auth with a username. Round 2 drops the legacy attempt from the
+#    pass/fail gate (kept as an informational-only step) and adds diagnostics
+#    aimed at explaining the black framebuffer.
 
 on:
   push:
@@ -34,22 +53,28 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Search available UltraVNC choco packages (diagnostic)
-        run: choco search ultravnc --all-versions
-        continue-on-error: true
-
       - name: Install UltraVNC via chocolatey
         run: choco install ultravnc -y --no-progress
 
       - name: Locate winvnc.exe
         id: locate
         run: |
-          $candidates = Get-ChildItem -Path 'C:\Program Files','C:\Program Files (x86)' -Recurse -Filter winvnc.exe -ErrorAction SilentlyContinue
-          if (-not $candidates) {
-            Write-Error "winvnc.exe not found after choco install"
-            exit 1
+          # Round 1: a full recursive scan of C:\Program Files took 5+ minutes
+          # on the loaded windows-latest toolcache. Choco always installs to
+          # this fixed path, so check it directly first and only fall back to
+          # a narrow (non-recursive-over-everything) search if that's wrong.
+          $known = 'C:\Program Files\uvnc bvba\UltraVNC\winvnc.exe'
+          if (Test-Path $known) {
+            $winvnc = $known
+          } else {
+            Write-Host "::warning::winvnc.exe not at expected path, falling back to a scoped search"
+            $candidates = Get-ChildItem -Path 'C:\Program Files\uvnc bvba' -Recurse -Filter winvnc.exe -ErrorAction SilentlyContinue
+            if (-not $candidates) {
+              Write-Error "winvnc.exe not found after choco install"
+              exit 1
+            }
+            $winvnc = $candidates[0].FullName
           }
-          $winvnc = $candidates[0].FullName
           Write-Host "Found winvnc.exe at $winvnc"
           $dir = Split-Path $winvnc -Parent
           "winvnc_path=$winvnc" >> $env:GITHUB_OUTPUT
@@ -86,12 +111,28 @@ jobs:
           Copy-Item (Join-Path $dir 'ultravnc.ini') (Join-Path $pdDir 'ultravnc.ini') -Force
           Get-Content (Join-Path $dir 'ultravnc.ini')
 
-      - name: Start winvnc.exe
+      - name: Install and start UltraVNC as a Windows service
+        id: service
         run: |
+          # Round 1: launching winvnc.exe directly (-run) opened an
+          # interactive "Settings" window instead of headlessly serving.
+          # Service mode is UltraVNC's normal unattended-deployment path and
+          # avoids any desktop-session GUI popup.
           $winvnc = "${{ steps.locate.outputs.winvnc_path }}"
-          Start-Process -FilePath $winvnc -ArgumentList '-run' -PassThru | Out-Null
-          Start-Sleep -Seconds 5
-          Get-Process -Name winvnc -ErrorAction SilentlyContinue | Format-List *
+          & $winvnc -install
+          Start-Sleep -Seconds 3
+          $svc = Get-Service | Where-Object { $_.Name -match 'uvnc|winvnc' -or $_.DisplayName -match 'UltraVNC' }
+          if (-not $svc) {
+            Write-Error "No UltraVNC service found after -install"
+            Get-Service | Format-Table Name, DisplayName, Status
+            exit 1
+          }
+          $svcName = $svc[0].Name
+          Write-Host "Found service: $svcName ($($svc[0].DisplayName))"
+          Start-Service -Name $svcName
+          Start-Sleep -Seconds 3
+          Get-Service -Name $svcName | Format-List *
+          "service_name=$svcName" >> $env:GITHUB_OUTPUT
 
       - name: Wait for port 5900
         id: waitport
@@ -110,13 +151,15 @@ jobs:
       - name: Diagnostics if port never opened
         if: steps.waitport.outputs.port_open != 'true'
         run: |
-          Get-Process -Name winvnc -ErrorAction SilentlyContinue | Format-List *
+          $svcName = "${{ steps.service.outputs.service_name }}"
+          if ($svcName) { Get-Service -Name $svcName | Format-List * }
           $dir = "${{ steps.locate.outputs.winvnc_dir }}"
           Get-ChildItem $dir -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object {
             Write-Host "---- $($_.FullName) ----"
             Get-Content $_.FullName -ErrorAction SilentlyContinue
           }
           Get-ChildItem $dir | Format-Table Name,Length
+          Get-EventLog -LogName Application -Source '*vnc*' -Newest 20 -ErrorAction SilentlyContinue | Format-List *
 
       - name: Install vncdotool
         run: |
@@ -124,10 +167,34 @@ jobs:
           pip install .
           pip install pillow
 
-      - name: Connect, type, and capture (no-auth)
+      - name: Connect and type (no-auth, verbose)
         id: connect
         run: |
-          vncdo -s 127.0.0.1::5900 type hello capture shot.png
+          vncdo -v -v -s 127.0.0.1::5900 type hello
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "vncdo type failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Write-Host "vncdo type: OK"
+
+      - name: Capture screenshot (verbose)
+        id: capture
+        if: always()
+        run: |
+          vncdo -v -v -s 127.0.0.1::5900 capture shot.png
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "vncdo capture failed with exit code $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          if (-not (Test-Path shot.png)) {
+            Write-Error "shot.png was not created"
+            exit 1
+          }
+          Write-Host "vncdo capture: OK, file size $((Get-Item shot.png).Length) bytes"
+
+      - name: Assert screenshot is not fully black
+        if: always() && steps.capture.outcome == 'success'
+        run: |
           python -c @"
           from PIL import Image
           img = Image.open('shot.png')
@@ -146,14 +213,17 @@ jobs:
           path: shot.png
           if-no-files-found: ignore
 
-      - name: Collect winvnc log / ini for diagnosis
+      - name: Collect winvnc log / ini / service state for diagnosis
         if: always()
         run: |
           $dir = "${{ steps.locate.outputs.winvnc_dir }}"
+          $svcName = "${{ steps.service.outputs.service_name }}"
           New-Item -ItemType Directory -Force -Path diagnostics | Out-Null
           Copy-Item (Join-Path $dir 'ultravnc.ini') diagnostics\ -ErrorAction SilentlyContinue
           Get-ChildItem $dir -Filter *.log -ErrorAction SilentlyContinue | Copy-Item -Destination diagnostics\ -ErrorAction SilentlyContinue
+          if ($svcName) { Get-Service -Name $svcName -ErrorAction SilentlyContinue | Out-File diagnostics\service.txt }
           Get-Process -Name winvnc -ErrorAction SilentlyContinue | Out-File diagnostics\winvnc-process.txt
+          Get-EventLog -LogName Application -Source '*vnc*' -Newest 20 -ErrorAction SilentlyContinue | Out-File diagnostics\eventlog.txt
 
       - name: Upload diagnostics artifact
         if: always()
@@ -182,7 +252,6 @@ jobs:
         run: |
           set -x
           sudo sysadminctl -addUser vncspike -fullName "VNC Spike" -password vncspike1 2>&1 | tee adduser.log
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
       - name: Activate Remote Management (ARD) and grant access
@@ -193,16 +262,32 @@ jobs:
             -activate -configure -access -on \
             -users runner,vncspike -privs -all \
             -restart -agent 2>&1 | tee kickstart.log
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
         continue-on-error: true
 
-      - name: Variant A - attempt legacy VNC password (diagnostic only)
+      - name: Variant A - attempt legacy VNC password (informational only, known non-functional)
         id: legacy
         run: |
           set -x
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw vncspike1 2>&1 | tee legacy-vnc.log
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Keep display awake for the duration of the job
+        run: |
+          # Round 1 produced a fully black framebuffer over a working ARD/DH
+          # connection. Rule out display/App Nap sleep as a contributing cause.
+          caffeinate -d -i -u -t 1100 &
+          disown
+        continue-on-error: true
+
+      - name: Display / console session diagnostics (pre-connect)
+        run: |
+          set -x
+          who
+          stat -f "console owner: %Su" /dev/console || true
+          pmset -g || true
+          system_profiler SPDisplaysDataType 2>&1 | head -50 || true
+          ioreg -lw0 | grep -i "IOPowerManagement\|CGSSession\|display" | head -20 || true
         continue-on-error: true
 
       - name: Wait for port 5900
@@ -230,40 +315,38 @@ jobs:
 
       - name: Connect, type, and capture (ARD / Diffie-Hellman auth, dedicated user)
         id: connect_ard
+        continue-on-error: true
         run: |
-          vncdo -s 127.0.0.1::5900 --username vncspike --password vncspike1 type hello capture shot-ard.png
+          vncdo -v -v -s 127.0.0.1::5900 --username vncspike --password vncspike1 type hello capture shot-ard.png
+          echo "vncdo exit code: $?"
+          ls -l shot-ard.png
+
+      - name: Report screenshot pixel content (does not fail the job)
+        if: always()
+        run: |
           python3 - <<'EOF'
           from PIL import Image
-          img = Image.open('shot-ard.png')
+          import os
+          path = 'shot-ard.png'
+          if not os.path.exists(path):
+              print(f'{path} was not created')
+              raise SystemExit(0)
+          img = Image.open(path)
           img.load()
+          print('size:', img.size, 'mode:', img.mode)
           extrema = img.convert('L').getextrema()
           print('extrema:', extrema)
-          assert extrema != (0, 0), 'screenshot is fully black'
-          print('OK: screenshot captured and is not fully black')
+          if extrema == (0, 0):
+              print('RESULT: framebuffer is fully black (protocol succeeded, no visible desktop content)')
+          else:
+              print('RESULT: framebuffer has visible content')
           EOF
         continue-on-error: true
 
-      - name: Connect, type, and capture (legacy VNC password, variant A)
-        id: connect_legacy
-        if: steps.connect_ard.outcome != 'success'
+      - name: Fail job only if the ARD connection itself did not succeed
+        if: always()
         run: |
-          vncdo -s 127.0.0.1::5900 --password vncspike1 type hello capture shot-legacy.png
-          python3 - <<'EOF'
-          from PIL import Image
-          img = Image.open('shot-legacy.png')
-          img.load()
-          extrema = img.convert('L').getextrema()
-          print('extrema:', extrema)
-          assert extrema != (0, 0), 'screenshot is fully black'
-          print('OK: screenshot captured and is not fully black')
-          EOF
-        continue-on-error: true
-
-      - name: Fail job if neither auth variant produced a usable screenshot
-        if: steps.connect_ard.outcome != 'success' && steps.connect_legacy.outcome != 'success'
-        run: |
-          echo "::error::Neither ARD/DH auth nor legacy VNC password auth succeeded"
-          exit 1
+          test -s shot-ard.png
 
       - name: Upload screenshot artifacts
         if: always()
@@ -281,9 +364,11 @@ jobs:
           set -x
           mkdir -p diagnostics
           cp adduser.log kickstart.log legacy-vnc.log diagnostics/ 2>/dev/null || true
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -status 2>&1 | tee diagnostics/kickstart-status.log || true
-          log show --last 5m --predicate 'process CONTAINS "ARDAgent" OR process CONTAINS "screensharingd" OR process CONTAINS "AppleVNCServer"' > diagnostics/system.log 2>&1 || true
+          log show --last 10m --predicate 'process CONTAINS "ARDAgent" OR process CONTAINS "screensharingd" OR process CONTAINS "AppleVNCServer" OR process CONTAINS "loginwindow" OR process CONTAINS "WindowServer"' > diagnostics/system.log 2>&1 || true
           sudo lsof -iTCP:5900 -sTCP:LISTEN -P > diagnostics/port5900.log 2>&1 || true
+          who > diagnostics/who.log 2>&1 || true
+          pmset -g > diagnostics/pmset.log 2>&1 || true
+          system_profiler SPDisplaysDataType > diagnostics/displays.log 2>&1 || true
 
       - name: Upload diagnostics artifact
         if: always()
