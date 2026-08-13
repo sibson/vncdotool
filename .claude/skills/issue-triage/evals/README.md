@@ -129,3 +129,13 @@ Verified leads for future cases, not ground truth yet:
   stopped discriminating and is no longer earning its slot.
 - When a case fails, decide which is wrong — the skill or the expectation —
   before editing either.
+- **Baselines inside the repo can read the skill.** Iteration 1's case-3
+  baseline found `.claude/skills/issue-triage/` in the working tree, followed
+  it, and cited it — so that column measured nothing. Run `without_skill`
+  variants in a worktree with the skill directory removed, or treat baseline
+  parity with suspicion before retiring a case for non-discrimination.
+- What actually separated skill from baseline in iteration 1 was not
+  investigation quality (same model, same repo — the baselines matched) but
+  the boundary behaviour: both baseline failures were draft comments that
+  close or promise to close the issue. Grade would-close language in drafts
+  as a close, not as "no write action taken".
