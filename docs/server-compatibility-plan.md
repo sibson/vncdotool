@@ -346,6 +346,23 @@ Findings worth keeping:
 - Images stay small and layer-cached (~15–20s builds); healthchecks make
   `up --wait` a reliable barrier.
 
+Tier 1 follow-ups:
+- **Publish the screenshot gallery to GitHub Pages.** Captures currently
+  reach the web only as a zipped artifact: the job summary carries a
+  server/port/resolution table, but seeing the pixels means download →
+  unzip → open `index.html`. Actions has no inline preview for artifact
+  contents, and inlining the PNGs as `data:` URIs doesn't help — the
+  markdown sanitizer strips them. Deploying the generated gallery to
+  Pages gives a stable URL to link from the job summary (and outlives
+  artifact expiry, which matters once fixtures reference these images).
+  Needs Pages enabled on the repo, plus a decision on whether runs
+  overwrite one `latest/` gallery or are namespaced by run ID. Interim
+  option if Pages is unwanted: push captures to an orphan branch and have
+  the workflow post/update a PR comment with `raw.githubusercontent.com`
+  image links, so they render inline where review happens.
+- Pin base images by digest and fold this workflow into the main CI one.
+- Deepen what the per-server scenario actually asserts (see Phase 0).
+
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow
 `spike-os-servers.yml`); final run
