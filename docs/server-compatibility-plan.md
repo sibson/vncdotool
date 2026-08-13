@@ -372,6 +372,15 @@ Tier 1 follow-ups:
   folds into the digest-pinning item below.
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
+- **Done:** the `servers` job's base image is now pinned by digest
+  (`tests/servers/Dockerfile`), and the build uses `docker/setup-buildx-action`
+  + `docker/bake-action` with `cache-from`/`cache-to: type=gha` ahead of a
+  build-less `docker compose up --wait`, so a run with no Dockerfile changes
+  hits the Actions cache instead of rebuilding. Every pin this plan asks for
+  — base image digests, distro server packages, `LIBVNCSERVER_VERSION`, the
+  UltraVNC Chocolatey package, and the Tier 2 runner images — is now
+  inventoried in `tests/servers/versions.md`, with where each pin lives and
+  how to bump it.
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow

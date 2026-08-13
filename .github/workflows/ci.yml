@@ -127,8 +127,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Build and start the VNC test servers
-        run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
+      # GitHub-hosted runners start every job with an empty Docker layer
+      # cache, so `up --build` rebuilds the images from scratch on every
+      # run (~35s of local no-op work). Building through buildx with the
+      # GitHub Actions cache backend (scoped to this repo, keyed by layer)
+      # turns that into a cache hit whenever the Dockerfile and its build
+      # context haven't changed, while still rebuilding correctly whenever
+      # they have. `docker buildx bake` reads targets straight out of the
+      # compose file, so there is exactly one definition of each image.
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build the VNC test server images (cached)
+        uses: docker/bake-action@v5
+        with:
+          files: tests/servers/docker-compose.yml
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+
+      - name: Start the VNC test servers
+        run: docker compose -f tests/servers/docker-compose.yml up -d --wait
 
       # The steps below are diagnostics and teardown, so they carry
       # `if: always()`: when a test fails, the container status, the
