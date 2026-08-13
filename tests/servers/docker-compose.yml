@@ -1,6 +1,6 @@
-# Docker Compose fleet of small, version-controlled Linux VNC servers used
-# as a compatibility test bed for vncdotool. See tests/servers/fleet.mk for
-# the make targets that drive this file and tests/functional/test_fleet.py
+# Docker Compose set of small, version-controlled Linux VNC servers used
+# as a compatibility test bed for vncdotool. See tests/servers/servers.mk for
+# the make targets that drive this file and tests/functional/test_servers.py
 # for the tests that exercise it.
 #
 # Each service is built from an in-repo Dockerfile (FROM debian:bookworm-slim)

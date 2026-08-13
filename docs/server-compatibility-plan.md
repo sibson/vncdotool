@@ -322,8 +322,8 @@ contributing a fingerprint must be a paved road:
 `bbfd188`) holds a working proof: three in-repo Dockerfile-based services
 (`tigervnc` no-auth, `tigervnc-auth` VNC-password, `x11vnc` over Xvfb)
 defined in `tests/servers/docker-compose.yml` with `nc`-based
-healthchecks, `make servers-up`/`servers-down`/`test-fleet` wrappers, and
-a parameterized `tests/functional/test_fleet.py` that connects, types,
+healthchecks, `make servers-up`/`servers-down`/`test-servers` wrappers, and
+a parameterized `tests/functional/test_servers.py` that connects, types,
 and captures against each server. GitHub Actions run
 [31729730724](https://github.com/sibson/vncdotool/actions/runs/31729730724)
 is green end-to-end: image builds + healthcheck-gated `up --wait` in
