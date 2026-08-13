@@ -85,7 +85,12 @@ servers, and the results are visible.
 - Generate a docs page (`docs/compatibility.rst`) from the matrix results:
   server × auth × encodings × known caveats.
 
-Acceptance: CI shows a per-server pass/fail grid; a transcript fixture
+How the servers themselves are obtained, pinned, and kept current — for
+local dev, CI, and gold-file creation — is covered in
+[Acquiring and maintaining server access](#acquiring-and-maintaining-server-access).
+
+Acceptance: CI shows a per-server pass/fail grid driven by the Tier 1
+compose fleet; the recording proxy has a raw-transcript mode; a fixture
 harness exists with at least the LibVNCServer and TigerVNC handshakes
 checked in.
 
@@ -170,6 +175,118 @@ pixel-exact against reference images for every supported pixel format.
 - Nightly (rather than per-PR) runs for the slower matrix jobs (QEMU with
   a real guest image) to keep PR CI fast.
 
+## Acquiring and maintaining server access
+
+The matrix, the gold files, and every phase after them depend on one
+operational question: how do we get — and keep — access to the servers we
+claim to support? The answer is three tiers with different acquisition
+models, plus a shared reproducibility discipline.
+
+### Tier 1 — Containerized Linux fleet (we own it, fully reproducible)
+
+TigerVNC, TightVNC, x11vnc, QEMU, LibVNCServer examples, and later
+websockify/noVNC are all runnable on Linux, so we own them outright as a
+**Docker Compose fleet**:
+
+- One `tests/servers/docker-compose.yml` defines a service per
+  server × configuration (`tigervnc`, `tigervnc-auth`, `tigervnc-tls`,
+  `x11vnc`, `qemu`, …), each on a distinct localhost port, each **pinned by
+  image digest**. Where no trustworthy upstream image exists, a small
+  in-repo Dockerfile under `tests/servers/<name>/` pins the package or
+  source-tarball version instead — we prefer vendored Dockerfiles over
+  third-party desktop images we don't control.
+- `make servers-up`, `make servers-down`, and `make server-<name>` wrap
+  compose so contributors never need to learn the fleet's internals; the
+  same compose file is what the CI matrix jobs run. **Local dev and CI use
+  identical bytes.**
+- The native `libvncserver.mk` source build stays as-is; it doubles as the
+  no-Docker fallback path and covers the "current git LibVNCServer" case
+  containers pin away.
+
+### Tier 2 — OS-bound live servers on hosted runners (rented nightly)
+
+UltraVNC only runs on Windows; Apple Screen Sharing/ARD only on macOS.
+GitHub-hosted `windows-latest` and `macos-latest` runners are free for
+public repositories, so we rent access instead of owning hardware:
+
+- A nightly (`schedule:` + `workflow_dispatch`) workflow installs UltraVNC
+  via a pinned Chocolatey version on Windows, and enables Remote
+  Management via `kickstart` on macOS, then runs the same scenario suite
+  against them.
+- These jobs are report-only at first (never blocking PRs) and are
+  promoted to blocking only once they prove stable; each successful run
+  can refresh that server's transcript fixtures as an artifact.
+
+### Tier 3 — Transcript-only servers (community-sourced fingerprints)
+
+RealVNC (Raspberry Pi OS), VMware/ESXi consoles, Proxmox, MobaXterm, and
+anything else licensing or hardware puts out of CI's reach are covered
+**exclusively by recorded fingerprints** — we never assume live access.
+The supply chain for these is the community, so contributing one must be a
+paved road:
+
+1. **Record**: a `vncdo record`-style command (a thin wrapper over the
+   existing `loggingproxy`, extended with a raw-transcript mode — Phase 0
+   work item) sits between the reporter's client and their server. They
+   run a short scripted scenario checklist (connect, auth, type, capture);
+   out comes a fixture directory. The recorder scrubs secrets by
+   construction: password bytes and auth challenges/responses are redacted
+   at capture time, never trusted to manual editing.
+2. **Describe**: the fixture's `manifest.yaml` (see below) plus the output
+   of `vncdo probe` (server version string, offered security types,
+   negotiated encodings) — the "fingerprint" proper.
+3. **Submit**: a "server fingerprint" issue template and a PR checklist
+   (manifest complete, transcript scrubbed, ≤ ~100 KB, scenarios covered).
+   A CI job replays every contributed fixture against the decoder, so
+   fingerprint PRs are **self-verifying** and cheap to review.
+4. **Reward**: each merged fixture automatically adds its row to the
+   `docs/compatibility.rst` support matrix, crediting the contributor —
+   the server they care about becomes visibly supported, which is the
+   incentive to contribute and to keep the fixture fresh when the server
+   updates.
+
+### Gold files: creation and regeneration rules
+
+- Fixtures live at `tests/fixtures/<server>/<scenario>/` with a
+  `manifest.yaml` recording: server product and version, image digest (or
+  OS/runner version for Tier 2, reporter's environment for Tier 3), server
+  command line, recorder identity, date, and the vncdotool commit used.
+- **Tier 1 gold files are deterministic**: `make fixtures-regen
+  SERVER=<name>` spins the pinned container, replays the scenario through
+  the recording proxy, and rewrites the fixture. Regeneration is always a
+  reviewable PR diff, never a silent CI side effect.
+- **Tier 2/3 gold files are opportunistic**: refreshed from nightly-run
+  artifacts (Tier 2) or new community recordings (Tier 3), and likewise
+  only replaced via PR.
+- Transcripts are handshakes plus a few update rounds — kilobytes each —
+  so they live in-repo with a ~100 KB per-fixture budget; no LFS.
+
+### Staying current: pins, drift, and ownership
+
+- **One source of version truth**: every pin (image digests, Chocolatey
+  version, `LIBVNCSERVER_VERSION`) lives in the compose file plus a short
+  `tests/servers/versions.md` table that CI, make, and manifests all
+  reference.
+- **Pinned on PRs, latest on schedule**: PR CI always runs the pinned
+  fleet. A weekly scheduled job re-runs the matrix against `:latest`
+  images / newest packages and *files an issue* on failure instead of
+  breaking PRs — upstream drift becomes a tracked task, not a fire.
+- Version-bump PRs (Dependabot/Renovate on image digests, or the weekly
+  job's issue) regenerate that server's Tier 1 gold files in the same PR,
+  so pins and fixtures always move together.
+- Ownership is explicit per tier: Tier 1 is maintainable by anyone with
+  Docker; Tier 2 needs no hardware, only workflow upkeep; Tier 3 is
+  honestly documented as "we do not own this access" and lives or dies by
+  the recording pipeline — which is why the paved road above matters.
+
+### Spike results (Tier 1 / Tier 2 viability)
+
+*Pending — two spikes are in flight on branches
+`claude/spike-server-fleet` (compose fleet locally + ubuntu CI) and
+`claude/spike-os-servers` (UltraVNC on windows-latest, ARD on
+macos-latest). Results, including exact working recipes and per-OS
+caveats, will be recorded here.*
+
 ## Sequencing and effort
 
 | Phase | Rough size | Depends on |
@@ -210,3 +327,12 @@ report arrives as an actionable error message plus, ideally, a transcript.
 - **Decoder rewrites regress existing users**: the Phase 0 transcript
   fixtures and pixel-exact reference images are the guard rail; land them
   first.
+- **Upstream supply disappears**: a Chocolatey package or base image we
+  pin can vanish or break. Mitigations: vendored in-repo Dockerfiles
+  rather than third-party images, pins with the weekly drift job to catch
+  breakage early, and transcript fixtures as the permanent floor — a
+  server we lose live access to degrades to Tier 3, not to zero coverage.
+- **Tier 3 fixtures go stale**: a fingerprint records one server version
+  at one moment. The manifest's version field and the compatibility table
+  make staleness visible, and the paved recording road keeps the cost of
+  a refreshed contribution low.
