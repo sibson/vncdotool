@@ -53,6 +53,7 @@ jobs:
 
       - name: Capture fleet screenshots for the artifact upload
         if: always()
+        timeout-minutes: 3
         run: |
           python - <<'PY'
           import socket
@@ -78,6 +79,11 @@ jobs:
                   print(f"captured {dest}")
               except Exception as exc:  # noqa: BLE001 - best effort artifact capture
                   print(f"failed to capture {server.name}: {exc}")
+
+          # api.connect() starts a background Twisted reactor thread that
+          # outlives any individual client connection -- without stopping it
+          # here this script (and the job step) hangs on exit.
+          api.shutdown()
           PY
 
       - name: Dump fleet container logs
