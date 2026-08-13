@@ -10,7 +10,12 @@
 # so captures aren't pure black, and the readiness probe -- so adding a
 # server means one stage, not another near-copy of this file.
 
-FROM debian:bookworm-slim AS base
+# Pinned by digest rather than tag so "debian:bookworm-slim" can't
+# silently move to a new point release underneath us -- reproducible test
+# server images are what make gold-file regeneration meaningful (see
+# docs/server-compatibility-plan.md, "Gold files"). Bump via
+# tests/servers/versions.md, which explains how to resolve a fresh digest.
+FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         x11-apps \
