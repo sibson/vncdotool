@@ -49,7 +49,8 @@ def main(argv: list) -> int:
     # password to anyone who has it, and stdout of a CI step is the last
     # place a credential should end up.
     password, output = argv[1], Path(argv[2])
-    output.write_text(vnc_passwd_hex(password), encoding="ascii")
+    ini_value = vnc_passwd_hex(password)
+    output.write_text(ini_value, encoding="ascii")
     print(f"wrote the ultravnc.ini password hex to {output}")
     return 0
 
