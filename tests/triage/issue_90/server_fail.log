@@ -1,0 +1,9 @@
+[server] mode=tightvnc listening on 127.0.0.1:5999
+[server] connection from ('127.0.0.1', 54978)
+[server] client version: b'RFB 003.003\n'
+[server] ClientInit shared=b'\x01'
+[server] ServerInit sent (1024x640, RGBX)
+[server] client: SetEncodings (0, -223, -224, -258)
+[server] client: FramebufferUpdateRequest incremental=0 0,0 1024x640
+[server] sent: FramebufferUpdate [1 rect: DesktopSize -223, NO pixels]
+[server] could not send pixel data: CLIENT ALREADY DISCONNECTED

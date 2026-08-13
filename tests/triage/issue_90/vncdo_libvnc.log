@@ -1,0 +1,13 @@
+INFO:root:connecting to 127.0.0.1:5900
+INFO:twisted:Starting factory <vncdotool.command.VNCDoCLIFactory object at 0x7f7262cdbe50>
+INFO:twisted:Using protocol version 3.8
+INFO:twisted:Offered <AuthTypes.NONE: 1>
+INFO:twisted:Native PixelFormat(bpp=32, depth=32, bigendian=False, truecolor=True, redmax=255, greenmax=255, bluemax=255, redshift=0, greenshift=8, blueshift=16) bytes=4
+INFO:twisted:Offering <Encoding.RAW: 0>
+INFO:twisted:Offering <Encoding.PSEUDO_DESKTOP_SIZE: -223>
+INFO:twisted:Offering <Encoding.PSEUDO_LAST_RECT: -224>
+INFO:twisted:Offering <Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT: -258>
+INFO:root:connected to b'LibVNCServer Example'
+INFO:twisted:x=0 y=0 w=800 h=600 <Encoding.RAW: 0>
+INFO:twisted:Stopping factory <vncdotool.command.VNCDoCLIFactory object at 0x7f7262cdbe50>
+INFO:twisted:Main loop terminated.
