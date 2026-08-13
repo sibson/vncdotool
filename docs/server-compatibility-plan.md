@@ -346,9 +346,50 @@ Findings worth keeping:
 - Images stay small and layer-cached (~15–20s builds); healthchecks make
   `up --wait` a reliable barrier.
 
-**Tier 2 — pending.** Branch `claude/spike-os-servers` (UltraVNC on
-`windows-latest`, Screen Sharing/ARD on `macos-latest`) is still
-iterating; per-OS verdicts and recipes will be recorded here.
+**Tier 2 — VIABLE on both OSes**, proven on branch
+`claude/spike-os-servers` (commit `2de3252`, workflow
+`spike-os-servers.yml`); final run
+[31730610001](https://github.com/sibson/vncdotool/actions/runs/31730610001)
+has both jobs green after four evidence-driven rounds.
+
+*Windows / UltraVNC — works, full recipe:*
+- `choco install ultravnc`; `winvnc.exe` lands at the fixed path
+  `C:\Program Files\uvnc bvba\UltraVNC\winvnc.exe` (never search
+  `Program Files` recursively — minutes-slow on runner images).
+- UltraVNC refuses all connections until a password is set, regardless of
+  `AuthRequired` — there is no no-auth shortcut. The `ultravnc.ini`
+  `passwd=` hex uses the classic VNC password-*file* obfuscation (DES
+  with the fixed `vncauth.c` key, bit-reversed) — not the
+  challenge-response transform — and is computable in a few lines of
+  Python on the runner.
+- Must run as a Windows service (`winvnc.exe -install` +
+  `Start-Service`); `winvnc.exe -run` opens an interactive settings
+  dialog instead of serving.
+- `vncdo type` + `capture` succeed with genuine, non-black desktop
+  content — Windows gives us real visual assertions.
+
+*macOS / Screen Sharing — works at the protocol level, with one caveat:*
+- `sysadminctl -addUser` a dedicated user, then `kickstart -activate
+  -configure -access -on -users … -privs -all -restart -agent`; Screen
+  Sharing is socket-activated on port 5900 out of the box.
+- Auth is **ARD/Diffie-Hellman (type 30)** with username+password —
+  vncdotool's existing ARD support handles it. The legacy VNC-password
+  path is confirmed dead on modern macOS: kickstart accepts the flags
+  silently but the server still demands ARD auth. (Bonus finding: when
+  no username is supplied, `rfb.py` falls into an interactive
+  `input("username:")` prompt and crashes with `EOFError` on a TTY-less
+  runner — another Phase 1 fail-loudly item.)
+- The captured framebuffer is fully black: the runner has no rendered
+  desktop to serve. So macOS jobs validate protocol, auth, and input
+  events, but not pixels — visual assertions need a follow-up spike into
+  whether a display can be attached, or must be scoped out for macOS.
+
+*Graduation into Phase 0 proper:* both jobs graduate under the
+change-triggered policy above — Windows as a full type+capture check with
+real screen content, macOS as a protocol/auth/input check with pixel
+assertions explicitly excluded until the black-framebuffer question is
+answered. Productionizing should keep the dedicated-user and
+service-mode setup steps and move passwords into repository secrets.
 
 ## Sequencing and effort
 
