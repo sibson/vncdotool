@@ -372,6 +372,19 @@ Tier 1 follow-ups:
   folds into the digest-pinning item below.
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
+- **The input-reactive test surface, deferred.** The scenario framework
+  (`tests/functional/scenarios.py`) defines a `PIXEL` assertion level -- a
+  *specific region* of the framebuffer changed in response to input -- but
+  no Tier 1 server declares the `input_reactive` capability that would
+  enable it: `tests/servers/draw-content.sh` paints static content once at
+  startup, so nothing in the fleet reacts to a keystroke or click at a
+  known screen position. Getting there needs a deterministic reactive
+  surface in the container desktop (e.g. a full-screen `xterm` echoing
+  keystrokes at a fixed position, plus a pointer-tracking app for mouse
+  input), which is image work with real flakiness risk (font rendering,
+  timing) -- its own spike, not part of the PR that establishes the
+  scenario abstraction. Until it lands, keyboard/mouse scenarios assert at
+  the weaker `CHANGE` (any repaint) or `PROTOCOL` (no disconnect) level.
 - **Done:** the `servers` job's base image is now pinned by digest
   (`tests/servers/Dockerfile`), and the build uses `docker/setup-buildx-action`
   + `docker/bake-action` with `cache-from`/`cache-to: type=gha` ahead of a

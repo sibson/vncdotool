@@ -20,12 +20,19 @@ import socket
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Dict, FrozenSet, List, NamedTuple, Optional, Tuple
 from unittest import TestCase
 
-from PIL import Image
-
 from vncdotool import api
+
+try:
+    from .scenarios import SCENARIOS, Scenario, ScenarioContext
+except ImportError:
+    # capture_screenshots.py runs this module as a plain top-level script
+    # (it puts this directory on sys.path itself) rather than importing it
+    # as part of the tests.functional package, so the relative import above
+    # fails there; fall back to an absolute one against the same sys.path.
+    from scenarios import SCENARIOS, Scenario, ScenarioContext  # type: ignore[no-redef]
 
 HOST = "127.0.0.1"
 CONNECT_TIMEOUT = 5.0
@@ -38,13 +45,19 @@ READY_DEADLINE = 180.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
-PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
-# getcolors() returns None above this many distinct colours, which is itself
-# proof the capture isn't a flat colour, so the cap only needs to be cheap.
-MAX_COLOURS = 256
-
 
 class VNCServer(NamedTuple):
+    """What a server is and what it can do.
+
+    ``capabilities`` (see below) is the one obvious place a server declares
+    what it can do; scenarios (tests/functional/scenarios.py) declare what
+    they ``require`` and a server missing a capability skips rather than
+    running a test that can't mean anything for it. ``size`` and
+    ``renders_desktop`` stay as plain fields because a scenario body needs
+    the actual values, not just a yes/no -- ``capabilities`` is derived from
+    them rather than duplicating them.
+    """
+
     name: str
     port: int
     password: Optional[str] = None
@@ -59,12 +72,39 @@ class VNCServer(NamedTuple):
     # flat, usually all-black, framebuffer is expected rather than a
     # failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
+    # Whether the desktop visibly changes in a *known region* in response
+    # to input. Deferred: no Tier 1 server sets this yet, because
+    # tests/servers/draw-content.sh paints static content -- see the
+    # "input-reactive test surface" follow-up in
+    # docs/server-compatibility-plan.md.
+    input_reactive: bool = False
     # How long to wait for the server to answer a single request. The
     # default suits a container on loopback; an OS-hosted server sharing a
     # busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
     # How to get this server running, quoted when a test skips itself.
     how_to_start: str = "start the servers first with `make servers-up`"
+
+    @property
+    def auth_capability(self) -> str:
+        """The ``auth:*`` capability this server's credentials negotiate."""
+        if self.username is not None:
+            return "auth:ard"
+        if self.password is not None:
+            return "auth:vncpass"
+        return "auth:none"
+
+    @property
+    def capabilities(self) -> FrozenSet[str]:
+        """What this server can do, as the set scenarios match ``requires`` against."""
+        caps = {self.auth_capability}
+        if self.size is not None:
+            caps.add("known_size")
+        if self.renders_desktop:
+            caps.add("renders_desktop")
+        if self.input_reactive:
+            caps.add("input_reactive")
+        return frozenset(caps)
 
 
 # One entry per service in tests/servers/docker-compose.yml.
@@ -209,12 +249,24 @@ def wait_until_ready(
     return False
 
 
+def scenario_artifact_dir(server: VNCServer, scenario_name: str) -> Path:
+    """Where one server's one scenario writes its artifacts, created if needed."""
+    path = screenshot_dir() / server.name / scenario_name
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 class _VNCServerTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 
     Deliberately does NOT subclass TestCase: only the generated per-server
     classes should (otherwise `unittest discover` also collects this shared
     base as its own, serverless test case).
+
+    register_server_tests() adds one `test_<scenario.name>` method per
+    scenario on top of this mixin -- see _make_scenario_test() below -- so
+    this class only carries what every one of those methods needs: the
+    server-reachability skip shared by all of them.
     """
 
     server: VNCServer
@@ -226,73 +278,52 @@ class _VNCServerTestMixin:
                 f"{self.server.how_to_start}"
             )
 
-    def test_connect_key_and_capture(self) -> None:
-        """End-to-end round trip against one real server.
 
-        Passing means, in order:
+def _make_scenario_test(scenario: Scenario) -> object:
+    """Build one `test_<scenario.name>` method bound to `scenario`.
 
-        * the RFB handshake completed against this server's protocol version
-          and security type (none, VNC password, or ARD/Diffie-Hellman);
-        * a key event was accepted without the server dropping the session;
-        * a framebuffer update was received and encoded to a PNG file;
-        * that PNG is the size the server said it serves, and -- for a server
-          with a desktop rendered behind it -- is not a single flat colour,
-          i.e. we decoded real screen content rather than the all-black
-          framebuffer you get when updates never arrive.
-        """
-        png = screenshot_dir() / f"{self.server.name}.png"
+    A missing required capability is a `skipTest` naming the capability,
+    never a silent pass -- that distinction is what keeps a skip from
+    reading as coverage in the compatibility matrix (e.g. macOS Screen
+    Sharing's black framebuffer must not read as green).
+    """
 
-        with connect(self.server) as client:
-            client.keyPress("x")
-            client.captureScreen(str(png))
-
-        data = png.read_bytes()
-        print(f"{self.server.name}: screenshot written to {png}")
-
-        self.assertTrue(data, f"{self.server.name}: captured screenshot is empty")
-        self.assertEqual(
-            data[:8],
-            PNG_MAGIC,
-            f"{self.server.name}: captured file is not a valid PNG",
-        )
-
-        with Image.open(png) as image:
-            if self.server.size is not None:
-                self.assertEqual(
-                    image.size,
-                    self.server.size,
-                    f"{self.server.name}: capture is not the size the server serves",
-                )
-            colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
-
-        distinct = colours if colours is None else len(colours)
-        if not self.server.renders_desktop:
-            print(
-                f"{self.server.name}: {distinct} colours captured; content is not "
-                "asserted, this server has no rendered desktop behind it"
+    def test_scenario(self: _VNCServerTestMixin) -> None:
+        missing = scenario.requires - self.server.capabilities
+        if missing:
+            self.skipTest(
+                f"{self.server.name} does not support required capabilit"
+                f"{'y' if len(missing) == 1 else 'ies'} {sorted(missing)} "
+                f"for scenario {scenario.name!r}"
             )
-            return
 
-        self.assertNotEqual(
-            distinct,
-            1,
-            f"{self.server.name}: capture is a single flat colour, "
-            "no screen content was decoded",
-        )
+        artifact_dir = scenario_artifact_dir(self.server, scenario.name)
+        ctx = ScenarioContext(server=self.server, artifact_dir=artifact_dir)
+        with connect(self.server) as client:
+            scenario.run(client, ctx)
+
+    test_scenario.__name__ = f"test_{scenario.name}"
+    test_scenario.__doc__ = scenario.description
+    return test_scenario
 
 
 def register_server_tests(servers: List[VNCServer], namespace: Dict[str, object]) -> None:
     """Add one TestCase subclass per server to a test module's namespace.
 
-    Gives `unittest discover` a separate pass/fail/skip per server instead of
-    one test that stops at the first server that misbehaves.
+    Each subclass gets one `test_<scenario>` method per entry in
+    `scenarios.SCENARIOS`, so `unittest discover` reports a separate
+    pass/fail/skip per server *and* per scenario (e.g.
+    `TestServer_tigervnc.test_capture`) instead of one test per server that
+    stops at the first thing that misbehaves.
     """
     for server in servers:
         name = "TestServer_" + server.name.replace("-", "_")
-        namespace[name] = type(
-            name,
-            (_VNCServerTestMixin, TestCase),
+        attrs: Dict[str, object] = {
+            "server": server,
             # __module__ so test ids name the module that registered the
             # case rather than this one.
-            {"server": server, "__module__": namespace.get("__name__", __name__)},
-        )
+            "__module__": namespace.get("__name__", __name__),
+        }
+        for scenario in SCENARIOS:
+            attrs[f"test_{scenario.name}"] = _make_scenario_test(scenario)
+        namespace[name] = type(name, (_VNCServerTestMixin, TestCase), attrs)
