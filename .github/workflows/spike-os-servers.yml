@@ -7,10 +7,9 @@ name: Spike - OS-hosted VNC servers
 # What each server needs, and what it does and doesn't prove, is documented
 # next to the setup scripts in tests/servers/ultravnc/README.md and
 # tests/servers/screen-sharing/README.md. This file only wires those scripts
-# and tests/functional/test_os_servers.py together.
-#
-# The two jobs are deliberately independent - one OS failing must never take
-# down the other, so there is no `needs:` and no matrix.
+# and tests/functional/test_os_servers.py together: the two OSes differ by
+# which script sets the server up and which shell runs it, so they are one
+# matrix job rather than two near-identical ones.
 
 on:
   push:
@@ -28,13 +27,31 @@ env:
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
 
 jobs:
-  windows-ultravnc:
-    name: Windows - UltraVNC
-    runs-on: windows-latest
+  os-server:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    strategy:
+      # One OS failing must never take down the other: each is a separate
+      # data point about that OS, not a step in a shared pipeline.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows - UltraVNC
+            runner: windows-latest
+            shell: pwsh
+            server: ultravnc
+            setup: ./tests/servers/ultravnc/setup.ps1
+            diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
+          - name: macOS - Screen Sharing
+            runner: macos-latest
+            shell: bash
+            server: screen-sharing
+            setup: bash tests/servers/screen-sharing/setup.sh
+            diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
     defaults:
       run:
-        shell: pwsh
+        shell: ${{ matrix.shell }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -49,26 +66,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install . pillow
 
-      - name: Set up the UltraVNC server
-        run: ./tests/servers/ultravnc/setup.ps1
+      - name: Set up the VNC server
+        run: ${{ matrix.setup }}
 
       - name: Run OS server functional tests
         run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 
+      # Everything below is diagnostics and artifact collection, so it runs
+      # with if: always() -- a failing test is exactly when the screenshot
+      # and the server's own logs are worth having. The steps above are the
+      # test itself and deliberately stop the job when they fail.
       - name: Capture screenshots and build the gallery
         if: always()
         timeout-minutes: 3
         run: python tests/functional/capture_screenshots.py os
 
-      - name: Collect UltraVNC diagnostics
+      - name: Collect server diagnostics
         if: always()
-        run: ./tests/servers/ultravnc/collect-diagnostics.ps1
+        run: ${{ matrix.diagnostics }}
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ultravnc-screenshots
+          name: ${{ matrix.server }}-screenshots
           path: screenshots/
           if-no-files-found: ignore
 
@@ -76,58 +97,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ultravnc-diagnostics
-          path: diagnostics/
-          if-no-files-found: ignore
-
-  macos-screen-sharing:
-    name: macOS - Screen Sharing
-    runs-on: macos-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Install vncdotool
-        run: |
-          python -m pip install --upgrade pip
-          pip install . pillow
-
-      - name: Set up the Screen Sharing server
-        run: bash tests/servers/screen-sharing/setup.sh
-
-      - name: Run OS server functional tests
-        run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
-
-      - name: Capture screenshots and build the gallery
-        if: always()
-        timeout-minutes: 3
-        run: python tests/functional/capture_screenshots.py os
-
-      - name: Collect Screen Sharing diagnostics
-        if: always()
-        run: bash tests/servers/screen-sharing/collect-diagnostics.sh
-
-      - name: Upload screenshots
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screen-sharing-screenshots
-          path: screenshots/
-          if-no-files-found: ignore
-
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screen-sharing-diagnostics
+          name: ${{ matrix.server }}-diagnostics
           path: diagnostics/
           if-no-files-found: ignore

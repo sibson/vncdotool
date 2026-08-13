@@ -35,6 +35,14 @@ machine.
 * **Screen Sharing is socket-activated on 5900.** Nothing has to be started
   beyond `kickstart -activate`; waiting for the port is enough.
 
+## Readiness
+
+An open RFB port is not always the same thing as a server with something to
+show -- the Docker servers need an extra readiness marker for exactly that
+reason (`tests/servers/draw-content.sh`). Here the port is all there is to
+wait for, and all it can mean: the framebuffer this runner serves is blank
+whether or not the server is ready (see below).
+
 ## What it proves, and what it doesn't
 
 Connect, RFB handshake, ARD authentication and key events all work. The

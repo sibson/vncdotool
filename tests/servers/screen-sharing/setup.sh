@@ -49,10 +49,12 @@ keep_display_awake() {
 }
 
 wait_for_port() {
+    # bash's own /dev/tcp rather than nc, matching how the Docker servers
+    # probe themselves -- one less tool the machine has to have.
     echo "--- waiting up to ${WAIT_SECONDS}s for port $PORT"
     local deadline=$((SECONDS + WAIT_SECONDS))
     while [ "$SECONDS" -lt "$deadline" ]; do
-        if nc -z -w2 127.0.0.1 "$PORT" 2>/dev/null; then
+        if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
             echo "port $PORT is open"
             return 0
         fi

@@ -41,6 +41,14 @@ down:
   `Start-Service` is UltraVNC's unattended-deployment path and serves
   headlessly.
 
+## Readiness
+
+An open RFB port is not always the same thing as a server with something to
+show -- the Docker servers need an extra readiness marker for exactly that
+reason (`tests/servers/draw-content.sh`). Here the port is enough: the
+desktop session exists before the VNC server is ever started, so there is
+no window between "accepting connections" and "has content".
+
 ## What it proves
 
 The Windows runner has a real rendered desktop, so captures come back with
