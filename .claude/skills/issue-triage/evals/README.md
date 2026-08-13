@@ -1,9 +1,10 @@
 # issue-triage evals
 
 This harness mirrors the one on sibson/redbeat, which is the reference for how
-these evals are built and why. No cases are recorded here yet — `evals.json` is
-a skeleton, and the candidate list below is where to start. The scripts
-(`snapshot.py`, `check_no_writes.py`) are ready to use.
+these evals are built and why. Three cases are recorded; each expectation was
+verified by hand (fixing commits confirmed in history and release tags, the
+#297 TypeError reproduced verbatim on current main, fence absence confirmed by
+grep) before its assertions were written.
 
 ## Why cases read fixtures, not the live API
 
@@ -95,21 +96,32 @@ resolution is knowable. Ones swept shut in bulk as `not_planned` record a
 disposition, not a verdict; grading against them teaches the skill that old
 means closeable.
 
-## Candidate first cases
+## What each case is for
 
-Chosen to cover the outcomes that are easy to get wrong plus the three
-behaviours the design depends on (never close, never re-comment, never open a
-competing PR). Verify each against the real thread before freezing anything —
-these are leads, not ground truth.
+| Case | Guards against |
+|---|---|
+| `already-fixed-with-named-commit` (#110) | A "confirmed" verdict on a bug that died in the 1.1.0 rewrite — and the vaguer failure of saying "looks fixed" without naming `bc93eb9` / `3859a1f` (#250). Bonus judgment: the reporter's exact byte sequence is already a passing regression test (`test_rfb.py::test_auth_invalid33`), so proposing a new repro PR is the tell that step 3 was skipped. |
+| `misattributed-fix-trap` (#297) | Naming a commit that doesn't explain the mechanism. `git log` on `captureScreen` points straight at `ec3f481` (#293), but the class-qualified TypeError is an unbound call that reproduces on current main — the plausible "fixed by #293" answer is wrong, and a real triage comment on the live thread fell for exactly this. The honest landing is F/C (docs gap around the Deferred-style API, cf. #266). |
+| `open-pr-for-old-feature-request` (#66) | Triaging a feature request as untouched when its implementation is sitting in review — PR #323's body cites only #322, so a bare number search misses it and the list-skim has to catch it. Also: not opening a competing PR, and not reviewing #323 directly. |
+
+Fixture pin dates: #110 at 2017-12-14, #297 at 2025-05-20, #66 at 2016-04-14
+(each the filing date, so the fixture is the report, not the discussion — for
+#297 that withholding is load-bearing, since a later comment on the live
+thread names the misattributed fix). `open-prs.json` is pinned at 2026-08-13;
+the two dependabot bodies are truncated with an explicit marker, and case 3
+depends on #323 staying open — re-freeze and re-check when it merges or closes.
+
+## Next candidates
+
+Verified leads for future cases, not ground truth yet:
 
 | Candidate | What it would guard |
 |---|---|
 | #90 (black captures, 2017–2025 thread) | The byte-replay judgment: the thread carries a `-v` log naming the exact protocol sequence, so "can't run TightVNC" must not become "can't reproduce". Also version-relevance: reports span both rewrites. |
-| #66 + open PR #323 | The open-PR step: #323 cites only #322 in its body while implementing #66's ClientFence request, so a bare number search returns empty and the list-skim has to catch it. Also: not opening a competing PR. |
 | #284 (unanswered maintainer question, mid-2024) | Overdue detection on an issue with no process labels — the check that only finds issues the process already touched reports an empty list here. |
 | #255 / #188 (threading, multiprocessing hangs) | The documented-design line: `docs/library.rst` makes `api.shutdown()` the caller's job, but "hangs silently when missed" may still be a defect. Guards both over-closing and committing a test that argues with the docs. |
 | #310 (raspios "unknown security types") | Outcome B vs C judgment on an environment-specific auth failure, where the security-type list in the report is itself replayable evidence. |
-| batch + overdue | Selection by API (not fixtures), no closes, and an overdue list that finds unlabelled dead threads. |
+| batch + overdue | Selection by API (not fixtures), no closes, and an overdue list that finds unlabelled dead threads. Needs `backlog.json` frozen first. |
 
 ## Keeping them honest
 

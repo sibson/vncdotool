@@ -1,0 +1,17 @@
+{
+  "_comment": "Eval fixture for issue #297, frozen as of 2025-05-20. Treat this as the authoritative issue content in place of the live API. Resolution is held out in ground-truth/ -- do not go looking for it, and do not post any of this anywhere.",
+  "issue_number": 297,
+  "as_of": "2025-05-20",
+  "comments_withheld": 2,
+  "issue": {
+    "number": 297,
+    "title": "TypeError: VNCDoToolClient.captureScreen() missing 1 required positional argument: 'fp'",
+    "body": "> client.captureScreen(\"tmp/1.png\")\n\nTypeError: VNCDoToolClient.captureScreen() missing 1 required positional argument: 'fp'\n\nEnvironment:\n\nMac OS 15.5 (MacBookPro M4 MAX)\nPython 3.12 (Install via Brew, within VirtualEnv)\nvncdotool==1.2.0\nExecute in Notebook (VS Code with Jupyter plugin)\n\n**Fixed**:\n\nModify .venv/lib/python3.12/site-packages/vncdotool/client.py@256-266:\n\nAdd TClient annotation to self:\n\n    def captureScreen(self: TClient, fp: TFile, incremental: bool = False) -> Deferred:\n        \"\"\"Save the current display to filename\"\"\"\n        log.debug(\"captureScreen %s\", fp)\n        return self._capture(fp, incremental)\n\n    def captureRegion(\n        self: TClient, fp: TFile, x: int, y: int, w: int, h: int, incremental: bool = False\n    ) -> Deferred:\n        \"\"\"Save a region of the current display to filename\"\"\"\n        log.debug(\"captureRegion %s\", fp)\n        return self._capture(fp, incremental, x, y, x + w, y + h)\n",
+    "user": {
+      "login": "viewstar000"
+    },
+    "created_at": "2025-05-20T03:43:52Z",
+    "comments": 2
+  },
+  "comments": []
+}
