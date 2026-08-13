@@ -1,5 +1,6 @@
 1.3.1 (UNRELEASED)
 ----------------------
+  - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (#90)
 
 1.3.0 (2026-04-03)
 ----------------------

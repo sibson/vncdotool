@@ -206,6 +206,57 @@ class TestVNCDoToolClient(TestCase):
 
         self.deferred.callback.assert_called_once_with(self.client)
 
+    # A framebuffer update whose only rectangle is the DesktopSize
+    # pseudo-encoding carries no pixel data; TightVNC answers the first
+    # non-incremental update request this way (#90).
+    MSG_FBU_DESKTOP_SIZE_ONLY = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x07\x80\x04\xb0"  # x=0 y=0 w=1920 h=1200
+        b"\xff\xff\xff\x21"  # PSEUDO_DESKTOP_SIZE (-223)
+    )
+    MSG_FBU_ONE_PIXEL = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x00\x01\x00\x01"  # x=0 y=0 w=1 h=1
+        b"\x00\x00\x00\x00"  # Encoding.RAW
+        b"\xff\x00\x00\x00"  # one RGBX pixel
+    )
+
+    def _connect(self) -> None:
+        self.client._packet = bytearray(self.MSG_HANDSHAKE)
+        self.client._handleInitial()
+        self.client._handleServerInit(self.MSG_INIT)
+
+    def test_desktop_size_only_update_rerequests_instead_of_completing(self) -> None:
+        cli = self.client
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+        cli.framebufferUpdateRequest.reset_mock()
+
+        cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
+
+        self.assertEqual(fired, [])
+        cli.framebufferUpdateRequest.assert_called_once_with()
+
+    def test_refresh_completes_once_pixel_data_arrives(self) -> None:
+        cli = self.client
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+
+        cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
+        cli.dataReceived(self.MSG_FBU_ONE_PIXEL)
+
+        self.assertEqual(fired, [cli])
+        assert cli.screen is not None
+        self.assertEqual(cli.screen.size, (1920, 1200))
+
     def test_vncRequestPassword_attribute(self):
         cli = self.client
         cli.sendPassword = mock.Mock()

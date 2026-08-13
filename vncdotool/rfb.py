@@ -439,6 +439,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 length += ((width + 7) // 8) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
+                del self.rectanglePos[-1]  # undo append as this carries no pixel data
                 self._handleDecodeDesktopSize(width, height)
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
