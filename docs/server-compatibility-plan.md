@@ -346,6 +346,10 @@ Findings worth keeping:
 - Images stay small and layer-cached (~15–20s builds); healthchecks make
   `up --wait` a reliable barrier.
 
+**Graduated:** this spike's workflow has been folded into the `servers` job
+in `.github/workflows/ci.yml` (PR-blocking, runs on every `pull_request` and
+`push` to `main`); `spike-servers.yml` is deleted.
+
 Tier 1 follow-ups:
 - **Publish the screenshot gallery to GitHub Pages.** Captures currently
   reach the web only as a zipped artifact: the job summary carries a
@@ -419,6 +423,13 @@ real screen content, macOS as a protocol/auth/input check with pixel
 assertions explicitly excluded until the black-framebuffer question is
 answered. Productionizing should keep the dedicated-user and
 service-mode setup steps and move passwords into repository secrets.
+
+**Graduated:** this spike's workflow now lives at
+`.github/workflows/os-servers.yml` (renamed from `spike-os-servers.yml`),
+change-triggered and path-filtered per the policy above, report-only via
+`continue-on-error: true`. Credentials come from `VNC_OS_SERVER_USERNAME`/
+`VNC_OS_SERVER_PASSWORD` repository secrets, falling back to the spike
+values when unset.
 
 ## Sequencing and effort
 

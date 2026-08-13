@@ -1,8 +1,12 @@
-name: Spike - OS-hosted VNC servers
+name: OS-hosted VNC servers
 
-# Viability spike: can GitHub-hosted windows-latest / macos-latest runners host
-# a live, OS-bound VNC server (UltraVNC on Windows, Apple Screen Sharing on
-# macOS) that vncdotool can connect to, drive and screenshot?
+# Live, OS-bound VNC servers (UltraVNC on Windows, Apple Screen Sharing on
+# macOS) that only exist on GitHub-hosted windows-latest / macos-latest VMs --
+# see docs/server-compatibility-plan.md, Tier 2. These are the only place
+# UltraVNC and Screen Sharing compatibility can be exercised live, so this
+# job runs on real changes rather than never, but it is deliberately
+# change-triggered (path-filtered, no schedule) and report-only: see the
+# `continue-on-error` note on the job below.
 #
 # What each server needs, and what it does and doesn't prove, is documented
 # next to the setup scripts in tests/servers/ultravnc/README.md and
@@ -14,8 +18,20 @@ name: Spike - OS-hosted VNC servers
 on:
   push:
     branches:
-      - claude/spike-os-servers
-      - claude/ultravnc-apple-screen-sharing-b04ev5
+      - main
+    paths:
+      - 'vncdotool/**'
+      - 'tests/functional/**'
+      - 'tests/servers/ultravnc/**'
+      - 'tests/servers/screen-sharing/**'
+      - '.github/workflows/os-servers.yml'
+  pull_request:
+    paths:
+      - 'vncdotool/**'
+      - 'tests/functional/**'
+      - 'tests/servers/ultravnc/**'
+      - 'tests/servers/screen-sharing/**'
+      - '.github/workflows/os-servers.yml'
   workflow_dispatch:
 
 permissions:
@@ -25,12 +41,24 @@ env:
   PIP_DISABLE_PIP_VERSION_CHECK: '1'
   PIP_NO_PYTHON_VERSION_WARNING: '1'
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
+  # Spike credentials for a throwaway runner, deliberately visible as the
+  # fallback. A repo secret overrides them without touching this file or
+  # tests/functional/vncservers.py, which just reads the environment.
+  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
+  VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
   os-server:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    # Report-only, never PR-blocking: per the plan, Tier 2 runs on hosted
+    # Windows/macOS VMs we don't own, and drift in the runner image or the
+    # Chocolatey package surfaces here first. continue-on-error keeps a
+    # failure visible (the job shows as failed in the run) without turning
+    # it red on the PR. Promote to blocking (drop this line) only once the
+    # job has proven stable -- see docs/server-compatibility-plan.md, Tier 2.
+    continue-on-error: true
     strategy:
       # One OS failing must never take down the other: each is a separate
       # data point about that OS, not a step in a shared pipeline.
