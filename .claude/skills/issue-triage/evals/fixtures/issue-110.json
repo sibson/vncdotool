@@ -1,0 +1,17 @@
+{
+  "_comment": "Eval fixture for issue #110, frozen as of 2017-12-14. Treat this as the authoritative issue content in place of the live API. Resolution is held out in ground-truth/ -- do not go looking for it, and do not post any of this anywhere.",
+  "issue_number": 110,
+  "as_of": "2017-12-14",
+  "comments_withheld": 3,
+  "issue": {
+    "number": 110,
+    "title": "ValueError on RFB buffer when \"Too many security failures\" received",
+    "body": "According to [1] VNC server blocks IP address after five unsuccessful connection attempts from client. In this situation I got exception from vncdotool:\n```\nFile \"/usr/lib/python2.7/site-packages/vncdotool/rfb.py\", line 133, in _handleInitial\n        version_server = float(buffer[3:-1].replace(b'0', b''))\n        exceptions.ValueError: invalid literal for float(): 3.3\n```\nAfter debugging I found out, that `buffer` contains `'RFB 003.003\\n\\x00\\x00\\x00\\x00\\x00\\x00\\x00\\x1aToo many security failures'` instead of `'RFB 003.003\\n'`.\n\nPossible fix I tried could be\n```\nversion_server = float(buffer.split()[1].replace(b'0', b''))\n```\n\nTried with tigervnc.\n[1] https://support.realvnc.com/knowledgebase/article/View/244/1/too-many-security-failures",
+    "user": {
+      "login": "freetomik"
+    },
+    "created_at": "2017-12-14T14:47:55Z",
+    "comments": 3
+  },
+  "comments": []
+}

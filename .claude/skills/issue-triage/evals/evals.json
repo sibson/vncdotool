@@ -1,0 +1,56 @@
+{
+  "skill_name": "issue-triage",
+  "verified_against": "b7b6357",
+  "notes": "Every case reads a frozen fixture rather than the live API, and every prompt runs --dry-run. See README.md for why, and for how to re-pin `verified_against` when the code moves under an expectation. All three cases' expectations were verified by hand against b7b6357: the fixing commits were confirmed in git history and release tags, the #297 TypeError was reproduced verbatim via an unbound class-level call on current main, and the absence of any fence implementation (constants only) was confirmed by grep.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "already-fixed-with-named-commit",
+      "prompt": "/issue-triage 110 --dry-run. Read the issue from evals/fixtures/issue-110.json and the open pull requests from evals/fixtures/open-prs.json — treat those as authoritative in place of the live API. Investigate the code and history normally.",
+      "fixture": "fixtures/issue-110.json",
+      "expected_output": "Outcome D. The float()-based version parsing the reporter crashed in was replaced by bc93eb9 (regex/int parsing) and the INVALID-auth-type path hardened by 3859a1f (#250), both released in v1.1.0 — and the exact reported byte sequence is already a passing regression test (tests/unit/test_rfb.py, test_auth_invalid33).",
+      "assertions": [
+        "Reports outcome D (probably already fixed), not A, B or C",
+        "Names bc93eb9 and/or 3859a1f (#250) as the fixing change, released in 1.1.0 — not merely 'looks fixed'",
+        "Recognises the traceback comes from the python-2-era code that the 1.1.0 rewrite replaced, without dismissing the report for age alone",
+        "Finds that tests/unit/test_rfb.py (test_auth_invalid33) already replays the reporter's exact byte sequence and asserts loseConnection, and therefore does not propose committing a new reproduction or opening a PR",
+        "Does not claim to have reproduced the ValueError on current main",
+        "Proposes only labels from the skill's fixed set, drawn from outcome D (probably-fixed, needs-info)",
+        "Reports 'Open PR: none found' or equivalent after checking the frozen PR list",
+        "Takes no write action: no comment posted, no branch, no PR, no label applied, no close"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "misattributed-fix-trap",
+      "prompt": "/issue-triage 297 --dry-run. Read the issue from evals/fixtures/issue-297.json and the open pull requests from evals/fixtures/open-prs.json — treat those as authoritative in place of the live API. Investigate the code and history normally.",
+      "fixture": "fixtures/issue-297.json",
+      "expected_output": "Outcome F or C, not a code defect. The qualname-prefixed TypeError ('VNCDoToolClient.captureScreen() missing ... fp') only arises from calling the method on the class rather than a connected client instance — it reproduces identically on current main and on 1.2.0 — so this is a usage/docs issue (the Deferred-style API docs, cf. #266), not something any commit fixed. The trap: git history of captureScreen points at ec3f481 (#293), which added the format parameter and changed nothing about method binding; attributing a fix to it is the plausible-but-wrong answer.",
+      "assertions": [
+        "Identifies the mechanism: the error message's class-qualified form means captureScreen was called on the class (or an unbound reference), not on a connected client instance",
+        "Does not report outcome D naming ec3f481 / #293 as the fix — that commit added the format parameter and did not change how the method is bound or called",
+        "Does not confirm a current library defect (not outcome A or B), and does not commit an expectedFailure test asserting the unbound call should succeed",
+        "Lands in outcome F (question/docs gap around the Deferred-style API documentation) or outcome C (asks the reporter how the `client` object was obtained)",
+        "Notes the reporter's proposed fix (adding a `self: TClient` annotation) cannot change runtime behaviour",
+        "Proposes only labels from the skill's fixed set, consistent with the chosen outcome (question/documentation or needs-info)",
+        "Takes no write action: no comment posted, no branch, no PR, no label applied, no close"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "open-pr-for-old-feature-request",
+      "prompt": "/issue-triage 66 --dry-run. Read the issue from evals/fixtures/issue-66.json and the open pull requests from evals/fixtures/open-prs.json — treat those as authoritative in place of the live API. Investigate the code and history normally.",
+      "fixture": "fixtures/issue-66.json",
+      "expected_output": "Outcome G, still-valid feature request: const.py defines the Fence message numbers (PSEUDO_FENCE, CLIENT_FENCE, SERVER_FENCE) but nothing in rfb.py or client.py sends or handles them. The frozen PR list contains #323 ('Initial VNC Fence implementation'), whose body cites only #322 — the run must surface it as addressing this issue anyway, and must not open a competing implementation.",
+      "assertions": [
+        "Reports outcome G (feature request), not a bug, and keeps the existing feature label rather than inventing new ones",
+        "Verifies the request is still unimplemented on main: fence message constants exist in vncdotool/const.py but no code path sends ClientFence or handles ServerFence",
+        "Surfaces open PR #323 as addressing this issue, despite its body citing only #322 — found by skimming the frozen open-PR list rather than only searching for '66'",
+        "Gives a one-or-two-sentence assessment of #323 rather than a bare link",
+        "Does not open or propose a competing implementation or reproduction PR",
+        "Does not review, approve or comment on PR #323 itself — the assessment goes in the issue comment and run report",
+        "Takes no write action: no comment posted, no branch, no PR, no label applied, no close"
+      ]
+    }
+  ]
+}

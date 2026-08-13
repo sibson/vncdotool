@@ -1,0 +1,67 @@
+{
+  "_comment": "Eval fixture: open pull requests frozen as of 2026-08-13. Treat as the authoritative list of open PRs in place of the live API when checking whether a fix is already proposed.",
+  "as_of": "2026-08-13",
+  "pr_count": 5,
+  "pull_requests": [
+    {
+      "number": 333,
+      "title": "Add issue-triage skill, eval scaffolding, and CLAUDE.md",
+      "body": "Port the issue-triage skill from sibson/redbeat, adapted to this\ncodebase: outcomes and guardrails are unchanged, while the repro\nguidance is rewritten for a mocked-transport Twisted protocol client\n(byte replay into RFBClient, the tests/unit discovery path, the\nno-reactor rule, the twisted-vs-stdlib logger split) and the label set\nmaps enhancement to this repo's feature label.\n\nThe evals directory carries the fixture-snapshot tooling and a candidate\ncase list, but no recorded cases yet; assertions are only written after\na verified investigation.",
+      "user": {
+        "login": "sibson"
+      },
+      "state": "open",
+      "draft": false,
+      "created_at": "2026-08-13T18:01:46Z",
+      "updated_at": "2026-08-13T18:01:46Z"
+    },
+    {
+      "number": 332,
+      "title": "build(deps): update cryptography requirement from >=49.0.0 to >=50.0.0",
+      "body": "Updates the requirements on [cryptography](https://github.com/pyca/cryptography) to permit the latest version.\n\n[dependabot release-notes/changelog body truncated in this fixture]",
+      "user": {
+        "login": "dependabot[bot]"
+      },
+      "state": "open",
+      "draft": false,
+      "created_at": "2026-08-07T23:52:32Z",
+      "updated_at": "2026-08-07T23:52:33Z"
+    },
+    {
+      "number": 328,
+      "title": "build(deps): update pillow requirement from >=12.2.0 to >=12.3.0",
+      "body": "Updates the requirements on [pillow](https://github.com/python-pillow/Pillow) to permit the latest version.\n\n[dependabot release-notes/changelog body truncated in this fixture]",
+      "user": {
+        "login": "dependabot[bot]"
+      },
+      "state": "open",
+      "draft": false,
+      "created_at": "2026-07-03T23:52:31Z",
+      "updated_at": "2026-07-03T23:52:32Z"
+    },
+    {
+      "number": 326,
+      "title": "Fix functional test runner invocation (unittest discover)",
+      "body": "## Summary\n\nFixes the functional test runner reported broken in [#303](https://github.com/sibson/vncdotool/pull/303#issuecomment-4679782983).\n\n`python -m unittest discover tests/functional` sets the top-level dir to `tests/functional`, so the test modules are imported as top-level names (`test_proxy`) and `from .cli import spawn_command` fails with *\"attempted relative import with no known parent package.\"* The Makefile's `test-libvnc` target had the same bug because `$(UNITTEST_ARGS)` was never defined.\n\nThis PR keeps the project on the standard library `unittest` runner (no new pytest dependency \u2014 CI and tox already use `unittest discover`):\n\n- `libvncserver.mk`: default `UNITTEST_ARGS?=-t .` and run `discover $(UNITTEST_ARGS) -s tests/functional`, preserving the `tests.functional` package context for `make test-func`.\n- `DEVELOP.rst`: documented command updated to `python -m unittest discover -t . -s tests/functional`.\n\n## Testing\n- `python -m unittest discover -t . -s tests/functional` now imports modules as `tests.functional.*` (relative imports resolve).",
+      "user": {
+        "login": "sibson"
+      },
+      "state": "open",
+      "draft": false,
+      "created_at": "2026-06-15T00:19:24Z",
+      "updated_at": "2026-06-15T00:19:24Z"
+    },
+    {
+      "number": 323,
+      "title": "Initial VNC Fence implementation",
+      "body": "Add basic ServerFence/ClientFence implementation, which is required to work with shared tigervnc #322 ",
+      "user": {
+        "login": "TeofilisMartisius"
+      },
+      "state": "open",
+      "draft": false,
+      "created_at": "2026-05-15T21:13:48Z",
+      "updated_at": "2026-07-29T06:39:42Z"
+    }
+  ]
+}

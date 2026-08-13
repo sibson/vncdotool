@@ -1,0 +1,17 @@
+{
+  "_comment": "Eval fixture for issue #66, frozen as of 2016-04-14. Treat this as the authoritative issue content in place of the live API. Resolution is held out in ground-truth/ -- do not go looking for it, and do not post any of this anywhere.",
+  "issue_number": 66,
+  "as_of": "2016-04-14",
+  "comments_withheld": 0,
+  "issue": {
+    "number": 66,
+    "title": "use ClientFence to syncronize state with Server",
+    "body": "Perhaps a new fence/block/sync command would help solve some of the issues around screen captures and mouse clicks.\n\nhttps://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst#clientfence\n",
+    "user": {
+      "login": "sibson"
+    },
+    "created_at": "2016-04-14T05:31:32Z",
+    "comments": 0
+  },
+  "comments": []
+}
