@@ -251,9 +251,11 @@ investigation has proven the mechanism *and* the fix is small with an
 in-codebase precedent, suggest the fix in the comment — one paragraph, with
 the precedent cited by `file:line` — per "When the trace hands you the fix"
 in the decision table; build the fix PR only when the maintainer asks.
-Screenshots and other binary evidence follow the artifact-lifetime rules in
-the same file: logs inline and durable, images branch-scoped, nothing binary
-ever merged to `main`.
+Repro evidence beyond the test follows the rules in the same file: the repro
+PR carries the test and nothing else, scripts and logs go in the issue
+comment as folded text, and screenshots are described in verifiable terms
+rather than committed or embedded — nothing evidentiary is ever committed to
+a branch that can merge.
 
 **10. Leave the tree as you found it.** Delete the scratch files *this run*
 created, then check `git status`. If it is not clean, report exactly what is

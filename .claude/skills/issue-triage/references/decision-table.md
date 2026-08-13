@@ -154,8 +154,8 @@ available on request. The triage PR stays a repro-only PR.
 When the maintainer asks for the fix (or the invocation says to build it):
 
 1. Branch `claude/fix-issue-NNN` off the default branch — a fresh branch, not
-   more commits on the triage branch, so the repro PR's artifacts stay intact
-   while the issue is open.
+   more commits on the triage branch, so the repro PR keeps standing on its
+   own for the maintainer to compare against.
 2. Apply the fix, and land the regression test **in its permanent home** in
    final form: moved to the topical file, `expectedFailure` marker dropped,
    renamed for the behaviour it checks. This performs the migration the
@@ -167,24 +167,33 @@ When the maintainer asks for the fix (or the invocation says to build it):
    unmerged when the fix lands, since its `expectedFailure` test would report
    an unexpected success on a fixed tree. Recommend; the maintainer closes.
 
-## Repro artifacts, logs and images
+## Repro evidence beyond the unit test
 
-A wire-level reproduction (scripted server, `vncdo -v` logs, before/after
-screenshots) is worth building when the unit test alone could be suspected of
-mock artifacts — but its products have different lifetimes, and main never
-carries any of it:
+A wire-level reproduction — a real server or scripted byte-replay server
+driven by the real `vncdo` CLI — is worth building when the unit test alone
+could be suspected of mock artifacts. For a real server, reach for the
+first-party harness in `tests/servers/` (docker-compose TigerVNC, UltraVNC
+and friends, driven by `tests/servers/servers.mk`) before writing anything;
+script a fake server only when the trigger is a wire sequence no runnable
+server produces (TightVNC on Windows was the #90 case).
 
-- **Logs are the durable evidence.** Quote the decisive lines inline in the
-  issue comment; the comment must stand on its own with images stripped.
-- **Images are branch-scoped illustration.** Commit them to the *triage*
-  branch (`tests/triage/issue_NNN/`, with a README naming each artifact) and
-  embed via `raw.githubusercontent.com/<repo>/<branch>/...` URLs. They go
-  dark when the branch is deleted after the fix — that is by design, not a
-  loss: once the bug is fixed, the durable record is the merged regression
-  test and the inline logs, and screenshots of a dead bug are not worth
-  carrying in main's history forever.
-- The fix PR (fresh branch) therefore contains **no** `tests/triage/`
-  directory, and merging it must not add images to main.
+Where the evidence goes is a hard rule learned on #90:
+
+- **The repro PR contains exactly one file: the `expectedFailure` test.**
+  The PR is designed to be merged, so anything committed on it eventually
+  lands on main — debugging scripts, logs and screenshots included, forever.
+  Nothing evidentiary is committed, on any branch.
+- **Everything else goes in the issue thread, as text.** The repro script
+  and full logs belong in the triage comment inside `<details>` folds — a
+  comment survives branch deletion, costs the repo nothing, and is where the
+  next reader of the issue actually looks. Quote the decisive log lines
+  outside the folds.
+- **Screenshots are described, not posted.** The API cannot attach files to
+  comments, and branch-hosted raw URLs die with the branch — so state what
+  the image shows in verifiable terms (`1024x640, extrema ((0,0),(0,0),(0,0))
+  — every pixel black`) and let the folded logs carry the proof. If the
+  maintainer wants the pictures, they can be handed over out-of-band or
+  attached via the web UI.
 
 ## When a PR is already open
 
