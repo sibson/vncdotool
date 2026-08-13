@@ -1,0 +1,294 @@
+name: Spike - OS-hosted VNC servers
+
+# Viability spike: can GitHub-hosted windows-latest / macos-latest runners host a
+# live, OS-bound VNC server (UltraVNC on Windows, Apple Screen Sharing / Remote
+# Management on macOS) that vncdotool can connect to, drive, and screenshot?
+#
+# The two jobs are fully independent - one OS failing must never take down the
+# other, so there is no `needs:`, no matrix, and each job carries its own
+# artifact uploads and diagnostics.
+
+on:
+  push:
+    branches: [claude/spike-os-servers]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-ultravnc:
+    name: Windows - UltraVNC
+    runs-on: windows-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Search available UltraVNC choco packages (diagnostic)
+        run: choco search ultravnc --all-versions
+        continue-on-error: true
+
+      - name: Install UltraVNC via chocolatey
+        run: choco install ultravnc -y --no-progress
+
+      - name: Locate winvnc.exe
+        id: locate
+        run: |
+          $candidates = Get-ChildItem -Path 'C:\Program Files','C:\Program Files (x86)' -Recurse -Filter winvnc.exe -ErrorAction SilentlyContinue
+          if (-not $candidates) {
+            Write-Error "winvnc.exe not found after choco install"
+            exit 1
+          }
+          $winvnc = $candidates[0].FullName
+          Write-Host "Found winvnc.exe at $winvnc"
+          $dir = Split-Path $winvnc -Parent
+          "winvnc_path=$winvnc" >> $env:GITHUB_OUTPUT
+          "winvnc_dir=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: Write ultravnc.ini (no-auth, loopback-only variant)
+        run: |
+          $dir = "${{ steps.locate.outputs.winvnc_dir }}"
+          $ini = @"
+          [admin]
+          UseRegistry=0
+
+          [ultravnc]
+          PortNumber=5900
+          HTTPPortNumber=0
+          AuthRequired=0
+          AuthHosts=+127.0.0.1
+          AllowLoopback=1
+          LoopbackOnly=1
+          QuerySetting=0
+          QueryTimeout=0
+          NewMSLogon=0
+          RemoveWallpaper=1
+          NeverShutdown=1
+          DebugMode=1
+          DebugLevel=9
+          Debugmode=1
+          FileTransferEnabled=1
+          "@
+          Set-Content -Path (Join-Path $dir 'ultravnc.ini') -Value $ini -Encoding ASCII
+          # Some UltraVNC builds also read the ini from ProgramData; write both to be safe.
+          $pdDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
+          New-Item -ItemType Directory -Force -Path $pdDir | Out-Null
+          Copy-Item (Join-Path $dir 'ultravnc.ini') (Join-Path $pdDir 'ultravnc.ini') -Force
+          Get-Content (Join-Path $dir 'ultravnc.ini')
+
+      - name: Start winvnc.exe
+        run: |
+          $winvnc = "${{ steps.locate.outputs.winvnc_path }}"
+          Start-Process -FilePath $winvnc -ArgumentList '-run' -PassThru | Out-Null
+          Start-Sleep -Seconds 5
+          Get-Process -Name winvnc -ErrorAction SilentlyContinue | Format-List *
+
+      - name: Wait for port 5900
+        id: waitport
+        run: |
+          $ok = $false
+          for ($i = 0; $i -lt 30; $i++) {
+            $test = Test-NetConnection -ComputerName 127.0.0.1 -Port 5900 -WarningAction SilentlyContinue
+            if ($test.TcpTestSucceeded) { $ok = $true; break }
+            Start-Sleep -Seconds 2
+          }
+          "port_open=$ok" >> $env:GITHUB_OUTPUT
+          if (-not $ok) {
+            Write-Host "::warning::port 5900 never opened"
+          }
+
+      - name: Diagnostics if port never opened
+        if: steps.waitport.outputs.port_open != 'true'
+        run: |
+          Get-Process -Name winvnc -ErrorAction SilentlyContinue | Format-List *
+          $dir = "${{ steps.locate.outputs.winvnc_dir }}"
+          Get-ChildItem $dir -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host "---- $($_.FullName) ----"
+            Get-Content $_.FullName -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem $dir | Format-Table Name,Length
+
+      - name: Install vncdotool
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pillow
+
+      - name: Connect, type, and capture (no-auth)
+        id: connect
+        run: |
+          vncdo -s 127.0.0.1::5900 type hello capture shot.png
+          python -c @"
+          from PIL import Image
+          img = Image.open('shot.png')
+          img.load()
+          extrema = img.convert('L').getextrema()
+          print('extrema:', extrema)
+          assert extrema != (0, 0), 'screenshot is fully black'
+          print('OK: screenshot captured and is not fully black')
+          "@
+
+      - name: Upload screenshot artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ultravnc-screenshot
+          path: shot.png
+          if-no-files-found: ignore
+
+      - name: Collect winvnc log / ini for diagnosis
+        if: always()
+        run: |
+          $dir = "${{ steps.locate.outputs.winvnc_dir }}"
+          New-Item -ItemType Directory -Force -Path diagnostics | Out-Null
+          Copy-Item (Join-Path $dir 'ultravnc.ini') diagnostics\ -ErrorAction SilentlyContinue
+          Get-ChildItem $dir -Filter *.log -ErrorAction SilentlyContinue | Copy-Item -Destination diagnostics\ -ErrorAction SilentlyContinue
+          Get-Process -Name winvnc -ErrorAction SilentlyContinue | Out-File diagnostics\winvnc-process.txt
+
+      - name: Upload diagnostics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-ultravnc-diagnostics
+          path: diagnostics
+          if-no-files-found: ignore
+
+  macos-ard:
+    name: macOS - Screen Sharing / Remote Management
+    runs-on: macos-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Create dedicated local user for VNC auth
+        id: adduser
+        run: |
+          set -x
+          sudo sysadminctl -addUser vncspike -fullName "VNC Spike" -password vncspike1 2>&1 | tee adduser.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Activate Remote Management (ARD) and grant access
+        id: kickstart
+        run: |
+          set -x
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate -configure -access -on \
+            -users runner,vncspike -privs -all \
+            -restart -agent 2>&1 | tee kickstart.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Variant A - attempt legacy VNC password (diagnostic only)
+        id: legacy
+        run: |
+          set -x
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw vncspike1 2>&1 | tee legacy-vnc.log
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Wait for port 5900
+        id: waitport
+        run: |
+          ok=false
+          for i in $(seq 1 30); do
+            if nc -z -w2 127.0.0.1 5900 2>/dev/null; then
+              ok=true
+              break
+            fi
+            sleep 2
+          done
+          echo "port_open=$ok" >> "$GITHUB_OUTPUT"
+          if [ "$ok" != "true" ]; then
+            echo "::warning::port 5900 never opened"
+          fi
+          sudo lsof -iTCP:5900 -sTCP:LISTEN -P || true
+
+      - name: Install vncdotool
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+          pip install pillow
+
+      - name: Connect, type, and capture (ARD / Diffie-Hellman auth, dedicated user)
+        id: connect_ard
+        run: |
+          vncdo -s 127.0.0.1::5900 --username vncspike --password vncspike1 type hello capture shot-ard.png
+          python3 - <<'EOF'
+          from PIL import Image
+          img = Image.open('shot-ard.png')
+          img.load()
+          extrema = img.convert('L').getextrema()
+          print('extrema:', extrema)
+          assert extrema != (0, 0), 'screenshot is fully black'
+          print('OK: screenshot captured and is not fully black')
+          EOF
+        continue-on-error: true
+
+      - name: Connect, type, and capture (legacy VNC password, variant A)
+        id: connect_legacy
+        if: steps.connect_ard.outcome != 'success'
+        run: |
+          vncdo -s 127.0.0.1::5900 --password vncspike1 type hello capture shot-legacy.png
+          python3 - <<'EOF'
+          from PIL import Image
+          img = Image.open('shot-legacy.png')
+          img.load()
+          extrema = img.convert('L').getextrema()
+          print('extrema:', extrema)
+          assert extrema != (0, 0), 'screenshot is fully black'
+          print('OK: screenshot captured and is not fully black')
+          EOF
+        continue-on-error: true
+
+      - name: Fail job if neither auth variant produced a usable screenshot
+        if: steps.connect_ard.outcome != 'success' && steps.connect_legacy.outcome != 'success'
+        run: |
+          echo "::error::Neither ARD/DH auth nor legacy VNC password auth succeeded"
+          exit 1
+
+      - name: Upload screenshot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ard-screenshots
+          path: |
+            shot-ard.png
+            shot-legacy.png
+          if-no-files-found: ignore
+
+      - name: Collect Remote Management / Screen Sharing logs
+        if: always()
+        run: |
+          set -x
+          mkdir -p diagnostics
+          cp adduser.log kickstart.log legacy-vnc.log diagnostics/ 2>/dev/null || true
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -status 2>&1 | tee diagnostics/kickstart-status.log || true
+          log show --last 5m --predicate 'process CONTAINS "ARDAgent" OR process CONTAINS "screensharingd" OR process CONTAINS "AppleVNCServer"' > diagnostics/system.log 2>&1 || true
+          sudo lsof -iTCP:5900 -sTCP:LISTEN -P > diagnostics/port5900.log 2>&1 || true
+
+      - name: Upload diagnostics artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-ard-diagnostics
+          path: diagnostics
+          if-no-files-found: ignore
