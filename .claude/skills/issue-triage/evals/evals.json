@@ -1,0 +1,6 @@
+{
+  "skill_name": "issue-triage",
+  "verified_against": "b7b6357",
+  "notes": "No cases recorded yet — see README.md for the candidate list and the rules for adding one. Every case must read a frozen fixture rather than the live API, every prompt must run --dry-run, and every assertion must be verified against a real investigation before it is written down. Re-pin `verified_against` when expectations are re-checked against a newer HEAD.",
+  "evals": []
+}
