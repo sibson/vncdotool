@@ -182,6 +182,27 @@ operational question: how do we get — and keep — access to the servers we
 claim to support? The answer is three tiers with different acquisition
 models, plus a shared reproducibility discipline.
 
+**Guiding principle: live servers beat recordings, always.** A recorded
+transcript proves we *once* interoperated with one version of a server; a
+live test proves we *still* do. Recordings are therefore a regression
+floor and a fallback for servers we cannot run — never a substitute where
+live access is possible. Concretely:
+
+- Every server sits at the **most-live tier it can occupy**, and tier
+  assignment is revisited as circumstances change: a new container image,
+  a licensing change, or emulation making a Tier 3 server runnable
+  promotes it to Tier 1/2, and its fixtures demote to secondary
+  regression guards.
+- We actively invest in promotions. For example, RealVNC on Raspberry Pi
+  OS — today's canonical Tier 3 case — is a candidate for a live nightly
+  job via a QEMU-emulated Pi OS image on an ubuntu runner; if that works
+  it leaves Tier 3 entirely.
+- Where both exist, the live run is the source of truth for the
+  compatibility matrix; transcripts serve unit-level decoder tests and
+  offline regression, and are refreshed *from* live runs (Tier 1
+  deterministically, Tier 2 from nightly artifacts) rather than treated
+  as an independent authority.
+
 ### Tier 1 — Containerized Linux fleet (we own it, fully reproducible)
 
 TigerVNC, TightVNC, x11vnc, QEMU, LibVNCServer examples, and later
@@ -220,10 +241,13 @@ public repositories, so we rent access instead of owning hardware:
 ### Tier 3 — Transcript-only servers (community-sourced fingerprints)
 
 RealVNC (Raspberry Pi OS), VMware/ESXi consoles, Proxmox, MobaXterm, and
-anything else licensing or hardware puts out of CI's reach are covered
-**exclusively by recorded fingerprints** — we never assume live access.
-The supply chain for these is the community, so contributing one must be a
-paved road:
+anything else licensing or hardware puts out of CI's reach are covered by
+recorded fingerprints — but per the guiding principle, Tier 3 is the tier
+of **last resort**: membership means "we have not yet found a way to run
+this server live", and each Tier 3 server carries a note on what its
+promotion path would be (emulation, a licensing change, a self-hosted
+runner). Until promoted, the supply chain for these is the community, so
+contributing a fingerprint must be a paved road:
 
 1. **Record**: a `vncdo record`-style command (a thin wrapper over the
    existing `loggingproxy`, extended with a raw-transcript mode — Phase 0
