@@ -172,8 +172,9 @@ pixel-exact against reference images for every supported pixel format.
   command that connects, prints the server version string, offered
   security types, and negotiated encodings, then exits — the first thing
   to ask any reporter to run.
-- Nightly (rather than per-PR) runs for the slower matrix jobs (QEMU with
-  a real guest image) to keep PR CI fast.
+- Slower matrix jobs (QEMU with a real guest image, the Tier 2 OS
+  runners) run change-triggered behind path filters — never on a
+  schedule — keeping PR CI fast and idle-repository cost zero.
 
 ## Acquiring and maintaining server access
 
@@ -194,9 +195,9 @@ live access is possible. Concretely:
   promotes it to Tier 1/2, and its fixtures demote to secondary
   regression guards.
 - We actively invest in promotions. For example, RealVNC on Raspberry Pi
-  OS — today's canonical Tier 3 case — is a candidate for a live nightly
-  job via a QEMU-emulated Pi OS image on an ubuntu runner; if that works
-  it leaves Tier 3 entirely.
+  OS — today's canonical Tier 3 case — is a candidate for a live CI job
+  via a QEMU-emulated Pi OS image on an ubuntu runner; if that works it
+  leaves Tier 3 entirely.
 - Where both exist, the live run is the source of truth for the
   compatibility matrix; transcripts serve unit-level decoder tests and
   offline regression, and are refreshed *from* live runs (Tier 1
@@ -224,19 +225,29 @@ websockify/noVNC are all runnable on Linux, so we own them outright as a
   no-Docker fallback path and covers the "current git LibVNCServer" case
   containers pin away.
 
-### Tier 2 — OS-bound live servers on hosted runners (rented nightly)
+### Tier 2 — OS-bound live servers on hosted runners (change-triggered)
 
 UltraVNC only runs on Windows; Apple Screen Sharing/ARD only on macOS.
-GitHub-hosted `windows-latest` and `macos-latest` runners are free for
-public repositories, so we rent access instead of owning hardware:
+Windows *containers* don't solve this: they exist
+(`mcr.microsoft.com/windows/servercore` etc.) but are GUI-less — there is
+no desktop session for a VNC server to share, so a screen-sharing server
+has nothing to serve — and they only run on Windows hosts anyway (no help
+for local dev on Linux/macOS, and no such thing as a macOS container at
+all). So these two stay on full GitHub-hosted `windows-latest` /
+`macos-latest` VMs, which are free for public repositories — but we only
+spin them up when something relevant changes:
 
-- A nightly (`schedule:` + `workflow_dispatch`) workflow installs UltraVNC
-  via a pinned Chocolatey version on Windows, and enables Remote
-  Management via `kickstart` on macOS, then runs the same scenario suite
-  against them.
-- These jobs are report-only at first (never blocking PRs) and are
-  promoted to blocking only once they prove stable; each successful run
-  can refresh that server's transcript fixtures as an artifact.
+- The workflow triggers on `pull_request`/`push` **path-filtered to code
+  that can affect server compatibility** (`vncdotool/**`, the workflow
+  itself, server setup scripts) plus `workflow_dispatch` for on-demand
+  runs. No scheduled runs: doc- and test-only changes never start an OS
+  VM, and a quiet repository consumes nothing.
+- Accepted trade-off: drift in the runner images or the Chocolatey
+  package surfaces on the next change-triggered run rather than the night
+  it happens. Because these jobs are report-only (never PR-blocking), a
+  drift failure costs a tracked issue, not a broken merge queue.
+- Each successful run can refresh that server's transcript fixtures as an
+  artifact; jobs are promoted to blocking only once they prove stable.
 
 ### Tier 3 — Transcript-only servers (community-sourced fingerprints)
 
@@ -279,9 +290,9 @@ contributing a fingerprint must be a paved road:
   SERVER=<name>` spins the pinned container, replays the scenario through
   the recording proxy, and rewrites the fixture. Regeneration is always a
   reviewable PR diff, never a silent CI side effect.
-- **Tier 2/3 gold files are opportunistic**: refreshed from nightly-run
-  artifacts (Tier 2) or new community recordings (Tier 3), and likewise
-  only replaced via PR.
+- **Tier 2/3 gold files are opportunistic**: refreshed from Tier 2 run
+  artifacts or new community recordings (Tier 3), and likewise only
+  replaced via PR.
 - Transcripts are handshakes plus a few update rounds — kilobytes each —
   so they live in-repo with a ~100 KB per-fixture budget; no LFS.
 
@@ -292,9 +303,11 @@ contributing a fingerprint must be a paved road:
   `tests/servers/versions.md` table that CI, make, and manifests all
   reference.
 - **Pinned on PRs, latest on schedule**: PR CI always runs the pinned
-  fleet. A weekly scheduled job re-runs the matrix against `:latest`
-  images / newest packages and *files an issue* on failure instead of
-  breaking PRs — upstream drift becomes a tracked task, not a fire.
+  fleet. A weekly scheduled job — Tier 1 containers only, cheap ubuntu
+  minutes; OS runners are exercised solely by change-triggered runs and
+  manual dispatch — re-runs the matrix against `:latest` images / newest
+  packages and *files an issue* on failure instead of breaking PRs, so
+  upstream drift becomes a tracked task, not a fire.
 - Version-bump PRs (Dependabot/Renovate on image digests, or the weekly
   job's issue) regenerate that server's Tier 1 gold files in the same PR,
   so pins and fixtures always move together.
@@ -346,8 +359,8 @@ report arrives as an actionable error message plus, ideally, a transcript.
   first-class detection + documentation, which still removes the "silent
   failure" cost.
 - **GUI servers in CI can be flaky**: mitigate with generous startup
-  polling, per-server retry, and by quarantining unstable servers to the
-  nightly job rather than PR CI.
+  polling, per-server retry, and by quarantining unstable servers to a
+  non-blocking change-triggered job rather than PR-blocking CI.
 - **Decoder rewrites regress existing users**: the Phase 0 transcript
   fixtures and pixel-exact reference images are the guard rail; land them
   first.
