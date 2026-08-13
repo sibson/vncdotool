@@ -37,11 +37,17 @@ machine.
 
 ## Readiness
 
-An open RFB port is not always the same thing as a server with something to
-show -- the Docker servers need an extra readiness marker for exactly that
-reason (`tests/servers/draw-content.sh`). Here the port is all there is to
-wait for, and all it can mean: the framebuffer this runner serves is blank
-whether or not the server is ready (see below).
+An open RFB port is not readiness here, and neither is a per-request
+timeout. Screen Sharing is socket-activated, so the first connection is
+what starts the server -- and that connection sometimes never finishes its
+handshake, while the very next one succeeds in seconds. A test that opened
+the first connection failed with a timeout after two minutes, and the
+screenshot step immediately afterwards captured fine.
+
+So `setup.sh` waits for the port, and CI then runs
+`tests/functional/wait_for_servers.py os`, which retries whole connections
+until one completes an RFB round trip. Only then do the tests run, and a
+timeout inside a test means something real.
 
 ## What it proves, and what it doesn't
 

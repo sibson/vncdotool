@@ -43,11 +43,13 @@ down:
 
 ## Readiness
 
-An open RFB port is not always the same thing as a server with something to
-show -- the Docker servers need an extra readiness marker for exactly that
-reason (`tests/servers/draw-content.sh`). Here the port is enough: the
-desktop session exists before the VNC server is ever started, so there is
-no window between "accepting connections" and "has content".
+An open RFB port is not readiness -- the Docker servers need a
+drawn-content marker on top of it, and macOS needs whole-connection
+retries (see `../screen-sharing`). UltraVNC has been reliable once the
+port opens, since the Windows desktop session exists before the server is
+ever started, but CI still runs the shared gate
+(`tests/functional/wait_for_servers.py os`) here so a slow start shows up
+as a wait rather than as a timeout inside a test.
 
 ## What it proves
 

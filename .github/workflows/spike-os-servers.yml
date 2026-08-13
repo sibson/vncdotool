@@ -69,6 +69,12 @@ jobs:
       - name: Set up the VNC server
         run: ${{ matrix.setup }}
 
+      # An open port is not readiness: the first connection to macOS Screen
+      # Sharing is what starts it, and that connection can stall for good
+      # while the next one succeeds immediately.
+      - name: Wait for the server to serve a screen
+        run: python tests/functional/wait_for_servers.py os
+
       - name: Run OS server functional tests
         run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 

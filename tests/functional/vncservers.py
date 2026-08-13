@@ -18,6 +18,7 @@ written twice.
 import os
 import socket
 import sys
+import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
 from unittest import TestCase
@@ -29,6 +30,11 @@ from vncdotool import api
 HOST = "127.0.0.1"
 CONNECT_TIMEOUT = 5.0
 PORT_PROBE_TIMEOUT = 1.0
+RETRY_DELAY = 2.0
+# Readiness budget for wait_until_ready(): how long one connection attempt
+# is given before it is abandoned, and how long to keep making them.
+READY_ATTEMPT_TIMEOUT = 20.0
+READY_DEADLINE = 180.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
@@ -163,6 +169,44 @@ def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] =
     with connect(server, timeout=timeout) as client:
         client.captureScreen(str(path))
     return path
+
+
+def wait_until_ready(
+    server: VNCServer,
+    deadline_seconds: float = READY_DEADLINE,
+    attempt_timeout: float = READY_ATTEMPT_TIMEOUT,
+) -> bool:
+    """Block until ``server`` completes a whole RFB round trip, or give up.
+
+    An open port is not readiness. The Docker servers need a drawn-content
+    marker on top of it (tests/servers/draw-content.sh); an OS-hosted
+    server needs this instead, because the first connection can stall
+    indefinitely while the next one succeeds at once -- macOS Screen
+    Sharing is socket-activated, so that first connection is also what
+    starts the server.
+
+    Retrying a whole connection is therefore the only probe that means
+    anything: a per-request timeout can't rescue a connection that never
+    finished its handshake.
+    """
+    deadline = time.monotonic() + deadline_seconds
+    attempt = 0
+    while time.monotonic() < deadline:
+        attempt += 1
+        if not port_open(HOST, server.port):
+            time.sleep(RETRY_DELAY)
+            continue
+        try:
+            with connect(server, timeout=attempt_timeout) as client:
+                client.refreshScreen()
+        except Exception as exc:  # noqa: BLE001 - any failure means try again
+            print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
+            continue
+        print(f"{server.name}: ready after {attempt} attempt(s)")
+        return True
+
+    print(f"{server.name}: never completed an RFB round trip")
+    return False
 
 
 class _VNCServerTestMixin:
