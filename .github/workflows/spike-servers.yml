@@ -43,6 +43,12 @@ jobs:
       - name: Build and start the VNC test servers
         run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
 
+      # The steps below are diagnostics and teardown, so they carry
+      # `if: always()`: when a test fails, the container status, the
+      # screenshot of what the server was actually showing, and the server
+      # logs are exactly what's needed to debug it -- skipping them on
+      # failure would throw away the evidence. `down` likewise has to run
+      # whatever happened.
       - name: Show test server status
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml ps

@@ -360,6 +360,12 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
+- **Stop paying the image build tax on every run.** GitHub-hosted runners
+  start with an empty Docker cache, so layer caching only helps within a
+  run — each CI run rebuilds from scratch (~35s of the ~70s total).
+  Options: `docker/build-push-action` with `cache-from/to: type=gha`, or
+  publish the images to GHCR once and have CI pull pinned digests, which
+  folds into the digest-pinning item below.
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 
