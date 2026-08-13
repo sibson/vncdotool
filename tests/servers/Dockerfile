@@ -24,9 +24,15 @@ RUN chmod +x /draw-content.sh
 EXPOSE 5900
 
 # bash's /dev/tcp rather than `nc`: same "is the RFB port accepting
-# connections" probe without pulling netcat into every image.
+# connections" probe without pulling netcat into every image. That alone
+# isn't sufficient readiness, though -- Xvnc in particular starts
+# accepting connections the instant it launches, before draw-content.sh's
+# backgrounded xlogo has drawn anything, so a port-only check can report
+# healthy against a still-flat framebuffer. draw-content.sh only creates
+# /tmp/draw-content-ready once xlogo's window is actually mapped, so the
+# check also requires that file to exist.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready'
 
 
 # TigerVNC's own X server. Serves with no authentication by default, or
