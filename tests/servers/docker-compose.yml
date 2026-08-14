@@ -12,6 +12,8 @@
 # `up --wait` a reliable barrier. Every service publishes its RFB port to
 # localhost only.
 
+name: vncdo-test-servers
+
 services:
   tigervnc:
     build:
