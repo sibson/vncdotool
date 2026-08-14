@@ -17,6 +17,7 @@ written twice.
 
 import os
 import socket
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -35,6 +36,11 @@ RETRY_DELAY = 2.0
 # is given before it is abandoned, and how long to keep making them.
 READY_ATTEMPT_TIMEOUT = 20.0
 READY_DEADLINE = 180.0
+
+# A console_scripts entry point, so only on PATH once vncdotool is installed.
+VNCDO = "vncdo"
+# Added to the server's response budget for interpreter start-up and handshake.
+SUBPROCESS_TIMEOUT_HEADROOM = 10.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
@@ -72,7 +78,13 @@ DOCKER_SERVERS = [
     VNCServer("tigervnc", 5931),
     VNCServer("tigervnc-auth", 5932, password="vncdotool"),
     VNCServer("x11vnc", 5933),
+    # 800x600 is the demo's hard-coded size; it takes no -geometry option.
+    VNCServer("libvncserver-example", 5935, size=(800, 600)),
 ]
+
+# An event sink rather than a rendering server, so it stays out of the smoke
+# grid; test_events.py still needs its host/port.
+VNCEV = VNCServer("vncev", 5934, renders_desktop=False, size=None)
 
 # Credentials the OS-hosted server setup scripts configure. They are spike
 # credentials for a throwaway runner, deliberately visible; a permanent job
@@ -209,12 +221,46 @@ def wait_until_ready(
     return False
 
 
+def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
+    """Build a `vncdo` argv for `server`, with whatever auth its security type needs."""
+    argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
+    if server.password is not None:
+        argv += ["-p", server.password]
+    if server.username is not None:
+        argv += ["-u", server.username]
+    argv.extend(args)
+    return argv
+
+
+def run_vncdo(
+    server: VNCServer, *args: str, timeout: Optional[float] = None
+) -> subprocess.CompletedProcess:
+    """Run the real `vncdo` CLI against `server` and return the completed process.
+
+    Never api.connect(): a hang is then contained by the kernel reaping the
+    subprocess at `timeout`, not by anything in-process.
+    """
+    argv = vncdo_argv(server, *args)
+    budget = (server.timeout if timeout is None else timeout) + SUBPROCESS_TIMEOUT_HEADROOM
+    try:
+        # stdin closed so an unexpected getpass() prompt fails instead of blocking.
+        return subprocess.run(argv, capture_output=True, text=True, timeout=budget, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(
+            f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"
+        ) from exc
+    except FileNotFoundError as exc:
+        raise AssertionError(
+            f"{server.name}: `{VNCDO}` not found on PATH -- install vncdotool "
+            "(`pip install -e .`) so its console script is available"
+        ) from exc
+
+
 class _VNCServerTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 
-    Deliberately does NOT subclass TestCase: only the generated per-server
-    classes should (otherwise `unittest discover` also collects this shared
-    base as its own, serverless test case).
+    Deliberately does NOT subclass TestCase, or `unittest discover` would
+    also collect this shared base as its own, serverless test case.
     """
 
     server: VNCServer
@@ -226,25 +272,38 @@ class _VNCServerTestMixin:
                 f"{self.server.how_to_start}"
             )
 
-    def test_connect_key_and_capture(self) -> None:
-        """End-to-end round trip against one real server.
+    def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
+        """run_vncdo(), asserting the CLI actually succeeded."""
+        result = run_vncdo(self.server, *args)
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"{self.server.name}: `vncdo {' '.join(args)}` exited "
+            f"{result.returncode}, stderr:\n{result.stderr}",
+        )
+        return result
 
-        Passing means, in order:
+    def test_connect(self) -> None:
+        """Handshake and auth succeed: `pause 0` still needs a live connection."""
+        self.run_vncdo_ok("pause", "0")
 
-        * the RFB handshake completed against this server's protocol version
-          and security type (none, VNC password, or ARD/Diffie-Hellman);
-        * a key event was accepted without the server dropping the session;
-        * a framebuffer update was received and encoded to a PNG file;
-        * that PNG is the size the server said it serves, and -- for a server
-          with a desktop rendered behind it -- is not a single flat colour,
-          i.e. we decoded real screen content rather than the all-black
-          framebuffer you get when updates never arrive.
+    def test_keypress(self) -> None:
+        """A key event is accepted without the server dropping the session."""
+        self.run_vncdo_ok("key", "x")
+
+    def test_mousemove(self) -> None:
+        """A pointer event is accepted without the server dropping the session."""
+        self.run_vncdo_ok("move", "10", "10")
+
+    def test_capture(self) -> None:
+        """A framebuffer update is received and encoded to a PNG.
+
+        A flat colour means no content was decoded, so it fails for any
+        server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
 
-        with connect(self.server) as client:
-            client.keyPress("x")
-            client.captureScreen(str(png))
+        self.run_vncdo_ok("capture", str(png))
 
         data = png.read_bytes()
         print(f"{self.server.name}: screenshot written to {png}")
@@ -292,7 +351,6 @@ def register_server_tests(servers: List[VNCServer], namespace: Dict[str, object]
         namespace[name] = type(
             name,
             (_VNCServerTestMixin, TestCase),
-            # __module__ so test ids name the module that registered the
-            # case rather than this one.
+            # __module__ so test ids name the registering module, not this one.
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )

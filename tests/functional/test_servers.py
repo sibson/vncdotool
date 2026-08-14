@@ -16,16 +16,8 @@ default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) so that a failing or
 suspicious capture can be looked at directly after the run.
 """
 
-from vncdotool import api
-
 from .vncservers import DOCKER_SERVERS, register_server_tests
 
+# Every scenario shells out to the vncdo CLI (see vncservers.run_vncdo), so
+# no reactor ever starts in this process and no api.shutdown() is needed.
 register_server_tests(DOCKER_SERVERS, globals())
-
-
-def tearDownModule() -> None:
-    # api.connect() starts a background Twisted reactor thread that
-    # outlives any individual client connection. Without stopping it here,
-    # the interpreter (and `unittest discover`) hangs on exit after all
-    # tests in this module have finished.
-    api.shutdown()

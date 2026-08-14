@@ -59,9 +59,73 @@ FROM base AS x11vnc
 RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb \
         x11vnc \
+        x11-utils \
     && rm -rf /var/lib/apt/lists/*
 
 COPY x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
+
+
+# Builds the vncev and example binaries from a pinned release, so neither
+# final image needs a compiler. Replaces the old libvncserver.mk host build.
+FROM base AS libvncserver-build
+
+ARG LIBVNCSERVER_VERSION=0.9.14
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        libssl-dev \
+        zlib1g-dev \
+        ca-certificates \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fL \
+        "https://github.com/LibVNC/libvncserver/archive/refs/tags/LibVNCServer-${LIBVNCSERVER_VERSION}.tar.gz" \
+        -o /tmp/libvncserver.tar.gz \
+    && mkdir -p /tmp/libvncserver \
+    && tar xzf /tmp/libvncserver.tar.gz --strip-components=1 -C /tmp/libvncserver \
+    && rm /tmp/libvncserver.tar.gz
+
+# Named targets rather than `all`: skips the SDL/GTK example clients.
+WORKDIR /tmp/libvncserver
+RUN cmake -DCMAKE_BUILD_TYPE=Release . \
+    && cmake --build . --target examples_vncev examples_example -- -j"$(nproc)"
+
+
+# Event sink: prints events, renders no desktop, so the HEALTHCHECK drops
+# base's draw-content marker.
+FROM base AS vncev
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=libvncserver-build /tmp/libvncserver/examples/vncev /usr/local/bin/vncev
+COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
+RUN ldconfig
+
+HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
+
+ENTRYPOINT ["vncev", "-rfbport", "5900", "-rfbwait", "1000"]
+
+
+# Self-animated canvas, so there is no draw-content.sh marker to wait for.
+FROM base AS libvncserver-example
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=libvncserver-build /tmp/libvncserver/examples/example /usr/local/bin/example
+COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
+RUN ldconfig
+
+HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
+
+ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]

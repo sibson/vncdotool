@@ -178,6 +178,13 @@ and can proceed while 3–5 follow.
   Investigate per-OS agents (AutoHotkey key listener on Windows, an event
   tap on macOS) so `type`/`move` can be verified server-side there rather
   than remaining connect/screenshot-only smoke.
+- **Special keys across servers**: the vncev sink proves which keysym the
+  client put on the wire, which is necessary but not sufficient. Reported
+  KEYMAP bugs are about what a *server* does with that keysym, and look
+  locale- or layout-dependent, so they can only be caught by driving the
+  key classes (named keys, function keys, modifier combos, keypad) at every
+  fleet server and reading the X-side sink. Needs a per-class matrix rather
+  than the one-key-per-server smoke case that exists today.
 - **Fleet expansion** (TightVNC, QEMU, more): follows the plan's tier
   process; this framework adds a server as one descriptor + one subclass.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
