@@ -65,34 +65,39 @@ Two structural problems underlie all of these:
 Goal: every change runs the same scenario suite against a fleet of real
 servers, and the results are visible.
 
-- Extract the common scenarios from the existing functional tests
-  (connect, authenticate, keyboard, mouse, capture, expect) into a
-  server-parameterized base class.
-- Add CI jobs for each server installable in GitHub Actions runners:
-  - **TigerVNC** (`tigervnc-standalone-server`) — plain and with password;
-    also a `-SecurityTypes TLSVnc` variant once VeNCrypt lands (Phase 2).
-  - **TightVNC** (`tightvncserver`).
-  - **x11vnc** (libvncserver-based, but a different config surface).
-  - **QEMU's built-in server** (`qemu-system-x86_64 -vnc`) — the primary
-    VM-automation use case and the origin of several key-event bugs.
-  - **LibVNCServer examples** (already present, keep as-is).
-  - Later: noVNC/websockify (once WebSocket lands), wayvnc.
-- Make each functional run record the wire traffic via the existing
-  `loggingproxy` module and upload transcripts as CI artifacts. Recorded
-  handshakes become **replayable unit-test fixtures**, so a compatibility
-  bug reported against a server we can't install (RealVNC, macOS Screen
-  Sharing, UltraVNC) can still be captured once and guarded forever.
-- Generate a docs page (`docs/compatibility.rst`) from the matrix results:
-  server × auth × encodings × known caveats.
+The framework itself is designed in
+[testing-framework-design.md](testing-framework-design.md), which
+supersedes this section's original sketch on several points. Summary:
+
+- **Unit tests are the regression layer; live servers are for smoke and
+  discovery.** Recorded traffic never replays in CI — bugs found live or
+  via capture are distilled into byte-level unit tests, and per-encoding
+  decoder golden tests (crafted/captured FBU bytes → pixel-exact
+  framebuffer assertions) replace live golden-PNG comparisons.
+- A small core scenario grid (connect, key press, mouse move, screenshot)
+  runs as plain `unittest` methods against every fleet server, each
+  scenario executed via `subprocess.run(["vncdo", ...], timeout=N)` so a
+  hanging client fails CI instead of hanging it. Input is verified via
+  event sinks (a `vncev` container; `xev`-style logs inside X-based
+  containers), not pixels.
+- Fleet targets: **TigerVNC**, **TightVNC**, **x11vnc**, **QEMU**,
+  containerized **LibVNCServer examples**; later noVNC/websockify,
+  wayvnc. The native libvncserver source build and the pexpect harness
+  are retired.
+- The capture kit (`vncdolog --capture`, scrub-at-capture) plus an
+  in-repo replay tool cover servers we cannot host — discovery evidence,
+  not CI fixtures.
+- A generated `docs/compatibility.rst` is **not** a requirement; the CI
+  grid is the matrix, plus a hand-maintained caveats table here.
 
 How the servers themselves are obtained, pinned, and kept current — for
 local dev, CI, and gold-file creation — is covered in
 [Acquiring and maintaining server access](#acquiring-and-maintaining-server-access).
 
 Acceptance: CI shows a per-server pass/fail grid driven by the Tier 1
-compose fleet; the recording proxy has a raw-transcript mode; a fixture
-harness exists with at least the LibVNCServer and TigerVNC handshakes
-checked in.
+compose fleet; the proxy CLI has a `--capture` mode; decoder golden unit
+tests exist for at least the encodings LibVNCServer and TigerVNC
+negotiate.
 
 ### Phase 1 — Robustness: fail loudly, never hang
 
@@ -163,11 +168,12 @@ pixel-exact against reference images for every supported pixel format.
 
 ### Phase 4 — Keep it working
 
-- Publish the auto-generated compatibility table in the docs and link it
-  from the README.
+- Maintain the hand-written caveats table in this doc; revisit
+  auto-generation only if someone asks for it.
 - Add a "compatibility bug" issue template asking for server product +
-  version, and a one-liner to capture a `loggingproxy` transcript; each
-  confirmed bug contributes a replay fixture before it is closed.
+  version, and a one-liner to record a `vncdolog --capture` directory;
+  each confirmed bug contributes a distilled unit test before it is
+  closed.
 - Add `server:<name>` issue labels and a `vncdo probe`-style diagnostic
   command that connects, prints the server version string, offered
   security types, and negotiated encodings, then exits — the first thing
@@ -184,25 +190,26 @@ claim to support? The answer is three tiers with different acquisition
 models, plus a shared reproducibility discipline.
 
 **Guiding principle: live servers beat recordings, always.** A recorded
-transcript proves we *once* interoperated with one version of a server; a
-live test proves we *still* do. Recordings are therefore a regression
-floor and a fallback for servers we cannot run — never a substitute where
-live access is possible. Concretely:
+capture proves we *once* interoperated with one version of a server; a
+live test proves we *still* do. Captures are therefore discovery
+evidence for servers we cannot run — never a substitute where live
+access is possible, and never CI fixtures: the durable regression floor
+is the unit test distilled from them
+(see [testing-framework-design.md](testing-framework-design.md)).
+Concretely:
 
 - Every server sits at the **most-live tier it can occupy**, and tier
   assignment is revisited as circumstances change: a new container image,
   a licensing change, or emulation making a Tier 3 server runnable
-  promotes it to Tier 1/2, and its fixtures demote to secondary
-  regression guards.
+  promotes it to Tier 1/2.
 - We actively invest in promotions. For example, RealVNC on Raspberry Pi
   OS — today's canonical Tier 3 case — is a candidate for a live CI job
   via a QEMU-emulated Pi OS image on an ubuntu runner; if that works it
   leaves Tier 3 entirely.
 - Where both exist, the live run is the source of truth for the
-  compatibility matrix; transcripts serve unit-level decoder tests and
-  offline regression, and are refreshed *from* live runs (Tier 1
-  deterministically, Tier 2 from nightly artifacts) rather than treated
-  as an independent authority.
+  compatibility matrix; captures serve discovery and as source material
+  for unit-level decoder golden bytes, refreshed *from* live runs where
+  possible rather than treated as an independent authority.
 
 ### Tier 1 — Containerized Linux fleet (we own it, fully reproducible)
 
@@ -221,9 +228,10 @@ websockify/noVNC are all runnable on Linux, so we own them outright as a
   compose so contributors never need to learn the fleet's internals; the
   same compose file is what the CI matrix jobs run. **Local dev and CI use
   identical bytes.**
-- The native `libvncserver.mk` source build stays as-is; it doubles as the
-  no-Docker fallback path and covers the "current git LibVNCServer" case
-  containers pin away.
+- The native `libvncserver.mk` source build is retired: LibVNCServer's
+  example servers (and `vncev`, the event-sink verifier) join the fleet as
+  compose services, built in-container and pinned like the rest. No host
+  toolchain requirement remains.
 
 ### Tier 2 — OS-bound live servers on hosted runners (change-triggered)
 
@@ -246,55 +254,40 @@ spin them up when something relevant changes:
   package surfaces on the next change-triggered run rather than the night
   it happens. Because these jobs are report-only (never PR-blocking), a
   drift failure costs a tracked issue, not a broken merge queue.
-- Each successful run can refresh that server's transcript fixtures as an
-  artifact; jobs are promoted to blocking only once they prove stable.
+- Each successful run can upload a wire capture as an artifact for
+  offline debugging; jobs are promoted to blocking only once they prove
+  stable.
 
-### Tier 3 — Transcript-only servers (community-sourced fingerprints)
+### Tier 3 — Capture-only servers (community-sourced evidence)
 
 RealVNC (Raspberry Pi OS), VMware/ESXi consoles, Proxmox, MobaXterm, and
 anything else licensing or hardware puts out of CI's reach are covered by
-recorded fingerprints — but per the guiding principle, Tier 3 is the tier
-of **last resort**: membership means "we have not yet found a way to run
-this server live", and each Tier 3 server carries a note on what its
-promotion path would be (emulation, a licensing change, a self-hosted
-runner). Until promoted, the supply chain for these is the community, so
-contributing a fingerprint must be a paved road:
+community-recorded captures — but per the guiding principle, Tier 3 is
+the tier of **last resort**: membership means "we have not yet found a
+way to run this server live", and each Tier 3 server carries a note on
+what its promotion path would be (emulation, a licensing change, a
+self-hosted runner). Until promoted, the supply chain for these is the
+community, so contributing a capture must be a paved road (detailed in
+[testing-framework-design.md](testing-framework-design.md)):
 
-1. **Record**: a `vncdo record`-style command (a thin wrapper over the
-   existing `loggingproxy`, extended with a raw-transcript mode — Phase 0
-   work item) sits between the reporter's client and their server. They
-   run a short scripted scenario checklist (connect, auth, type, capture);
-   out comes a fixture directory. The recorder scrubs secrets by
-   construction: password bytes and auth challenges/responses are redacted
-   at capture time, never trusted to manual editing.
-2. **Describe**: the fixture's `manifest.yaml` (see below) plus the output
-   of `vncdo probe` (server version string, offered security types,
-   negotiated encodings) — the "fingerprint" proper.
-3. **Submit**: a "server fingerprint" issue template and a PR checklist
-   (manifest complete, transcript scrubbed, ≤ ~100 KB, scenarios covered).
-   A CI job replays every contributed fixture against the decoder, so
-   fingerprint PRs are **self-verifying** and cheap to review.
-4. **Reward**: each merged fixture automatically adds its row to the
-   `docs/compatibility.rst` support matrix, crediting the contributor —
-   the server they care about becomes visibly supported, which is the
-   incentive to contribute and to keep the fixture fresh when the server
-   updates.
+1. **Record**: `vncdolog --capture DIR` sits between the reporter's
+   client (or a `vncdo` script) and their server; out comes a capture
+   directory — `session.vdo`, raw `s2c.bin`/`c2s.bin` streams, and
+   `meta.json` (server version string, security types offered, geometry).
+   The proxy scrubs secrets by construction: password bytes and auth
+   challenges/responses are redacted at capture time, never trusted to
+   manual editing.
+2. **Submit**: attach the capture to a "compatibility bug" or "server
+   report" issue. Captures are issue-thread evidence, not repo fixtures.
+3. **Distill**: a maintainer replays the capture at the real client with
+   the in-repo replay tool (`tests/tools/replay_server.py`), finds the
+   bug, and lands a byte-level unit test — that test, not the capture,
+   is the permanent regression guard.
 
-### Gold files: creation and regeneration rules
-
-- Fixtures live at `tests/fixtures/<server>/<scenario>/` with a
-  `manifest.yaml` recording: server product and version, image digest (or
-  OS/runner version for Tier 2, reporter's environment for Tier 3), server
-  command line, recorder identity, date, and the vncdotool commit used.
-- **Tier 1 gold files are deterministic**: `make fixtures-regen
-  SERVER=<name>` spins the pinned container, replays the scenario through
-  the recording proxy, and rewrites the fixture. Regeneration is always a
-  reviewable PR diff, never a silent CI side effect.
-- **Tier 2/3 gold files are opportunistic**: refreshed from Tier 2 run
-  artifacts or new community recordings (Tier 3), and likewise only
-  replaced via PR.
-- Transcripts are handshakes plus a few update rounds — kilobytes each —
-  so they live in-repo with a ~100 KB per-fixture budget; no LFS.
+Golden bytes for decoder unit tests follow the same discipline at Tier 1:
+per-encoding FBU fixture bytes are captured once against a pinned fleet
+container, committed inline in the unit suite, and regenerated only via
+reviewable PR diffs.
 
 ### Staying current: pins, drift, and ownership
 
@@ -309,8 +302,8 @@ contributing a fingerprint must be a paved road:
   packages and *files an issue* on failure instead of breaking PRs, so
   upstream drift becomes a tracked task, not a fire.
 - Version-bump PRs (Dependabot/Renovate on image digests, or the weekly
-  job's issue) regenerate that server's Tier 1 gold files in the same PR,
-  so pins and fixtures always move together.
+  job's issue) regenerate any decoder golden bytes sourced from that
+  server in the same PR, so pins and fixtures always move together.
 - Ownership is explicit per tier: Tier 1 is maintainable by anyone with
   Docker; Tier 2 needs no hardware, only workflow upkeep; Tier 3 is
   honestly documented as "we do not own this access" and lives or dies by
@@ -435,7 +428,7 @@ values when unset.
 
 | Phase | Rough size | Depends on |
 |---|---|---|
-| 0 — CI matrix + transcript fixtures | Medium; pure test/infra, no protocol risk | — |
+| 0 — CI matrix + capture kit + decoder goldens | Medium; pure test/infra, no protocol risk | — |
 | 1 — Robustness/error reporting | Small–medium; touches negotiation paths | 0 (to verify against matrix) |
 | 2 — Tight, VeNCrypt, pixel formats | Large; the core protocol work | 0, 1 |
 | 3 — Desktop size, CU/Fence, WebSocket, clipboard | Medium, parallelizable per feature | 2 |
@@ -444,7 +437,7 @@ values when unset.
 Phases 0 and 1 are deliberately front-loaded: they are cheap, carry no
 protocol-breakage risk, and multiply the value of everything after them —
 every Phase 2/3 feature lands with matrix coverage, and every future user
-report arrives as an actionable error message plus, ideally, a transcript.
+report arrives as an actionable error message plus, ideally, a capture.
 
 ## Issue map
 
@@ -468,15 +461,15 @@ report arrives as an actionable error message plus, ideally, a transcript.
 - **GUI servers in CI can be flaky**: mitigate with generous startup
   polling, per-server retry, and by quarantining unstable servers to a
   non-blocking change-triggered job rather than PR-blocking CI.
-- **Decoder rewrites regress existing users**: the Phase 0 transcript
-  fixtures and pixel-exact reference images are the guard rail; land them
-  first.
+- **Decoder rewrites regress existing users**: the Phase 0 decoder
+  golden unit tests (pixel-exact, per encoding) are the guard rail; land
+  them first.
 - **Upstream supply disappears**: a Chocolatey package or base image we
   pin can vanish or break. Mitigations: vendored in-repo Dockerfiles
   rather than third-party images, pins with the weekly drift job to catch
-  breakage early, and transcript fixtures as the permanent floor — a
+  breakage early, and distilled unit tests as the permanent floor — a
   server we lose live access to degrades to Tier 3, not to zero coverage.
-- **Tier 3 fixtures go stale**: a fingerprint records one server version
-  at one moment. The manifest's version field and the compatibility table
-  make staleness visible, and the paved recording road keeps the cost of
-  a refreshed contribution low.
+- **Tier 3 evidence goes stale**: a capture records one server version
+  at one moment. `meta.json`'s version field makes staleness visible,
+  and the paved capture road keeps the cost of a refreshed contribution
+  low.
