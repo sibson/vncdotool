@@ -1,4 +1,4 @@
-1.3.1 (UNRELEASED)
+1.4.0 (UNRELEASED)
 ----------------------
   - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
   - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
