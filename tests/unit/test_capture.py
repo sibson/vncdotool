@@ -20,6 +20,7 @@ from twisted.protocols import portforward
 from vncdotool.client import VNCDoToolClient
 from vncdotool.capture import (
     ARD_CREDENTIALS_LEN,
+    SPOOL_TO_DISK_ABOVE,
     CaptureWriter,
     HandshakeScrubber,
     check_capture_target,
@@ -314,17 +315,20 @@ class TestCaptureWriter(TestCase):
             + SECURITY_RESULT_OK
             + SERVER_INIT_640x480
         )
-        self.assertEqual(bytes(cw.s2c), expected_s2c)
-        self.assertEqual(bytes(cw.c2s), VERSION_33 + MARKER + b"\x01")
+        expected_c2s = VERSION_33 + MARKER + b"\x01"
+        self.assertEqual(cw.recorded(cw.s2c), expected_s2c)
+        self.assertEqual(cw.recorded(cw.c2s), expected_c2s)
 
+        # write_archive() releases the spools, so the comparison is against
+        # what was recorded before the write, not after it.
         cw.write_archive(self.archive, cw.meta("9.9.9"), session_vdo=b"pause 0.1 key a\n")
 
         with zipfile.ZipFile(self.archive) as zf:
             self.assertEqual(
                 sorted(zf.namelist()), ["c2s.bin", "meta.json", "s2c.bin", "session.vdo"]
             )
-        self.assertEqual(self.read_archive("s2c.bin"), bytes(cw.s2c))
-        self.assertEqual(self.read_archive("c2s.bin"), bytes(cw.c2s))
+        self.assertEqual(self.read_archive("s2c.bin"), expected_s2c)
+        self.assertEqual(self.read_archive("c2s.bin"), expected_c2s)
         self.assertEqual(self.read_archive("session.vdo"), b"pause 0.1 key a\n")
 
         meta = self.read_meta()
@@ -346,10 +350,10 @@ class TestCaptureWriter(TestCase):
         cw.feed_s2c(SERVER_INIT_640x480)
 
         self.assertEqual(
-            bytes(cw.s2c),
+            cw.recorded(cw.s2c),
             VERSION_38 + bytes([1, AuthTypes.NONE]) + SECURITY_RESULT_OK + SERVER_INIT_640x480,
         )
-        self.assertEqual(bytes(cw.c2s), VERSION_38 + bytes([AuthTypes.NONE]) + b"\x01")
+        self.assertEqual(cw.recorded(cw.c2s), VERSION_38 + bytes([AuthTypes.NONE]) + b"\x01")
 
         cw.write_archive(self.archive, cw.meta("9.9.9"))
         meta = self.read_meta()
@@ -385,6 +389,28 @@ class TestCaptureWriter(TestCase):
                 {"encoding": 12345, "name": None, "rectangles": 1},
             ],
         )
+
+    def test_a_large_capture_spills_to_disk_and_still_round_trips(self) -> None:
+        """Framebuffer traffic must not have to fit in memory.
+
+        Asserts the spool actually rolled over, so this cannot quietly go
+        back to buffering the whole session in RAM.
+        """
+        cw = CaptureWriter(server="host::5900")
+        cw.feed_s2c(VERSION_33)
+        cw.feed_c2s(VERSION_33)
+        cw.feed_s2c(b"\x00\x00\x00" + bytes([AuthTypes.NONE]))
+        bulk = bytes(range(256)) * 4096  # 1MiB per write
+        for _ in range(SPOOL_TO_DISK_ABOVE // len(bulk) + 1):
+            cw.feed_s2c(bulk)
+
+        self.assertTrue(cw.s2c._rolled, "the spool stayed in memory past its threshold")
+
+        cw.write_archive(self.archive, cw.meta("9.9.9"))
+        with zipfile.ZipFile(self.archive) as zf:
+            written = zf.read("s2c.bin")
+        self.assertTrue(written.endswith(bulk), "the spooled tail did not reach the archive")
+        self.assertEqual(len(written), 16 + (SPOOL_TO_DISK_ABOVE // len(bulk) + 1) * len(bulk))
 
     def test_no_partial_archive_left_when_write_fails(self) -> None:
         cw = CaptureWriter(server="host::5900")
@@ -457,8 +483,8 @@ class TestProxyCaptureWiring(TestCase):
 
         expected_s2c = VERSION_33 + b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x00\x00\x00\x00"
         expected_c2s = VERSION_33 + MARKER + b"\x01"
-        self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
-        self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
+        self.assertEqual(sp.capture.recorded(sp.capture.s2c), expected_s2c)
+        self.assertEqual(sp.capture.recorded(sp.capture.c2s), expected_c2s)
 
         # Unscrubbed bytes still reach the peer transports: capture must
         # never mutate what the proxy forwards.
@@ -495,9 +521,9 @@ class TestProxyCaptureWiring(TestCase):
         sp.dataReceived(b"\x01")  # ClientInit: shared=1, reached cleanly this time
 
         expected_c2s = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x01"
-        self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
+        self.assertEqual(sp.capture.recorded(sp.capture.c2s), expected_c2s)
         expected_s2c = VERSION_38 + bytes([1, AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x00\x00\x00\x00"
-        self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
+        self.assertEqual(sp.capture.recorded(sp.capture.s2c), expected_s2c)
 
         # ClientInit was reached (not desynced into _handle_protocol on the
         # response bytes), so the client-init handoff fired normally.
@@ -578,7 +604,7 @@ class TestProxyCaptureWiring(TestCase):
         sp.dataReceived(garbage)  # RFBServer._handle_protocol raises ProtocolError(250) here
 
         expected_c2s = VERSION_38 + bytes([AuthTypes.NONE]) + b"\x01" + garbage
-        self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
+        self.assertEqual(sp.capture.recorded(sp.capture.c2s), expected_c2s)
 
         # forwarding still happened despite the parser raising
         cp.transport.write.assert_any_call(garbage)

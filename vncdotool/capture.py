@@ -15,17 +15,22 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
 import time
 import zipfile
 from dataclasses import dataclass, field
 from struct import unpack
-from typing import Any, Generator, NamedTuple
+from typing import IO, Any, Generator, NamedTuple
 
 from .const import AuthTypes, Encoding
 
 # AES-ECB over a fixed 64-byte username + 64-byte password struct; see
 # RFBClient._encryptArd().
 ARD_CREDENTIALS_LEN = 128
+
+# Below this a capture is held in memory; past it, it spills to a temp file.
+SPOOL_TO_DISK_ABOVE = 8 * 1024 * 1024
 
 
 class Tap:
@@ -252,17 +257,28 @@ class HandshakeScrubber:
         return
 
 
+def _spool() -> IO[bytes]:
+    """A stream that stays in memory while it is small.
+
+    Framebuffer traffic makes a capture arbitrarily large, so the scrubbed
+    bytes spill to a temporary file past the threshold rather than being
+    held whole in RAM. The file is unlinked when closed.
+    """
+    return tempfile.SpooledTemporaryFile(max_size=SPOOL_TO_DISK_ABOVE)
+
+
 @dataclass
 class CaptureWriter:
     """Scrubbed s2c/c2s streams and meta.json fields for one connection.
 
-    Owns no file handles: the caller decides when to flush to disk.
+    Bytes are spooled as they arrive; :meth:`write_archive` streams them
+    into the zip, so a long session never has to fit in memory.
     """
 
     server: str
     scrubber: HandshakeScrubber = field(default_factory=HandshakeScrubber)
-    s2c: bytearray = field(default_factory=bytearray)
-    c2s: bytearray = field(default_factory=bytearray)
+    s2c: IO[bytes] = field(default_factory=_spool)
+    c2s: IO[bytes] = field(default_factory=_spool)
     # encoding number -> rectangles seen, from the decoded stream rather than
     # the client's SetEncodings request: a server may answer in any encoding
     # it likes, and which one it chose is what the capture is asked for.
@@ -277,15 +293,25 @@ class CaptureWriter:
         self.encodings_seen[encoding] = self.encodings_seen.get(encoding, 0) + 1
 
     def feed_s2c(self, data: bytes) -> None:
-        self.s2c += self.scrubber.s2c.feed(data)
+        self.s2c.write(self.scrubber.s2c.feed(data))
 
     def feed_c2s(self, data: bytes) -> None:
-        self.c2s += self.scrubber.c2s.feed(data)
+        self.c2s.write(self.scrubber.c2s.feed(data))
 
     def flush(self) -> None:
         """Emit whatever the scrubber was still holding back, at disconnect."""
-        self.s2c += self.scrubber.s2c.flush()
-        self.c2s += self.scrubber.c2s.flush()
+        self.s2c.write(self.scrubber.s2c.flush())
+        self.c2s.write(self.scrubber.c2s.flush())
+
+    def recorded(self, stream: IO[bytes]) -> bytes:
+        """Everything spooled on `stream` so far. For tests and assertions."""
+        stream.seek(0)
+        return stream.read()
+
+    def discard(self) -> None:
+        """Drop a capture that will never be written, spool files included."""
+        self.s2c.close()
+        self.c2s.close()
 
     def encodings_list(self) -> list[dict[str, Any]]:
         """`encodings_seen` as JSON, ordered and named where we know the name."""
@@ -327,8 +353,10 @@ class CaptureWriter:
         partial = path + ".part"
         try:
             with zipfile.ZipFile(partial, "w", zipfile.ZIP_DEFLATED) as archive:
-                archive.writestr("s2c.bin", bytes(self.s2c))
-                archive.writestr("c2s.bin", bytes(self.c2s))
+                for name, spool in (("s2c.bin", self.s2c), ("c2s.bin", self.c2s)):
+                    spool.seek(0)
+                    with archive.open(name, "w") as member:
+                        shutil.copyfileobj(spool, member)
                 archive.writestr("session.vdo", session_vdo)
                 archive.writestr("meta.json", json.dumps(meta, indent=2, sort_keys=True) + "\n")
             os.replace(partial, path)
@@ -336,6 +364,8 @@ class CaptureWriter:
             if os.path.exists(partial):
                 os.unlink(partial)
             raise
+        finally:
+            self.discard()
 
 
 def check_capture_target(path: str) -> None:

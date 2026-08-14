@@ -340,7 +340,9 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
             log.debug("connection produced no bytes; not counting it as a session")
             if self.took_session:
                 self.factory.session_taken = False
-            self.capture = None
+            if self.capture is not None:
+                self.capture.discard()
+                self.capture = None
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
 
@@ -365,6 +367,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         """
         log.error("--capture-raw aborted: %s", reason)
         self.factory.capture_failed = True
+        self.capture.discard()
         self.capture = None
         if self.vnclog_client is not None:
             self.vnclog_client.capture = None
