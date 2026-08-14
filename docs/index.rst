@@ -14,6 +14,7 @@ vncdotool Documentation
    usage
    library
    commands
+   capture
    history
    contributing
    modules

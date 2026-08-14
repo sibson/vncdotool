@@ -26,6 +26,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
+from .capture import check_capture_target
 from .client import (
     AuthenticationError,
     ProtocolError,
@@ -320,6 +321,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
 def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
+    factory.server_address = options.server
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -419,7 +421,7 @@ def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
 def vnclog() -> None:
     from vncdotool import __version__
 
-    usage = "%prog [options] OUTPUT"
+    usage = "%prog [options] [OUTPUT]"
     description = "Capture user interactions with a VNC Server"
     version = "%prog " + __version__
 
@@ -433,9 +435,11 @@ def vnclog() -> None:
         help="listen for client connections on PORT [%default]",
     )
     op.add_option(
-        "--forever",
+        "--file-per-client",
         action="store_true",
-        help="continually accept new connections",
+        default=False,
+        help="record each client connection to its own .vdo in OUTPUT, which must "
+        "be a directory (was --forever, which never controlled how long vnclog ran)",
     )
     op.add_option(
         "--viewer",
@@ -449,15 +453,50 @@ def vnclog() -> None:
         default=False,
         help="a VNC password is required to connect to the server",
     )
+    op.add_option(
+        "--one-shot",
+        action="store_true",
+        default=False,
+        help="serve a single session, then exit; implied by --capture-raw",
+    )
+    op.add_option(
+        "--capture-raw",
+        metavar="FILE.zip",
+        help="write a raw wire capture (scrubbed of auth secrets) to FILE.zip, "
+        "ready to attach to an issue -- see docs/capture.rst. FILE.zip must not "
+        "exist; OUTPUT is implied (session.vdo inside the archive) and should be omitted.",
+    )
+    op.add_option(
+        "--capture-raw-unsafe-auth",
+        action="store_true",
+        default=False,
+        help="allow --capture-raw to record auth types vncdotool cannot scrub, storing "
+        "the credential exchange verbatim. Use a disposable password and rotate it "
+        "afterwards.",
+    )
     options, args = op.parse_args()
 
     setup_logging(options)
 
     options.address_family, options.host, options.port = parse_server(options.server)
 
-    if len(args) != 1:
+    output = None
+    # --capture-raw implies --one-shot, so it inherits the same conflict.
+    if (options.one_shot or options.capture_raw) and options.file_per_client:
+        op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
+    if options.capture_raw:
+        if args:
+            op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
+        try:
+            check_capture_target(options.capture_raw)
+        except ValueError as exc:
+            op.error(str(exc))
+    elif options.capture_raw_unsafe_auth:
+        op.error("--capture-raw-unsafe-auth is only meaningful with --capture-raw")
+    elif len(args) != 1:
         op.error("incorrect number of arguments")
-    output = args[0]
+    else:
+        output = args[0]
 
     factory = build_proxy(options)
     # stderr, because stdout may carry the recorded session (OUTPUT of `-`)
@@ -467,10 +506,15 @@ def vnclog() -> None:
         flush=True,
     )
 
-    if options.forever and os.path.isdir(output):
+    factory.one_shot = options.one_shot or bool(options.capture_raw)
+
+    if options.capture_raw:
+        factory.capture_path = options.capture_raw
+        factory.capture_unsafe_auth = options.capture_raw_unsafe_auth
+    elif options.file_per_client and os.path.isdir(output):
         factory.output = output
-    elif options.forever:
-        op.error("--forever requires OUTPUT to be a directory")
+    elif options.file_per_client:
+        op.error("--file-per-client requires OUTPUT to be a directory")
     elif output == "-":
         factory.output = sys.stdout
     else:
@@ -487,6 +531,10 @@ def vnclog() -> None:
             env=os.environ,
         )
     reactor.run()
+    if factory.capture_failed and not reactor.exit_status:
+        # Aborted or unwritable capture: the contributor has no archive, so
+        # exiting 0 would tell a script the capture succeeded.
+        sys.exit(ExitStatus.COMMAND_FAILED)
     sys.exit(reactor.exit_status)
 
 

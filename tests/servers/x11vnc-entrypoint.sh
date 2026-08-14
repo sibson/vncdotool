@@ -19,4 +19,10 @@ DISPLAY=:0 /draw-content.sh &
     DISPLAY=:0 xev -root
 ) 2>&1 | sed -u 's/^/xev: /' &
 
+# x11vnc exits 1 if the display isn't up yet, and Xvfb needs a moment.
+for _ in $(seq 1 30); do
+    DISPLAY=:0 xdpyinfo >/dev/null 2>&1 && break
+    sleep 0.5
+done
+
 exec x11vnc -display :0 -forever -shared -nopw -rfbport 5900 -quiet
