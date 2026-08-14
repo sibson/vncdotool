@@ -260,17 +260,78 @@ class TestVNCDoCLIClient(unittest.TestCase):
 
 class TestVNCDoCLIFactory(unittest.TestCase):
 
-    @mock.patch('vncdotool.command.reactor')
-    def test_auth_failure_exits_nonzero(self, reactor):
-        factory = command.VNCDoCLIFactory()
-        factory.clientConnectionFailed(
+    def setUp(self) -> None:
+        patcher = mock.patch('vncdotool.command.reactor')
+        self.reactor = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.reactor.exit_status = None
+        self.factory = command.VNCDoCLIFactory()
+
+    def test_auth_failure_exits_nonzero(self) -> None:
+        self.factory.clientConnectionFailed(
             None, Failure(AuthenticationError('Authentication failure'))
         )
 
-        assert reactor.exit_status == 10
+        assert self.reactor.exit_status == 10
 
-        # the server closing the rejected connection afterwards must not
-        # overwrite the failure exit status with a clean-close success
-        factory.clientConnectionLost(None, Failure(ConnectionDone()))
+    def test_clean_close_before_commands_run_exits_nonzero(self) -> None:
+        # the server hanging up cleanly is not evidence the commands ran
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
 
-        assert reactor.exit_status == 10
+        assert self.reactor.exit_status == 10
+
+    def test_clean_close_after_commands_run_keeps_success(self) -> None:
+        self.factory.done(0)
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert self.reactor.exit_status == 0
+
+    def test_first_outcome_wins(self) -> None:
+        self.factory.error(Failure(AuthenticationError('denied')))
+        self.factory.done(0)
+
+        assert self.reactor.exit_status == 10
+
+
+class TestBuildTool(unittest.TestCase):
+
+    def setUp(self) -> None:
+        patcher = mock.patch('vncdotool.command.reactor')
+        self.reactor = patcher.start()
+        self.addCleanup(patcher.stop)
+        self.reactor.exit_status = 'unset'
+
+        connect_patcher = mock.patch('vncdotool.command.factory_connect')
+        connect_patcher.start()
+        self.addCleanup(connect_patcher.stop)
+
+        self.options = mock.Mock(
+            verbose=False,
+            delay=None,
+            warp=1.0,
+            incremental_refreshes=0,
+            host='127.0.0.1',
+            port=5900,
+            address_family=socket.AF_INET,
+        )
+
+    def test_undecided_exit_status_starts_none(self) -> None:
+        command.build_tool(self.options, [])
+
+        assert self.reactor.exit_status is None
+
+    def test_completed_commands_close_connection_and_exit_zero(self) -> None:
+        factory = command.build_tool(self.options, [])
+        client = mock.Mock()
+
+        factory.deferred.callback(client)
+
+        client.transport.loseConnection.assert_called_once_with()
+        assert self.reactor.exit_status == 0
+
+    def test_failed_command_exits_nonzero(self) -> None:
+        factory = command.build_tool(self.options, [])
+
+        factory.deferred.errback(Failure(IOError('cannot write capture')))
+
+        assert self.reactor.exit_status == 10

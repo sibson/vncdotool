@@ -20,7 +20,6 @@ import sys
 from types import TracebackType
 
 from twisted.internet import protocol, reactor
-from twisted.internet.error import ConnectionDone
 from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
@@ -58,27 +57,26 @@ class VNCDoCLIClient(VNCDoToolClient):
 
 class VNCDoCLIFactory(VNCDoToolFactory):
     protocol = VNCDoCLIClient
-    finished = False
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
-        if reason.type == ConnectionDone:
-            self.done(0)
-        else:
-            self.error(reason)
+        # losing the connection is never itself a success: the command chain
+        # reports the outcome, and closing the transport is its last step, so
+        # a close arriving first means the commands never finished
+        self.error(reason)
 
     def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
         self.error(reason)
 
     def error(self, reason: Failure) -> None:
+        if reactor.exit_status is not None:
+            return
         log.critical(reason.getErrorMessage())
         self.done(10)
 
     def done(self, exit_code: int) -> None:
-        # an authentication failure reports its error before the server
-        # closes the socket; the later clean close must not overwrite it
-        if self.finished:
+        # first outcome wins; the expected close follows a completed run
+        if reactor.exit_status is not None:
             return
-        self.finished = True
         reactor.exit_status = exit_code
         reactor.callLater(0.1, reactor.stop)
 
@@ -256,11 +254,15 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
     except CommandParseError as exc:
         sys.exit(str(exc))
 
+    # no outcome decided yet; set before connecting so a synchronous
+    # connection failure has somewhere to record itself
+    reactor.exit_status = None
     factory_connect(factory, options.host, options.port, options.address_family)
-    reactor.exit_status = 1
 
-    # close the connection when we're done
+    # close the connection when we're done, then report how it went
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
+    factory.deferred.addCallback(lambda _: factory.done(0))
+    factory.deferred.addErrback(factory.error)
 
     return factory
 
@@ -530,7 +532,8 @@ def vncdo() -> None:
 
     reactor.run()
 
-    sys.exit(reactor.exit_status)
+    # the reactor stopping without an outcome is itself a failure
+    sys.exit(1 if reactor.exit_status is None else reactor.exit_status)
 
 
 if __name__ == "__main__":
