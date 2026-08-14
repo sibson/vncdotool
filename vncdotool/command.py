@@ -435,9 +435,11 @@ def vnclog() -> None:
         help="listen for client connections on PORT [%default]",
     )
     op.add_option(
-        "--forever",
+        "--file-per-client",
         action="store_true",
-        help="continually accept new connections",
+        default=False,
+        help="record each client connection to its own .vdo in OUTPUT, which must "
+        "be a directory (was --forever, which never controlled how long vnclog ran)",
     )
     op.add_option(
         "--viewer",
@@ -479,11 +481,8 @@ def vnclog() -> None:
     options.address_family, options.host, options.port = parse_server(options.server)
 
     output = None
-    if options.one_shot and options.forever:
-        # --forever names an output layout (a .vdo per client), not a
-        # lifetime -- vnclog has always served connections until killed. It
-        # is still incoherent to ask for a file per client and stop after one.
-        op.error("--forever writes a file per client, so it cannot be combined with --one-shot")
+    if options.one_shot and options.file_per_client:
+        op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
     if options.capture_raw:
         if args:
             op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
@@ -511,10 +510,10 @@ def vnclog() -> None:
     if options.capture_raw:
         factory.capture_path = options.capture_raw
         factory.capture_unsafe_auth = options.capture_raw_unsafe_auth
-    elif options.forever and os.path.isdir(output):
+    elif options.file_per_client and os.path.isdir(output):
         factory.output = output
-    elif options.forever:
-        op.error("--forever requires OUTPUT to be a directory")
+    elif options.file_per_client:
+        op.error("--file-per-client requires OUTPUT to be a directory")
     elif output == "-":
         factory.output = sys.stdout
     else:

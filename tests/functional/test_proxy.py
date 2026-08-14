@@ -84,7 +84,7 @@ class TestVnclogProxy(TestCase):
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
-        # --forever with a directory OUTPUT is the one recorder mode that
+        # --file-per-client with a directory OUTPUT is the one recorder mode that
         # flushes its .vdo file on client disconnect rather than on clean
         # process exit, which a tearDown terminate() can't guarantee.
         self.output_dir = Path(tempfile.mkdtemp())
@@ -93,7 +93,7 @@ class TestVnclogProxy(TestCase):
                 "vnclog",
                 "-s", f"{HOST}::{VNCEV.port}",
                 "--listen", str(PROXY_PORT),
-                "--forever",
+                "--file-per-client",
                 str(self.output_dir),
             ],
             stdout=subprocess.PIPE,

@@ -11,6 +11,10 @@
     given. ``meta.json`` records which encodings the server actually sent
   - Add ``vnclog --one-shot``, serving a single session then exiting; implied
     by ``--capture-raw``
+  - [BREAKING] ``vnclog --forever`` is renamed ``--file-per-client``. It never
+    controlled how long vnclog ran -- vnclog has always accepted connections
+    until stopped -- it selects a separate ``.vdo`` per client connection.
+    Scripts passing ``--forever`` must be updated
   - ``vnclog`` no longer drops a session when its own logging fails to parse a
     message: the semantic log is an observer, and a server the real client
     copes with should not be cut off by the proxy
