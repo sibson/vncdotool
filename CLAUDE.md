@@ -30,6 +30,15 @@ fix the underlying bug, move the test into the topical file, drop its
 `@unittest.expectedFailure` marker, and rename it for the behaviour it checks
 rather than the issue number.
 
+# Comments
+
+Default to no comments. Add one only when the WHY is non-obvious: a hidden
+constraint, a subtle invariant, a workaround for a specific bug, behaviour
+that would surprise a reader. Don't explain WHAT the code does -- well-named
+identifiers already do that. Don't reference the current task, fix, or
+callers ("used by X", "added for the Y flow", "handles the case from issue
+#123") -- that belongs in the commit message, not the code.
+
 # Release Process
 
 Version lives in `vncdotool/__init__.py` and is bumped by the release target.
