@@ -15,6 +15,8 @@ import zipfile
 from struct import pack
 from unittest import TestCase, mock
 
+from twisted.protocols import portforward
+
 from vncdotool.client import VNCDoToolClient
 from vncdotool.capture import (
     ARD_CREDENTIALS_LEN,
@@ -51,7 +53,7 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(s.protocol_version, "RFB 003.003")
         self.assertEqual(s.security_types, [AuthTypes.VNC_AUTHENTICATION])
-        self.assertIsNone(s.unscrubbed_auth)
+        self.assertIsNone(s.unscrubbable_auth)
 
         # the security-result that follows is still passed through untouched
         self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
@@ -111,7 +113,7 @@ class TestHandshakeScrubber(TestCase):
         out = s.feed("c2s", bytes([AuthTypes.NONE]))
         self.assertEqual(out, bytes([AuthTypes.NONE]))
         self.assertEqual(s.security_type, AuthTypes.NONE)
-        self.assertIsNone(s.unscrubbed_auth)
+        self.assertIsNone(s.unscrubbable_auth)
 
         # security-result(4) + ClientInit(1) + ServerInit(24), still passthrough
         self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
@@ -150,7 +152,7 @@ class TestHandshakeScrubber(TestCase):
         client_key = b"Y" * 8
         self.assertEqual(s.feed("c2s", credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
 
-        self.assertIsNone(s.unscrubbed_auth)
+        self.assertIsNone(s.unscrubbable_auth)
         self.assertIsNone(s.abort_reason)
         self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
 
@@ -175,8 +177,8 @@ class TestHandshakeScrubber(TestCase):
         self.assertIsNotNone(s.abort_reason)
         self.assertIn("tight", s.abort_reason)
         self.assertIn("--capture-raw-unsafe-auth", s.abort_reason)
-        self.assertIn("tight", s.unscrubbed_auth)
-        self.assertIn("16", s.unscrubbed_auth)
+        self.assertIn("tight", s.unscrubbable_auth)
+        self.assertIn("16", s.unscrubbable_auth)
 
     def test_unscrubbable_auth_allowed_when_opted_in(self) -> None:
         s = HandshakeScrubber(allow_unsafe_auth=True)
@@ -186,7 +188,7 @@ class TestHandshakeScrubber(TestCase):
         s.feed("c2s", bytes([AuthTypes.TIGHT]))
 
         self.assertIsNone(s.abort_reason)
-        self.assertIn("tight", s.unscrubbed_auth)
+        self.assertIn("tight", s.unscrubbable_auth)
         # key exchange passes through verbatim -- that is what was opted into
         exchange = b"\x01\x02\x03\x04"
         self.assertEqual(s.feed("s2c", exchange), exchange)
@@ -307,7 +309,6 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(meta["vncdotool_version"], "9.9.9")
         self.assertEqual(meta["protocol_version"], "RFB 003.003")
         self.assertEqual(meta["security_types"], [AuthTypes.VNC_AUTHENTICATION])
-        self.assertIsNone(meta["unscrubbed_auth"])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
         self.assertIn("capture_timestamp", meta)
 
@@ -330,10 +331,9 @@ class TestCaptureWriter(TestCase):
         cw.write_archive(self.archive, cw.meta("9.9.9"))
         meta = self.read_meta()
         self.assertEqual(meta["security_types"], [AuthTypes.NONE])
-        self.assertIsNone(meta["unscrubbed_auth"])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
 
-    def test_unscrubbed_auth_recorded_in_meta_when_opted_in(self) -> None:
+    def test_unscrubbable_auth_captured_when_opted_in(self) -> None:
         cw = CaptureWriter(
             server="host::5900",
             scrubber=HandshakeScrubber(allow_unsafe_auth=True),
@@ -343,10 +343,8 @@ class TestCaptureWriter(TestCase):
         cw.feed_s2c(bytes([1, AuthTypes.TIGHT]))
         cw.feed_c2s(bytes([AuthTypes.TIGHT]))
 
-        meta = cw.meta("9.9.9")
-        self.assertIsNotNone(meta["unscrubbed_auth"])
-        self.assertIn("tight", meta["unscrubbed_auth"])
-        self.assertIsNone(cw.abort_reason)
+        self.assertIsNone(cw.abort_reason, "the opt-in must not abort")
+        self.assertIn("tight", cw.scrubber.unscrubbable_auth)
 
     def test_encodings_seen_recorded_in_meta(self) -> None:
         """What the server actually sent, named where we know the name."""
@@ -481,7 +479,7 @@ class TestProxyCaptureWiring(TestCase):
         """Chosen on the client side (3.7+), so it surfaces in the c2s tap."""
         sp, cp = self.server_proxy, self.client_proxy
         sp.factory.capture_path = os.path.join(tempfile.mkdtemp(), "capture.zip")
-        sp.factory.capture_claimed = True
+        sp.factory.session_taken = True
 
         cp.dataReceived(VERSION_38)
         sp.dataReceived(VERSION_38)
@@ -522,6 +520,18 @@ class TestProxyCaptureWiring(TestCase):
             {int(Encoding.ZRLE): 2, int(Encoding.HEXTILE): 1},
         )
 
+    def test_forwarding_failures_are_not_swallowed(self) -> None:
+        """Only the observers are wrapped.
+
+        Suppressing a forwarding failure would leave the client waiting on
+        bytes that never arrive, so the session has to fail as it always did.
+        """
+        sp = self.server_proxy
+        sp.factory.password_required = False
+        with mock.patch.object(portforward.ProxyServer, "dataReceived", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                sp.dataReceived(VERSION_38)
+
     def test_capture_survives_a_parser_that_raises(self) -> None:
         """The tap must not depend on RFBServer's semantic parser: an
         unknown ptype raises ProtocolError, and capture and forwarding both
@@ -552,7 +562,7 @@ class TestProxyCaptureWiring(TestCase):
         """
         factory = mock.Mock()
         factory.capture_path = "/tmp/some-capture.zip"
-        factory.capture_claimed = True
+        factory.session_taken = True
 
         sp = VNCLoggingServerProxy()
         sp.factory = factory
@@ -565,14 +575,15 @@ class TestProxyCaptureWiring(TestCase):
         self.assertIsNone(sp.capture)
         factory.getRecorder.assert_not_called()
 
-    def test_empty_connection_does_not_permanently_claim_capture(self) -> None:
+    def test_empty_connection_does_not_use_up_the_one_shot(self) -> None:
         """A bare TCP probe must not lock out the real connection behind it.
         Found live: the functional suite's own port-polling startup wait was
-        claiming the capture before vncdo ever connected.
+        taking the session before vncdo ever connected.
         """
         factory = mock.Mock()
+        factory.one_shot = True
         factory.capture_path = "/tmp/some-capture.zip"
-        factory.capture_claimed = True  # what connectionMade would have set
+        factory.session_taken = True  # what connectionMade would have set
 
         probe = VNCLoggingServerProxy()
         probe.factory = factory
@@ -580,8 +591,9 @@ class TestProxyCaptureWiring(TestCase):
 
         probe.connectionLost(mock.Mock())
 
-        self.assertFalse(factory.capture_claimed)
+        self.assertFalse(factory.session_taken)
         self.assertIsNone(probe.capture)
+        factory.sessionFinished.assert_not_called()
 
     def test_greeting_only_session_is_still_written(self) -> None:
         """A server rejecting the client before it speaks (TigerVNC's "Too
@@ -592,18 +604,21 @@ class TestProxyCaptureWiring(TestCase):
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         archive = os.path.join(tmp, "capture.zip")
         factory = mock.Mock()
+        factory.one_shot = True
         factory.capture_path = archive
-        factory.capture_claimed = True
+        factory.session_taken = True
         factory.getRecordedSession.return_value = b""
 
         session = VNCLoggingServerProxy()
         session.factory = factory
         session.capture = CaptureWriter(server="testhost::5900")
-        session.capture.feed_s2c(b"RFB 003.003\n")  # greeting arrived; client never got a byte through
+        session.saw_bytes = True  # the greeting arrived
+        session.capture.feed_s2c(b"RFB 003.003\n")  # client never got a byte through
 
         session.connectionLost(mock.Mock())
 
-        self.assertTrue(factory.capture_claimed, "a real (if one-sided) session keeps the claim")
+        self.assertTrue(factory.session_taken, "a real (if one-sided) session is still a session")
+        factory.sessionFinished.assert_called_once()
         with zipfile.ZipFile(archive) as zf:
             self.assertEqual(zf.read("s2c.bin"), b"RFB 003.003\n")
             self.assertEqual(zf.read("c2s.bin"), b"")

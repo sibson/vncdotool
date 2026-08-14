@@ -1,13 +1,4 @@
-"""The `vnclog` recording proxy, driven end to end as a subprocess.
-
-A `vnclog` process sits between `vncdo` and the vncev fleet service, and
-the test asserts both sides of the proxy did their job: the events reached
-the server and the recorder wrote them down.
-
-The `--capture` classes run against vncev (auth None) and against
-tigervnc-auth, so the challenge/response scrub is proven against a real
-server's byte stream, not only the scripted bytes in tests/unit/test_capture.py.
-"""
+"""The `vnclog` recording proxy, driven end to end as a subprocess."""
 
 import json
 import select
@@ -46,9 +37,8 @@ def _await_capture(archive: Path) -> zipfile.ZipFile:
 def _start_vnclog(listen_port: int, server: str, capture_path: Path) -> subprocess.Popen:
     """Start `vnclog --capture-raw`, waiting until it is actually listening.
 
-    Readiness comes from vnclog's stderr, never a port probe: in capture
-    mode the probe can race the forwarded greeting into looking like a real
-    session, claim the capture, and get the actual client refused.
+    Readiness comes from vnclog's stderr, never a port probe: the probe can
+    race the forwarded greeting into looking like a real session.
     """
     proxy = subprocess.Popen(
         [
@@ -150,12 +140,7 @@ class TestVnclogProxy(TestCase):
 
 
 class TestVnclogCapture(TestCase):
-    """`vnclog --capture-raw FILE.zip` end to end against vncev.
-
-    vncev speaks auth None, so this is the no-scrub path: the archive lands
-    with all four members and stays byte-identical when there is nothing to
-    redact.
-    """
+    """`vnclog --capture-raw FILE.zip` against vncev, which uses auth None."""
 
     def setUp(self) -> None:
         if not port_open(HOST, VNCEV.port):
@@ -220,8 +205,8 @@ class TestVnclogCapture(TestCase):
         self.assertIn("already exists", second.stderr.lower())
 
 
-class TestVnclogCaptureVncAuth(TestCase):
-    """`vnclog --capture-raw FILE.zip` against tigervnc-auth (VNC password auth).
+class TestVnclogCaptureVNCAuth(TestCase):
+    """`vnclog --capture-raw FILE.zip` against tigervnc-auth.
 
     The unit tests scrub a scripted challenge/response; only a live run
     proves it against tigervnc's real handshake.
@@ -271,7 +256,7 @@ class TestVnclogCaptureVncAuth(TestCase):
         # version reply, 1-byte security type, then the 16 bytes that must
         # have been zeroed.
         self.assertEqual(c2s[13:29], bytes(16), f"auth response was not scrubbed: {c2s[:32]!r}")
-        self.assertIsNone(meta["unscrubbed_auth"])
+        self.assertIsNone(meta.get("unscrubbable_auth"))
 
         self.assertIn("keydown z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")
         self.assertIn("keyup z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")

@@ -9,6 +9,7 @@ import time
 from struct import unpack, unpack_from
 from typing import IO, Callable, Sequence
 
+from twisted.internet.error import ReactorNotRunning
 from twisted.internet.protocol import Protocol
 from twisted.protocols import portforward
 from twisted.python.failure import Failure
@@ -231,8 +232,9 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
     def dataReceived(self, data: bytes) -> None:
-        # Capture first, unconditionally: a parse failure below must never
-        # truncate the recording.
+        # Capture first: a parse failure below must never truncate it.
+        if self.peer is not None and data:
+            self.peer.saw_bytes = True
         if self.peer is not None and self.peer.capture is not None:
             self.peer.capture.feed_s2c(data)
             # Pre-3.7 the *server* picks the security type, so an
@@ -241,17 +243,19 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
                 self.peer._abortCapture(self.peer.capture.abort_reason)
                 return
         if self.vnclog:
+            # The decoder is an observer: it feeds the log, never the client.
+            # Killing a session the server was happy with, because our own
+            # optional logging choked, would record a vnclog artefact.
             try:
                 self.vnclog.dataReceived(data)
             except Exception:
                 log.warning(
-                    "vnclog client failed to parse %d server bytes; capture and forwarding continue",
+                    "vnclog client failed to parse %d server bytes; forwarding continues",
                     len(data), exc_info=True,
                 )
-        try:
-            super().dataReceived(data)
-        except Exception:
-            log.warning("failed forwarding %d server bytes to client", len(data), exc_info=True)
+        # Forwarding is not wrapped: if bytes cannot reach the client, the
+        # session has to fail like it always did rather than hang.
+        super().dataReceived(data)
 
 
 class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[misc]
@@ -273,14 +277,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     buttons = 0
     recorder: Callable[[str], int] | None = None
     capture: CaptureWriter | None = None
+    saw_bytes: bool = False
 
     def connectionMade(self) -> None:
-        # Claimed on accept rather than on write, so a second concurrent
-        # connection is refused too instead of overwriting the capture.
-        if self.factory.capture_path and self.factory.capture_claimed:
+        # Taken on accept rather than on first byte, so a second concurrent
+        # connection is refused rather than interleaved into the session.
+        if self.factory.one_shot and self.factory.session_taken:
             log.warning(
-                "--capture-raw %s already has a session; refusing connection from %s",
-                self.factory.capture_path,
+                "--one-shot: already serving a session; refusing connection from %s",
                 self.transport.getPeer().host,
             )
             self.transport.loseConnection()
@@ -292,27 +296,28 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.mouse: tuple[int | None, int | None] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
+        if self.factory.one_shot:
+            self.factory.session_taken = True
         if self.factory.capture_path:
-            self.factory.capture_claimed = True
             self.capture = CaptureWriter(
-                server=self.factory.server_str,
+                server=self.factory.server_address,
                 scrubber=HandshakeScrubber(allow_unsafe_auth=self.factory.capture_unsafe_auth),
             )
 
     def connectionLost(self, reason: Failure) -> None:
-        if self.capture is not None:
-            if self.capture.s2c or self.capture.c2s:
-                # Bytes in either direction count: a server rejecting the
-                # client before it speaks is itself the evidence. So nothing
-                # may port-probe a capture-mode vnclog -- the forwarded
-                # greeting would look like a session and claim the capture.
+        # Bytes in either direction make it a session, including a server
+        # rejecting the client before it speaks -- that rejection is itself
+        # the evidence. A bare TCP open/close is not one, so a port probe
+        # neither writes a capture nor uses up a --one-shot run.
+        if self.saw_bytes:
+            if self.capture is not None:
                 self._writeCapture()
-            else:
-                # A bare TCP open/close is not a session. Release the claim
-                # rather than lock out the real connection behind it.
-                log.debug("--capture-raw: connection produced no bytes, not claiming the capture")
-                self.factory.capture_claimed = False
-                self.capture = None
+            if self.factory.one_shot:
+                self.factory.sessionFinished()
+        else:
+            log.debug("connection produced no bytes; not counting it as a session")
+            self.factory.session_taken = False
+            self.capture = None
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
 
@@ -339,7 +344,6 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.capture = None
         if self.vnclog_client is not None:
             self.vnclog_client.capture = None
-        self.factory.capture_aborted = True
         self.transport.loseConnection()
 
     @property
@@ -348,24 +352,24 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         return getattr(peer, "vnclog", None) if peer is not None else None
 
     def dataReceived(self, data: bytes) -> None:
-        # Capture first, unconditionally: a parse failure below must never
-        # truncate the recording.
+        # Capture first: a parse failure below must never truncate it.
+        if data:
+            self.saw_bytes = True
         if self.capture is not None:
             self.capture.feed_c2s(data)
             if self.capture.abort_reason is not None:
                 self._abortCapture(self.capture.abort_reason)
                 return
+        # See VNCLoggingClientProxy.dataReceived: the semantic parser is an
+        # observer, the forwarding is not.
         try:
             RFBServer.dataReceived(self, data)
         except Exception:
             log.warning(
-                "RFBServer failed to parse %d client bytes; capture and forwarding continue",
+                "RFBServer failed to parse %d client bytes; forwarding continues",
                 len(data), exc_info=True,
             )
-        try:
-            super().dataReceived(data)
-        except Exception:
-            log.warning("failed forwarding %d client bytes to server", len(data), exc_info=True)
+        super().dataReceived(data)
 
     def _handle_clientInit(self) -> None:
         RFBServer._handle_clientInit(self)
@@ -422,14 +426,25 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     output: IO[str] | str = sys.stdout
     _out: IO[str] | None = None
 
-    # `capture_claimed` latches on the first connection accepted in capture
-    # mode, so a later one is refused rather than clobbering the capture.
+    # --one-shot: serve a single session, then exit. `session_taken` latches
+    # on the connection that gets it, so a concurrent second one is refused.
+    one_shot: bool = False
+    session_taken: bool = False
+
     capture_path: str | None = None
-    capture_claimed: bool = False
-    capture_aborted: bool = False
     capture_unsafe_auth: bool = False
-    server_str: str = ""
+    server_address: str = ""
     _capture_vdo: io.StringIO | None = None
+
+    def sessionFinished(self) -> None:
+        """End the process after a --one-shot session, once it has closed."""
+        from twisted.internet import reactor
+
+        log.info("--one-shot: session finished, shutting down")
+        try:
+            reactor.stop()
+        except ReactorNotRunning:
+            pass
 
     def getRecorder(self) -> Callable[[str], int]:
         if self.capture_path:

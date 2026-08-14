@@ -23,8 +23,6 @@ from typing import Any, Generator
 
 from .const import AuthTypes, Encoding
 
-MARKER = b"\x00" * 16
-
 # AES-ECB over a fixed 64-byte username + 64-byte password struct; see
 # RFBClient._encryptArd().
 ARD_CREDENTIALS_LEN = 128
@@ -39,8 +37,8 @@ class HandshakeScrubber:
     """Tracks an RFB handshake across both directions of a proxied stream.
 
     :meth:`feed` takes raw bytes in arrival order and returns what should
-    reach disk, with the VNC-auth challenge/response replaced by ``MARKER``.
-    Once the handshake is done it passes bytes straight through.
+    reach disk, credentials replaced by zeros. Once the handshake is done it
+    passes bytes straight through.
     """
 
     def __init__(self, allow_unsafe_auth: bool = False) -> None:
@@ -49,7 +47,7 @@ class HandshakeScrubber:
         self.negotiated_version: tuple[int, int] | None = None
         self.security_types: list[int] = []
         self.security_type: int | None = None
-        self.unscrubbed_auth: str | None = None
+        self.unscrubbable_auth: str | None = None
         # Set when an unscrubbable auth type is selected without an opt-in;
         # the caller drops the capture.
         self.abort_reason: str | None = None
@@ -183,10 +181,10 @@ class HandshakeScrubber:
             # whole. Name it, and stop unless a human opted in.
             looked_up = AuthTypes.lookup(sectype)
             name = getattr(looked_up, "name", None) or str(looked_up)
-            self.unscrubbed_auth = f"{name.lower().replace('_', '-')}({int(sectype)})"
+            self.unscrubbable_auth = f"{name.lower().replace('_', '-')}({int(sectype)})"
             if not self.allow_unsafe_auth:
                 self.abort_reason = (
-                    f"the session negotiated {self.unscrubbed_auth}, which vncdotool cannot scrub; "
+                    f"the session negotiated {self.unscrubbable_auth}, which vncdotool cannot scrub; "
                     "the capture would contain the credential exchange verbatim. "
                     "Re-run with --capture-raw-unsafe-auth, using a disposable password "
                     "you rotate afterwards, if you need this exchange captured."
@@ -278,7 +276,6 @@ class CaptureWriter:
             "capture_timestamp": self.capture_timestamp,
             "protocol_version": self.scrubber.protocol_version,
             "security_types": self.scrubber.security_types,
-            "unscrubbed_auth": self.scrubber.unscrubbed_auth,
             "encodings_seen": self.encodings_list(),
             "geometry": (
                 {"width": self.scrubber.width, "height": self.scrubber.height}

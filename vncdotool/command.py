@@ -321,7 +321,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
 def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
-    factory.server_str = options.server
+    factory.server_address = options.server
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -452,6 +452,12 @@ def vnclog() -> None:
         help="a VNC password is required to connect to the server",
     )
     op.add_option(
+        "--one-shot",
+        action="store_true",
+        default=False,
+        help="serve a single session, then exit; implied by --capture-raw",
+    )
+    op.add_option(
         "--capture-raw",
         metavar="FILE.zip",
         help="write a raw wire capture (scrubbed of auth secrets) to FILE.zip, "
@@ -473,6 +479,8 @@ def vnclog() -> None:
     options.address_family, options.host, options.port = parse_server(options.server)
 
     output = None
+    if options.one_shot and options.forever:
+        op.error("--one-shot and --forever are mutually exclusive")
     if options.capture_raw:
         if args:
             op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
@@ -494,6 +502,8 @@ def vnclog() -> None:
         file=sys.stderr,
         flush=True,
     )
+
+    factory.one_shot = options.one_shot or bool(options.capture_raw)
 
     if options.capture_raw:
         factory.capture_path = options.capture_raw
