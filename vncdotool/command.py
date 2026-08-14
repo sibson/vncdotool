@@ -26,6 +26,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
+from .capture import check_capture_dir
 from .client import (
     AuthenticationError,
     ProtocolError,
@@ -320,6 +321,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
 def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
+    factory.server_str = options.server
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -419,7 +421,7 @@ def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
 def vnclog() -> None:
     from vncdotool import __version__
 
-    usage = "%prog [options] OUTPUT"
+    usage = "%prog [options] [OUTPUT]"
     description = "Capture user interactions with a VNC Server"
     version = "%prog " + __version__
 
@@ -449,15 +451,36 @@ def vnclog() -> None:
         default=False,
         help="a VNC password is required to connect to the server",
     )
+    op.add_option(
+        "--capture",
+        metavar="DIR",
+        help="also write a raw wire capture (scrubbed of auth secrets) into DIR, "
+        "alongside session.vdo -- see docs/capture.rst. DIR must not exist or be "
+        "empty; OUTPUT is implied (DIR/session.vdo) and should be omitted.",
+    )
     options, args = op.parse_args()
 
     setup_logging(options)
 
     options.address_family, options.host, options.port = parse_server(options.server)
 
-    if len(args) != 1:
+    output = None
+    if options.capture:
+        if args:
+            op.error("OUTPUT is implied by --capture (DIR/session.vdo); do not also pass OUTPUT")
+        try:
+            check_capture_dir(options.capture)
+        except ValueError as exc:
+            op.error(str(exc))
+    elif len(args) != 1:
         op.error("incorrect number of arguments")
-    output = args[0]
+    else:
+        output = args[0]
+
+    # Created only after every argument validates, so an op.error() above
+    # leaves no stray directory behind.
+    if options.capture:
+        os.makedirs(options.capture, exist_ok=True)
 
     factory = build_proxy(options)
     # stderr, because stdout may carry the recorded session (OUTPUT of `-`)
@@ -467,7 +490,9 @@ def vnclog() -> None:
         flush=True,
     )
 
-    if options.forever and os.path.isdir(output):
+    if options.capture:
+        factory.capture_dir = options.capture
+    elif options.forever and os.path.isdir(output):
         factory.output = output
     elif options.forever:
         op.error("--forever requires OUTPUT to be a directory")

@@ -12,6 +12,8 @@ from twisted.internet.protocol import Protocol
 from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
+from . import __version__ as VNCDOTOOL_VERSION
+from .capture import CaptureWriter, write_meta
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import VNCDoToolClient
 from .keys import KEYMAP
@@ -72,7 +74,14 @@ class RFBServer(Protocol):  # type: ignore[misc]
         sectype = self.buffer[0]
         log.debug("Client selected %r", AuthTypes.lookup(sectype))
         del self.buffer[:1]
-        self._handler = self._handle_clientInit, 1
+        if sectype == AuthTypes.VNC_AUTHENTICATION:
+            # The challenge/response is the same 16 bytes as on the pre-3.7
+            # path, and must be skipped the same way: otherwise the response's
+            # first byte is read as ClientInit's `shared` flag and everything
+            # downstream desyncs.
+            self._handler = self._handle_VNCAuthResponse, 16
+        else:
+            self._handler = self._handle_clientInit, 1
 
     def _handle_VNCAuthResponse(self) -> None:
         del self.buffer[:16]
@@ -211,9 +220,22 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         self.vnclog.expect(self.vnclog._handleServerInit, 24)
 
     def dataReceived(self, data: bytes) -> None:
-        super().dataReceived(data)
+        # Capture first, unconditionally: a parse failure below must never
+        # truncate the recording.
+        if self.peer is not None and self.peer.capture is not None:
+            self.peer.capture.feed_s2c(data)
         if self.vnclog:
-            self.vnclog.dataReceived(data)
+            try:
+                self.vnclog.dataReceived(data)
+            except Exception:
+                log.warning(
+                    "vnclog client failed to parse %d server bytes; capture and forwarding continue",
+                    len(data), exc_info=True,
+                )
+        try:
+            super().dataReceived(data)
+        except Exception:
+            log.warning("failed forwarding %d server bytes to client", len(data), exc_info=True)
 
 
 class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[misc]
@@ -234,22 +256,79 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     server: str | None = None
     buttons = 0
     recorder: Callable[[str], int] | None = None
+    capture: CaptureWriter | None = None
 
     def connectionMade(self) -> None:
+        # One capture per directory: the format is singular, and a viewer
+        # that reconnects would otherwise overwrite the capture the
+        # contributor wanted. Claimed on accept, not on write, so a second
+        # concurrent connection is refused too.
+        if self.factory.capture_dir and self.factory.capture_claimed:
+            log.warning(
+                "--capture %s already has a session; refusing connection from %s",
+                self.factory.capture_dir,
+                self.transport.getPeer().host,
+            )
+            self.transport.loseConnection()
+            return
+
         log.info("new connection from %s", self.transport.getPeer().host)
         super().connectionMade()
         RFBServer.connectionMade(self)
         self.mouse: tuple[int | None, int | None] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
+        if self.factory.capture_dir:
+            self.factory.capture_claimed = True
+            password = self.factory.password.encode() if self.factory.password else None
+            self.capture = CaptureWriter(server=self.factory.server_str, password=password)
 
     def connectionLost(self, reason: Failure) -> None:
+        if self.capture is not None:
+            if self.capture.s2c or self.capture.c2s:
+                # Bytes in either direction count, including a server that
+                # rejects the client before the client sends anything -- that
+                # rejection is the evidence being captured. So nothing may
+                # port-probe a capture-mode vnclog: the forwarded greeting
+                # would look like a session and claim the capture.
+                self._writeCapture()
+            else:
+                # A bare TCP open/close is not a session. Release the claim
+                # rather than lock out the real connection behind it.
+                log.debug("--capture: connection produced no bytes, not claiming the capture")
+                self.factory.capture_claimed = False
+                self.capture = None
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
 
+    def _writeCapture(self) -> None:
+        assert self.capture is not None
+        capture_dir = self.factory.capture_dir
+        assert capture_dir is not None
+        self.capture.write(capture_dir)
+        write_meta(
+            os.path.join(capture_dir, "meta.json"),
+            self.capture.meta(VNCDOTOOL_VERSION),
+        )
+        # Guard against a double connectionLost (peer already gone) writing twice.
+        self.capture = None
+
     def dataReceived(self, data: bytes) -> None:
-        RFBServer.dataReceived(self, data)
-        super().dataReceived(data)
+        # Capture first, unconditionally: a parse failure below must never
+        # truncate the recording.
+        if self.capture is not None:
+            self.capture.feed_c2s(data)
+        try:
+            RFBServer.dataReceived(self, data)
+        except Exception:
+            log.warning(
+                "RFBServer failed to parse %d client bytes; capture and forwarding continue",
+                len(data), exc_info=True,
+            )
+        try:
+            super().dataReceived(data)
+        except Exception:
+            log.warning("failed forwarding %d client bytes to server", len(data), exc_info=True)
 
     def _handle_clientInit(self) -> None:
         RFBServer._handle_clientInit(self)
@@ -299,12 +378,27 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     force_caps = False
 
     password_required = False
+    # Declared so a factory built without the CLI parser still has a value
+    # here rather than raising AttributeError.
+    password: str | None = None
 
     output: IO[str] | str = sys.stdout
     _out: IO[str] | None = None
 
+    # `capture_claimed` latches on the first connection accepted in capture
+    # mode, so a later one is refused rather than clobbering the capture.
+    capture_dir: str | None = None
+    capture_claimed: bool = False
+    server_str: str = ""
+
     def getRecorder(self) -> Callable[[str], int]:
-        if isinstance(self.output, str):
+        if self.capture_dir:
+            # Opened and closed per connection, like --forever, so
+            # session.vdo is complete when the client disconnects.
+            outfile = os.path.join(self.capture_dir, "session.vdo")
+            self._out = open(outfile, "w")
+            return self._out.write
+        elif isinstance(self.output, str):
             now = time.strftime("%y%m%d-%H%M%S")
             outfile = os.path.join(self.output, "%s.vdo" % now)
             self._out = open(outfile, "w")
