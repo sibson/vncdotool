@@ -95,12 +95,12 @@ compatibility is already proven by the subprocess grid.
 For servers we cannot run (RealVNC, Proxmox, ...), contributors submit
 evidence instead of access.
 
-**Capture tool**: a `--capture DIR` flag on the existing proxy CLI
-(`vncdolog`). Contributor pip-installs released vncdotool, points their
+**Capture tool**: a `--capture-raw ARCHIVE.zip` flag on the existing proxy
+CLI (`vnclog`). Contributor pip-installs released vncdotool, points their
 client (or a `vncdo` script) through the proxy at their server, and gets a
-capture directory to attach to an issue. No repo checkout required.
+capture archive to attach to an issue. No repo checkout required.
 
-Capture directory format — bytes stay dumb, parsing happens at
+Capture archive format — bytes stay dumb, parsing happens at
 replay/distill time, so the format never needs versioning:
 
     session.vdo   # what was driven (vncdo script / logged commands)
@@ -114,7 +114,10 @@ bytes and the VNC auth challenge/response are redacted in the recorded
 streams. The paved-road doc tells contributors what the capture does and
 does not contain.
 
-**Replay tool** (in-repo, never shipped, never in CI):
+**Replay tool** (in-repo, never shipped, never a CI fixture — no recorded
+capture is ever replayed in CI, though one inline-bytes end-to-end test,
+`tests/functional/test_replay.py`, does run in CI to guard the tool's own
+pacing logic):
 `tests/tools/replay_server.py` — listens on a port, plays a captured
 `s2c.bin` (or a hand-written script of protocol messages) at whatever
 client connects, tolerant of client input. Two uses:
@@ -165,7 +168,7 @@ revisit only if someone asks for it.
    terrain.)
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
    delete golden-PNG suite.
-3. `--capture` flag + scrubbing + contributor paved-road doc.
+3. `--capture-raw` flag + scrubbing + contributor paved-road doc.
 4. `tests/tools/replay_server.py` as distillation aid.
 5. In-process API lifecycle suite against one container.
 
