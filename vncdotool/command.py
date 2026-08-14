@@ -26,7 +26,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from .capture import check_capture_dir
+from .capture import check_capture_target
 from .client import (
     AuthenticationError,
     ProtocolError,
@@ -453,10 +453,18 @@ def vnclog() -> None:
     )
     op.add_option(
         "--capture",
-        metavar="DIR",
-        help="also write a raw wire capture (scrubbed of auth secrets) into DIR, "
-        "alongside session.vdo -- see docs/capture.rst. DIR must not exist or be "
-        "empty; OUTPUT is implied (DIR/session.vdo) and should be omitted.",
+        metavar="FILE.zip",
+        help="write a raw wire capture (scrubbed of auth secrets) to FILE.zip, "
+        "ready to attach to an issue -- see docs/capture.rst. FILE.zip must not "
+        "exist; OUTPUT is implied (session.vdo inside the archive) and should be omitted.",
+    )
+    op.add_option(
+        "--capture-unsafe-auth",
+        action="store_true",
+        default=False,
+        help="allow --capture to record auth types vncdotool cannot scrub, storing "
+        "the credential exchange verbatim. Use a disposable password and rotate it "
+        "afterwards.",
     )
     options, args = op.parse_args()
 
@@ -467,20 +475,17 @@ def vnclog() -> None:
     output = None
     if options.capture:
         if args:
-            op.error("OUTPUT is implied by --capture (DIR/session.vdo); do not also pass OUTPUT")
+            op.error("OUTPUT is implied by --capture (session.vdo in the archive); do not also pass OUTPUT")
         try:
-            check_capture_dir(options.capture)
+            check_capture_target(options.capture)
         except ValueError as exc:
             op.error(str(exc))
+    elif options.capture_unsafe_auth:
+        op.error("--capture-unsafe-auth is only meaningful with --capture")
     elif len(args) != 1:
         op.error("incorrect number of arguments")
     else:
         output = args[0]
-
-    # Created only after every argument validates, so an op.error() above
-    # leaves no stray directory behind.
-    if options.capture:
-        os.makedirs(options.capture, exist_ok=True)
 
     factory = build_proxy(options)
     # stderr, because stdout may carry the recorded session (OUTPUT of `-`)
@@ -491,7 +496,8 @@ def vnclog() -> None:
     )
 
     if options.capture:
-        factory.capture_dir = options.capture
+        factory.capture_path = options.capture
+        factory.capture_unsafe_auth = options.capture_unsafe_auth
     elif options.forever and os.path.isdir(output):
         factory.output = output
     elif options.forever:

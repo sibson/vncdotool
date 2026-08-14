@@ -19,13 +19,12 @@ Making a capture
        pip install vncdotool
 
 2. Start the recording proxy, pointed at the server you're seeing the bug
-   against, with an empty (or not-yet-existing) directory to write into::
+   against, naming the ``.zip`` to write::
 
-       vnclog --capture ./my-bug-capture --listen 5902 -s YOURSERVER::5900
+       vnclog --capture ./my-bug-capture.zip --listen 5902 -s YOURSERVER::5900
 
-   ``vnclog`` will refuse to run if ``./my-bug-capture`` already exists and
-   is non-empty -- that's deliberate, so a capture is never silently mixed
-   with an older one.
+   ``vnclog`` will refuse to run if ``./my-bug-capture.zip`` already exists
+   -- that's deliberate, so a capture is never silently overwritten.
 
 3. Point your VNC client at the proxy instead of the real server --
    ``localhost::5902`` -- and reproduce the problem. This can be your usual
@@ -33,15 +32,14 @@ Making a capture
 
        vncdo -s localhost::5902 key enter type "hello" capture screen.png
 
-4. Stop the proxy (Ctrl-C) once you're done. It flushes and closes the
-   capture when your client disconnects, not only on a clean process exit,
-   so a Ctrl-C is safe.
+4. Stop the proxy (Ctrl-C) once you're done. It writes the archive when your
+   client disconnects, not only on a clean process exit, so a Ctrl-C is
+   safe.
 
-5. Attach the whole ``my-bug-capture`` directory to the GitHub issue (zip it
-   first if your attachment tool doesn't take directories).
+5. Attach ``my-bug-capture.zip`` to the GitHub issue.
 
-What's in the directory
--------------------------
+What's in the archive
+-----------------------
 
 ::
 
@@ -50,13 +48,17 @@ What's in the directory
     c2s.bin       # raw client-to-server byte stream, in arrival order
     meta.json     # server address, vncdotool version, capture timestamp,
                   # the server's protocol version string, the security
-                  # types it offered, the framebuffer geometry, and what
-                  # was (and was not) scrubbed
+                  # types it offered, which encodings it actually sent,
+                  # the framebuffer geometry, and what was (and was not)
+                  # scrubbed
 
-Only one session is ever recorded per ``--capture DIR``: if a second client
+The archive is written whole, under a temporary name and renamed into place,
+so a half-written capture never looks like a complete one.
+
+Only one session is ever recorded per ``--capture``: if a second client
 connects (a viewer retrying after a dropped connection, say) it is refused
 outright rather than silently overwriting the capture you already have.
-Start a fresh ``vnclog --capture`` into a new directory to record another
+Start a fresh ``vnclog --capture`` with a new filename to record another
 session.
 
 ``meta.json`` is plain, human-readable JSON -- open it and read it before
@@ -64,39 +66,76 @@ you attach the capture. It tells you exactly what got redacted, so you can
 confirm nothing else in the two ``.bin`` files needs to be trimmed by hand
 before it leaves your machine.
 
+``encodings_seen`` is counted from the rectangles the server actually sent,
+not from what the client asked for -- a server is free to ignore the
+client's ``SetEncodings`` -- so it answers "which encodings does this server
+really use?" directly::
+
+    "encodings_seen": [
+      {"encoding": 0,  "name": "raw",  "rectangles": 3},
+      {"encoding": 16, "name": "zrle", "rectangles": 118}
+    ]
+
+An encoding vncdotool has no name for shows as ``"name": null`` with its
+number intact, which is itself a useful bug report.
+
 What is scrubbed
 ------------------
 
-Two things are redacted at capture time, before any byte touches disk:
+Credentials are redacted at capture time, before any byte touches disk.
+Redactions are always replaced by the same number of zero bytes, so the
+surrounding byte offsets don't shift and the capture still replays:
 
-* the 16-byte VNC authentication challenge (sent by the server) and the
-  16-byte response (sent by the client), each replaced with an all-zero
-  marker of the same length so the surrounding byte offsets don't shift;
-* any bytes matching the VNC password vncdotool itself was given (via
-  ``-p``/``--password``), wherever they occur in either stream.
+* **VNC authentication** -- the 16-byte challenge (from the server) and the
+  16-byte response (from the client);
+* **ARD / Apple Screen Sharing** (``diffie-hellman``, macOS) -- the 128-byte
+  AES block carrying your username and password. The Diffie-Hellman values
+  around it (generator, modulus, both public keys) are public by
+  construction and are kept deliberately: ARD compatibility bugs live in
+  those values;
+* **your VNC password** -- any bytes matching the password vncdotool itself
+  was given (via ``-p``/``--password``), wherever they occur in either
+  stream. Best-effort only: VNC auth never puts the password on the wire in
+  the clear, so this is a backstop, not the main defence.
 
-Both are also listed by name in ``meta.json``'s ``scrubbed`` field, so you
-don't have to take it on faith -- e.g. ``["vnc-auth-challenge",
+Each is listed by name in ``meta.json``'s ``scrubbed`` field, so you don't
+have to take it on faith -- e.g. ``["vnc-auth-challenge",
 "vnc-auth-response"]``, or ``[]`` if the server used no authentication at
 all.
 
+Auth types with no scrubber
+-----------------------------
+
+vncdotool can only redact an exchange it can parse. If the session
+negotiates something else -- ``tight``, ``vencrypt``, ``rsa-aes``,
+UltraVNC's MS-Logon -- the capture is **aborted**: nothing is written and
+the connection is closed, with the reason printed to stderr::
+
+    --capture aborted: the session negotiated tight(16), which vncdotool
+    cannot scrub; the capture would contain the credential exchange verbatim.
+
+That is the safe default for a file you are about to attach to a public
+issue tracker. If the bug you are chasing *is* in that auth exchange, you
+can override it::
+
+    vnclog --capture ./my-bug-capture.zip --capture-unsafe-auth \
+        --listen 5902 -s YOURSERVER::5900
+
 .. warning::
 
-   **Apple Remote Desktop / Diffie-Hellman auth (macOS Screen Sharing) is
-   not scrubbed.** If ``meta.json``'s ``unscrubbed_auth`` field is set
-   (e.g. ``"diffie-hellman(30)"``) instead of ``null``, the capture
-   contains that key exchange -- including your username and
-   DES/AES-wrapped password -- verbatim in ``s2c.bin``/``c2s.bin``. ARD's
-   512-bit Diffie-Hellman is within reach of offline compute today, so
-   treat such a capture as containing your credentials in a weakly
-   protected form. Do **not** attach it to a public issue; email it to a
-   maintainer instead, or reproduce the bug against a server that uses VNC
-   password auth or no auth if that's an option for you.
+   ``--capture-unsafe-auth`` writes the credential exchange to the archive
+   verbatim, and ``meta.json``'s ``unscrubbed_auth`` field records which
+   type it was. Some of these exchanges are attackable offline -- ARD's
+   512-bit Diffie-Hellman is within reach of ordinary compute today. Use a
+   **disposable password, and rotate it afterwards**, and prefer emailing
+   such a capture to a maintainer over attaching it to a public issue.
 
 What is **not** scrubbed
 --------------------------
 
-Everything else in the capture is recorded as-is. In particular:
+Scrubbing stops at the end of the handshake. Everything the session itself
+carries is recorded as-is -- deliberately: a capture with its input stream
+rewritten is no longer evidence of what the server did. In particular:
 
 * **screen contents** -- framebuffer updates are the whole point of the
   protocol, and they are not redacted;
@@ -108,11 +147,12 @@ Everything else in the capture is recorded as-is. In particular:
   sent.
 
 Do not reproduce a bug through the capture proxy while entering anything you
-would not want to see attached to a public GitHub issue. If your reproduction
-requires it, redact the relevant bytes from ``s2c.bin``/``c2s.bin`` by hand
-before attaching -- the file format is deliberately simple (three flat
-files plus JSON metadata) so that's a plain byte-offset edit, not a special
-tool.
+would not want to see attached to a public GitHub issue -- in particular, do
+not type a password into the remote desktop during a capture. If your
+reproduction requires it, unzip the archive, redact the relevant bytes from
+``s2c.bin``/``c2s.bin`` by hand, and rezip -- the format is deliberately
+simple (three flat files plus JSON metadata) so that's a plain byte-offset
+edit, not a special tool.
 
 Replaying a capture
 ---------------------

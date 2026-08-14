@@ -14,6 +14,7 @@ import select
 import subprocess
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from unittest import TestCase
 
@@ -28,7 +29,21 @@ PROXY_STARTUP_DEADLINE = 10.0
 PROXY_SHUTDOWN_TIMEOUT = 10.0
 
 
-def _start_vnclog(listen_port: int, server: str, capture_dir: Path) -> subprocess.Popen:
+def _await_capture(archive: Path) -> zipfile.ZipFile:
+    """Wait for the capture archive to be written, then open it.
+
+    The archive is renamed into place only once complete, so its existence
+    is enough -- no polling for individual members.
+    """
+    deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
+    while time.monotonic() < deadline and not archive.exists():
+        time.sleep(0.2)
+    if not archive.exists():
+        raise AssertionError(f"capture archive {archive} was never written")
+    return zipfile.ZipFile(archive)
+
+
+def _start_vnclog(listen_port: int, server: str, capture_path: Path) -> subprocess.Popen:
     """Start `vnclog --capture`, waiting until it is actually listening.
 
     Readiness comes from vnclog's stderr, never a port probe: in capture
@@ -40,7 +55,7 @@ def _start_vnclog(listen_port: int, server: str, capture_dir: Path) -> subproces
             "vnclog",
             "-s", server,
             "--listen", str(listen_port),
-            "--capture", str(capture_dir),
+            "--capture", str(capture_path),
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -135,10 +150,11 @@ class TestVnclogProxy(TestCase):
 
 
 class TestVnclogCapture(TestCase):
-    """`vnclog --capture DIR` end to end against vncev.
+    """`vnclog --capture FILE.zip` end to end against vncev.
 
-    vncev speaks auth None, so this is the no-scrub path: the four files
-    land and stay byte-identical when there is nothing to redact.
+    vncev speaks auth None, so this is the no-scrub path: the archive lands
+    with all four members and stays byte-identical when there is nothing to
+    redact.
     """
 
     def setUp(self) -> None:
@@ -147,62 +163,66 @@ class TestVnclogCapture(TestCase):
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
-        self.capture_dir = Path(tempfile.mkdtemp()) / "capture"
-        self.proxy = _start_vnclog(CAPTURE_PROXY_PORT, f"{HOST}::{VNCEV.port}", self.capture_dir)
+        self.capture = Path(tempfile.mkdtemp()) / "capture.zip"
+        self.proxy = _start_vnclog(CAPTURE_PROXY_PORT, f"{HOST}::{VNCEV.port}", self.capture)
 
     def tearDown(self) -> None:
         _stop_proxy(self.proxy)
 
     def test_capture_writes_scrubbed_streams_and_meta(self) -> None:
         proxied = VNCEV._replace(port=CAPTURE_PROXY_PORT)
-        result = run_vncdo(proxied, "key", "z")
+        # `capture` rather than a bare key press: a screenshot forces a
+        # FramebufferUpdate, which is what puts rectangles on the wire for
+        # meta.json's encodings_seen to count.
+        screenshot = Path(tempfile.mkdtemp()) / "screen.png"
+        result = run_vncdo(proxied, "key", "z", "capture", str(screenshot))
         self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
 
-        expected = {"session.vdo", "s2c.bin", "c2s.bin", "meta.json"}
-        deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
-        present: set = set()
-        while time.monotonic() < deadline and not expected.issubset(present):
-            present = {p.name for p in self.capture_dir.glob("*")} if self.capture_dir.is_dir() else set()
-            time.sleep(0.2)
-        self.assertEqual(expected, present, f"capture dir has: {sorted(present)}")
+        with _await_capture(self.capture) as archive:
+            self.assertEqual(
+                sorted(archive.namelist()), ["c2s.bin", "meta.json", "s2c.bin", "session.vdo"]
+            )
+            s2c = archive.read("s2c.bin")
+            c2s = archive.read("c2s.bin")
+            meta = json.loads(archive.read("meta.json"))
 
-        s2c = (self.capture_dir / "s2c.bin").read_bytes()
-        c2s = (self.capture_dir / "c2s.bin").read_bytes()
         self.assertTrue(s2c.startswith(b"RFB "), f"s2c.bin did not start with the server greeting: {s2c[:16]!r}")
         self.assertTrue(c2s.startswith(b"RFB "), f"c2s.bin did not start with the client's version reply: {c2s[:16]!r}")
 
-        meta = json.loads((self.capture_dir / "meta.json").read_text())
         for key in ("server", "vncdotool_version", "capture_timestamp", "protocol_version", "security_types", "scrubbed"):
             self.assertIn(key, meta)
         self.assertEqual(meta["scrubbed"], [])  # vncev is auth None: nothing to scrub
 
-    def test_capture_refuses_nonempty_dir(self) -> None:
-        # A second vnclog pointed at the same (now non-empty) capture dir
-        # must refuse rather than silently mixing captures.
+        # Recorded off the decoded stream, so this is what the server chose,
+        # not what the client requested.
+        self.assertTrue(meta["encodings_seen"], "no rectangles were tallied")
+        for seen in meta["encodings_seen"]:
+            self.assertGreater(seen["rectangles"], 0)
+
+    def test_capture_refuses_existing_target(self) -> None:
+        # A second vnclog pointed at a capture that already exists must
+        # refuse rather than overwrite it.
         proxied = VNCEV._replace(port=CAPTURE_PROXY_PORT)
         run_vncdo(proxied, "key", "z")
-        deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
-        while time.monotonic() < deadline and not (self.capture_dir / "meta.json").exists():
-            time.sleep(0.2)
-        self.assertTrue((self.capture_dir / "meta.json").exists(), "first capture never completed")
+        _await_capture(self.capture).close()
 
         second = subprocess.run(
             [
                 "vnclog",
                 "-s", f"{HOST}::{VNCEV.port}",
                 "--listen", str(CAPTURE_PROXY_PORT + 1),
-                "--capture", str(self.capture_dir),
+                "--capture", str(self.capture),
             ],
             capture_output=True,
             text=True,
             timeout=PROXY_STARTUP_DEADLINE,
         )
         self.assertNotEqual(second.returncode, 0)
-        self.assertIn("empty", second.stderr.lower())
+        self.assertIn("already exists", second.stderr.lower())
 
 
 class TestVnclogCaptureVncAuth(TestCase):
-    """`vnclog --capture DIR` against tigervnc-auth (VNC password auth).
+    """`vnclog --capture FILE.zip` against tigervnc-auth (VNC password auth).
 
     The unit tests scrub a scripted challenge/response; only a live run
     proves it against tigervnc's real handshake.
@@ -214,8 +234,8 @@ class TestVnclogCaptureVncAuth(TestCase):
                 f"tigervnc-auth not reachable on {HOST}:{TIGERVNC_AUTH.port} -- "
                 "start the servers first with `make servers-up`"
             )
-        self.capture_dir = Path(tempfile.mkdtemp()) / "capture"
-        self.proxy = _start_vnclog(CAPTURE_AUTH_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", self.capture_dir)
+        self.capture = Path(tempfile.mkdtemp()) / "capture.zip"
+        self.proxy = _start_vnclog(CAPTURE_AUTH_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", self.capture)
 
     def tearDown(self) -> None:
         _stop_proxy(self.proxy)
@@ -225,16 +245,15 @@ class TestVnclogCaptureVncAuth(TestCase):
         result = run_vncdo(proxied, "key", "z")
         self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
 
-        expected = {"session.vdo", "s2c.bin", "c2s.bin", "meta.json"}
-        deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
-        present: set = set()
-        while time.monotonic() < deadline and not expected.issubset(present):
-            present = {p.name for p in self.capture_dir.glob("*")} if self.capture_dir.is_dir() else set()
-            time.sleep(0.2)
-        self.assertEqual(expected, present, f"capture dir has: {sorted(present)}")
+        with _await_capture(self.capture) as archive:
+            self.assertEqual(
+                sorted(archive.namelist()), ["c2s.bin", "meta.json", "s2c.bin", "session.vdo"]
+            )
+            s2c = archive.read("s2c.bin")
+            c2s = archive.read("c2s.bin")
+            meta = json.loads(archive.read("meta.json"))
+            session_vdo = archive.read("session.vdo").decode()
 
-        s2c = (self.capture_dir / "s2c.bin").read_bytes()
-        c2s = (self.capture_dir / "c2s.bin").read_bytes()
         self.assertTrue(s2c.startswith(b"RFB "), f"s2c.bin did not start with the server greeting: {s2c[:16]!r}")
         self.assertTrue(c2s.startswith(b"RFB "), f"c2s.bin did not start with the client's version reply: {c2s[:16]!r}")
 
@@ -249,10 +268,8 @@ class TestVnclogCaptureVncAuth(TestCase):
         self.assertNotIn(TIGERVNC_AUTH.password.encode(), s2c)
         self.assertNotIn(TIGERVNC_AUTH.password.encode(), c2s)
 
-        meta = json.loads((self.capture_dir / "meta.json").read_text())
         self.assertEqual(meta["scrubbed"], ["vnc-auth-challenge", "vnc-auth-response"])
         self.assertIsNone(meta["unscrubbed_auth"])
 
-        session_vdo = (self.capture_dir / "session.vdo").read_text()
         self.assertIn("keydown z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")
         self.assertIn("keyup z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")

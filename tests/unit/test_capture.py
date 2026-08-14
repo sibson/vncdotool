@@ -11,10 +11,19 @@ import json
 import os
 import shutil
 import tempfile
+import zipfile
+from struct import pack
 from unittest import TestCase, mock
 
-from vncdotool.capture import CaptureWriter, HandshakeScrubber, check_capture_dir, scrub_password, write_meta
-from vncdotool.const import AuthTypes
+from vncdotool.client import VNCDoToolClient
+from vncdotool.capture import (
+    ARD_CREDENTIALS_LEN,
+    CaptureWriter,
+    HandshakeScrubber,
+    check_capture_target,
+    scrub_password,
+)
+from vncdotool.const import AuthTypes, Encoding
 from vncdotool.loggingproxy import VNCLoggingClientProxy, VNCLoggingServerProxy
 
 VERSION_33 = b"RFB 003.003\n"
@@ -120,25 +129,74 @@ class TestHandshakeScrubber(TestCase):
         rest = b"some-server-name-bytes"
         self.assertEqual(s.feed("s2c", rest), rest)
 
-    def test_unscrubbed_auth_type_is_named(self) -> None:
-        """ARD's key exchange passes through verbatim, so it has to be named
-        rather than leave `scrubbed` empty and read as "nothing sensitive".
-        """
-        s = HandshakeScrubber()
+    def _ard_to_credentials(self, s: HandshakeScrubber, key_len: int = 8) -> None:
+        """Drive an ARD handshake up to the client's credential block."""
         s.feed("s2c", VERSION_38)
         s.feed("c2s", VERSION_38)
         s.feed("s2c", bytes([1, AuthTypes.DIFFIE_HELLMAN]))
         s.feed("c2s", bytes([AuthTypes.DIFFIE_HELLMAN]))
+        self.dh_params = b"\x00\x02" + key_len.to_bytes(2, "big")
+        self.modulus = b"P" * key_len
+        self.server_key = b"G" * key_len
 
-        self.assertEqual(s.scrubbed, [])
-        self.assertEqual(s.security_type, AuthTypes.DIFFIE_HELLMAN)
-        self.assertIsNotNone(s.unscrubbed_auth)
-        self.assertIn("diffie-hellman", s.unscrubbed_auth)
-        self.assertIn("30", s.unscrubbed_auth)
+    def test_ard_credentials_scrubbed_key_exchange_kept(self) -> None:
+        """The AES block carrying username+password goes; the DH values stay.
 
-        # the DH key material is NOT redacted -- passes straight through
-        dh_params = b"\x00\x02\x00\x08" + b"P" * 8 + b"G" * 8
-        self.assertEqual(s.feed("s2c", dh_params), dh_params)
+        Keeping the exchange is deliberate: ARD compatibility bugs live in
+        those values, and they are public by construction.
+        """
+        s = HandshakeScrubber()
+        self._ard_to_credentials(s)
+
+        self.assertEqual(s.feed("s2c", self.dh_params), self.dh_params)
+        self.assertEqual(s.feed("s2c", self.modulus), self.modulus)
+        self.assertEqual(s.feed("s2c", self.server_key), self.server_key)
+
+        credentials = bytes(range(256))[:ARD_CREDENTIALS_LEN]
+        client_key = b"Y" * 8
+        self.assertEqual(s.feed("c2s", credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
+
+        self.assertEqual(s.scrubbed, ["ard-credentials"])
+        self.assertIsNone(s.unscrubbed_auth)
+        self.assertIsNone(s.abort_reason)
+        self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+
+    def test_scrubbing_preserves_byte_offsets(self) -> None:
+        """A redaction that changed length would break replay of the capture."""
+        s = HandshakeScrubber()
+        self._ard_to_credentials(s)
+        s.feed("s2c", self.dh_params + self.modulus + self.server_key)
+
+        credentials = b"\xab" * ARD_CREDENTIALS_LEN
+        out = s.feed("c2s", credentials)
+        self.assertEqual(len(out), ARD_CREDENTIALS_LEN)
+        self.assertNotIn(b"\xab", out)
+
+    def test_unscrubbable_auth_aborts_by_default(self) -> None:
+        s = HandshakeScrubber()
+        s.feed("s2c", VERSION_38)
+        s.feed("c2s", VERSION_38)
+        s.feed("s2c", bytes([1, AuthTypes.TIGHT]))
+        s.feed("c2s", bytes([AuthTypes.TIGHT]))
+
+        self.assertIsNotNone(s.abort_reason)
+        self.assertIn("tight", s.abort_reason)
+        self.assertIn("--capture-unsafe-auth", s.abort_reason)
+        self.assertIn("tight", s.unscrubbed_auth)
+        self.assertIn("16", s.unscrubbed_auth)
+
+    def test_unscrubbable_auth_allowed_when_opted_in(self) -> None:
+        s = HandshakeScrubber(allow_unsafe_auth=True)
+        s.feed("s2c", VERSION_38)
+        s.feed("c2s", VERSION_38)
+        s.feed("s2c", bytes([1, AuthTypes.TIGHT]))
+        s.feed("c2s", bytes([AuthTypes.TIGHT]))
+
+        self.assertIsNone(s.abort_reason)
+        self.assertIn("tight", s.unscrubbed_auth)
+        # key exchange passes through verbatim -- that is what was opted into
+        exchange = b"\x01\x02\x03\x04"
+        self.assertEqual(s.feed("s2c", exchange), exchange)
 
     def test_split_across_chunks(self) -> None:
         s = HandshakeScrubber()
@@ -198,42 +256,45 @@ class TestScrubPassword(TestCase):
         self.assertEqual(out, b"whatever")
 
 
-class TestCheckCaptureDir(TestCase):
+class TestCheckCaptureTarget(TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    def test_does_not_create_missing_dir(self) -> None:
-        """Validation only: creating the directory is the CLI's job."""
-        target = os.path.join(self.tmp, "capture")
-        check_capture_dir(target)  # must not raise
+    def test_accepts_missing_zip_and_creates_nothing(self) -> None:
+        """Validation only: the archive is written when the session ends."""
+        target = os.path.join(self.tmp, "capture.zip")
+        check_capture_target(target)  # must not raise
         self.assertFalse(os.path.exists(target))
 
-    def test_accepts_existing_empty_dir(self) -> None:
-        target = os.path.join(self.tmp, "capture")
-        os.makedirs(target)
-        check_capture_dir(target)  # must not raise
-
-    def test_refuses_nonempty_dir(self) -> None:
-        target = os.path.join(self.tmp, "capture")
-        os.makedirs(target)
-        with open(os.path.join(target, "stray.txt"), "w") as fh:
-            fh.write("x")
+    def test_refuses_non_zip_suffix(self) -> None:
         with self.assertRaises(ValueError):
-            check_capture_dir(target)
+            check_capture_target(os.path.join(self.tmp, "capture"))
 
-    def test_refuses_non_directory(self) -> None:
-        target = os.path.join(self.tmp, "notadir")
+    def test_refuses_existing_file(self) -> None:
+        target = os.path.join(self.tmp, "capture.zip")
         with open(target, "w") as fh:
             fh.write("x")
         with self.assertRaises(ValueError):
-            check_capture_dir(target)
+            check_capture_target(target)
+
+    def test_refuses_missing_parent_directory(self) -> None:
+        with self.assertRaises(ValueError):
+            check_capture_target(os.path.join(self.tmp, "nope", "capture.zip"))
 
 
 class TestCaptureWriter(TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.archive = os.path.join(self.tmp, "capture.zip")
+
+    def read_archive(self, name: str) -> bytes:
+        with zipfile.ZipFile(self.archive) as zf:
+            return zf.read(name)
+
+    def read_meta(self) -> dict:
+        return json.loads(self.read_archive("meta.json"))
 
     def test_meta_and_write_vnc_auth(self) -> None:
         cw = CaptureWriter(server="host::5900", password=None)
@@ -257,16 +318,17 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(bytes(cw.c2s), VERSION_33 + MARKER + b"\x01")
         self.assertEqual(cw.scrubbed_list(), ["vnc-auth-challenge", "vnc-auth-response"])
 
-        cw.write(self.tmp)
-        write_meta(os.path.join(self.tmp, "meta.json"), cw.meta("9.9.9"))
+        cw.write_archive(self.archive, cw.meta("9.9.9"), session_vdo=b"pause 0.1 key a\n")
 
-        with open(os.path.join(self.tmp, "s2c.bin"), "rb") as fh:
-            self.assertEqual(fh.read(), bytes(cw.s2c))
-        with open(os.path.join(self.tmp, "c2s.bin"), "rb") as fh:
-            self.assertEqual(fh.read(), bytes(cw.c2s))
+        with zipfile.ZipFile(self.archive) as zf:
+            self.assertEqual(
+                sorted(zf.namelist()), ["c2s.bin", "meta.json", "s2c.bin", "session.vdo"]
+            )
+        self.assertEqual(self.read_archive("s2c.bin"), bytes(cw.s2c))
+        self.assertEqual(self.read_archive("c2s.bin"), bytes(cw.c2s))
+        self.assertEqual(self.read_archive("session.vdo"), b"pause 0.1 key a\n")
 
-        with open(os.path.join(self.tmp, "meta.json")) as fh:
-            meta = json.load(fh)
+        meta = self.read_meta()
         self.assertEqual(meta["server"], "host::5900")
         self.assertEqual(meta["vncdotool_version"], "9.9.9")
         self.assertEqual(meta["protocol_version"], "RFB 003.003")
@@ -293,26 +355,56 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(bytes(cw.c2s), VERSION_38 + bytes([AuthTypes.NONE]) + b"\x01")
         self.assertEqual(cw.scrubbed_list(), [])
 
-        cw.write(self.tmp)
-        write_meta(os.path.join(self.tmp, "meta.json"), cw.meta("9.9.9"))
-        with open(os.path.join(self.tmp, "meta.json")) as fh:
-            meta = json.load(fh)
+        cw.write_archive(self.archive, cw.meta("9.9.9"))
+        meta = self.read_meta()
         self.assertEqual(meta["scrubbed"], [])
         self.assertEqual(meta["security_types"], [AuthTypes.NONE])
         self.assertIsNone(meta["unscrubbed_auth"])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
 
-    def test_unscrubbed_auth_recorded_in_meta(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=None)
+    def test_unscrubbed_auth_recorded_in_meta_when_opted_in(self) -> None:
+        cw = CaptureWriter(
+            server="host::5900",
+            password=None,
+            scrubber=HandshakeScrubber(allow_unsafe_auth=True),
+        )
         cw.feed_s2c(VERSION_38)
         cw.feed_c2s(VERSION_38)
-        cw.feed_s2c(bytes([1, AuthTypes.DIFFIE_HELLMAN]))
-        cw.feed_c2s(bytes([AuthTypes.DIFFIE_HELLMAN]))
+        cw.feed_s2c(bytes([1, AuthTypes.TIGHT]))
+        cw.feed_c2s(bytes([AuthTypes.TIGHT]))
 
         meta = cw.meta("9.9.9")
         self.assertEqual(meta["scrubbed"], [])
         self.assertIsNotNone(meta["unscrubbed_auth"])
-        self.assertIn("diffie-hellman", meta["unscrubbed_auth"])
+        self.assertIn("tight", meta["unscrubbed_auth"])
+        self.assertIsNone(cw.abort_reason)
+
+    def test_encodings_seen_recorded_in_meta(self) -> None:
+        """What the server actually sent, named where we know the name."""
+        cw = CaptureWriter(server="host::5900", password=None)
+        cw.note_encoding(Encoding.RAW)
+        cw.note_encoding(Encoding.RAW)
+        cw.note_encoding(Encoding.ZRLE)
+        cw.note_encoding(12345)  # a server sending something we do not know
+
+        self.assertEqual(
+            cw.meta("9.9.9")["encodings_seen"],
+            [
+                {"encoding": int(Encoding.RAW), "name": "raw", "rectangles": 2},
+                {"encoding": int(Encoding.ZRLE), "name": "zrle", "rectangles": 1},
+                {"encoding": 12345, "name": None, "rectangles": 1},
+            ],
+        )
+
+    def test_no_partial_archive_left_when_write_fails(self) -> None:
+        cw = CaptureWriter(server="host::5900", password=None)
+        cw.feed_s2c(VERSION_33)
+        with mock.patch("vncdotool.capture.json.dumps", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                cw.write_archive(self.archive, cw.meta("9.9.9"))
+
+        self.assertFalse(os.path.exists(self.archive))
+        self.assertFalse(os.path.exists(self.archive + ".part"))
 
     def test_password_bytes_scrubbed_when_present(self) -> None:
         cw = CaptureWriter(server="host::5900", password=b"hunter2")
@@ -327,10 +419,9 @@ class TestCaptureWriter(TestCase):
         cw.feed_s2c(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
         cw.feed_s2c(CHALLENGE[:6])  # client vanishes mid-challenge
 
-        cw.write(self.tmp)  # simulates connectionLost firing right now
+        cw.write_archive(self.archive, cw.meta("9.9.9"))  # connectionLost fires right now
 
-        with open(os.path.join(self.tmp, "s2c.bin"), "rb") as fh:
-            s2c = fh.read()
+        s2c = self.read_archive("s2c.bin")
         # the 6 partial challenge bytes must never land on disk
         self.assertNotIn(CHALLENGE[:6], s2c)
         self.assertEqual(s2c, VERSION_33 + b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
@@ -425,6 +516,51 @@ class TestProxyCaptureWiring(TestCase):
         # response bytes), so the client-init handoff fired normally.
         cp.startLogging.assert_called_once_with(sp)
 
+    def test_unscrubbable_auth_aborts_and_writes_nothing(self) -> None:
+        """Chosen on the client side (3.7+), so it surfaces in the c2s tap."""
+        sp, cp = self.server_proxy, self.client_proxy
+        sp.factory.capture_path = os.path.join(tempfile.mkdtemp(), "capture.zip")
+        sp.factory.capture_claimed = True
+
+        cp.dataReceived(VERSION_38)
+        sp.dataReceived(VERSION_38)
+        cp.dataReceived(bytes([1, AuthTypes.TIGHT]))
+        sp.dataReceived(bytes([AuthTypes.TIGHT]))
+
+        self.assertIsNone(sp.capture, "the capture must be dropped, not written")
+        sp.transport.loseConnection.assert_called_once()
+        self.assertFalse(os.path.exists(sp.factory.capture_path))
+
+    def test_unscrubbable_auth_chosen_by_a_pre37_server_also_aborts(self) -> None:
+        """Pre-3.7 the server dictates the type, so the s2c tap has to catch it."""
+        sp, cp = self.server_proxy, self.client_proxy
+        sp.factory.capture_path = os.path.join(tempfile.mkdtemp(), "capture.zip")
+
+        cp.dataReceived(VERSION_33)
+        sp.dataReceived(VERSION_33)
+        cp.dataReceived(b"\x00\x00\x00" + bytes([AuthTypes.TIGHT]))
+
+        self.assertIsNone(sp.capture)
+        sp.transport.loseConnection.assert_called_once()
+        self.assertFalse(os.path.exists(sp.factory.capture_path))
+
+    def test_encodings_are_tallied_from_what_the_server_sent(self) -> None:
+        """Not from SetEncodings: a server may answer in anything it likes."""
+        from vncdotool.loggingproxy import VNCLoggingClient
+
+        capture = CaptureWriter(server="testhost::5900", password=None)
+        vnclog = VNCLoggingClient()
+        vnclog.capture = capture
+        # Stop after the tally; the decode path itself is test_client.py's job.
+        with mock.patch.object(VNCDoToolClient, "_handleRectangle"):
+            for encoding in (Encoding.ZRLE, Encoding.ZRLE, Encoding.HEXTILE):
+                vnclog._handleRectangle(pack("!HHHHi", 0, 0, 4, 4, int(encoding)))
+
+        self.assertEqual(
+            capture.encodings_seen,
+            {int(Encoding.ZRLE): 2, int(Encoding.HEXTILE): 1},
+        )
+
     def test_capture_survives_a_parser_that_raises(self) -> None:
         """The tap must not depend on RFBServer's semantic parser: an
         unknown ptype raises ProtocolError, and capture and forwarding both
@@ -454,7 +590,7 @@ class TestProxyCaptureWiring(TestCase):
         reactor.connectTCP half.
         """
         factory = mock.Mock()
-        factory.capture_dir = "/tmp/some-capture-dir"
+        factory.capture_path = "/tmp/some-capture.zip"
         factory.capture_claimed = True
 
         sp = VNCLoggingServerProxy()
@@ -474,7 +610,7 @@ class TestProxyCaptureWiring(TestCase):
         claiming the capture before vncdo ever connected.
         """
         factory = mock.Mock()
-        factory.capture_dir = "/tmp/some-capture-dir"
+        factory.capture_path = "/tmp/some-capture.zip"
         factory.capture_claimed = True  # what connectionMade would have set
 
         probe = VNCLoggingServerProxy()
@@ -491,10 +627,13 @@ class TestProxyCaptureWiring(TestCase):
         many security failures" is greeting + reason + close) is a real
         session: the s2c-only capture is written, not discarded as a probe.
         """
-        capture_dir = tempfile.mkdtemp()
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        archive = os.path.join(tmp, "capture.zip")
         factory = mock.Mock()
-        factory.capture_dir = capture_dir
+        factory.capture_path = archive
         factory.capture_claimed = True
+        factory.getRecordedSession.return_value = b""
 
         session = VNCLoggingServerProxy()
         session.factory = factory
@@ -504,8 +643,7 @@ class TestProxyCaptureWiring(TestCase):
         session.connectionLost(mock.Mock())
 
         self.assertTrue(factory.capture_claimed, "a real (if one-sided) session keeps the claim")
-        with open(os.path.join(capture_dir, "s2c.bin"), "rb") as fh:
-            self.assertEqual(fh.read(), b"RFB 003.003\n")
-        with open(os.path.join(capture_dir, "c2s.bin"), "rb") as fh:
-            self.assertEqual(fh.read(), b"")
-        self.assertTrue(os.path.exists(os.path.join(capture_dir, "meta.json")))
+        with zipfile.ZipFile(archive) as zf:
+            self.assertEqual(zf.read("s2c.bin"), b"RFB 003.003\n")
+            self.assertEqual(zf.read("c2s.bin"), b"")
+            self.assertIn("meta.json", zf.namelist())

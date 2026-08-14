@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import os.path
 import socket
@@ -13,7 +14,7 @@ from twisted.protocols import portforward
 from twisted.python.failure import Failure
 
 from . import __version__ as VNCDOTOOL_VERSION
-from .capture import CaptureWriter, write_meta
+from .capture import CaptureWriter, HandshakeScrubber
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import VNCDoToolClient
 from .keys import KEYMAP
@@ -188,6 +189,16 @@ class VNCLoggingClient(VNCDoToolClient):
     """Specialization of a :class:`VNCDoToolClient` that will save screen captures."""
 
     capture_file: str | None = None
+    capture: CaptureWriter | None = None
+
+    def _handleRectangle(self, block: bytes) -> None:
+        # Tallied here, off the decoded stream, because this is the only
+        # place that knows what the server actually sent. SetEncodings only
+        # says what the client asked for, and a server may ignore it.
+        if self.capture is not None:
+            (encoding,) = unpack("!i", block[8:12])
+            self.capture.note_encoding(encoding)
+        super()._handleRectangle(block)
 
     def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
         if self.capture_file:
@@ -214,6 +225,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         self.vnclog.transport = NullTransport()
         self.vnclog.factory = self.peer.factory
         self.vnclog.recorder = peer.recorder
+        self.vnclog.capture = peer.capture
         # XXX double call to connectionMade?
         self.vnclog.connectionMade()
         self.vnclog._handler = self.vnclog._handleExpected
@@ -224,6 +236,11 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         # truncate the recording.
         if self.peer is not None and self.peer.capture is not None:
             self.peer.capture.feed_s2c(data)
+            # Pre-3.7 the *server* picks the security type, so an
+            # unscrubbable one surfaces on this side of the proxy.
+            if self.peer.capture.abort_reason is not None:
+                self.peer._abortCapture(self.peer.capture.abort_reason)
+                return
         if self.vnclog:
             try:
                 self.vnclog.dataReceived(data)
@@ -263,10 +280,10 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         # that reconnects would otherwise overwrite the capture the
         # contributor wanted. Claimed on accept, not on write, so a second
         # concurrent connection is refused too.
-        if self.factory.capture_dir and self.factory.capture_claimed:
+        if self.factory.capture_path and self.factory.capture_claimed:
             log.warning(
                 "--capture %s already has a session; refusing connection from %s",
-                self.factory.capture_dir,
+                self.factory.capture_path,
                 self.transport.getPeer().host,
             )
             self.transport.loseConnection()
@@ -278,10 +295,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.mouse: tuple[int | None, int | None] = (None, None)
         self.last_event = time.time()
         self.recorder = self.factory.getRecorder()
-        if self.factory.capture_dir:
+        if self.factory.capture_path:
             self.factory.capture_claimed = True
             password = self.factory.password.encode() if self.factory.password else None
-            self.capture = CaptureWriter(server=self.factory.server_str, password=password)
+            self.capture = CaptureWriter(
+                server=self.factory.server_str,
+                password=password,
+                scrubber=HandshakeScrubber(allow_unsafe_auth=self.factory.capture_unsafe_auth),
+            )
 
     def connectionLost(self, reason: Failure) -> None:
         if self.capture is not None:
@@ -303,21 +324,44 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
 
     def _writeCapture(self) -> None:
         assert self.capture is not None
-        capture_dir = self.factory.capture_dir
-        assert capture_dir is not None
-        self.capture.write(capture_dir)
-        write_meta(
-            os.path.join(capture_dir, "meta.json"),
+        capture_path = self.factory.capture_path
+        assert capture_path is not None
+        self.capture.write_archive(
+            capture_path,
             self.capture.meta(VNCDOTOOL_VERSION),
+            session_vdo=self.factory.getRecordedSession(),
         )
+        log.info("--capture: wrote %s", capture_path)
         # Guard against a double connectionLost (peer already gone) writing twice.
         self.capture = None
+
+    def _abortCapture(self, reason: str) -> None:
+        """Drop an in-flight capture we are not allowed to write.
+
+        Nothing reaches disk and the connection ends: a contributor who
+        cannot get a scrubbed capture should find out now, not on reading
+        the warning under an archive they already attached to an issue.
+        """
+        log.error("--capture aborted: %s", reason)
+        self.capture = None
+        if self.vnclog_client is not None:
+            self.vnclog_client.capture = None
+        self.factory.capture_aborted = True
+        self.transport.loseConnection()
+
+    @property
+    def vnclog_client(self) -> VNCLoggingClient | None:
+        peer = getattr(self, "peer", None)
+        return getattr(peer, "vnclog", None) if peer is not None else None
 
     def dataReceived(self, data: bytes) -> None:
         # Capture first, unconditionally: a parse failure below must never
         # truncate the recording.
         if self.capture is not None:
             self.capture.feed_c2s(data)
+            if self.capture.abort_reason is not None:
+                self._abortCapture(self.capture.abort_reason)
+                return
         try:
             RFBServer.dataReceived(self, data)
         except Exception:
@@ -387,17 +431,20 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
 
     # `capture_claimed` latches on the first connection accepted in capture
     # mode, so a later one is refused rather than clobbering the capture.
-    capture_dir: str | None = None
+    capture_path: str | None = None
     capture_claimed: bool = False
+    capture_aborted: bool = False
+    capture_unsafe_auth: bool = False
     server_str: str = ""
+    _capture_vdo: io.StringIO | None = None
 
     def getRecorder(self) -> Callable[[str], int]:
-        if self.capture_dir:
-            # Opened and closed per connection, like --forever, so
-            # session.vdo is complete when the client disconnects.
-            outfile = os.path.join(self.capture_dir, "session.vdo")
-            self._out = open(outfile, "w")
-            return self._out.write
+        if self.capture_path:
+            # Buffered, not written straight to disk: the session log is one
+            # member of the capture archive, and nothing may exist on disk
+            # until the whole capture is known to be writable.
+            self._capture_vdo = io.StringIO()
+            return self._capture_vdo.write
         elif isinstance(self.output, str):
             now = time.strftime("%y%m%d-%H%M%S")
             outfile = os.path.join(self.output, "%s.vdo" % now)
@@ -406,6 +453,10 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
         else:
             return self.output.write
 
+    def getRecordedSession(self) -> bytes:
+        """The buffered session.vdo for this capture, for the archive."""
+        return self._capture_vdo.getvalue().encode() if self._capture_vdo else b""
+
     def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:
         pass
 
@@ -413,3 +464,4 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
         if self._out:
             self._out.close()
             self._out = None
+        self._capture_vdo = None
