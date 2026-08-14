@@ -35,7 +35,11 @@ installed. No other server implementation is exercised anywhere.
   literal `TODO convert pixel format?`, and the CoRRE subrect decoder has
   two latent bugs (`format` string missing its f-prefix, loop bound uses
   `sz` instead of `end`) that bite the first time a server sends CoRRE
-  subrects.
+  subrects. CopyRect is a silent no-op: `RFBClient.copyRectangle` is a
+  docstring-only stub that no subclass overrides, so the destination
+  region keeps stale pixels whenever a server sends CopyRect. Both this
+  and the CoRRE case are pinned as expected failures in
+  tests/unit/test_decoder_bugs.py.
 - **Hangs instead of errors** — when negotiation or decoding goes wrong the
   reactor keeps waiting forever and the API never returns: #322 (silent
   disconnect/hang against shared TigerVNC), #284 ("Stopping factory" with
