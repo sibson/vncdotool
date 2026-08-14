@@ -1,5 +1,6 @@
 1.3.1 (UNRELEASED)
 ----------------------
+  - Fix: vncdo now exits non-zero when VNC authentication fails instead of reporting success (@sibson)
 
 1.3.0 (2026-04-03)
 ----------------------

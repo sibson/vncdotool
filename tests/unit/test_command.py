@@ -2,7 +2,11 @@ import socket
 import unittest
 from unittest import mock, skipUnless
 
+from twisted.internet.error import ConnectionDone
+from twisted.python.failure import Failure
+
 from vncdotool import command
+from vncdotool.client import AuthenticationError
 
 
 class TestBuildCommandList(unittest.TestCase):
@@ -252,3 +256,21 @@ class TestVNCDoCLIClient(unittest.TestCase):
         assert command.getpass.getpass.called
         assert cli.factory.password == password
         cli.sendPassword.assert_called_once_with(password)
+
+
+class TestVNCDoCLIFactory(unittest.TestCase):
+
+    @mock.patch('vncdotool.command.reactor')
+    def test_auth_failure_exits_nonzero(self, reactor):
+        factory = command.VNCDoCLIFactory()
+        factory.clientConnectionFailed(
+            None, Failure(AuthenticationError('Authentication failure'))
+        )
+
+        assert reactor.exit_status == 10
+
+        # the server closing the rejected connection afterwards must not
+        # overwrite the failure exit status with a clean-close success
+        factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert reactor.exit_status == 10

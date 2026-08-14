@@ -58,6 +58,7 @@ class VNCDoCLIClient(VNCDoToolClient):
 
 class VNCDoCLIFactory(VNCDoToolFactory):
     protocol = VNCDoCLIClient
+    finished = False
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
         if reason.type == ConnectionDone:
@@ -73,6 +74,11 @@ class VNCDoCLIFactory(VNCDoToolFactory):
         self.done(10)
 
     def done(self, exit_code: int) -> None:
+        # an authentication failure reports its error before the server
+        # closes the socket; the later clean close must not overwrite it
+        if self.finished:
+            return
+        self.finished = True
         reactor.exit_status = exit_code
         reactor.callLater(0.1, reactor.stop)
 

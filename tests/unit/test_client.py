@@ -213,6 +213,14 @@ class TestVNCDoToolClient(TestCase):
         cli.vncRequestPassword()
         cli.sendPassword.assert_called_once_with(cli.factory.password)
 
+    def test_vncAuthFailed_reports_connection_failed(self):
+        cli = self.client
+        cli.vncAuthFailed(b'Authentication failure')
+
+        assert cli.factory.clientConnectionFailed.called
+        reason = cli.factory.clientConnectionFailed.call_args[0][1]
+        assert isinstance(reason.value, client.AuthenticationError)
+
 
 class TestVNCDoToolFactory(TestCase):
 

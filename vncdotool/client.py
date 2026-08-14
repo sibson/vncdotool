@@ -325,6 +325,12 @@ class VNCDoToolClient(rfb.RFBClient):
             return
         self.sendPassword(self.factory.password)
 
+    def vncAuthFailed(self, reason: bytes | str) -> None:
+        super().vncAuthFailed(reason)
+        if isinstance(reason, bytes):
+            reason = reason.decode("utf-8", "replace")
+        self.factory.clientConnectionFailed(self, Failure(AuthenticationError(reason)))
+
     def vncConnectionMade(self) -> None:
         self.setImageMode()
         encodings = [self.encoding]
