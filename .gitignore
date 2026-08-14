@@ -12,3 +12,7 @@ docs/_build
 *~
 #*
 tests/servers/screenshots/
+
+.DS_Store
+.tool-versions
+.vscode/
