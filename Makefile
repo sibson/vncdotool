@@ -36,15 +36,17 @@ release: test-unit
 docs:
 	$(MAKE) -C docs/ html
 
-.PHONY: test testall test-unit test-func
+.PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
 test-unit:
 	$(VENV)/python -m unittest discover tests/unit
 
-include libvncserver.mk
-
-test-func: libvnc-examples test-libvnc
+# Needs `make servers-up`; unreachable servers skip rather than fail, so
+# this still runs without docker.
+.PHONY: test-func
+test-func:
+	$(PYTHON) -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 

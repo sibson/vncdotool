@@ -10,16 +10,16 @@ Unit tests can be quickly run with the following commands::
 
     make test
 
-The functional tests require libvncserver/examples to be on your path before
-running.  You can either manually configure and update your path or use the provided makefile target::
+The functional tests exercise the real ``vncdo`` CLI via ``subprocess.run``
+against the Docker Compose VNC test server fleet, so ``vncdotool`` needs to
+be installed (e.g. ``pip install -e .``) so ``vncdo`` is on your path, and
+the fleet needs to be running::
 
+    make servers-up
     make test-func
 
-    OR
-
-    make libvnc-examples
-    export PATH="$PATH:.vncdo/libvncserver-LibVNCServer-0.9.14/examples"
-    python -m unittest discover tests/functional
+A server that isn't reachable is skipped rather than failing the run, so
+``make test-func`` also degrades gracefully without Docker.
 
 
 The RFB/VNC Protocol
