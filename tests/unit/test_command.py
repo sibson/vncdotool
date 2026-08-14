@@ -258,6 +258,23 @@ class TestVNCDoCLIClient(unittest.TestCase):
         cli.sendPassword.assert_called_once_with(password)
 
 
+class TestExitStatus(unittest.TestCase):
+
+    def test_documented_values(self) -> None:
+        # these are a published interface, see docs/usage.rst
+        assert dict(command.ExitStatus.__members__.items()) == {
+            'SUCCESS': 0,
+            'ERROR': 1,
+            'USAGE': 2,
+            'AUTHENTICATION_FAILED': 3,
+            'CONNECTION_FAILED': 10,
+            'CONNECTION_LOST': 11,
+            'PROTOCOL_ERROR': 20,
+            'COMMAND_FAILED': 30,
+            'TIMEOUT': 40,
+        }
+
+
 class FakeReactor:
     """Records the exit status instead of stopping the real reactor.
 

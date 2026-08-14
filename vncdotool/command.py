@@ -50,13 +50,14 @@ class ExitStatus(enum.IntEnum):
 
     SUCCESS = 0
     ERROR = 1
+    # bad input from whoever invoked us, credentials included
     USAGE = 2
+    AUTHENTICATION_FAILED = 3
 
     CONNECTION_FAILED = 10
     CONNECTION_LOST = 11
 
     PROTOCOL_ERROR = 20
-    AUTHENTICATION_FAILED = 21
 
     COMMAND_FAILED = 30
 

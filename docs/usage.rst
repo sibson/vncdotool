@@ -63,7 +63,7 @@ a script can tell a server that is down from one that rejected the password::
     > vncdo -s $HOST -p $PASSWORD type hello
     > case $? in
     >   0)  echo "done" ;;
-    >   21) echo "wrong password" ;;
+    >   3)  echo "wrong password" ;;
     >   1?) echo "cannot reach $HOST" ;;
     >   *)  echo "failed" ;;
     > esac
@@ -74,16 +74,18 @@ Code  Meaning
 0     all actions completed
 1     unexpected error
 2     bad command line or unknown action
+3     authentication failed, usually a wrong password
 10    could not connect: refused, unreachable, or name lookup failed
 11    connection closed before the actions finished
 20    server spoke something we could not understand
-21    authentication failed, usually a wrong password
 30    an action failed, such as writing a capture to an unwritable path
 40    ``--timeout`` elapsed before the actions finished
 ===== ==================================================================
 
-Codes are grouped in tens by cause, so new codes can be added to a group
-later.  Match on the group when you only care about the category.
+Single digits are for things you told us: the command line and the
+credentials.  Failures out on the wire are grouped in tens by cause, so
+new codes can be added to a group later.  Match on the group when you
+only care about the category.
 
 
 Running Scripts
