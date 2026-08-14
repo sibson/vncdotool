@@ -480,7 +480,10 @@ def vnclog() -> None:
 
     output = None
     if options.one_shot and options.forever:
-        op.error("--one-shot and --forever are mutually exclusive")
+        # --forever names an output layout (a .vdo per client), not a
+        # lifetime -- vnclog has always served connections until killed. It
+        # is still incoherent to ask for a file per client and stop after one.
+        op.error("--forever writes a file per client, so it cannot be combined with --one-shot")
     if options.capture_raw:
         if args:
             op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")

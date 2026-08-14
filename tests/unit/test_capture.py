@@ -43,12 +43,12 @@ SERVER_INIT_640x480 = (
 class TestHandshakeScrubber(TestCase):
     def test_vnc_auth_scrubbed_pre37(self) -> None:
         s = HandshakeScrubber()
-        self.assertEqual(s.feed("s2c", VERSION_33), VERSION_33)
-        self.assertEqual(s.feed("c2s", VERSION_33), VERSION_33)
+        self.assertEqual(s.s2c.feed(VERSION_33), VERSION_33)
+        self.assertEqual(s.c2s.feed(VERSION_33), VERSION_33)
         auth_announce = b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
-        self.assertEqual(s.feed("s2c", auth_announce), auth_announce)
-        self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
-        self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(auth_announce), auth_announce)
+        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
+        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
 
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(s.protocol_version, "RFB 003.003")
@@ -56,20 +56,20 @@ class TestHandshakeScrubber(TestCase):
         self.assertIsNone(s.unscrubbable_auth)
 
         # the security-result that follows is still passed through untouched
-        self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
 
     def test_vnc_auth_scrubbed_negotiated(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_38)
-        s.feed("c2s", VERSION_38)
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
         # server offers None + VNC auth, client picks VNC auth
         self.assertEqual(
-            s.feed("s2c", bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])),
+            s.s2c.feed(bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])),
             bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION]),
         )
-        self.assertEqual(s.feed("c2s", bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
-        self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
+        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
+        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
+        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
         self.assertEqual(s.security_types, [AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
 
     def test_version_downgrade_still_finds_vnc_auth(self) -> None:
@@ -78,16 +78,16 @@ class TestHandshakeScrubber(TestCase):
         watches the wrong 16 bytes and lets the real ones through.
         """
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_38)  # server greets 3.8
-        s.feed("c2s", VERSION_33)  # client downgrades to 3.3
+        s.s2c.feed(VERSION_38)  # server greets 3.8
+        s.c2s.feed(VERSION_33)  # client downgrades to 3.3
         self.assertEqual(s.negotiated_version, (3, 3))
 
         # pre-3.7 path: a direct 4-byte auth type announcement, no
         # client-side security-type selection byte.
         auth_announce = b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
-        self.assertEqual(s.feed("s2c", auth_announce), auth_announce)
-        self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
-        self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(auth_announce), auth_announce)
+        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
+        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
 
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
 
@@ -96,41 +96,41 @@ class TestHandshakeScrubber(TestCase):
         what is on the wire rather than assume either side behaves.
         """
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_33)
-        s.feed("c2s", VERSION_38)
+        s.s2c.feed(VERSION_33)
+        s.c2s.feed(VERSION_38)
         self.assertEqual(s.negotiated_version, (3, 8))
 
-        self.assertEqual(s.feed("s2c", bytes([1, AuthTypes.VNC_AUTHENTICATION])), bytes([1, AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.feed("c2s", bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
-        self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION])), bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
+        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
+        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
 
     def test_auth_none_untouched(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_38)
-        s.feed("c2s", VERSION_38)
-        s.feed("s2c", bytes([1, AuthTypes.NONE]))
-        out = s.feed("c2s", bytes([AuthTypes.NONE]))
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.NONE]))
+        out = s.c2s.feed(bytes([AuthTypes.NONE]))
         self.assertEqual(out, bytes([AuthTypes.NONE]))
         self.assertEqual(s.security_type, AuthTypes.NONE)
         self.assertIsNone(s.unscrubbable_auth)
 
         # security-result(4) + ClientInit(1) + ServerInit(24), still passthrough
-        self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
-        self.assertEqual(s.feed("c2s", b"\x01"), b"\x01")
-        self.assertEqual(s.feed("s2c", SERVER_INIT_640x480), SERVER_INIT_640x480)
+        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+        self.assertEqual(s.c2s.feed(b"\x01"), b"\x01")
+        self.assertEqual(s.s2c.feed(SERVER_INIT_640x480), SERVER_INIT_640x480)
         self.assertEqual(s.width, 640)
         self.assertEqual(s.height, 480)
 
         rest = b"some-server-name-bytes"
-        self.assertEqual(s.feed("s2c", rest), rest)
+        self.assertEqual(s.s2c.feed(rest), rest)
 
     def _ard_to_credentials(self, s: HandshakeScrubber, key_len: int = 8) -> None:
         """Drive an ARD handshake up to the client's credential block."""
-        s.feed("s2c", VERSION_38)
-        s.feed("c2s", VERSION_38)
-        s.feed("s2c", bytes([1, AuthTypes.DIFFIE_HELLMAN]))
-        s.feed("c2s", bytes([AuthTypes.DIFFIE_HELLMAN]))
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.DIFFIE_HELLMAN]))
+        s.c2s.feed(bytes([AuthTypes.DIFFIE_HELLMAN]))
         self.dh_params = b"\x00\x02" + key_len.to_bytes(2, "big")
         self.modulus = b"P" * key_len
         self.server_key = b"G" * key_len
@@ -144,35 +144,35 @@ class TestHandshakeScrubber(TestCase):
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
 
-        self.assertEqual(s.feed("s2c", self.dh_params), self.dh_params)
-        self.assertEqual(s.feed("s2c", self.modulus), self.modulus)
-        self.assertEqual(s.feed("s2c", self.server_key), self.server_key)
+        self.assertEqual(s.s2c.feed(self.dh_params), self.dh_params)
+        self.assertEqual(s.s2c.feed(self.modulus), self.modulus)
+        self.assertEqual(s.s2c.feed(self.server_key), self.server_key)
 
         credentials = bytes(range(256))[:ARD_CREDENTIALS_LEN]
         client_key = b"Y" * 8
-        self.assertEqual(s.feed("c2s", credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
+        self.assertEqual(s.c2s.feed(credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
 
         self.assertIsNone(s.unscrubbable_auth)
         self.assertIsNone(s.abort_reason)
-        self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
 
     def test_scrubbing_preserves_byte_offsets(self) -> None:
         """A redaction that changed length would break replay of the capture."""
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
-        s.feed("s2c", self.dh_params + self.modulus + self.server_key)
+        s.s2c.feed(self.dh_params + self.modulus + self.server_key)
 
         credentials = b"\xab" * ARD_CREDENTIALS_LEN
-        out = s.feed("c2s", credentials)
+        out = s.c2s.feed(credentials)
         self.assertEqual(len(out), ARD_CREDENTIALS_LEN)
         self.assertNotIn(b"\xab", out)
 
     def test_unscrubbable_auth_aborts_by_default(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_38)
-        s.feed("c2s", VERSION_38)
-        s.feed("s2c", bytes([1, AuthTypes.TIGHT]))
-        s.feed("c2s", bytes([AuthTypes.TIGHT]))
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.TIGHT]))
+        s.c2s.feed(bytes([AuthTypes.TIGHT]))
 
         self.assertIsNotNone(s.abort_reason)
         self.assertIn("tight", s.abort_reason)
@@ -182,55 +182,53 @@ class TestHandshakeScrubber(TestCase):
 
     def test_unscrubbable_auth_allowed_when_opted_in(self) -> None:
         s = HandshakeScrubber(allow_unsafe_auth=True)
-        s.feed("s2c", VERSION_38)
-        s.feed("c2s", VERSION_38)
-        s.feed("s2c", bytes([1, AuthTypes.TIGHT]))
-        s.feed("c2s", bytes([AuthTypes.TIGHT]))
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.TIGHT]))
+        s.c2s.feed(bytes([AuthTypes.TIGHT]))
 
         self.assertIsNone(s.abort_reason)
         self.assertIn("tight", s.unscrubbable_auth)
         # key exchange passes through verbatim -- that is what was opted into
         exchange = b"\x01\x02\x03\x04"
-        self.assertEqual(s.feed("s2c", exchange), exchange)
+        self.assertEqual(s.s2c.feed(exchange), exchange)
 
     def test_split_across_chunks(self) -> None:
         s = HandshakeScrubber()
-        self.assertEqual(s.feed("s2c", b"RFB 003."), b"")
-        self.assertEqual(s.feed("s2c", b"003\n"), VERSION_33)
+        self.assertEqual(s.s2c.feed(b"RFB 003."), b"")
+        self.assertEqual(s.s2c.feed(b"003\n"), VERSION_33)
 
     def test_split_challenge_across_chunks(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_33)
-        s.feed("c2s", VERSION_33)
-        s.feed("s2c", b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
-        first = s.feed("s2c", CHALLENGE[:6])
-        second = s.feed("s2c", CHALLENGE[6:])
+        s.s2c.feed(VERSION_33)
+        s.c2s.feed(VERSION_33)
+        s.s2c.feed(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
+        first = s.s2c.feed(CHALLENGE[:6])
+        second = s.s2c.feed(CHALLENGE[6:])
         self.assertEqual(first, b"")
         self.assertEqual(second, MARKER)
 
     def test_flush_drops_partial_secret(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_33)
-        s.feed("c2s", VERSION_33)
-        s.feed("s2c", b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
-        s.feed("s2c", CHALLENGE[:6])  # connection drops mid-challenge
+        s.s2c.feed(VERSION_33)
+        s.c2s.feed(VERSION_33)
+        s.s2c.feed(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s.s2c.feed(CHALLENGE[:6])  # connection drops mid-challenge
 
-        pending = s.flush()
-        self.assertEqual(pending["s2c"], b"", "a half-collected secret must never be flushed in the clear")
-        self.assertEqual(pending["c2s"], b"")
+        self.assertEqual(s.s2c.flush(), b"", "a half-collected secret must never be flushed in the clear")
+        self.assertEqual(s.c2s.flush(), b"")
 
     def test_flush_emits_pending_non_secret(self) -> None:
         s = HandshakeScrubber()
-        s.feed("s2c", VERSION_33)
-        s.feed("c2s", VERSION_33)
-        s.feed("s2c", b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
-        s.feed("s2c", CHALLENGE)
-        s.feed("c2s", RESPONSE)
-        s.feed("s2c", SECURITY_RESULT_OK[:2])  # connection drops mid-result, not a secret
+        s.s2c.feed(VERSION_33)
+        s.c2s.feed(VERSION_33)
+        s.s2c.feed(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s.s2c.feed(CHALLENGE)
+        s.c2s.feed(RESPONSE)
+        s.s2c.feed(SECURITY_RESULT_OK[:2])  # connection drops mid-result, not a secret
 
-        pending = s.flush()
-        self.assertEqual(pending["s2c"], SECURITY_RESULT_OK[:2])
-        self.assertEqual(pending["c2s"], b"")
+        self.assertEqual(s.s2c.flush(), SECURITY_RESULT_OK[:2])
+        self.assertEqual(s.c2s.flush(), b"")
 
 
 class TestCheckCaptureTarget(TestCase):

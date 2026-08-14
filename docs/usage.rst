@@ -143,4 +143,9 @@ This can be useful for quickly recording a number of testcases.::
     # do some other stuff
     > ls /tmp/*.vdo
 
+``vnclog`` keeps accepting connections until you stop it. Use ``--one-shot``
+to record a single session and exit::
+
+    > vnclog --one-shot --listen 6000 keylog.vdo
+
 .. _Pillow: http://www.pythonware.com/products/pil

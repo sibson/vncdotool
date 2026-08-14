@@ -19,7 +19,7 @@ import time
 import zipfile
 from dataclasses import dataclass, field
 from struct import unpack
-from typing import Any, Generator
+from typing import Any, Generator, NamedTuple
 
 from .const import AuthTypes, Encoding
 
@@ -27,21 +27,49 @@ from .const import AuthTypes, Encoding
 # RFBClient._encryptArd().
 ARD_CREDENTIALS_LEN = 128
 
-Direction = str  # "s2c" or "c2s"
 
-# What _run() is currently waiting for: (direction, nbytes, "pass"|"scrub").
-_Want = tuple[Direction, int, str]
+class Tap:
+    """One direction of the proxied connection.
+
+    Callers hold the tap for the direction they are feeding, so no direction
+    argument travels through the code: ``scrubber.s2c.feed(data)`` returns
+    what that direction should record.
+    """
+
+    def __init__(self, scrubber: HandshakeScrubber, name: str) -> None:
+        self.name = name  # "s2c" / "c2s", for messages only
+        self.pending = bytearray()
+        self._scrubber = scrubber
+
+    def __repr__(self) -> str:
+        return f"<Tap {self.name}>"
+
+    def feed(self, data: bytes) -> bytes:
+        return self._scrubber._feed(self, data)
+
+    def flush(self) -> bytes:
+        return self._scrubber._flush(self)
+
+
+class _Want(NamedTuple):
+    """What the handshake is waiting for next."""
+
+    tap: Tap
+    nbytes: int
+    scrub: bool
 
 
 class HandshakeScrubber:
     """Tracks an RFB handshake across both directions of a proxied stream.
 
-    :meth:`feed` takes raw bytes in arrival order and returns what should
-    reach disk, credentials replaced by zeros. Once the handshake is done it
-    passes bytes straight through.
+    Feed arriving bytes to :attr:`s2c` or :attr:`c2s`; each returns what that
+    direction should record, credentials replaced by zeros. Once the
+    handshake is done both pass bytes straight through.
     """
 
     def __init__(self, allow_unsafe_auth: bool = False) -> None:
+        self.s2c = Tap(self, "s2c")
+        self.c2s = Tap(self, "c2s")
         self.allow_unsafe_auth = allow_unsafe_auth
         self.protocol_version: str | None = None
         self.negotiated_version: tuple[int, int] | None = None
@@ -54,7 +82,6 @@ class HandshakeScrubber:
         self.width: int | None = None
         self.height: int | None = None
 
-        self._bufs: dict[Direction, bytearray] = {"s2c": bytearray(), "c2s": bytearray()}
         self._gen: Generator[_Want, bytes, None] | None = self._run()
         self._want: _Want | None = None
         self._advance(None)
@@ -73,14 +100,20 @@ class HandshakeScrubber:
             self._gen = None
             self._want = None
 
-    def feed(self, direction: Direction, data: bytes) -> bytes:
+    def _waiting_on(self, tap: Tap) -> _Want | None:
+        """What the handshake wants from `tap`, if it is watching it at all."""
+        if self._gen is None or self._want is None or self._want.tap is not tap:
+            return None
+        return self._want
+
+    def _feed(self, tap: Tap, data: bytes) -> bytes:
         if not data:
             return b""
 
-        buf = self._bufs[direction]
+        buf = tap.pending
 
-        if self._gen is None or self._want is None or self._want[0] != direction:
-            # Not tracking this direction, so nothing pending here is a
+        if self._waiting_on(tap) is None:
+            # Not watching this direction, so nothing pending here is a
             # secret: flush it with the new data, unmodified.
             buf += data
             out = bytes(buf)
@@ -90,54 +123,45 @@ class HandshakeScrubber:
         buf += data
         out = bytearray()
 
-        while self._gen is not None and self._want is not None and self._want[0] == direction:
-            _, nbytes, mode = self._want
-            if len(buf) < nbytes:
+        while (want := self._waiting_on(tap)) is not None:
+            if len(buf) < want.nbytes:
                 break
-            chunk = bytes(buf[:nbytes])
-            del buf[:nbytes]
+            chunk = bytes(buf[:want.nbytes])
+            del buf[:want.nbytes]
             # Equal-length redaction: byte offsets after a scrubbed span
             # have to match the live stream or the capture stops replaying.
-            out += bytes(nbytes) if mode == "scrub" else chunk
+            out += bytes(want.nbytes) if want.scrub else chunk
             self._advance(chunk)
 
-        # No longer tracked, so flush rather than hold these back forever.
-        if buf and (self._gen is None or self._want is None or self._want[0] != direction):
+        # No longer watched, so flush rather than hold these back forever.
+        if buf and self._waiting_on(tap) is None:
             out += buf
             del buf[:]
 
         return bytes(out)
 
-    def flush(self) -> dict[Direction, bytes]:
-        """Bytes left buffered per direction when the connection ends.
+    def _flush(self, tap: Tap) -> bytes:
+        """Bytes left buffered on `tap` when the connection ends.
 
         Bytes buffered mid-secret are dropped instead of returned: half a
         challenge is still a fragment of a secret.
         """
-        out: dict[Direction, bytes] = {"s2c": b"", "c2s": b""}
-        for direction in ("s2c", "c2s"):
-            buf = self._bufs[direction]
-            if not buf:
-                continue
-            pending_is_secret = (
-                self._want is not None and self._want[0] == direction and self._want[2] == "scrub"
-            )
-            if not pending_is_secret:
-                out[direction] = bytes(buf)
-            del buf[:]
+        want = self._waiting_on(tap)
+        out = b"" if want is not None and want.scrub else bytes(tap.pending)
+        del tap.pending[:]
         return out
 
     # -- the handshake description -------------------------------------------
 
     def _run(self) -> Generator[_Want, bytes, None]:
-        server_head = yield ("s2c", 12, "pass")
+        server_head = yield _Want(self.s2c, 12, scrub=False)
         self.protocol_version = server_head.decode("ascii", "replace").rstrip("\n")
 
         # Branch on the client's reply, not the server's greeting: per RFC
         # 6143 7.1.1 that reply governs the rest of the exchange, so a client
         # downgrading below 3.7 would otherwise take this down the wrong path
         # and miss the challenge/response entirely.
-        client_head = yield ("c2s", 12, "pass")
+        client_head = yield _Want(self.c2s, 12, scrub=False)
         try:
             negotiated = (int(client_head[4:7]), int(client_head[8:11]))
         except (ValueError, IndexError):
@@ -145,16 +169,16 @@ class HandshakeScrubber:
         self.negotiated_version = negotiated
 
         if negotiated >= (3, 7):
-            num_types_b = yield ("s2c", 1, "pass")
+            num_types_b = yield _Want(self.s2c, 1, scrub=False)
             num_types = num_types_b[0]
             if num_types == 0:
                 return  # connection-failed reason string follows; not tracked
-            types_b = yield ("s2c", num_types, "pass")
+            types_b = yield _Want(self.s2c, num_types, scrub=False)
             self.security_types = list(types_b)
-            sectype_b = yield ("c2s", 1, "pass")
+            sectype_b = yield _Want(self.c2s, 1, scrub=False)
             sectype = sectype_b[0]
         else:
-            auth_b = yield ("s2c", 4, "pass")
+            auth_b = yield _Want(self.s2c, 4, scrub=False)
             sectype = int.from_bytes(auth_b, "big")
             if sectype == AuthTypes.INVALID:
                 return
@@ -163,19 +187,19 @@ class HandshakeScrubber:
         self.security_type = sectype
 
         if sectype == AuthTypes.VNC_AUTHENTICATION:
-            yield ("s2c", 16, "scrub")  # challenge
-            yield ("c2s", 16, "scrub")  # response
+            yield _Want(self.s2c, 16, scrub=True)  # challenge
+            yield _Want(self.c2s, 16, scrub=True)  # response
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
             # ARD / Apple Screen Sharing, laid out as RFBClient._handleDHAuth
             # reads it. Only the client's AES block is secret; the DH values
             # are public by design, and keeping them is what makes the
             # capture useful for the ARD bugs this kit exists to chase.
-            head = yield ("s2c", 4, "pass")
+            head = yield _Want(self.s2c, 4, scrub=False)
             _generator, key_len = unpack("!HH", head)
-            yield ("s2c", key_len, "pass")  # modulus
-            yield ("s2c", key_len, "pass")  # server public key
-            yield ("c2s", ARD_CREDENTIALS_LEN, "scrub")  # username + password
-            yield ("c2s", key_len, "pass")  # client public key
+            yield _Want(self.s2c, key_len, scrub=False)  # modulus
+            yield _Want(self.s2c, key_len, scrub=False)  # server public key
+            yield _Want(self.c2s, ARD_CREDENTIALS_LEN, scrub=True)  # username + password
+            yield _Want(self.c2s, key_len, scrub=False)  # client public key
         elif sectype not in (AuthTypes.NONE, AuthTypes.INVALID):
             # No scrubber for this type: its key exchange would reach disk
             # whole. Name it, and stop unless a human opted in.
@@ -194,15 +218,15 @@ class HandshakeScrubber:
         # SecurityResult follows in every case but one: pre-3.8 with
         # AuthTypes.NONE jumps straight to ClientInit.
         if not (negotiated < (3, 8) and sectype == AuthTypes.NONE):
-            result_b = yield ("s2c", 4, "pass")
+            result_b = yield _Want(self.s2c, 4, scrub=False)
             (result,) = unpack("!I", result_b)
             if result != 0:
                 return  # auth failed/too-many-tries; reason string not tracked
 
-        yield ("c2s", 1, "pass")  # ClientInit: shared flag
+        yield _Want(self.c2s, 1, scrub=False)  # ClientInit: shared flag
 
         # ServerInit: width(2) height(2) pixel-format(16) name-len(4).
-        server_init = yield ("s2c", 24, "pass")
+        server_init = yield _Want(self.s2c, 24, scrub=False)
         self.width, self.height = unpack("!HH", server_init[:4])
 
         # Server name follows; nothing past it carries a tracked secret.
@@ -234,25 +258,15 @@ class CaptureWriter:
         self.encodings_seen[encoding] = self.encodings_seen.get(encoding, 0) + 1
 
     def feed_s2c(self, data: bytes) -> None:
-        self._feed("s2c", data)
+        self.s2c += self.scrubber.s2c.feed(data)
 
     def feed_c2s(self, data: bytes) -> None:
-        self._feed("c2s", data)
-
-    def _feed(self, direction: Direction, data: bytes) -> None:
-        self._append(direction, self.scrubber.feed(direction, data))
-
-    def _append(self, direction: Direction, data: bytes) -> None:
-        if not data:
-            return
-        buf = self.s2c if direction == "s2c" else self.c2s
-        buf += data
+        self.c2s += self.scrubber.c2s.feed(data)
 
     def flush(self) -> None:
         """Emit whatever the scrubber was still holding back, at disconnect."""
-        pending = self.scrubber.flush()
-        for direction, data in pending.items():
-            self._append(direction, data)
+        self.s2c += self.scrubber.s2c.flush()
+        self.c2s += self.scrubber.c2s.flush()
 
     def encodings_list(self) -> list[dict[str, Any]]:
         """`encodings_seen` as JSON, ordered and named where we know the name."""
