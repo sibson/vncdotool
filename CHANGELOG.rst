@@ -1,5 +1,9 @@
-1.3.1 (UNRELEASED)
+1.4.0 (UNRELEASED)
 ----------------------
+  - [BREAKING] vncdo exit codes now say what went wrong: single digits for bad input, including 3 for authentication, and tens grouped by cause out on the wire, 10s connection, 20s protocol, 30s command, 40s timeout, documented in docs/usage.rst.  Scripts reading the exit code see new values: authentication failure is now 3 and a session cut short 11, both of which used to be 0; an unknown action is now 2, previously 1 (@sibson, #345)
+  - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
+  - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
+  - Protocol errors abort the session instead of only being logged, reported through the new ``RFBClient.vncProtocolError`` hook (@sibson, #345)
 
 1.3.0 (2026-04-03)
 ----------------------

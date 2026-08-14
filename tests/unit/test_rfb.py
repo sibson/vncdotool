@@ -15,6 +15,36 @@ class TestRFB(TestCase):
         self.client._handler()
         self.client.transport.loseConnection.assert_called_once()
 
+    def test_invalid_server_response_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._packet += b"X"
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_unknown_security_types_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._packet += (
+            b"RFB 003.007\n"  # header
+            b"\x01"  # num-auth-types
+            b"\x7f"  # an auth type we do not support
+        )
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_unknown_auth_type_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._packet += (
+            b"RFB 003.003\n"  # header
+            b"\x00\x00\x00\x7f"  # an auth type we do not support
+        )
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_unknown_message_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._handleConnection(b"\x7f")
+        self.client.vncProtocolError.assert_called_once()
+
     def test_auth_incmplete(self):
         self.client._packet += b"RFB 000.000"
         self.client._handler()

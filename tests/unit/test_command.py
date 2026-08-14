@@ -2,7 +2,11 @@ import socket
 import unittest
 from unittest import mock, skipUnless
 
+from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLookupError
+from twisted.python.failure import Failure
+
 from vncdotool import command
+from vncdotool.client import AuthenticationError, ProtocolError
 
 
 class TestBuildCommandList(unittest.TestCase):
@@ -252,3 +256,143 @@ class TestVNCDoCLIClient(unittest.TestCase):
         assert command.getpass.getpass.called
         assert cli.factory.password == password
         cli.sendPassword.assert_called_once_with(password)
+
+
+class TestExitStatus(unittest.TestCase):
+
+    def test_documented_values(self) -> None:
+        # these are a published interface, see docs/usage.rst
+        assert dict(command.ExitStatus.__members__.items()) == {
+            'SUCCESS': 0,
+            'ERROR': 1,
+            'USAGE': 2,
+            'AUTHENTICATION_FAILED': 3,
+            'CONNECTION_FAILED': 10,
+            'CONNECTION_LOST': 11,
+            'PROTOCOL_ERROR': 20,
+            'COMMAND_FAILED': 30,
+            'TIMEOUT': 40,
+        }
+
+
+class FakeReactor:
+    """Records the exit status instead of stopping the real reactor.
+
+    A bare Mock would report an auto-created attribute for exit_status, which
+    the factory reads as an outcome having already been decided.
+    """
+
+    def __init__(self) -> None:
+        self.exit_status = None
+
+    def callLater(self, delay, fn, *args, **kwargs) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+
+@mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
+class TestVNCDoCLIFactory(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.factory = command.VNCDoCLIFactory()
+
+    def test_auth_failure(self, reactor) -> None:
+        self.factory.clientConnectionFailed(
+            None, Failure(AuthenticationError('Authentication failure'))
+        )
+
+        assert reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
+
+    def test_protocol_error(self, reactor) -> None:
+        self.factory.clientConnectionFailed(
+            None, Failure(ProtocolError('unknown encoding received'))
+        )
+
+        assert reactor.exit_status == command.ExitStatus.PROTOCOL_ERROR
+
+    def test_connection_refused(self, reactor) -> None:
+        self.factory.clientConnectionFailed(None, Failure(ConnectionRefusedError()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_dns_lookup_failure(self, reactor) -> None:
+        self.factory.clientConnectionFailed(None, Failure(DNSLookupError()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_clean_close_before_commands_run(self, reactor) -> None:
+        # the server hanging up cleanly is not evidence the commands ran
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_LOST
+
+    def test_command_failure(self, reactor) -> None:
+        self.factory.error(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_timeout(self, reactor) -> None:
+        self.factory.error(Failure(command.TimeoutError('TIMEOUT Exceeded (5s)')))
+
+        assert reactor.exit_status == command.ExitStatus.TIMEOUT
+
+    def test_clean_close_after_commands_run_keeps_success(self, reactor) -> None:
+        self.factory.done(command.ExitStatus.SUCCESS)
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert reactor.exit_status == command.ExitStatus.SUCCESS
+
+    def test_first_outcome_wins(self, reactor) -> None:
+        self.factory.error(Failure(AuthenticationError('denied')))
+        self.factory.done(command.ExitStatus.SUCCESS)
+
+        assert reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
+class TestBuildTool(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.options = mock.Mock(
+            verbose=False,
+            delay=None,
+            warp=1.0,
+            incremental_refreshes=0,
+            host='127.0.0.1',
+            port=5900,
+            address_family=socket.AF_INET,
+        )
+
+    def test_undecided_exit_status_starts_none(self, reactor, connect) -> None:
+        reactor.exit_status = 'left over from an earlier run'
+
+        command.build_tool(self.options, [])
+
+        assert reactor.exit_status is None
+
+    def test_completed_commands_close_connection_and_exit_zero(
+        self, reactor, connect
+    ) -> None:
+        factory = command.build_tool(self.options, [])
+        client = mock.Mock()
+
+        factory.deferred.callback(client)
+
+        client.transport.loseConnection.assert_called_once_with()
+        assert reactor.exit_status == command.ExitStatus.SUCCESS
+
+    def test_failed_command_exits_command_failed(self, reactor, connect) -> None:
+        factory = command.build_tool(self.options, [])
+
+        factory.deferred.errback(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_unparsable_command_exits_usage(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.build_tool(self.options, ['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
