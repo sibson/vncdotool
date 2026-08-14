@@ -1,31 +1,14 @@
-"""Raw wire capture for the ``vnclog --capture`` discovery kit.
+"""Raw wire capture for the ``vnclog --capture-raw`` discovery kit.
 
-Scrubbing happens *before* bytes touch disk, and is kept here, socket-free,
-so it can be unit tested. Secrets are located by walking the handshake state
-machine, never by pattern matching -- every one of them is high-entropy and
-indistinguishable from any other span of the same length by content alone:
+Credentials are located by walking the handshake state machine, never by
+pattern matching: they are high-entropy and indistinguishable from any other
+span of the same length by content alone. Redacted spans are replaced by an
+equal number of zero bytes, so byte offsets do not shift and the capture
+still replays.
 
-* VNC auth (:attr:`AuthTypes.VNC_AUTHENTICATION`): the 16-byte challenge and
-  the 16-byte response.
-* ARD / Apple Screen Sharing (:attr:`AuthTypes.DIFFIE_HELLMAN`): the
-  128-byte AES-ECB block carrying username and password. The surrounding
-  Diffie-Hellman values (generator, modulus, both public keys) are public by
-  construction and pass through, so the capture still shows the key exchange
-  a compatibility bug would live in.
-
-Redacted spans are replaced by an equal number of zero bytes, never by a
-shorter or longer marker: a capture whose byte offsets shifted under
-scrubbing would no longer replay.
-
-An auth type with no scrubber aborts the capture and names itself, unless
-the contributor passes ``--capture-unsafe-auth``. Writing an unscrubbed key
-exchange to a file destined for a public issue tracker is a decision for a
-human with a disposable password, not a default. See ``docs/capture.rst``.
-
-Scrubbing stops at the end of the handshake. Everything the session itself
-carries -- keystrokes, clipboard -- is recorded verbatim; that risk is
-documented rather than filtered, because a capture with its input stream
-rewritten is no longer evidence of what the server did.
+An auth type with no scrubber aborts the capture unless the contributor
+passes ``--capture-raw-unsafe-auth``. Scrubbing stops at the end of the
+handshake; see ``docs/capture.rst``.
 """
 
 from __future__ import annotations
@@ -66,10 +49,9 @@ class HandshakeScrubber:
         self.negotiated_version: tuple[int, int] | None = None
         self.security_types: list[int] = []
         self.security_type: int | None = None
-        self.scrubbed: list[str] = []
         self.unscrubbed_auth: str | None = None
-        # Set when an auth type we cannot scrub is selected and the
-        # contributor has not opted in; the caller drops the capture.
+        # Set when an unscrubbable auth type is selected without an opt-in;
+        # the caller drops the capture.
         self.abort_reason: str | None = None
         self.width: int | None = None
         self.height: int | None = None
@@ -183,23 +165,18 @@ class HandshakeScrubber:
         self.security_type = sectype
 
         if sectype == AuthTypes.VNC_AUTHENTICATION:
-            yield ("s2c", 16, "scrub")
-            self.scrubbed.append("vnc-auth-challenge")
-            yield ("c2s", 16, "scrub")
-            self.scrubbed.append("vnc-auth-response")
+            yield ("s2c", 16, "scrub")  # challenge
+            yield ("c2s", 16, "scrub")  # response
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
             # ARD / Apple Screen Sharing, laid out as RFBClient._handleDHAuth
-            # reads it: generator(2) keyLen(2), modulus(keyLen),
-            # serverKey(keyLen), then the client's reply. Only the client's
-            # AES block is secret -- the DH values are public by design, and
-            # keeping them is what makes the capture useful for the ARD
-            # compatibility bugs this kit exists to chase.
+            # reads it. Only the client's AES block is secret; the DH values
+            # are public by design, and keeping them is what makes the
+            # capture useful for the ARD bugs this kit exists to chase.
             head = yield ("s2c", 4, "pass")
             _generator, key_len = unpack("!HH", head)
             yield ("s2c", key_len, "pass")  # modulus
             yield ("s2c", key_len, "pass")  # server public key
-            yield ("c2s", ARD_CREDENTIALS_LEN, "scrub")
-            self.scrubbed.append("ard-credentials")
+            yield ("c2s", ARD_CREDENTIALS_LEN, "scrub")  # username + password
             yield ("c2s", key_len, "pass")  # client public key
         elif sectype not in (AuthTypes.NONE, AuthTypes.INVALID):
             # No scrubber for this type: its key exchange would reach disk
@@ -211,8 +188,8 @@ class HandshakeScrubber:
                 self.abort_reason = (
                     f"the session negotiated {self.unscrubbed_auth}, which vncdotool cannot scrub; "
                     "the capture would contain the credential exchange verbatim. "
-                    "Re-run with --capture-unsafe-auth, using a disposable password you "
-                    "rotate afterwards, if you need this exchange captured."
+                    "Re-run with --capture-raw-unsafe-auth, using a disposable password "
+                    "you rotate afterwards, if you need this exchange captured."
                 )
                 return
 
@@ -234,17 +211,6 @@ class HandshakeScrubber:
         return
 
 
-def scrub_password(data: bytes, password: bytes | None) -> tuple[bytes, bool]:
-    """Redact literal occurrences of `password` in `data`.
-
-    Best-effort: only catches a password landing entirely within one chunk.
-    """
-    if not password or password not in data:
-        return data, False
-    marker = b"\x00" * len(password)
-    return data.replace(password, marker), True
-
-
 @dataclass
 class CaptureWriter:
     """Scrubbed s2c/c2s streams and meta.json fields for one connection.
@@ -253,16 +219,13 @@ class CaptureWriter:
     """
 
     server: str
-    password: bytes | None = None
     scrubber: HandshakeScrubber = field(default_factory=HandshakeScrubber)
     s2c: bytearray = field(default_factory=bytearray)
     c2s: bytearray = field(default_factory=bytearray)
-    # encoding number -> rectangles seen. Recorded from the decoded stream,
-    # never from the client's SetEncodings request: a server may answer in
-    # any encoding it likes, and which one it actually chose is the whole
-    # question a capture from an unhostable server is meant to answer.
+    # encoding number -> rectangles seen, from the decoded stream rather than
+    # the client's SetEncodings request: a server may answer in any encoding
+    # it likes, and which one it chose is what the capture is asked for.
     encodings_seen: dict[int, int] = field(default_factory=dict)
-    _password_scrubbed: bool = False
     capture_timestamp: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
 
     @property
@@ -279,29 +242,19 @@ class CaptureWriter:
         self._feed("c2s", data)
 
     def _feed(self, direction: Direction, data: bytes) -> None:
-        scrubbed = self.scrubber.feed(direction, data)
-        self._append(direction, scrubbed)
+        self._append(direction, self.scrubber.feed(direction, data))
 
     def _append(self, direction: Direction, data: bytes) -> None:
         if not data:
             return
-        scrubbed, hit = scrub_password(data, self.password)
-        if hit:
-            self._password_scrubbed = True
         buf = self.s2c if direction == "s2c" else self.c2s
-        buf += scrubbed
+        buf += data
 
     def flush(self) -> None:
         """Emit whatever the scrubber was still holding back, at disconnect."""
         pending = self.scrubber.flush()
         for direction, data in pending.items():
             self._append(direction, data)
-
-    def scrubbed_list(self) -> list[str]:
-        names = list(self.scrubber.scrubbed)
-        if self._password_scrubbed:
-            names.append("password")
-        return names
 
     def encodings_list(self) -> list[dict[str, Any]]:
         """`encodings_seen` as JSON, ordered and named where we know the name."""
@@ -325,7 +278,6 @@ class CaptureWriter:
             "capture_timestamp": self.capture_timestamp,
             "protocol_version": self.scrubber.protocol_version,
             "security_types": self.scrubber.security_types,
-            "scrubbed": self.scrubbed_list(),
             "unscrubbed_auth": self.scrubber.unscrubbed_auth,
             "encodings_seen": self.encodings_list(),
             "geometry": (
@@ -357,15 +309,18 @@ class CaptureWriter:
 
 
 def check_capture_target(path: str) -> None:
-    """Validate `path` is usable as a --capture target.
+    """Validate `path` is usable as a --capture-raw target.
 
     Creates nothing: the archive is written when the session ends, so a
     later `op.error()` leaves nothing behind.
     """
     if not path.endswith(".zip"):
-        raise ValueError(f"--capture target {path!r} must end in .zip -- captures are written as one archive")
+        raise ValueError(f"--capture-raw target {path!r} must end in .zip -- captures are written as one archive")
     if os.path.exists(path):
-        raise ValueError(f"--capture target {path!r} already exists -- refusing to overwrite a capture")
+        raise ValueError(
+            f"--capture-raw target {path!r} already exists -- "
+            "refusing to overwrite a capture; pick another filename"
+        )
     parent = os.path.dirname(os.path.abspath(path))
     if not os.path.isdir(parent):
-        raise ValueError(f"--capture target directory {parent!r} does not exist")
+        raise ValueError(f"--capture-raw target directory {parent!r} does not exist")

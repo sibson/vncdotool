@@ -452,17 +452,17 @@ def vnclog() -> None:
         help="a VNC password is required to connect to the server",
     )
     op.add_option(
-        "--capture",
+        "--capture-raw",
         metavar="FILE.zip",
         help="write a raw wire capture (scrubbed of auth secrets) to FILE.zip, "
         "ready to attach to an issue -- see docs/capture.rst. FILE.zip must not "
         "exist; OUTPUT is implied (session.vdo inside the archive) and should be omitted.",
     )
     op.add_option(
-        "--capture-unsafe-auth",
+        "--capture-raw-unsafe-auth",
         action="store_true",
         default=False,
-        help="allow --capture to record auth types vncdotool cannot scrub, storing "
+        help="allow --capture-raw to record auth types vncdotool cannot scrub, storing "
         "the credential exchange verbatim. Use a disposable password and rotate it "
         "afterwards.",
     )
@@ -473,15 +473,15 @@ def vnclog() -> None:
     options.address_family, options.host, options.port = parse_server(options.server)
 
     output = None
-    if options.capture:
+    if options.capture_raw:
         if args:
-            op.error("OUTPUT is implied by --capture (session.vdo in the archive); do not also pass OUTPUT")
+            op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
         try:
-            check_capture_target(options.capture)
+            check_capture_target(options.capture_raw)
         except ValueError as exc:
             op.error(str(exc))
-    elif options.capture_unsafe_auth:
-        op.error("--capture-unsafe-auth is only meaningful with --capture")
+    elif options.capture_raw_unsafe_auth:
+        op.error("--capture-raw-unsafe-auth is only meaningful with --capture-raw")
     elif len(args) != 1:
         op.error("incorrect number of arguments")
     else:
@@ -495,9 +495,9 @@ def vnclog() -> None:
         flush=True,
     )
 
-    if options.capture:
-        factory.capture_path = options.capture
-        factory.capture_unsafe_auth = options.capture_unsafe_auth
+    if options.capture_raw:
+        factory.capture_path = options.capture_raw
+        factory.capture_unsafe_auth = options.capture_raw_unsafe_auth
     elif options.forever and os.path.isdir(output):
         factory.output = output
     elif options.forever:

@@ -192,9 +192,8 @@ class VNCLoggingClient(VNCDoToolClient):
     capture: CaptureWriter | None = None
 
     def _handleRectangle(self, block: bytes) -> None:
-        # Tallied here, off the decoded stream, because this is the only
-        # place that knows what the server actually sent. SetEncodings only
-        # says what the client asked for, and a server may ignore it.
+        # Tallied off the decoded stream: SetEncodings only says what the
+        # client asked for, and a server may ignore it.
         if self.capture is not None:
             (encoding,) = unpack("!i", block[8:12])
             self.capture.note_encoding(encoding)
@@ -276,13 +275,11 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     capture: CaptureWriter | None = None
 
     def connectionMade(self) -> None:
-        # One capture per directory: the format is singular, and a viewer
-        # that reconnects would otherwise overwrite the capture the
-        # contributor wanted. Claimed on accept, not on write, so a second
-        # concurrent connection is refused too.
+        # Claimed on accept rather than on write, so a second concurrent
+        # connection is refused too instead of overwriting the capture.
         if self.factory.capture_path and self.factory.capture_claimed:
             log.warning(
-                "--capture %s already has a session; refusing connection from %s",
+                "--capture-raw %s already has a session; refusing connection from %s",
                 self.factory.capture_path,
                 self.transport.getPeer().host,
             )
@@ -297,26 +294,23 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.recorder = self.factory.getRecorder()
         if self.factory.capture_path:
             self.factory.capture_claimed = True
-            password = self.factory.password.encode() if self.factory.password else None
             self.capture = CaptureWriter(
                 server=self.factory.server_str,
-                password=password,
                 scrubber=HandshakeScrubber(allow_unsafe_auth=self.factory.capture_unsafe_auth),
             )
 
     def connectionLost(self, reason: Failure) -> None:
         if self.capture is not None:
             if self.capture.s2c or self.capture.c2s:
-                # Bytes in either direction count, including a server that
-                # rejects the client before the client sends anything -- that
-                # rejection is the evidence being captured. So nothing may
-                # port-probe a capture-mode vnclog: the forwarded greeting
-                # would look like a session and claim the capture.
+                # Bytes in either direction count: a server rejecting the
+                # client before it speaks is itself the evidence. So nothing
+                # may port-probe a capture-mode vnclog -- the forwarded
+                # greeting would look like a session and claim the capture.
                 self._writeCapture()
             else:
                 # A bare TCP open/close is not a session. Release the claim
                 # rather than lock out the real connection behind it.
-                log.debug("--capture: connection produced no bytes, not claiming the capture")
+                log.debug("--capture-raw: connection produced no bytes, not claiming the capture")
                 self.factory.capture_claimed = False
                 self.capture = None
         super().connectionLost(reason)
@@ -331,18 +325,17 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
             self.capture.meta(VNCDOTOOL_VERSION),
             session_vdo=self.factory.getRecordedSession(),
         )
-        log.info("--capture: wrote %s", capture_path)
+        log.info("--capture-raw: wrote %s", capture_path)
         # Guard against a double connectionLost (peer already gone) writing twice.
         self.capture = None
 
     def _abortCapture(self, reason: str) -> None:
         """Drop an in-flight capture we are not allowed to write.
 
-        Nothing reaches disk and the connection ends: a contributor who
-        cannot get a scrubbed capture should find out now, not on reading
-        the warning under an archive they already attached to an issue.
+        Nothing reaches disk and the connection ends, so a contributor finds
+        out now rather than after attaching the archive to an issue.
         """
-        log.error("--capture aborted: %s", reason)
+        log.error("--capture-raw aborted: %s", reason)
         self.capture = None
         if self.vnclog_client is not None:
             self.vnclog_client.capture = None
@@ -440,9 +433,8 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
 
     def getRecorder(self) -> Callable[[str], int]:
         if self.capture_path:
-            # Buffered, not written straight to disk: the session log is one
-            # member of the capture archive, and nothing may exist on disk
-            # until the whole capture is known to be writable.
+            # Buffered: the session log is one member of the archive, so
+            # nothing lands on disk until the whole capture is writable.
             self._capture_vdo = io.StringIO()
             return self._capture_vdo.write
         elif isinstance(self.output, str):

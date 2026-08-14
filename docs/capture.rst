@@ -21,7 +21,7 @@ Making a capture
 2. Start the recording proxy, pointed at the server you're seeing the bug
    against, naming the ``.zip`` to write::
 
-       vnclog --capture ./my-bug-capture.zip --listen 5902 -s YOURSERVER::5900
+       vnclog --capture-raw ./my-bug-capture.zip --listen 5902 -s YOURSERVER::5900
 
    ``vnclog`` will refuse to run if ``./my-bug-capture.zip`` already exists
    -- that's deliberate, so a capture is never silently overwritten.
@@ -49,22 +49,19 @@ What's in the archive
     meta.json     # server address, vncdotool version, capture timestamp,
                   # the server's protocol version string, the security
                   # types it offered, which encodings it actually sent,
-                  # the framebuffer geometry, and what was (and was not)
-                  # scrubbed
+                  # and the framebuffer geometry
 
 The archive is written whole, under a temporary name and renamed into place,
 so a half-written capture never looks like a complete one.
 
-Only one session is ever recorded per ``--capture``: if a second client
+Only one session is ever recorded per ``--capture-raw``: if a second client
 connects (a viewer retrying after a dropped connection, say) it is refused
 outright rather than silently overwriting the capture you already have.
-Start a fresh ``vnclog --capture`` with a new filename to record another
+Start a fresh ``vnclog --capture-raw`` with a new filename to record another
 session.
 
 ``meta.json`` is plain, human-readable JSON -- open it and read it before
-you attach the capture. It tells you exactly what got redacted, so you can
-confirm nothing else in the two ``.bin`` files needs to be trimmed by hand
-before it leaves your machine.
+you attach the capture, so you know what is about to leave your machine.
 
 ``encodings_seen`` is counted from the rectangles the server actually sent,
 not from what the client asked for -- a server is free to ignore the
@@ -92,39 +89,17 @@ surrounding byte offsets don't shift and the capture still replays:
   AES block carrying your username and password. The Diffie-Hellman values
   around it (generator, modulus, both public keys) are public by
   construction and are kept deliberately: ARD compatibility bugs live in
-  those values;
-* **your VNC password** -- any bytes matching the password vncdotool itself
-  was given (via ``-p``/``--password``), wherever they occur in either
-  stream. Best-effort only: VNC auth never puts the password on the wire in
-  the clear, so this is a backstop, not the main defence.
-
-Each is listed by name in ``meta.json``'s ``scrubbed`` field, so you don't
-have to take it on faith -- e.g. ``["vnc-auth-challenge",
-"vnc-auth-response"]``, or ``[]`` if the server used no authentication at
-all.
-
-Auth types with no scrubber
------------------------------
+  those values.
 
 vncdotool can only redact an exchange it can parse. If the session
-negotiates something else -- ``tight``, ``vencrypt``, ``rsa-aes``,
-UltraVNC's MS-Logon -- the capture is **aborted**: nothing is written and
-the connection is closed, with the reason printed to stderr::
-
-    --capture aborted: the session negotiated tight(16), which vncdotool
-    cannot scrub; the capture would contain the credential exchange verbatim.
-
-That is the safe default for a file you are about to attach to a public
-issue tracker. If the bug you are chasing *is* in that auth exchange, you
-can override it::
-
-    vnclog --capture ./my-bug-capture.zip --capture-unsafe-auth \
-        --listen 5902 -s YOURSERVER::5900
+negotiates an auth type it cannot -- ``tight``, ``vencrypt``, ``rsa-aes``,
+UltraVNC's MS-Logon -- the capture is aborted and the error tells you how to
+proceed anyway.
 
 .. warning::
 
-   ``--capture-unsafe-auth`` writes the credential exchange to the archive
-   verbatim, and ``meta.json``'s ``unscrubbed_auth`` field records which
+   ``--capture-raw-unsafe-auth`` writes the credential exchange to the
+   archive verbatim, and ``meta.json``'s ``unscrubbed_auth`` records which
    type it was. Some of these exchanges are attackable offline -- ARD's
    512-bit Diffie-Hellman is within reach of ordinary compute today. Use a
    **disposable password, and rotate it afterwards**, and prefer emailing

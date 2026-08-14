@@ -4,10 +4,10 @@
   - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
   - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
   - Protocol errors abort the session instead of only being logged, reported through the new ``RFBClient.vncProtocolError`` hook (@sibson, #345)
-  - Add ``vnclog --capture FILE.zip`` for raw wire captures, written as one
+  - Add ``vnclog --capture-raw FILE.zip`` for raw wire captures, written as one
     upload-ready archive with VNC-auth and ARD credentials scrubbed, for
     filing bug reports against servers we can't host. An auth type vncdotool
-    cannot scrub aborts the capture unless ``--capture-unsafe-auth`` is
+    cannot scrub aborts the capture unless ``--capture-raw-unsafe-auth`` is
     given. ``meta.json`` records which encodings the server actually sent
   - Fix ``vnclog`` desyncing against RFB 3.7+ servers using VNC password
     authentication (it ate the 16-byte auth response instead of skipping it,

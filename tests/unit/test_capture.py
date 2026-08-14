@@ -1,4 +1,4 @@
-"""Unit coverage for the vnclog --capture kit.
+"""Unit coverage for the vnclog --capture-raw kit.
 
 Drives HandshakeScrubber/CaptureWriter directly, and the two proxy protocol
 classes through a scripted handshake on mocked transports, so both raw
@@ -21,7 +21,6 @@ from vncdotool.capture import (
     CaptureWriter,
     HandshakeScrubber,
     check_capture_target,
-    scrub_password,
 )
 from vncdotool.const import AuthTypes, Encoding
 from vncdotool.loggingproxy import VNCLoggingClientProxy, VNCLoggingServerProxy
@@ -49,7 +48,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
         self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
 
-        self.assertEqual(s.scrubbed, ["vnc-auth-challenge", "vnc-auth-response"])
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(s.protocol_version, "RFB 003.003")
         self.assertEqual(s.security_types, [AuthTypes.VNC_AUTHENTICATION])
@@ -70,7 +68,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.feed("c2s", bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
         self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
         self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
-        self.assertEqual(s.scrubbed, ["vnc-auth-challenge", "vnc-auth-response"])
         self.assertEqual(s.security_types, [AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
 
     def test_version_downgrade_still_finds_vnc_auth(self) -> None:
@@ -90,7 +87,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
         self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
 
-        self.assertEqual(s.scrubbed, ["vnc-auth-challenge", "vnc-auth-response"])
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
 
     def test_downgrade_the_other_way_is_also_followed(self) -> None:
@@ -106,7 +102,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.feed("c2s", bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
         self.assertEqual(s.feed("s2c", CHALLENGE), MARKER)
         self.assertEqual(s.feed("c2s", RESPONSE), MARKER)
-        self.assertEqual(s.scrubbed, ["vnc-auth-challenge", "vnc-auth-response"])
 
     def test_auth_none_untouched(self) -> None:
         s = HandshakeScrubber()
@@ -115,7 +110,6 @@ class TestHandshakeScrubber(TestCase):
         s.feed("s2c", bytes([1, AuthTypes.NONE]))
         out = s.feed("c2s", bytes([AuthTypes.NONE]))
         self.assertEqual(out, bytes([AuthTypes.NONE]))
-        self.assertEqual(s.scrubbed, [])
         self.assertEqual(s.security_type, AuthTypes.NONE)
         self.assertIsNone(s.unscrubbed_auth)
 
@@ -156,7 +150,6 @@ class TestHandshakeScrubber(TestCase):
         client_key = b"Y" * 8
         self.assertEqual(s.feed("c2s", credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
 
-        self.assertEqual(s.scrubbed, ["ard-credentials"])
         self.assertIsNone(s.unscrubbed_auth)
         self.assertIsNone(s.abort_reason)
         self.assertEqual(s.feed("s2c", SECURITY_RESULT_OK), SECURITY_RESULT_OK)
@@ -181,7 +174,7 @@ class TestHandshakeScrubber(TestCase):
 
         self.assertIsNotNone(s.abort_reason)
         self.assertIn("tight", s.abort_reason)
-        self.assertIn("--capture-unsafe-auth", s.abort_reason)
+        self.assertIn("--capture-raw-unsafe-auth", s.abort_reason)
         self.assertIn("tight", s.unscrubbed_auth)
         self.assertIn("16", s.unscrubbed_auth)
 
@@ -212,7 +205,6 @@ class TestHandshakeScrubber(TestCase):
         second = s.feed("s2c", CHALLENGE[6:])
         self.assertEqual(first, b"")
         self.assertEqual(second, MARKER)
-        self.assertEqual(s.scrubbed, ["vnc-auth-challenge"])
 
     def test_flush_drops_partial_secret(self) -> None:
         s = HandshakeScrubber()
@@ -237,23 +229,6 @@ class TestHandshakeScrubber(TestCase):
         pending = s.flush()
         self.assertEqual(pending["s2c"], SECURITY_RESULT_OK[:2])
         self.assertEqual(pending["c2s"], b"")
-
-
-class TestScrubPassword(TestCase):
-    def test_redacts_password_bytes(self) -> None:
-        out, hit = scrub_password(b"xxsecretxx", b"secret")
-        self.assertTrue(hit)
-        self.assertEqual(out, b"xx" + b"\x00" * 6 + b"xx")
-
-    def test_no_password_configured(self) -> None:
-        out, hit = scrub_password(b"whatever", None)
-        self.assertFalse(hit)
-        self.assertEqual(out, b"whatever")
-
-    def test_password_not_present(self) -> None:
-        out, hit = scrub_password(b"whatever", b"missing")
-        self.assertFalse(hit)
-        self.assertEqual(out, b"whatever")
 
 
 class TestCheckCaptureTarget(TestCase):
@@ -297,7 +272,7 @@ class TestCaptureWriter(TestCase):
         return json.loads(self.read_archive("meta.json"))
 
     def test_meta_and_write_vnc_auth(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=None)
+        cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_33)
         cw.feed_c2s(VERSION_33)
         cw.feed_s2c(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
@@ -316,7 +291,6 @@ class TestCaptureWriter(TestCase):
         )
         self.assertEqual(bytes(cw.s2c), expected_s2c)
         self.assertEqual(bytes(cw.c2s), VERSION_33 + MARKER + b"\x01")
-        self.assertEqual(cw.scrubbed_list(), ["vnc-auth-challenge", "vnc-auth-response"])
 
         cw.write_archive(self.archive, cw.meta("9.9.9"), session_vdo=b"pause 0.1 key a\n")
 
@@ -333,13 +307,12 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(meta["vncdotool_version"], "9.9.9")
         self.assertEqual(meta["protocol_version"], "RFB 003.003")
         self.assertEqual(meta["security_types"], [AuthTypes.VNC_AUTHENTICATION])
-        self.assertEqual(meta["scrubbed"], ["vnc-auth-challenge", "vnc-auth-response"])
         self.assertIsNone(meta["unscrubbed_auth"])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
         self.assertIn("capture_timestamp", meta)
 
     def test_auth_none_session_untouched_and_unscrubbed(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=None)
+        cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_38)
         cw.feed_c2s(VERSION_38)
         cw.feed_s2c(bytes([1, AuthTypes.NONE]))
@@ -353,11 +326,9 @@ class TestCaptureWriter(TestCase):
             VERSION_38 + bytes([1, AuthTypes.NONE]) + SECURITY_RESULT_OK + SERVER_INIT_640x480,
         )
         self.assertEqual(bytes(cw.c2s), VERSION_38 + bytes([AuthTypes.NONE]) + b"\x01")
-        self.assertEqual(cw.scrubbed_list(), [])
 
         cw.write_archive(self.archive, cw.meta("9.9.9"))
         meta = self.read_meta()
-        self.assertEqual(meta["scrubbed"], [])
         self.assertEqual(meta["security_types"], [AuthTypes.NONE])
         self.assertIsNone(meta["unscrubbed_auth"])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
@@ -365,7 +336,6 @@ class TestCaptureWriter(TestCase):
     def test_unscrubbed_auth_recorded_in_meta_when_opted_in(self) -> None:
         cw = CaptureWriter(
             server="host::5900",
-            password=None,
             scrubber=HandshakeScrubber(allow_unsafe_auth=True),
         )
         cw.feed_s2c(VERSION_38)
@@ -374,14 +344,13 @@ class TestCaptureWriter(TestCase):
         cw.feed_c2s(bytes([AuthTypes.TIGHT]))
 
         meta = cw.meta("9.9.9")
-        self.assertEqual(meta["scrubbed"], [])
         self.assertIsNotNone(meta["unscrubbed_auth"])
         self.assertIn("tight", meta["unscrubbed_auth"])
         self.assertIsNone(cw.abort_reason)
 
     def test_encodings_seen_recorded_in_meta(self) -> None:
         """What the server actually sent, named where we know the name."""
-        cw = CaptureWriter(server="host::5900", password=None)
+        cw = CaptureWriter(server="host::5900")
         cw.note_encoding(Encoding.RAW)
         cw.note_encoding(Encoding.RAW)
         cw.note_encoding(Encoding.ZRLE)
@@ -397,7 +366,7 @@ class TestCaptureWriter(TestCase):
         )
 
     def test_no_partial_archive_left_when_write_fails(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=None)
+        cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_33)
         with mock.patch("vncdotool.capture.json.dumps", side_effect=RuntimeError("boom")):
             with self.assertRaises(RuntimeError):
@@ -406,14 +375,8 @@ class TestCaptureWriter(TestCase):
         self.assertFalse(os.path.exists(self.archive))
         self.assertFalse(os.path.exists(self.archive + ".part"))
 
-    def test_password_bytes_scrubbed_when_present(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=b"hunter2")
-        cw.feed_c2s(b"clientcuttext-hunter2-trailing")
-        self.assertEqual(bytes(cw.c2s), b"clientcuttext-" + b"\x00" * 7 + b"-trailing")
-        self.assertEqual(cw.scrubbed_list(), ["password"])
-
     def test_write_flushes_pending_non_secret_but_drops_partial_secret(self) -> None:
-        cw = CaptureWriter(server="host::5900", password=None)
+        cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_33)
         cw.feed_c2s(VERSION_33)
         cw.feed_s2c(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
@@ -453,7 +416,7 @@ class TestProxyCaptureWiring(TestCase):
         factory.password_required = True  # matches the RFB 3.3 script below
         self.server_proxy.factory = factory
 
-        self.server_proxy.capture = CaptureWriter(server="testhost::5900", password=None)
+        self.server_proxy.capture = CaptureWriter(server="testhost::5900")
 
     def test_vnc_auth_challenge_and_response_scrubbed_both_directions(self) -> None:
         sp, cp = self.server_proxy, self.client_proxy
@@ -470,7 +433,6 @@ class TestProxyCaptureWiring(TestCase):
         expected_c2s = VERSION_33 + MARKER + b"\x01"
         self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
         self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
-        self.assertEqual(sp.capture.scrubbed_list(), ["vnc-auth-challenge", "vnc-auth-response"])
 
         # Unscrubbed bytes still reach the peer transports: capture must
         # never mutate what the proxy forwards.
@@ -510,7 +472,6 @@ class TestProxyCaptureWiring(TestCase):
         self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
         expected_s2c = VERSION_38 + bytes([1, AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x00\x00\x00\x00"
         self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
-        self.assertEqual(sp.capture.scrubbed_list(), ["vnc-auth-challenge", "vnc-auth-response"])
 
         # ClientInit was reached (not desynced into _handle_protocol on the
         # response bytes), so the client-init handoff fired normally.
@@ -548,7 +509,7 @@ class TestProxyCaptureWiring(TestCase):
         """Not from SetEncodings: a server may answer in anything it likes."""
         from vncdotool.loggingproxy import VNCLoggingClient
 
-        capture = CaptureWriter(server="testhost::5900", password=None)
+        capture = CaptureWriter(server="testhost::5900")
         vnclog = VNCLoggingClient()
         vnclog.capture = capture
         # Stop after the tally; the decode path itself is test_client.py's job.
@@ -615,7 +576,7 @@ class TestProxyCaptureWiring(TestCase):
 
         probe = VNCLoggingServerProxy()
         probe.factory = factory
-        probe.capture = CaptureWriter(server="testhost::5900", password=None)  # never fed any bytes
+        probe.capture = CaptureWriter(server="testhost::5900")  # never fed any bytes
 
         probe.connectionLost(mock.Mock())
 
@@ -637,7 +598,7 @@ class TestProxyCaptureWiring(TestCase):
 
         session = VNCLoggingServerProxy()
         session.factory = factory
-        session.capture = CaptureWriter(server="testhost::5900", password=None)
+        session.capture = CaptureWriter(server="testhost::5900")
         session.capture.feed_s2c(b"RFB 003.003\n")  # greeting arrived; client never got a byte through
 
         session.connectionLost(mock.Mock())
