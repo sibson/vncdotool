@@ -481,7 +481,8 @@ def vnclog() -> None:
     options.address_family, options.host, options.port = parse_server(options.server)
 
     output = None
-    if options.one_shot and options.file_per_client:
+    # --capture-raw implies --one-shot, so it inherits the same conflict.
+    if (options.one_shot or options.capture_raw) and options.file_per_client:
         op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
     if options.capture_raw:
         if args:
@@ -530,6 +531,10 @@ def vnclog() -> None:
             env=os.environ,
         )
     reactor.run()
+    if factory.capture_failed and not reactor.exit_status:
+        # Aborted or unwritable capture: the contributor has no archive, so
+        # exiting 0 would tell a script the capture succeeded.
+        sys.exit(ExitStatus.COMMAND_FAILED)
     sys.exit(reactor.exit_status)
 
 

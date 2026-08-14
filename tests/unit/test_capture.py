@@ -25,7 +25,11 @@ from vncdotool.capture import (
     check_capture_target,
 )
 from vncdotool.const import AuthTypes, Encoding
-from vncdotool.loggingproxy import VNCLoggingClientProxy, VNCLoggingServerProxy
+from vncdotool.loggingproxy import (
+    VNCLoggingClientProxy,
+    VNCLoggingServerFactory,
+    VNCLoggingServerProxy,
+)
 
 VERSION_33 = b"RFB 003.003\n"
 VERSION_38 = b"RFB 003.008\n"
@@ -155,6 +159,27 @@ class TestHandshakeScrubber(TestCase):
         self.assertIsNone(s.unscrubbable_auth)
         self.assertIsNone(s.abort_reason)
         self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+
+    def test_unparseable_version_reply_aborts(self) -> None:
+        """Losing the handshake must fail closed.
+
+        Giving up quietly would put both directions into passthrough, so a
+        server that carried on regardless would have its challenge and
+        response recorded in the clear.
+        """
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(b"NOT-A-VERSION\n"[:12])
+
+        self.assertIsNotNone(s.abort_reason)
+        self.assertIn("--capture-raw-unsafe-auth", s.abort_reason)
+
+    def test_unparseable_version_reply_allowed_when_opted_in(self) -> None:
+        s = HandshakeScrubber(allow_unsafe_auth=True)
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(b"NOT-A-VERSION\n"[:12])
+
+        self.assertIsNone(s.abort_reason)
 
     def test_scrubbing_preserves_byte_offsets(self) -> None:
         """A redaction that changed length would break replay of the capture."""
@@ -391,6 +416,11 @@ class TestProxyCaptureWiring(TestCase):
     for the peer connections portforward would otherwise wire up.
     """
 
+    def tmpdir(self) -> str:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        return tmp
+
     def setUp(self) -> None:
         self.server_proxy = VNCLoggingServerProxy()
         self.server_proxy.transport = mock.Mock()
@@ -476,7 +506,7 @@ class TestProxyCaptureWiring(TestCase):
     def test_unscrubbable_auth_aborts_and_writes_nothing(self) -> None:
         """Chosen on the client side (3.7+), so it surfaces in the c2s tap."""
         sp, cp = self.server_proxy, self.client_proxy
-        sp.factory.capture_path = os.path.join(tempfile.mkdtemp(), "capture.zip")
+        sp.factory.capture_path = os.path.join(self.tmpdir(), "capture.zip")
         sp.factory.session_taken = True
 
         cp.dataReceived(VERSION_38)
@@ -491,7 +521,7 @@ class TestProxyCaptureWiring(TestCase):
     def test_unscrubbable_auth_chosen_by_a_pre37_server_also_aborts(self) -> None:
         """Pre-3.7 the server dictates the type, so the s2c tap has to catch it."""
         sp, cp = self.server_proxy, self.client_proxy
-        sp.factory.capture_path = os.path.join(tempfile.mkdtemp(), "capture.zip")
+        sp.factory.capture_path = os.path.join(self.tmpdir(), "capture.zip")
 
         cp.dataReceived(VERSION_33)
         sp.dataReceived(VERSION_33)
@@ -573,6 +603,41 @@ class TestProxyCaptureWiring(TestCase):
         self.assertIsNone(sp.capture)
         factory.getRecorder.assert_not_called()
 
+    def test_a_refused_connection_touches_nothing(self) -> None:
+        """A probe refused mid-session must not disturb the live one.
+
+        The refuse path returns before ProxyServer.connectionMade, so it has
+        no peer and never got pauseProducing(): bytes can still arrive, and
+        connectionLost still fires. A real factory is used deliberately --
+        against a Mock every one of these side effects is invisible.
+        """
+        factory = VNCLoggingServerFactory("localhost", 5900)
+        factory.one_shot = True
+        factory.session_taken = True  # a live session holds it
+        factory.capture_path = "/tmp/some-capture.zip"
+        live_recorder = factory.getRecorder()  # the live session's session.vdo
+        live_recorder("pause 0.1\n")
+
+        refused = VNCLoggingServerProxy()
+        refused.factory = factory
+        refused.transport = mock.Mock()
+        refused.transport.getPeer.return_value = mock.Mock(host="10.0.0.9")
+
+        refused.connectionMade()
+        refused.transport.loseConnection.assert_called_once()
+
+        # Bytes arriving after loseConnection() must not make this a session.
+        refused.dataReceived(b"RFB 003.008\n")
+        self.assertFalse(refused.saw_bytes)
+
+        refused.connectionLost(mock.Mock())
+
+        self.assertTrue(factory.session_taken, "the live session's claim must survive")
+        self.assertEqual(
+            factory.getRecordedSession(), b"pause 0.1\n",
+            "the live session's recorder must survive a refused connection",
+        )
+
     def test_empty_connection_does_not_use_up_the_one_shot(self) -> None:
         """A bare TCP probe must not lock out the real connection behind it.
         Found live: the functional suite's own port-polling startup wait was
@@ -585,6 +650,7 @@ class TestProxyCaptureWiring(TestCase):
 
         probe = VNCLoggingServerProxy()
         probe.factory = factory
+        probe.took_session = True  # it was accepted, so connectionMade set both
         probe.capture = CaptureWriter(server="testhost::5900")  # never fed any bytes
 
         probe.connectionLost(mock.Mock())

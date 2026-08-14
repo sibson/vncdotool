@@ -100,6 +100,21 @@ class HandshakeScrubber:
             self._gen = None
             self._want = None
 
+    def _give_up(self, why: str) -> None:
+        """Stop the capture when we can no longer follow the handshake.
+
+        Losing track means we no longer know where the credentials are, so
+        the same rule as an unscrubbable auth type applies: nothing is
+        written unless a human asked for it.
+        """
+        if self.allow_unsafe_auth:
+            return
+        self.abort_reason = (
+            f"{why}; vncdotool can no longer tell where this handshake's credentials are. "
+            "Re-run with --capture-raw-unsafe-auth, using a disposable password you rotate "
+            "afterwards, if you need this session captured."
+        )
+
     def _waiting_on(self, tap: Tap) -> _Want | None:
         """What the handshake wants from `tap`, if it is watching it at all."""
         if self._gen is None or self._want is None or self._want.tap is not tap:
@@ -165,6 +180,10 @@ class HandshakeScrubber:
         try:
             negotiated = (int(client_head[4:7]), int(client_head[8:11]))
         except (ValueError, IndexError):
+            # Fail closed. Giving up here would put both directions into
+            # passthrough, so a server that carried on regardless would have
+            # its challenge and response recorded in the clear.
+            self._give_up(f"could not parse the client's version reply {bytes(client_head)!r}")
             return
         self.negotiated_version = negotiated
 

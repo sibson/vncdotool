@@ -248,9 +248,10 @@ class TestVnclogCaptureVNCAuth(TestCase):
             len(c2s), HANDSHAKE_ONLY, f"c2s.bin looks truncated at the handshake: {len(c2s)} bytes: {c2s!r}"
         )
 
-        # the real password must not appear anywhere in the clear
-        self.assertNotIn(TIGERVNC_AUTH.password.encode(), s2c)
-        self.assertNotIn(TIGERVNC_AUTH.password.encode(), c2s)
+        # The challenge sits at a fixed offset too: 12-byte greeting, the
+        # count of security types, the one type on offer, then the 16 bytes
+        # that must have been zeroed.
+        self.assertEqual(s2c[14:30], bytes(16), f"auth challenge was not scrubbed: {s2c[:32]!r}")
 
         # The response sits at a fixed offset on the 3.8 path: 12-byte
         # version reply, 1-byte security type, then the 16 bytes that must

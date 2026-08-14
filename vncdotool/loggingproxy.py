@@ -278,6 +278,12 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     recorder: Callable[[str], int] | None = None
     capture: CaptureWriter | None = None
     saw_bytes: bool = False
+    # A refused connection owns nothing: it never ran ProxyServer's
+    # connectionMade, so it has no peer, no recorder and no claim to release.
+    # It can still receive bytes -- pauseProducing() is part of the setup it
+    # skipped -- so every later hook has to check this first.
+    refused: bool = False
+    took_session: bool = False
 
     def connectionMade(self) -> None:
         # Taken on accept rather than on first byte, so a second concurrent
@@ -287,6 +293,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
                 "--one-shot: already serving a session; refusing connection from %s",
                 self.transport.getPeer().host,
             )
+            self.refused = True
             self.transport.loseConnection()
             return
 
@@ -298,6 +305,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.recorder = self.factory.getRecorder()
         if self.factory.one_shot:
             self.factory.session_taken = True
+            self.took_session = True
         if self.factory.capture_path:
             self.capture = CaptureWriter(
                 server=self.factory.server_address,
@@ -305,18 +313,33 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
             )
 
     def connectionLost(self, reason: Failure) -> None:
+        if self.refused:
+            # Touching the factory here would release the live session's
+            # claim, or close the recorder it is still writing to.
+            return
+
         # Bytes in either direction make it a session, including a server
         # rejecting the client before it speaks -- that rejection is itself
         # the evidence. A bare TCP open/close is not one, so a port probe
         # neither writes a capture nor uses up a --one-shot run.
         if self.saw_bytes:
-            if self.capture is not None:
-                self._writeCapture()
-            if self.factory.one_shot:
-                self.factory.sessionFinished()
+            try:
+                if self.capture is not None:
+                    self._writeCapture()
+            except Exception:
+                # Unwritable path, full disk: the contributor has no archive,
+                # so the exit status has to say so.
+                log.error("--capture-raw: could not write %s", self.factory.capture_path, exc_info=True)
+                self.factory.capture_failed = True
+            finally:
+                # Even a failed write has to end a --one-shot run: the
+                # alternative is a process that never exits.
+                if self.factory.one_shot:
+                    self.factory.sessionFinished()
         else:
             log.debug("connection produced no bytes; not counting it as a session")
-            self.factory.session_taken = False
+            if self.took_session:
+                self.factory.session_taken = False
             self.capture = None
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self)
@@ -341,6 +364,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         out now rather than after attaching the archive to an issue.
         """
         log.error("--capture-raw aborted: %s", reason)
+        self.factory.capture_failed = True
         self.capture = None
         if self.vnclog_client is not None:
             self.vnclog_client.capture = None
@@ -352,6 +376,11 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         return getattr(peer, "vnclog", None) if peer is not None else None
 
     def dataReceived(self, data: bytes) -> None:
+        if self.refused:
+            # loseConnection() is not instant and this connection never got
+            # ProxyServer's pauseProducing(), so bytes can still arrive.
+            return
+
         # Capture first: a parse failure below must never truncate it.
         if data:
             self.saw_bytes = True
@@ -433,6 +462,8 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
 
     capture_path: str | None = None
     capture_unsafe_auth: bool = False
+    # Aborted or unwritable: read by the CLI to pick a non-zero exit status.
+    capture_failed: bool = False
     server_address: str = ""
     _capture_vdo: io.StringIO | None = None
 
