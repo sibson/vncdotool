@@ -25,23 +25,24 @@ RUN chmod +x /draw-content.sh
 
 EXPOSE 5900
 
-# Readiness must never open an RFB connection. Xvnc counts every connection
+# Liveness only: the process came up and bound its port. Whether the server
+# is ready to serve is decided out of band by
+# `tests/functional/wait_for_servers.py docker`, which connects, captures,
+# and requires the content the server is supposed to render -- the same
+# assertion the tests make, so there is one definition of readiness for the
+# Docker fleet and the OS-hosted servers rather than a weaker in-container
+# imitation of it.
+#
+# This must never open an RFB connection. Xvnc counts every connection
 # closed before a successful authentication towards BlacklistThreshold
 # (default 5), so a probe that connects and hangs up blacklists 127.0.0.1
 # within ~10s and refuses every later session. Completing the RFB version
 # handshake first does not help -- measured against TigerVNC 1.12.0, a bare
 # connect, a version exchange, and a version-plus-security-types exchange
-# all trip the counter identically.
-#
-# `ss` reads the kernel's socket table instead, so the port is confirmed
-# listening without a connection existing. That alone isn't sufficient
-# readiness, though -- Xvnc starts listening the instant it launches,
-# before draw-content.sh's backgrounded xlogo has drawn anything, so a
-# port-only check can report healthy against a still-flat framebuffer.
-# draw-content.sh only creates /tmp/draw-content-ready once xlogo's window
-# is actually mapped, so the check also requires that file to exist.
+# all trip the counter identically. `ss` reads the kernel's socket table
+# instead, so the port is confirmed listening without a connection existing.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD ss -H -ltn 'sport = :5900' | grep -q . && test -f /tmp/draw-content-ready
+    CMD ss -H -ltn 'sport = :5900' | grep -q .
 
 
 # TigerVNC's own X server. Serves with no authentication by default, or
@@ -112,8 +113,8 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release . \
     && cmake --build . --target examples_vncev examples_example -- -j"$(nproc)"
 
 
-# Event sink: prints events, renders no desktop, so the HEALTHCHECK drops
-# base's draw-content marker.
+# Event sink: prints events and renders no desktop, so vncservers.py marks
+# it renders_desktop=False and readiness stops at the handshake.
 FROM base AS vncev
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -124,13 +125,11 @@ COPY --from=libvncserver-build /tmp/libvncserver/examples/vncev /usr/local/bin/v
 COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
 RUN ldconfig
 
-HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD ss -H -ltn 'sport = :5900' | grep -q .
-
 ENTRYPOINT ["vncev", "-rfbport", "5900", "-rfbwait", "1000"]
 
 
-# Self-animated canvas, so there is no draw-content.sh marker to wait for.
+# Self-animated canvas, so it draws its own content rather than needing
+# draw-content.sh to put an X client on the screen.
 FROM base AS libvncserver-example
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -140,8 +139,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=libvncserver-build /tmp/libvncserver/examples/example /usr/local/bin/example
 COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
 RUN ldconfig
-
-HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD ss -H -ltn 'sport = :5900' | grep -q .
 
 ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]
