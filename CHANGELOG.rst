@@ -2,6 +2,8 @@
 ----------------------
   - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
   - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
+  - vncdo exit codes are grouped by cause: 10s connection, 20s protocol, 30s command, 40s timeout, see docs/usage.rst (@sibson, #345)
+  - Protocol errors are reported through the new ``RFBClient.vncProtocolError`` hook instead of only being logged (@sibson, #345)
 
 1.3.0 (2026-04-03)
 ----------------------

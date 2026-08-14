@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import getpass
 import ipaddress
+import enum
 import logging
 import logging.handlers
 import optparse
@@ -20,11 +21,19 @@ import sys
 from types import TracebackType
 
 from twisted.internet import protocol, reactor
+from twisted.internet.error import ConnectError, ConnectionClosed, DNSLookupError
 from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
+from .client import (
+    AuthenticationError,
+    ProtocolError,
+    TClient,
+    VNCDoToolClient,
+    VNCDoToolFactory,
+    factory_connect,
+)
 from .loggingproxy import VNCLoggingServerFactory
 
 log = logging.getLogger()
@@ -34,6 +43,35 @@ SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif", "bmp")
 
 class TimeoutError(RuntimeError):
     pass
+
+
+class ExitStatus(enum.IntEnum):
+    """Exit codes returned by :program:`vncdo`, grouped by cause."""
+
+    SUCCESS = 0
+    ERROR = 1
+    USAGE = 2
+
+    CONNECTION_FAILED = 10
+    CONNECTION_LOST = 11
+
+    PROTOCOL_ERROR = 20
+    AUTHENTICATION_FAILED = 21
+
+    COMMAND_FAILED = 30
+
+    TIMEOUT = 40
+
+
+# more specific causes first; the first match decides the exit status
+EXIT_STATUS_FOR_ERROR: dict[type[BaseException], ExitStatus] = {
+    AuthenticationError: ExitStatus.AUTHENTICATION_FAILED,
+    ProtocolError: ExitStatus.PROTOCOL_ERROR,
+    TimeoutError: ExitStatus.TIMEOUT,
+    ConnectError: ExitStatus.CONNECTION_FAILED,
+    DNSLookupError: ExitStatus.CONNECTION_FAILED,
+    ConnectionClosed: ExitStatus.CONNECTION_LOST,
+}
 
 
 def log_exceptions(
@@ -62,18 +100,28 @@ class VNCDoCLIFactory(VNCDoToolFactory):
         # losing the connection is never itself a success: the command chain
         # reports the outcome, and closing the transport is its last step, so
         # a close arriving first means the commands never finished
-        self.error(reason)
+        self.error(reason, ExitStatus.CONNECTION_LOST)
 
     def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
-        self.error(reason)
+        self.error(reason, ExitStatus.CONNECTION_FAILED)
 
-    def error(self, reason: Failure) -> None:
+    def error(
+        self, reason: Failure, default: ExitStatus = ExitStatus.COMMAND_FAILED
+    ) -> None:
         if reactor.exit_status is not None:
             return
         log.critical(reason.getErrorMessage())
-        self.done(10)
+        self.done(self.status_for(reason, default))
 
-    def done(self, exit_code: int) -> None:
+    @staticmethod
+    def status_for(reason: Failure, default: ExitStatus) -> ExitStatus:
+        """Classify a failure, falling back to where it was reported from."""
+        for error_type, status in EXIT_STATUS_FOR_ERROR.items():
+            if reason.check(error_type):
+                return status
+        return default
+
+    def done(self, exit_code: ExitStatus) -> None:
         # first outcome wins; the expected close follows a completed run
         if reactor.exit_status is not None:
             return
@@ -252,7 +300,8 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
             factory, args, options.delay, options.warp, options.incremental_refreshes
         )
     except CommandParseError as exc:
-        sys.exit(str(exc))
+        print(exc, file=sys.stderr)
+        sys.exit(ExitStatus.USAGE)
 
     # no outcome decided yet; set before connecting so a synchronous
     # connection failure has somewhere to record itself
@@ -261,7 +310,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
 
     # close the connection when we're done, then report how it went
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
-    factory.deferred.addCallback(lambda _: factory.done(0))
+    factory.deferred.addCallback(lambda _: factory.done(ExitStatus.SUCCESS))
     factory.deferred.addErrback(factory.error)
 
     return factory
@@ -533,7 +582,7 @@ def vncdo() -> None:
     reactor.run()
 
     # the reactor stopping without an outcome is itself a failure
-    sys.exit(1 if reactor.exit_status is None else reactor.exit_status)
+    sys.exit(ExitStatus.ERROR if reactor.exit_status is None else reactor.exit_status)
 
 
 if __name__ == "__main__":

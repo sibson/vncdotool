@@ -57,6 +57,10 @@ class AuthenticationError(VNCDoException):
     """VNC Server requires Authentication"""
 
 
+class ProtocolError(VNCDoException):
+    """VNC Server sent something we cannot handle"""
+
+
 RGB32 = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16)
 RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
 BGR16 = rfb.PixelFormat(16, 16, False, True, 31, 63, 31, 11, 5, 0)
@@ -330,6 +334,10 @@ class VNCDoToolClient(rfb.RFBClient):
         if isinstance(reason, bytes):
             reason = reason.decode("utf-8", "replace")
         self.factory.clientConnectionFailed(self, Failure(AuthenticationError(reason)))
+
+    def vncProtocolError(self, reason: str) -> None:
+        super().vncProtocolError(reason)
+        self.factory.clientConnectionFailed(self, Failure(ProtocolError(reason)))
 
     def vncConnectionMade(self) -> None:
         self.setImageMode()

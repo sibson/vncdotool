@@ -221,6 +221,15 @@ class TestVNCDoToolClient(TestCase):
         reason = cli.factory.clientConnectionFailed.call_args[0][1]
         assert isinstance(reason.value, client.AuthenticationError)
 
+    def test_vncProtocolError_reports_connection_failed(self):
+        cli = self.client
+        cli.vncProtocolError('unknown encoding received')
+
+        assert cli.factory.clientConnectionFailed.called
+        reason = cli.factory.clientConnectionFailed.call_args[0][1]
+        assert isinstance(reason.value, client.ProtocolError)
+        assert 'unknown encoding' in str(reason.value)
+
 
 class TestVNCDoToolFactory(TestCase):
 

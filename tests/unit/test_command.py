@@ -2,11 +2,11 @@ import socket
 import unittest
 from unittest import mock, skipUnless
 
-from twisted.internet.error import ConnectionDone
+from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLookupError
 from twisted.python.failure import Failure
 
 from vncdotool import command
-from vncdotool.client import AuthenticationError
+from vncdotool.client import AuthenticationError, ProtocolError
 
 
 class TestBuildCommandList(unittest.TestCase):
@@ -267,30 +267,57 @@ class TestVNCDoCLIFactory(unittest.TestCase):
         self.reactor.exit_status = None
         self.factory = command.VNCDoCLIFactory()
 
-    def test_auth_failure_exits_nonzero(self) -> None:
+    def test_auth_failure(self) -> None:
         self.factory.clientConnectionFailed(
             None, Failure(AuthenticationError('Authentication failure'))
         )
 
-        assert self.reactor.exit_status == 10
+        assert self.reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
 
-    def test_clean_close_before_commands_run_exits_nonzero(self) -> None:
+    def test_protocol_error(self) -> None:
+        self.factory.clientConnectionFailed(
+            None, Failure(ProtocolError('unknown encoding received'))
+        )
+
+        assert self.reactor.exit_status == command.ExitStatus.PROTOCOL_ERROR
+
+    def test_connection_refused(self) -> None:
+        self.factory.clientConnectionFailed(None, Failure(ConnectionRefusedError()))
+
+        assert self.reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_dns_lookup_failure(self) -> None:
+        self.factory.clientConnectionFailed(None, Failure(DNSLookupError()))
+
+        assert self.reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_clean_close_before_commands_run(self) -> None:
         # the server hanging up cleanly is not evidence the commands ran
         self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
 
-        assert self.reactor.exit_status == 10
+        assert self.reactor.exit_status == command.ExitStatus.CONNECTION_LOST
+
+    def test_command_failure(self) -> None:
+        self.factory.error(Failure(IOError('cannot write capture')))
+
+        assert self.reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_timeout(self) -> None:
+        self.factory.error(Failure(command.TimeoutError('TIMEOUT Exceeded (5s)')))
+
+        assert self.reactor.exit_status == command.ExitStatus.TIMEOUT
 
     def test_clean_close_after_commands_run_keeps_success(self) -> None:
-        self.factory.done(0)
+        self.factory.done(command.ExitStatus.SUCCESS)
         self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
 
-        assert self.reactor.exit_status == 0
+        assert self.reactor.exit_status == command.ExitStatus.SUCCESS
 
     def test_first_outcome_wins(self) -> None:
         self.factory.error(Failure(AuthenticationError('denied')))
-        self.factory.done(0)
+        self.factory.done(command.ExitStatus.SUCCESS)
 
-        assert self.reactor.exit_status == 10
+        assert self.reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
 
 
 class TestBuildTool(unittest.TestCase):
@@ -327,11 +354,17 @@ class TestBuildTool(unittest.TestCase):
         factory.deferred.callback(client)
 
         client.transport.loseConnection.assert_called_once_with()
-        assert self.reactor.exit_status == 0
+        assert self.reactor.exit_status == command.ExitStatus.SUCCESS
 
-    def test_failed_command_exits_nonzero(self) -> None:
+    def test_failed_command_exits_command_failed(self) -> None:
         factory = command.build_tool(self.options, [])
 
         factory.deferred.errback(Failure(IOError('cannot write capture')))
 
-        assert self.reactor.exit_status == 10
+        assert self.reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_unparsable_command_exits_usage(self) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.build_tool(self.options, ['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
