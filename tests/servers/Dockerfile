@@ -14,8 +14,10 @@ FROM debian:bookworm-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         x11-apps \
+        x11-utils \
         xauth \
         procps \
+        iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY draw-content.sh /draw-content.sh
@@ -23,16 +25,23 @@ RUN chmod +x /draw-content.sh
 
 EXPOSE 5900
 
-# bash's /dev/tcp rather than `nc`: same "is the RFB port accepting
-# connections" probe without pulling netcat into every image. That alone
-# isn't sufficient readiness, though -- Xvnc in particular starts
-# accepting connections the instant it launches, before draw-content.sh's
-# backgrounded xlogo has drawn anything, so a port-only check can report
-# healthy against a still-flat framebuffer. draw-content.sh only creates
-# /tmp/draw-content-ready once xlogo's window is actually mapped, so the
-# check also requires that file to exist.
+# Readiness must never open an RFB connection. Xvnc counts every connection
+# closed before a successful authentication towards BlacklistThreshold
+# (default 5), so a probe that connects and hangs up blacklists 127.0.0.1
+# within ~10s and refuses every later session. Completing the RFB version
+# handshake first does not help -- measured against TigerVNC 1.12.0, a bare
+# connect, a version exchange, and a version-plus-security-types exchange
+# all trip the counter identically.
+#
+# `ss` reads the kernel's socket table instead, so the port is confirmed
+# listening without a connection existing. That alone isn't sufficient
+# readiness, though -- Xvnc starts listening the instant it launches,
+# before draw-content.sh's backgrounded xlogo has drawn anything, so a
+# port-only check can report healthy against a still-flat framebuffer.
+# draw-content.sh only creates /tmp/draw-content-ready once xlogo's window
+# is actually mapped, so the check also requires that file to exist.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready'
+    CMD ss -H -ltn 'sport = :5900' | grep -q . && test -f /tmp/draw-content-ready
 
 
 # TigerVNC's own X server. Serves with no authentication by default, or
@@ -116,7 +125,7 @@ COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib
 RUN ldconfig
 
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
+    CMD ss -H -ltn 'sport = :5900' | grep -q .
 
 ENTRYPOINT ["vncev", "-rfbport", "5900", "-rfbwait", "1000"]
 
@@ -133,6 +142,6 @@ COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib
 RUN ldconfig
 
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
+    CMD ss -H -ltn 'sport = :5900' | grep -q .
 
 ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]

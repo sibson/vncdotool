@@ -154,6 +154,12 @@ def screenshot_dir() -> Path:
 
 
 def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool:
+    """Whether ``port`` accepts a connection. Cheap liveness, not readiness.
+
+    This hangs up without authenticating, which TigerVNC counts towards
+    BlacklistThreshold -- see the note in tests/servers/tigervnc-entrypoint.sh
+    before adding more callers on the password-protected server.
+    """
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
