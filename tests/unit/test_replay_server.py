@@ -1,7 +1,7 @@
 """Unit coverage for tests/tools/replay_server.py.
 
 Covers the tool's pure logic -- capture loading, script parsing, the
-pacing byte-walk -- with plain bytes and callables; the one socket test
+handshake byte-walk -- with plain bytes and callables; the one socket test
 lives in tests/functional/test_replay.py. tests/tools is not a package, so
 the module is loaded via importlib from its path.
 """
@@ -207,14 +207,14 @@ class TestLoadScript(TestCase):
         self.assertEqual(messages, [b"\x00", b"\x01", b"\x02"])
 
 
-class TestReplayHandshakePaced(TestCase):
-    """Drives replay_handshake_paced() with a fake client: a queue of canned
+class TestReplayHandshakeStepByStep(TestCase):
+    """Drives replay_handshake_step_by_step() with a fake client: a queue of canned
     c2s replies popped by recv_exact().
     """
 
     def _run(
         self, s2c_data: bytes, client_replies: list[bytes], recorded_c2s_data: bytes | None = None
-    ) -> tuple[bytes, "replay_server.PaceResult"]:
+    ) -> tuple[bytes, "replay_server.HandshakeResult"]:
         sent = bytearray()
         replies = list(client_replies)
 
@@ -228,7 +228,7 @@ class TestReplayHandshakePaced(TestCase):
             assert len(chunk) == nbytes, f"test client reply {chunk!r} does not match requested {nbytes} bytes"
             return chunk
 
-        result = replay_server.replay_handshake_paced(s2c_data, send, recv_exact, recorded_c2s_data=recorded_c2s_data)
+        result = replay_server.replay_handshake_step_by_step(s2c_data, send, recv_exact, recorded_c2s_data=recorded_c2s_data)
         return bytes(sent), result
 
     def test_auth_none_pre38_handshake(self) -> None:
@@ -250,7 +250,7 @@ class TestReplayHandshakePaced(TestCase):
         self.assertEqual(s2c_data[result.offset :], b"EXTRA-FBU-BYTES")
 
     def test_client_downgrade_still_finds_the_right_shape(self) -> None:
-        """A 3.3 reply to a 3.8 greeting must pace down the pre-3.7
+        """A 3.3 reply to a 3.8 greeting must follow the pre-3.7
         direct-auth path, not the security-type-list path."""
         greeting = b"RFB 003.008\n"
         auth_announce = pack("!I", AuthTypes.NONE)
@@ -264,21 +264,21 @@ class TestReplayHandshakePaced(TestCase):
         self.assertEqual(sent, greeting + auth_announce + SERVER_INIT_640x480)
         self.assertEqual(result.offset, len(s2c_data))
 
-    def test_client_disconnects_mid_handshake_stops_pacing(self) -> None:
-        """If the fake client never replies (empty recv), pacing must stop
+    def test_client_disconnects_mid_handshake_stops_sending(self) -> None:
+        """If the fake client never replies (empty recv), sending must stop
         rather than hang or raise -- the offset reflects only what was
-        actually paced out."""
+        actually sent."""
         greeting = VERSION_33
         s2c_data = greeting + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
 
-        sent, result = self._run(s2c_data, client_replies=[])  # client vanishes before replying
+        sent, result = self._run(s2c_data, client_replies=[])
 
         self.assertEqual(sent, greeting)
         self.assertEqual(result.offset, len(greeting))
 
-    def test_truncated_capture_stops_pacing_without_raising(self) -> None:
+    def test_truncated_capture_stops_sending_without_raising(self) -> None:
         """A capture with fewer s2c bytes than the handshake grammar wants
-        next (a hand-edited or corrupted capture) must not raise -- pacing
+        next (a hand-edited or corrupted capture) must not raise -- sending
         stops with whatever was sent so far."""
         s2c_data = b"RFB 003."  # cut off mid-greeting
 
@@ -289,7 +289,7 @@ class TestReplayHandshakePaced(TestCase):
 
     def test_security_type_divergence_detected_and_bails(self) -> None:
         """Recorded session used VNC_AUTHENTICATION, live client picks NONE
-        (e.g. replayed without -p). Pacing must report both types and stop:
+        (e.g. replayed without -p). Both types must be reported and sending must stop:
         the recorded bytes past this point assume the other path."""
         num_types_and_list = bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
         s2c_data = (
@@ -298,10 +298,7 @@ class TestReplayHandshakePaced(TestCase):
             + bytes([0]) * 16  # recorded (scrubbed) challenge -- must never be sent
             + b"MORE-BYTES-THAT-MUST-NOT-BE-SENT"
         )
-        # What c2s.bin recorded: version reply, then VNC_AUTHENTICATION.
         recorded_c2s_data = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
-
-        # The LIVE client instead picks NONE.
         live_replies = [VERSION_38, bytes([AuthTypes.NONE])]
 
         sent, result = self._run(s2c_data, client_replies=live_replies, recorded_c2s_data=recorded_c2s_data)
@@ -309,14 +306,12 @@ class TestReplayHandshakePaced(TestCase):
         self.assertTrue(result.diverged)
         self.assertEqual(result.recorded_security_type, AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(result.live_security_type, AuthTypes.NONE)
-        # Greeting + security-types list only: the wrong-path challenge
-        # bytes must not have gone out.
         self.assertEqual(sent, VERSION_38 + num_types_and_list)
         self.assertEqual(result.offset, len(VERSION_38) + len(num_types_and_list))
 
     def test_matching_security_type_does_not_diverge(self) -> None:
         """The control case for the divergence check: recorded and live
-        both choose VNC_AUTHENTICATION -- pacing proceeds normally and
+        both choose VNC_AUTHENTICATION -- sending proceeds normally and
         `diverged` stays False."""
         num_types_and_list = bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
         challenge = bytes(range(16))
@@ -331,7 +326,7 @@ class TestReplayHandshakePaced(TestCase):
         self.assertEqual(result.offset, len(s2c_data))
 
     def test_no_recorded_c2s_data_skips_divergence_check(self) -> None:
-        """Without c2s.bin there is nothing to compare against, so pacing
+        """Without c2s.bin there is nothing to compare against, so sending
         proceeds and never sets `diverged`."""
         auth_announce = pack("!I", AuthTypes.NONE)
         s2c_data = VERSION_33 + auth_announce + SERVER_INIT_640x480

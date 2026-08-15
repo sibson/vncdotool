@@ -117,7 +117,7 @@ does not contain.
 **Replay tool** (in-repo, never shipped, never a CI fixture — no recorded
 capture is ever replayed in CI, though one inline-bytes end-to-end test,
 `tests/functional/test_replay.py`, does run in CI to guard the tool's own
-pacing logic):
+handshake logic):
 `tests/tools/replay_server.py` — listens on a port, plays a captured
 `s2c.bin` (or a hand-written script of protocol messages) at whatever
 client connects, tolerant of client input. Two uses:

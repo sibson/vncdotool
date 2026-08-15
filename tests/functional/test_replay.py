@@ -2,7 +2,7 @@
 
 No docker, no fleet: a hand-built capture is served on a loopback port by
 the replay tool itself, the real `vncdo` CLI is pointed at it, and the
-resulting PNG is checked pixel-exactly. This is the only place the pacing
+resulting PNG is checked pixel-exactly. This is the only place the handshake logic
 runs against a real client rather than a scripted fake one.
 """
 
@@ -75,7 +75,7 @@ class TestReplayServerEndToEnd(TestCase):
                 errors.append(exc)
                 return
             try:
-                replay_server.handle_capture_connection(conn, s2c_data, pace="handshake", verbose=False)
+                replay_server.handle_capture_connection(conn, s2c_data, wait_for_client=True, verbose=False)
             except Exception as exc:  # noqa: BLE001 -- surfaced via `errors` to the test thread
                 errors.append(exc)
             finally:
