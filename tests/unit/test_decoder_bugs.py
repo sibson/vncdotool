@@ -102,8 +102,6 @@ class TestDecoderBugs(unittest.TestCase):
     def setUp(self) -> None:
         self.cli = make_client()
 
-    # ---  CopyRect
-
     GRID_4X4 = [
         (10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120),
         (130, 140, 150), (160, 170, 180), (190, 200, 210), (220, 230, 240),
@@ -135,8 +133,6 @@ class TestDecoderBugs(unittest.TestCase):
                 expected[(2 + sy) * width + (2 + sx)] = self.GRID_4X4[sy * width + sx]
         self.assertIsNotNone(self.cli.screen)
         assert_pixels(self, self.cli.screen, expected)
-
-    # ---  CoRRE
 
     @unittest.expectedFailure
     def test_corre(self) -> None:
