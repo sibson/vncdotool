@@ -118,9 +118,9 @@ does not contain.
 capture is ever replayed in CI, though one inline-bytes end-to-end test,
 `tests/functional/test_replay.py`, does run in CI to guard the tool's own
 handshake logic):
-`tests/tools/replay_server.py` — listens on a port, plays a captured
-`s2c.bin` (or a hand-written script of protocol messages) at whatever
-client connects, tolerant of client input. Two uses:
+`tests/tools/replay_capture.py` — listens on a port, forks `vncdo` on the
+archive's recorded `session.vdo`, and plays the captured `s2c.bin` (or a
+hand-written script of protocol messages) back at it. Two uses:
 
 - replaying a contributor's capture at the real client/CLI to find the bug;
 - *forcing* server behaviors that are hard to trigger live (the
@@ -169,7 +169,7 @@ revisit only if someone asks for it.
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
    delete golden-PNG suite.
 3. `--capture-raw` flag + scrubbing + contributor paved-road doc.
-4. `tests/tools/replay_server.py` as distillation aid.
+4. `tests/tools/replay_capture.py` as distillation aid.
 5. In-process API lifecycle suite against one container.
 
 Each phase is independently landable; 1 and 2 remove the most CI fragility

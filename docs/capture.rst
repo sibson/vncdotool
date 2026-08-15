@@ -81,7 +81,7 @@ remote desktop while capturing.
 Replaying a capture (maintainers)
 -----------------------------------
 
-``tests/tools/replay_server.py`` serves a capture back at a real VNC client,
+``tests/tools/replay_capture.py`` serves a capture back at a real VNC client,
 so a bug against a server nobody here can run becomes reproducible on a
 laptop. It is a maintainer's tool: never shipped, never a CI fixture. The
 end product of a replay session is a unit test with the relevant bytes
@@ -89,50 +89,75 @@ inlined, not the capture itself.
 
 ::
 
-    python tests/tools/replay_server.py --capture ./my-bug-capture.zip --verbose
+    python tests/tools/replay_capture.py ./my-bug-capture.zip --verbose
 
-then point a client at it::
+That serves the archive *and* drives it: the tool forks ``vncdo`` on the
+archive's own ``session.vdo``, so the client sends the events the original
+one sent, in the order it sent them. Anything else is a different session,
+and a replay of a different session is not evidence. The replay ends on a
+screenshot -- ``replay.png`` in a fresh temporary directory, both settable
+with ``--screenshot`` and ``--workdir`` -- and the tool exits with
+``vncdo``'s own status.
 
+``--no-client`` listens and stops there, for driving the replay from a GUI
+viewer or a hand-written ``vncdo`` line instead::
+
+    python tests/tools/replay_capture.py ./my-bug-capture.zip --no-client
     vncdo -s 127.0.0.1::5999 key enter type "hello" capture screen.png
 
-``--script FILE`` runs a hand-written scenario instead of a recording: a
-Python file defining a ``MESSAGES`` list of ``bytes`` to send, ``("wait",
-nbytes)`` to block until the client has sent that much, or ``("pause",
-seconds)``. It is ``exec()``'d -- **scripts are trusted developer code**,
-like a local config file. Use it to force a case no capture reproduces.
+Passing a file that is not a zip archive runs it as a hand-written scenario
+instead of a recording: a Python file defining a ``MESSAGES`` list of
+``bytes`` to send, ``("wait", nbytes)`` to block until the client has sent
+that much, or ``("pause", seconds)``. It is ``exec()``'d -- **scripts are
+trusted developer code**, like a local config file. Use it to force a case
+no capture reproduces; there is no recorded session to drive, so it implies
+``--no-client``.
+
+Auth is replaced, not replayed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The recorded handshake is not what the bug is usually in, and replaying it
+means reproducing the original client's auth setup exactly -- the same
+password, the same security type -- before you can even reach the session.
+So the replay keeps the recorded greeting, offers ``none`` and nothing else,
+skips the recorded auth exchange, and picks the recording back up at
+ServerInit. Any client connects, no password needed, whatever the capture
+negotiated.
+
+``--replay-auth`` serves the recorded handshake verbatim, for a bug that
+lives in the negotiation itself. It is also the automatic fallback when the
+archive has no usable ``c2s.bin``, since where the handshake ends is read
+off the client's side of the recording. Two things then apply again:
+
+* A VNC-authenticated capture has its challenge and response zeroed, so a
+  real client's response to the replayed all-zero challenge can never match
+  what the original server expected. ARD captures are the opposite case:
+  the key exchange is in the clear and replays exactly.
+* Recorded bytes past the security-type choice only fit the auth path the
+  original client took. Sending them to a client that chose differently
+  desyncs it silently -- challenge bytes get read as something else
+  entirely -- so the replay reads ``c2s.bin`` to learn what the original
+  session negotiated, and closes the connection with an error rather than
+  mislead you.
 
 Waiting for the client
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 The handshake is a conversation: the client replies partway through, and
-what it says next depends on what it was sent. So the recorded handshake
-goes out a step at a time, waiting for the client's real reply to each,
-and only then is the rest sent in one go. ``--no-wait-for-client`` sends
-everything at once, for when that waiting is itself what you are debugging.
+what it says next depends on what it was sent. So the handshake goes out a
+step at a time, against the client's real replies. Under ``--replay-auth``
+those steps come from the same grammar the capture scrubber uses, which is
+what keeps the two from drifting apart.
 
-The steps come from the same handshake grammar the capture scrubber uses,
-which is what keeps the two from drifting apart.
+Past ServerInit the recorded framebuffer waits for the client's first
+FramebufferUpdateRequest. A capture holds one finite recording of the
+screen, so those bytes get exactly one chance to be useful: sent before the
+client asked, they go past a client that asks a moment later, which then
+waits forever for an update that has already been and gone.
 
-Security-type divergence
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Recorded bytes past the security-type choice are only valid for the auth
-path the original client took. Sending them to a client that chose
-differently desyncs it silently -- challenge bytes get read as something
-else entirely. So the replay also reads ``c2s.bin`` to learn what the
-original session negotiated, and closes the connection with an error rather
-than mislead you. Replay against a client configured the same way, e.g.
-with or without ``-p``.
-
-What replay cannot reproduce
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A capture of a VNC-authenticated server has its challenge and response
-zeroed, so a real client's response to the replayed all-zero challenge can
-never match what the original server expected. Replay is faithful for
-``none``-auth sessions, and for bugs in the pre-auth negotiation, which is
-never scrubbed. ARD captures are the opposite case: the key exchange is
-present in the clear and replays exactly.
+Once the recording runs out the connection is left open. The original
+server hung up because its client did, and hanging up here instead would
+cut short whatever the live client is still doing with the bytes it has.
 
 Because an unscrubbed capture can replay credentials verbatim, the tool
 binds to ``127.0.0.1``. Pass ``--bind`` only for a capture you know carries

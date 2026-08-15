@@ -284,7 +284,7 @@ community, so contributing a capture must be a paved road (detailed in
 2. **Submit**: attach the capture to a "compatibility bug" or "server
    report" issue. Captures are issue-thread evidence, not repo fixtures.
 3. **Distill**: a maintainer replays the capture at the real client with
-   the in-repo replay tool (`tests/tools/replay_server.py`), finds the
+   the in-repo replay tool (`tests/tools/replay_capture.py`), finds the
    bug, and lands a byte-level unit test — that test, not the capture,
    is the permanent regression guard.
 
