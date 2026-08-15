@@ -17,7 +17,6 @@ vncdotool Documentation
    capture
    history
    contributing
-   develop
    modules
 
 
