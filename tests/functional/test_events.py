@@ -128,6 +128,24 @@ class TestVncevSink(TestCase):
         )
 
 
+def _sink_alive(service: str, pattern: str) -> bool:
+    """Is the container's event sink process still running?
+
+    A sink that died leaves the container serving VNC quite happily, so
+    nothing else in the suite notices; asking the container directly is
+    the only way to tell "the event never arrived" from "nothing was
+    listening for it".
+    """
+    result = subprocess.run(
+        ["docker", "compose", "-f", str(COMPOSE_FILE), "exec", "-T", service, "pgrep", "-f", pattern],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        stdin=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
 class TestX11SideSink(TestCase):
     """Server processing: did x11vnc's X display see a real X event.
 
@@ -143,6 +161,14 @@ class TestX11SideSink(TestCase):
                 f"x11vnc not reachable on {HOST}:{X11VNC.port} -- start the servers first "
                 "with `make servers-up`"
             )
+        # Fail as the infrastructure problem it is. Without this the symptom
+        # of a dead sink is an assertion about a keypress, pointing at
+        # vncdotool for something vncdotool did not do.
+        self.assertTrue(
+            _sink_alive("x11vnc", "xev -root"),
+            "x11vnc's xev sink is not running, so no event can be observed no matter what "
+            "the client sends. Check `docker compose logs x11vnc` for why it exited.",
+        )
 
     def test_keypress_seen_by_xev(self) -> None:
         offset = len(_compose_logs("x11vnc"))
