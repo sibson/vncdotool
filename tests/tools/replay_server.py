@@ -30,10 +30,9 @@ WaitMessage = tuple[str, int]
 PauseMessage = tuple[str, float]
 Message = Union[bytes, WaitMessage, PauseMessage]
 
-# The two auth types vncdotool implements, and so the two it can locate the
-# secret inside: a capture of either replays with that secret zeroed. Any
-# other type reaching a capture at all means --capture-raw-unsafe-auth was
-# passed, so its key exchange is in the archive verbatim.
+# The two vncdotool can locate the secret inside. Any other type in a
+# capture means --capture-raw-unsafe-auth was passed, so its key exchange
+# is in the archive verbatim.
 SCRUBBED_AUTH_TYPES = (AuthTypes.VNC_AUTHENTICATION, AuthTypes.DIFFIE_HELLMAN)
 
 
@@ -129,9 +128,8 @@ def recorded_security_type(s2c_data: bytes, c2s_data: bytes) -> Optional[int]:
 def scrub_warnings(security_type: Optional[int]) -> list[str]:
     """What this capture's auth path means for replay.
 
-    Driven by the security type the recorded session actually negotiated --
-    read back off ``c2s.bin`` -- rather than ``meta.json``, which records the
-    types the server *offered* and not the one the client picked.
+    Not from ``meta.json``: that records the types the server offered, not
+    the one the client picked.
     """
     if security_type == AuthTypes.VNC_AUTHENTICATION:
         return [
@@ -202,11 +200,6 @@ class ReplayProtocol(Protocol):  # type: ignore[misc]
 class CaptureReplay(ReplayProtocol):
     """Serve a recorded ``s2c.bin``, waiting for the client through the handshake.
 
-    The handshake is a conversation -- what the client says next depends on
-    what it was sent -- so the recorded bytes go out one step at a time,
-    against the client's real replies. The framebuffer traffic afterwards
-    needs no such care and goes out in one go.
-
     The steps come from HandshakeScrubber's grammar, at the cost of reaching
     into its private ``_want`` state: if that moves, this moves with it.
     Sharing the grammar is what keeps the two from drifting apart.
@@ -249,9 +242,8 @@ class CaptureReplay(ReplayProtocol):
     def _diverged(self) -> bool:
         """Has the live client picked a different security type than the capture?
 
-        Recorded bytes past the security-type choice are only valid for the
-        auth path the original client took. Sending them down another path
-        desyncs the client silently, so the connection ends here instead.
+        Recorded bytes past the choice only fit the path the original client
+        took; sending them down another desyncs it silently.
         """
         recorded = self.factory.recorded_security_type
         live = self.scrubber.security_type

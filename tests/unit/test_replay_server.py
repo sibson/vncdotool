@@ -1,12 +1,10 @@
 """Unit coverage for tests/tools/replay_server.py.
 
-The protocols are driven directly with a mocked transport, like the rest of
-the protocol tests. tests/tools is not a package, so the module is loaded
-via importlib from its path.
+tests/tools is not a package, so the module is loaded via importlib from
+its path.
 
-`client_timeout=None` throughout: the stall warning is the one thing that
-would put a delayed call on the global reactor, and no unit test may touch
-the reactor.
+`client_timeout=None` throughout: the stall warning is the one thing here
+that would put a delayed call on the global reactor.
 """
 
 from __future__ import annotations

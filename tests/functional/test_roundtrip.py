@@ -1,15 +1,11 @@
 """Capture and replay, joined: does what vnclog writes still decode the same?
 
-test_proxy.py checks a capture by reading the archive, and test_replay.py
-checks replay by feeding it bytes the test itself built. Neither notices if
-the two disagree about the format between them -- a capture vnclog writes
+test_proxy.py checks a capture by reading the archive, test_replay.py
+checks replay against bytes the test itself built. A capture vnclog writes
 but replay cannot serve passes both.
 
-So: record a real session against a fleet server, keeping the screenshot
-that session produced, then replay the archive and screenshot it again. The
-two PNGs must be pixel-identical. Determinism is by construction rather than
-by the server holding still: both images decode from the same recorded
-bytes, so any difference is capture or replay mangling them.
+The two screenshots decode from the same recorded bytes, so they are
+identical by construction, not by the server holding still.
 """
 
 import subprocess
