@@ -309,7 +309,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         if self.factory.capture_path:
             self.capture = CaptureWriter(
                 server=self.factory.server_address,
-                scrubber=HandshakeScrubber(allow_unsafe_auth=self.factory.capture_unsafe_auth),
+                scrubber=HandshakeScrubber(preserve_auth=self.factory.capture_preserve_auth),
             )
 
     def connectionLost(self, reason: Failure) -> None:
@@ -461,7 +461,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     session_taken: bool = False
 
     capture_path: str | None = None
-    capture_unsafe_auth: bool = False
+    capture_preserve_auth: bool = False
     # Aborted or unwritable: read by the CLI to pick a non-zero exit status.
     capture_failed: bool = False
     server_address: str = ""

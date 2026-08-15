@@ -35,8 +35,11 @@ VERSION_33 = b"RFB 003.003\n"
 VERSION_38 = b"RFB 003.008\n"
 CHALLENGE = bytes(range(16))
 RESPONSE = bytes(range(200, 216))
-MARKER = b"\x00" * 16
 SECURITY_RESULT_OK = b"\x00\x00\x00\x00"
+# The synthetic handshake a stripped capture records in place of the real one.
+NONE_OFFER = bytes([1, AuthTypes.NONE])
+NONE_CHOICE = bytes([AuthTypes.NONE])
+NONE_AUTH_33 = pack("!I", AuthTypes.NONE)
 SERVER_INIT_640x480 = (
     b"\x02\x80\x01\xe0"  # width=640, height=480
     b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
@@ -45,36 +48,68 @@ SERVER_INIT_640x480 = (
 
 
 class TestHandshakeScrubber(TestCase):
-    def test_vnc_auth_scrubbed_pre37(self) -> None:
+    """The recorded handshake is a synthetic none-auth one, not the real one."""
+
+    def test_vnc_auth_stripped_pre37(self) -> None:
         s = HandshakeScrubber()
         self.assertEqual(s.s2c.feed(VERSION_33), VERSION_33)
         self.assertEqual(s.c2s.feed(VERSION_33), VERSION_33)
         auth_announce = b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
-        self.assertEqual(s.s2c.feed(auth_announce), auth_announce)
-        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
-        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(auth_announce), NONE_AUTH_33)
+        self.assertEqual(s.s2c.feed(CHALLENGE), b"")
+        self.assertEqual(s.c2s.feed(RESPONSE), b"")
 
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(s.protocol_version, "RFB 003.003")
         self.assertEqual(s.security_types, [AuthTypes.VNC_AUTHENTICATION])
-        self.assertIsNone(s.unscrubbable_auth)
+        self.assertIsNone(s.unstrippable_auth)
 
-        # the security-result that follows is still passed through untouched
-        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+        # Pre-3.8 `none` carries no SecurityResult, so the real one is dropped
+        # rather than passed through: the recorded handshake has to be a
+        # handshake a client can actually follow.
+        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), b"")
+        self.assertEqual(s.c2s.feed(b"\x01"), b"\x01")
+        self.assertEqual(s.s2c.feed(SERVER_INIT_640x480), SERVER_INIT_640x480)
 
-    def test_vnc_auth_scrubbed_negotiated(self) -> None:
+    def test_vnc_auth_stripped_negotiated(self) -> None:
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
         # server offers None + VNC auth, client picks VNC auth
         self.assertEqual(
             s.s2c.feed(bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])),
-            bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION]),
+            NONE_OFFER,
         )
-        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
-        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
+        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), NONE_CHOICE)
+        self.assertEqual(s.s2c.feed(CHALLENGE), b"")
+        self.assertEqual(s.c2s.feed(RESPONSE), b"")
+        # 3.8 `none` does carry a SecurityResult, so this one survives
+        self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
         self.assertEqual(s.security_types, [AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
+
+    def test_a_failed_auth_stops_the_rewrite(self) -> None:
+        """A non-zero SecurityResult means no session followed, so there is
+        nothing to make replayable; record what happened."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s.s2c.feed(CHALLENGE)
+        s.c2s.feed(RESPONSE)
+
+        self.assertEqual(s.s2c.feed(pack("!I", 1)), pack("!I", 1))
+
+    def test_refused_connection_is_recorded_as_it_happened(self) -> None:
+        """Zero offered types is a refusal, not a session: nothing was
+        negotiated, so there is no handshake to rewrite."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+
+        self.assertEqual(s.s2c.feed(b"\x00"), b"\x00")
+        reason = pack("!I", 3) + b"nope"
+        self.assertEqual(s.s2c.feed(reason), reason)
 
     def test_version_downgrade_still_finds_vnc_auth(self) -> None:
         """A 3.3 reply to a 3.8 greeting puts the exchange on the pre-3.7
@@ -89,9 +124,9 @@ class TestHandshakeScrubber(TestCase):
         # pre-3.7 path: a direct 4-byte auth type announcement, no
         # client-side security-type selection byte.
         auth_announce = b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
-        self.assertEqual(s.s2c.feed(auth_announce), auth_announce)
-        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
-        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(auth_announce), NONE_AUTH_33)
+        self.assertEqual(s.s2c.feed(CHALLENGE), b"")
+        self.assertEqual(s.c2s.feed(RESPONSE), b"")
 
         self.assertEqual(s.security_type, AuthTypes.VNC_AUTHENTICATION)
 
@@ -104,20 +139,21 @@ class TestHandshakeScrubber(TestCase):
         s.c2s.feed(VERSION_38)
         self.assertEqual(s.negotiated_version, (3, 8))
 
-        self.assertEqual(s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION])), bytes([1, AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), bytes([AuthTypes.VNC_AUTHENTICATION]))
-        self.assertEqual(s.s2c.feed(CHALLENGE), MARKER)
-        self.assertEqual(s.c2s.feed(RESPONSE), MARKER)
+        self.assertEqual(s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION])), NONE_OFFER)
+        self.assertEqual(s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION])), NONE_CHOICE)
+        self.assertEqual(s.s2c.feed(CHALLENGE), b"")
+        self.assertEqual(s.c2s.feed(RESPONSE), b"")
 
     def test_auth_none_untouched(self) -> None:
+        """A session that was already none-auth records byte for byte."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
-        s.s2c.feed(bytes([1, AuthTypes.NONE]))
+        self.assertEqual(s.s2c.feed(bytes([1, AuthTypes.NONE])), bytes([1, AuthTypes.NONE]))
         out = s.c2s.feed(bytes([AuthTypes.NONE]))
         self.assertEqual(out, bytes([AuthTypes.NONE]))
         self.assertEqual(s.security_type, AuthTypes.NONE)
-        self.assertIsNone(s.unscrubbable_auth)
+        self.assertIsNone(s.unstrippable_auth)
 
         # security-result(4) + ClientInit(1) + ServerInit(24), still passthrough
         self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
@@ -139,26 +175,36 @@ class TestHandshakeScrubber(TestCase):
         self.modulus = b"P" * key_len
         self.server_key = b"G" * key_len
 
-    def test_ard_credentials_scrubbed_key_exchange_kept(self) -> None:
-        """The AES block carrying username+password goes; the DH values stay.
+    def test_ard_key_exchange_goes_with_the_credentials(self) -> None:
+        """The whole ARD exchange is dropped, DH values included.
 
-        Keeping the exchange is deliberate: ARD compatibility bugs live in
-        those values, and they are public by construction.
+        They are public by construction and ARD bugs live in them, but a
+        `none` handshake has nowhere to put them; --capture-raw-unsafe is
+        how an ARD bug gets its key exchange into an archive.
         """
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
 
-        self.assertEqual(s.s2c.feed(self.dh_params), self.dh_params)
-        self.assertEqual(s.s2c.feed(self.modulus), self.modulus)
-        self.assertEqual(s.s2c.feed(self.server_key), self.server_key)
+        self.assertEqual(s.s2c.feed(self.dh_params), b"")
+        self.assertEqual(s.s2c.feed(self.modulus), b"")
+        self.assertEqual(s.s2c.feed(self.server_key), b"")
 
         credentials = bytes(range(256))[:ARD_CREDENTIALS_LEN]
         client_key = b"Y" * 8
-        self.assertEqual(s.c2s.feed(credentials + client_key), bytes(ARD_CREDENTIALS_LEN) + client_key)
+        self.assertEqual(s.c2s.feed(credentials + client_key), b"")
 
-        self.assertIsNone(s.unscrubbable_auth)
+        self.assertIsNone(s.unstrippable_auth)
         self.assertIsNone(s.abort_reason)
         self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), SECURITY_RESULT_OK)
+
+    def test_ard_key_exchange_kept_when_auth_is_preserved(self) -> None:
+        s = HandshakeScrubber(preserve_auth=True)
+        self._ard_to_credentials(s)
+        self.assertEqual(s.s2c.feed(self.dh_params), self.dh_params)
+
+        credentials = b"\xab" * ARD_CREDENTIALS_LEN
+        s.s2c.feed(self.modulus + self.server_key)
+        self.assertEqual(s.c2s.feed(credentials), credentials)
 
     def test_unparseable_version_reply_aborts(self) -> None:
         """Losing the handshake must fail closed.
@@ -172,27 +218,26 @@ class TestHandshakeScrubber(TestCase):
         s.c2s.feed(b"NOT-A-VERSION\n"[:12])
 
         self.assertIsNotNone(s.abort_reason)
-        self.assertIn("--capture-raw-unsafe-auth", s.abort_reason)
+        self.assertIn("--capture-raw-unsafe", s.abort_reason)
 
     def test_unparseable_version_reply_allowed_when_opted_in(self) -> None:
-        s = HandshakeScrubber(allow_unsafe_auth=True)
+        s = HandshakeScrubber(preserve_auth=True)
         s.s2c.feed(VERSION_38)
         s.c2s.feed(b"NOT-A-VERSION\n"[:12])
 
         self.assertIsNone(s.abort_reason)
 
-    def test_scrubbing_preserves_byte_offsets(self) -> None:
-        """A redaction that changed length would break replay of the capture."""
+    def test_no_credential_byte_survives_stripping(self) -> None:
+        """The point of stripping over redaction: the bytes are absent, not
+        zeroed, so the archive is shorter than the session that made it."""
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
         s.s2c.feed(self.dh_params + self.modulus + self.server_key)
 
         credentials = b"\xab" * ARD_CREDENTIALS_LEN
-        out = s.c2s.feed(credentials)
-        self.assertEqual(len(out), ARD_CREDENTIALS_LEN)
-        self.assertNotIn(b"\xab", out)
+        self.assertEqual(s.c2s.feed(credentials), b"")
 
-    def test_unscrubbable_auth_aborts_by_default(self) -> None:
+    def test_unstrippable_auth_aborts_by_default(self) -> None:
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -201,19 +246,19 @@ class TestHandshakeScrubber(TestCase):
 
         self.assertIsNotNone(s.abort_reason)
         self.assertIn("tight", s.abort_reason)
-        self.assertIn("--capture-raw-unsafe-auth", s.abort_reason)
-        self.assertIn("tight", s.unscrubbable_auth)
-        self.assertIn("16", s.unscrubbable_auth)
+        self.assertIn("--capture-raw-unsafe", s.abort_reason)
+        self.assertIn("tight", s.unstrippable_auth)
+        self.assertIn("16", s.unstrippable_auth)
 
-    def test_unscrubbable_auth_allowed_when_opted_in(self) -> None:
-        s = HandshakeScrubber(allow_unsafe_auth=True)
+    def test_unstrippable_auth_allowed_when_opted_in(self) -> None:
+        s = HandshakeScrubber(preserve_auth=True)
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
         s.s2c.feed(bytes([1, AuthTypes.TIGHT]))
         s.c2s.feed(bytes([AuthTypes.TIGHT]))
 
         self.assertIsNone(s.abort_reason)
-        self.assertIn("tight", s.unscrubbable_auth)
+        self.assertIn("tight", s.unstrippable_auth)
         # key exchange passes through verbatim -- that is what was opted into
         exchange = b"\x01\x02\x03\x04"
         self.assertEqual(s.s2c.feed(exchange), exchange)
@@ -228,10 +273,8 @@ class TestHandshakeScrubber(TestCase):
         s.s2c.feed(VERSION_33)
         s.c2s.feed(VERSION_33)
         s.s2c.feed(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
-        first = s.s2c.feed(CHALLENGE[:6])
-        second = s.s2c.feed(CHALLENGE[6:])
-        self.assertEqual(first, b"")
-        self.assertEqual(second, MARKER)
+        self.assertEqual(s.s2c.feed(CHALLENGE[:6]), b"")
+        self.assertEqual(s.s2c.feed(CHALLENGE[6:]), b"")
 
     def test_flush_drops_partial_secret(self) -> None:
         s = HandshakeScrubber()
@@ -245,9 +288,10 @@ class TestHandshakeScrubber(TestCase):
 
     def test_flush_emits_pending_non_secret(self) -> None:
         s = HandshakeScrubber()
-        s.s2c.feed(VERSION_33)
-        s.c2s.feed(VERSION_33)
-        s.s2c.feed(b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION]))
         s.s2c.feed(CHALLENGE)
         s.c2s.feed(RESPONSE)
         s.s2c.feed(SECURITY_RESULT_OK[:2])  # connection drops mid-result, not a secret
@@ -297,6 +341,7 @@ class TestCaptureWriter(TestCase):
         return json.loads(self.read_archive("meta.json"))
 
     def test_meta_and_write_vnc_auth(self) -> None:
+        """A VNC-authenticated session records as a none-auth one."""
         cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_33)
         cw.feed_c2s(VERSION_33)
@@ -307,15 +352,10 @@ class TestCaptureWriter(TestCase):
         cw.feed_c2s(b"\x01")
         cw.feed_s2c(SERVER_INIT_640x480)
 
-        expected_s2c = (
-            VERSION_33
-            + b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
-            + MARKER
-            + SECURITY_RESULT_OK
-            + SERVER_INIT_640x480
-        )
-        self.assertEqual(bytes(cw.s2c), expected_s2c)
-        self.assertEqual(bytes(cw.c2s), VERSION_33 + MARKER + b"\x01")
+        self.assertEqual(bytes(cw.s2c), VERSION_33 + NONE_AUTH_33 + SERVER_INIT_640x480)
+        self.assertEqual(bytes(cw.c2s), VERSION_33 + b"\x01")
+        self.assertNotIn(CHALLENGE, bytes(cw.s2c))
+        self.assertNotIn(RESPONSE, bytes(cw.c2s))
 
         cw.write_archive(self.archive, cw.meta("9.9.9"), session_vdo=b"pause 0.1 key a\n")
 
@@ -332,10 +372,12 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(meta["vncdotool_version"], "9.9.9")
         self.assertEqual(meta["protocol_version"], "RFB 003.003")
         self.assertEqual(meta["security_types"], [AuthTypes.VNC_AUTHENTICATION])
+        self.assertEqual(meta["security_type"], AuthTypes.VNC_AUTHENTICATION)
+        self.assertEqual(meta["auth"], "stripped")
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
         self.assertIn("capture_timestamp", meta)
 
-    def test_auth_none_session_untouched_and_unscrubbed(self) -> None:
+    def test_auth_none_session_recorded_verbatim(self) -> None:
         cw = CaptureWriter(server="host::5900")
         cw.feed_s2c(VERSION_38)
         cw.feed_c2s(VERSION_38)
@@ -356,10 +398,10 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(meta["security_types"], [AuthTypes.NONE])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
 
-    def test_unscrubbable_auth_captured_when_opted_in(self) -> None:
+    def test_unstrippable_auth_captured_when_opted_in(self) -> None:
         cw = CaptureWriter(
             server="host::5900",
-            scrubber=HandshakeScrubber(allow_unsafe_auth=True),
+            scrubber=HandshakeScrubber(preserve_auth=True),
         )
         cw.feed_s2c(VERSION_38)
         cw.feed_c2s(VERSION_38)
@@ -367,7 +409,8 @@ class TestCaptureWriter(TestCase):
         cw.feed_c2s(bytes([AuthTypes.TIGHT]))
 
         self.assertIsNone(cw.abort_reason, "the opt-in must not abort")
-        self.assertIn("tight", cw.scrubber.unscrubbable_auth)
+        self.assertIn("tight", cw.scrubber.unstrippable_auth)
+        self.assertEqual(cw.meta("9.9.9")["auth"], "preserved")
 
     def test_encodings_seen_recorded_in_meta(self) -> None:
         """What the server actually sent, named where we know the name."""
@@ -408,7 +451,7 @@ class TestCaptureWriter(TestCase):
         s2c = self.read_archive("s2c.bin")
         # the 6 partial challenge bytes must never land on disk
         self.assertNotIn(CHALLENGE[:6], s2c)
-        self.assertEqual(s2c, VERSION_33 + b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]))
+        self.assertEqual(s2c, VERSION_33 + NONE_AUTH_33)
 
 
 class TestProxyCaptureWiring(TestCase):
@@ -444,7 +487,7 @@ class TestProxyCaptureWiring(TestCase):
 
         self.server_proxy.capture = CaptureWriter(server="testhost::5900")
 
-    def test_vnc_auth_challenge_and_response_scrubbed_both_directions(self) -> None:
+    def test_vnc_auth_challenge_and_response_stripped_both_directions(self) -> None:
         sp, cp = self.server_proxy, self.client_proxy
 
         cp.dataReceived(VERSION_33)  # server's greeting, relayed to the real client
@@ -455,10 +498,8 @@ class TestProxyCaptureWiring(TestCase):
         cp.dataReceived(b"\x00\x00\x00\x00")  # auth OK
         sp.dataReceived(b"\x01")  # clientInit shared=1
 
-        expected_s2c = VERSION_33 + b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x00\x00\x00\x00"
-        expected_c2s = VERSION_33 + MARKER + b"\x01"
-        self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
-        self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
+        self.assertEqual(bytes(sp.capture.s2c), VERSION_33 + NONE_AUTH_33)
+        self.assertEqual(bytes(sp.capture.c2s), VERSION_33 + b"\x01")
 
         # Unscrubbed bytes still reach the peer transports: capture must
         # never mutate what the proxy forwards.
@@ -494,16 +535,14 @@ class TestProxyCaptureWiring(TestCase):
         cp.dataReceived(b"\x00\x00\x00\x00")  # security result OK
         sp.dataReceived(b"\x01")  # ClientInit: shared=1, reached cleanly this time
 
-        expected_c2s = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x01"
-        self.assertEqual(bytes(sp.capture.c2s), expected_c2s)
-        expected_s2c = VERSION_38 + bytes([1, AuthTypes.VNC_AUTHENTICATION]) + MARKER + b"\x00\x00\x00\x00"
-        self.assertEqual(bytes(sp.capture.s2c), expected_s2c)
+        self.assertEqual(bytes(sp.capture.c2s), VERSION_38 + NONE_CHOICE + b"\x01")
+        self.assertEqual(bytes(sp.capture.s2c), VERSION_38 + NONE_OFFER + SECURITY_RESULT_OK)
 
         # ClientInit was reached (not desynced into _handle_protocol on the
         # response bytes), so the client-init handoff fired normally.
         cp.startLogging.assert_called_once_with(sp)
 
-    def test_unscrubbable_auth_aborts_and_writes_nothing(self) -> None:
+    def test_unstrippable_auth_aborts_and_writes_nothing(self) -> None:
         """Chosen on the client side (3.7+), so it surfaces in the c2s tap."""
         sp, cp = self.server_proxy, self.client_proxy
         sp.factory.capture_path = os.path.join(self.tmpdir(), "capture.zip")
@@ -518,7 +557,7 @@ class TestProxyCaptureWiring(TestCase):
         sp.transport.loseConnection.assert_called_once()
         self.assertFalse(os.path.exists(sp.factory.capture_path))
 
-    def test_unscrubbable_auth_chosen_by_a_pre37_server_also_aborts(self) -> None:
+    def test_unstrippable_auth_chosen_by_a_pre37_server_also_aborts(self) -> None:
         """Pre-3.7 the server dictates the type, so the s2c tap has to catch it."""
         sp, cp = self.server_proxy, self.client_proxy
         sp.factory.capture_path = os.path.join(self.tmpdir(), "capture.zip")

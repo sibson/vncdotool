@@ -16,8 +16,10 @@ import logging.handlers
 import optparse
 import os
 import shlex
+import shutil
 import socket
 import sys
+import tempfile
 from types import TracebackType
 
 from twisted.internet import protocol, reactor
@@ -462,17 +464,18 @@ def vnclog() -> None:
     op.add_option(
         "--capture-raw",
         metavar="FILE.zip",
-        help="write a raw wire capture (scrubbed of auth secrets) to FILE.zip, "
-        "ready to attach to an issue -- see docs/capture.rst. FILE.zip must not "
-        "exist; OUTPUT is implied (session.vdo inside the archive) and should be omitted.",
+        help="write a raw wire capture (auth stripped, replaced by a none-auth "
+        "handshake) to FILE.zip, ready to attach to an issue -- see docs/capture.rst. "
+        "FILE.zip must not exist; OUTPUT is implied (session.vdo inside the archive) "
+        "and should be omitted.",
     )
     op.add_option(
-        "--capture-raw-unsafe-auth",
+        "--capture-raw-unsafe",
         action="store_true",
         default=False,
-        help="allow --capture-raw to record auth types vncdotool cannot scrub, storing "
-        "the credential exchange verbatim. Use a disposable password and rotate it "
-        "afterwards.",
+        help="record the handshake verbatim instead of stripping it, credential exchange "
+        "and all. Needed for auth types vncdotool cannot follow, and for a bug in the "
+        "negotiation itself. Use a disposable password and rotate it afterwards.",
     )
     options, args = op.parse_args()
 
@@ -491,8 +494,8 @@ def vnclog() -> None:
             check_capture_target(options.capture_raw)
         except ValueError as exc:
             op.error(str(exc))
-    elif options.capture_raw_unsafe_auth:
-        op.error("--capture-raw-unsafe-auth is only meaningful with --capture-raw")
+    elif options.capture_raw_unsafe:
+        op.error("--capture-raw-unsafe is only meaningful with --capture-raw")
     elif len(args) != 1:
         op.error("incorrect number of arguments")
     else:
@@ -510,7 +513,7 @@ def vnclog() -> None:
 
     if options.capture_raw:
         factory.capture_path = options.capture_raw
-        factory.capture_unsafe_auth = options.capture_raw_unsafe_auth
+        factory.capture_preserve_auth = options.capture_raw_unsafe
     elif options.file_per_client and os.path.isdir(output):
         factory.output = output
     elif options.file_per_client:
@@ -632,6 +635,144 @@ def vncdo() -> None:
 
     # the reactor stopping without an outcome is itself a failure
     sys.exit(ExitStatus.ERROR if reactor.exit_status is None else reactor.exit_status)
+
+
+def vncdo_replay() -> None:
+    """Replay a `vnclog --capture-raw` archive: serve it, or drive it.
+
+    Two halves of the same job, deliberately two processes: one terminal
+    serves the recorded bytes, another runs the recorded session against
+    them. Splitting them is what lets a GUI viewer, or a `vncdo` line with
+    an extra command appended, take the client side instead.
+    """
+    from vncdotool import __version__
+    from .replay import (
+        DEFAULT_BIND,
+        DEFAULT_CLIENT_TIMEOUT,
+        DEFAULT_PORT,
+        DEFAULT_SERVER,
+        ReplayFactory,
+        load_capture,
+    )
+
+    op = VNCDoToolOptionParser(
+        usage="%prog [options] CAPTURE.zip [CMD CMDARGS...]",
+        description="Replay a vnclog --capture-raw archive. Without --server, runs the "
+        "session.vdo recorded inside CAPTURE.zip through vncdo, plus any commands given "
+        "after it. See docs/capture.rst.",
+        version="%prog " + __version__,
+    )
+    op.add_option(
+        "--server",
+        action="store_true",
+        default=False,
+        help="serve the archive's recorded bytes to whatever client connects, instead of "
+        "being the client",
+    )
+    op.add_option(
+        "-s",
+        "--connect",
+        metavar="ADDRESS",
+        default=DEFAULT_SERVER,
+        help="client mode: the replay server to drive the session against [%default]",
+    )
+    op.add_option(
+        "--listen",
+        type="int",
+        metavar="PORT",
+        default=DEFAULT_PORT,
+        help="--server: TCP port to listen on [%default]",
+    )
+    op.add_option(
+        "--bind",
+        metavar="ADDR",
+        default=DEFAULT_BIND,
+        help="--server: interface to listen on [%default], i.e. local connections only. A "
+        "--capture-raw-unsafe archive replays whatever credentials it carried, so opening "
+        "this up is a deliberate call to make.",
+    )
+    op.add_option(
+        "--client-timeout",
+        type="float",
+        metavar="SECONDS",
+        default=DEFAULT_CLIENT_TIMEOUT,
+        help="--server: warn if the client sends nothing for this long [%default]",
+    )
+    op.add_option(
+        "--forever",
+        action="store_true",
+        default=False,
+        help="--server: keep accepting a new client after each connection ends",
+    )
+    op.add_option("-v", "--verbose", action="store_true", help="hexdump client->server bytes")
+
+    options, args = op.parse_args()
+    if not args:
+        op.error("no capture archive given")
+    archive, extra = args[0], args[1:]
+
+    logging.basicConfig(
+        level=logging.DEBUG if options.verbose else logging.INFO,
+        format="vncdo-replay: %(levelname)s: %(message)s",
+    )
+
+    try:
+        capture = load_capture(archive)
+    except ValueError as exc:
+        op.error(str(exc))
+
+    if not options.server:
+        _replay_client(op, options, capture, archive, extra)
+        return
+
+    if extra:
+        op.error("--server serves bytes and takes no commands; run those from a client instead")
+    if capture.auth_preserved:
+        log.warning(
+            "%s was recorded with --capture-raw-unsafe, so its original handshake is served "
+            "verbatim: the client has to be configured the way the original one was, and "
+            "whatever credentials that exchange carried are on the wire again",
+            archive,
+        )
+
+    factory = ReplayFactory(
+        capture=capture,
+        client_timeout=options.client_timeout,
+        forever=options.forever,
+    )
+    reactor.listenTCP(options.listen, factory, interface=options.bind)
+    log.info("listening on %s:%s", options.bind, options.listen)
+    reactor.run()
+
+
+def _replay_client(
+    op: optparse.OptionParser,
+    options: optparse.Values,
+    capture: object,
+    archive: str,
+    extra: list[str],
+) -> None:
+    """Run the archive's recorded session through `vncdo`.
+
+    Being faithful to what the original client sent is the point: a replay
+    driven by different events is a different session, and a replay of a
+    different session is not evidence.
+    """
+    if not capture.session_vdo.strip() and not extra:
+        op.error(
+            f"{archive} records no session.vdo (a GUI-driven capture records events, not "
+            "vncdo commands), and no commands were given to run instead"
+        )
+
+    workdir = tempfile.mkdtemp(prefix="vncdo-replay-")
+    try:
+        script = os.path.join(workdir, "session.vdo")
+        with open(script, "wb") as fh:
+            fh.write(capture.session_vdo)
+        sys.argv = ["vncdo", "-s", options.connect] + ([script] if capture.session_vdo.strip() else []) + extra
+        vncdo()
+    finally:
+        shutil.rmtree(workdir, ignore_errors=True)
 
 
 if __name__ == "__main__":
