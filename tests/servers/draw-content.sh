@@ -7,17 +7,12 @@
 # This script does not decide readiness. Whether the content actually
 # arrived is settled by `tests/functional/wait_for_servers.py docker`,
 # which connects and captures until the screen holds what the server is
-# supposed to render. An in-container marker file used to stand in for
-# that and was worse than nothing: it waited with
-# `cmd >/dev/null 2>&1 && break`, which cannot tell "not ready yet" from
-# "that program isn't installed", and then created the marker whether or
-# not either wait had succeeded. x11-utils was missing from the tigervnc
-# image, so both waits ran to exhaustion and the marker was really a fixed
-# 21s sleep that reported ready against a blank screen.
+# supposed to render.
 #
-# The waits that remain are still worth getting right, because xlogo needs
-# a display to draw on, so failures here stay loud: a missing tool is a
-# hard error, and a wait that runs out is a hard error.
+# The waits below still have to be loud, because xlogo needs a display to
+# draw on: a wait that silently gives up leaves this drawing nothing on a
+# screen that later reports itself ready. So a missing tool is a hard
+# error, and so is a wait that runs out.
 set -e
 
 export DISPLAY="${DISPLAY:-:0}"
