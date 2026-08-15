@@ -155,12 +155,7 @@ def screenshot_dir() -> Path:
 
 
 def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool:
-    """Whether ``port`` accepts a connection. Cheap liveness, not readiness.
-
-    This hangs up without authenticating, which TigerVNC counts towards
-    BlacklistThreshold -- see the note in tests/servers/tigervnc-entrypoint.sh
-    before adding more callers on the password-protected server.
-    """
+    """Whether ``port`` accepts a connection. Cheap liveness, not readiness."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -197,11 +192,7 @@ def distinct_colours(image: Image.Image) -> Optional[int]:
 
 
 def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
-    """Whether a capture of ``colours`` distinct colours is what ``server`` should serve.
-
-    A single flat colour means nothing was decoded, except on the servers
-    that have no rendered desktop behind them and are expected to be flat.
-    """
+    """Whether a capture of ``colours`` distinct colours is what ``server`` should serve."""
     if not server.renders_desktop:
         return True
     return colours != 1
@@ -214,20 +205,10 @@ def wait_until_ready(
 ) -> bool:
     """Block until ``server`` serves the screen the tests expect, or give up.
 
-    An open port is not readiness, and neither is a completed handshake.
-    Every server in the fleet starts accepting connections before it has
-    anything to show: Xvnc listens the instant it launches, well before
-    draw-content.sh has mapped a window, so a capture taken too early comes
-    back flat and is indistinguishable from a decode that failed. An
-    OS-hosted server needs the retry for a different reason -- macOS Screen
-    Sharing is socket-activated, so the first connection is also what starts
-    it and can stall indefinitely while the next one succeeds at once.
-
-    So readiness is asserted the same way test_capture asserts it: connect,
-    capture, and require the content that server is supposed to render.
-    Retrying the whole connection is the only probe that means anything --
-    a per-request timeout can't rescue a connection that never finished its
-    handshake.
+    Servers accept connections before they have anything to show, so
+    readiness has to be a capture. The whole connection is retried because
+    macOS Screen Sharing is socket-activated: the first connection starts
+    it and can stall indefinitely while the next succeeds at once.
     """
     deadline = time.monotonic() + deadline_seconds
     attempt = 0
