@@ -1,26 +1,26 @@
 """Unit coverage for tests/tools/replay_server.py.
 
-Covers the tool's pure logic -- capture loading, script parsing, the
-handshake byte-walk -- with plain bytes and callables; the one socket test
-lives in tests/functional/test_replay.py. tests/tools is not a package, so
-the module is loaded via importlib from its path.
+The protocols are driven directly with a mocked transport, like the rest of
+the protocol tests. tests/tools is not a package, so the module is loaded
+via importlib from its path.
+
+`client_timeout=None` throughout: the stall warning is the one thing that
+would put a delayed call on the global reactor, and no unit test may touch
+the reactor.
 """
 
 from __future__ import annotations
 
 import importlib.util
-import io
 import json
 import os
 import shutil
 import sys
 import tempfile
-import time
 import zipfile
-from contextlib import redirect_stderr
 from pathlib import Path
 from struct import pack
-from unittest import TestCase
+from unittest import TestCase, mock
 
 from vncdotool.const import AuthTypes
 
@@ -29,8 +29,6 @@ _TOOL_PATH = REPO_ROOT / "tests" / "tools" / "replay_server.py"
 _spec = importlib.util.spec_from_file_location("replay_server_tool", _TOOL_PATH)
 replay_server = importlib.util.module_from_spec(_spec)
 assert _spec.loader is not None
-# dataclass() resolves string type hints via sys.modules[cls.__module__],
-# so the module has to be registered before it is exec'd.
 sys.modules[_spec.name] = replay_server
 _spec.loader.exec_module(replay_server)
 
@@ -42,6 +40,19 @@ SERVER_INIT_640x480 = (
     b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
     b"\x00\x00\x00\x00"  # name-len=0
 )
+
+
+def written(protocol) -> bytes:
+    """Everything the protocol has sent, in order."""
+    return b"".join(call.args[0] for call in protocol.transport.write.call_args_list)
+
+
+def start(factory) -> replay_server.ReplayProtocol:
+    """Build a protocol on a mocked transport and open the connection."""
+    protocol = factory.buildProtocol(("127.0.0.1", 0))
+    protocol.transport = mock.Mock()
+    protocol.connectionMade()
+    return protocol
 
 
 class TestLoadCapture(TestCase):
@@ -57,45 +68,36 @@ class TestLoadCapture(TestCase):
         return path
 
     def test_loads_s2c_bytes(self) -> None:
-        path = self._archive(s2c_bin=b"hello-s2c")
+        capture = replay_server.load_capture(self._archive(s2c_bin=b"hello-s2c"))
 
-        s2c_data, c2s_data, meta = replay_server.load_capture(path)
-
-        self.assertEqual(s2c_data, b"hello-s2c")
-        self.assertIsNone(c2s_data)
-        self.assertIsNone(meta)
+        self.assertEqual(capture.s2c, b"hello-s2c")
+        self.assertIsNone(capture.c2s)
+        self.assertIsNone(capture.meta)
 
     def test_loads_c2s_bytes_when_present(self) -> None:
-        path = self._archive(s2c_bin=b"x", c2s_bin=b"hello-c2s")
+        capture = replay_server.load_capture(self._archive(s2c_bin=b"x", c2s_bin=b"hello-c2s"))
 
-        _, c2s_data, _ = replay_server.load_capture(path)
-
-        self.assertEqual(c2s_data, b"hello-c2s")
+        self.assertEqual(capture.c2s, b"hello-c2s")
 
     def test_loads_meta_json_when_present(self) -> None:
         path = self._archive(s2c_bin=b"x", meta_json=json.dumps({"server": "host::5900"}).encode())
 
-        _, _, meta = replay_server.load_capture(path)
-
-        self.assertEqual(meta, {"server": "host::5900"})
+        self.assertEqual(replay_server.load_capture(path).meta, {"server": "host::5900"})
 
     def test_missing_s2c_bin_raises(self) -> None:
-        path = self._archive(meta_json=b"{}")
-
-        with self.assertRaises(SystemExit):
-            replay_server.load_capture(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_capture(self._archive(meta_json=b"{}"))
 
     def test_missing_archive_raises(self) -> None:
-        with self.assertRaises(SystemExit):
+        with self.assertRaises(ValueError):
             replay_server.load_capture(os.path.join(self.tmp, "absent.zip"))
 
     def test_non_zip_raises_rather_than_traceback(self) -> None:
-        """A capture directory from an older vnclog, or any stray file."""
         path = os.path.join(self.tmp, "not-a-zip.zip")
         with open(path, "wb") as fh:
             fh.write(b"not a zip at all")
 
-        with self.assertRaises(SystemExit) as caught:
+        with self.assertRaises(ValueError) as caught:
             replay_server.load_capture(path)
 
         self.assertIn("--capture-raw", str(caught.exception))
@@ -127,7 +129,6 @@ class TestScrubWarnings(TestCase):
         self.assertIn("Diffie-Hellman", warnings[0])
 
     def test_unscrubbable_type_warns_credentials_are_verbatim(self) -> None:
-        """Reaching a capture at all means --capture-raw-unsafe-auth was passed."""
         warnings = replay_server.scrub_warnings(AuthTypes.VENCRYPT)
 
         self.assertEqual(len(warnings), 1)
@@ -146,261 +147,217 @@ class TestLoadScript(TestCase):
         return path
 
     def test_loads_valid_messages(self) -> None:
-        path = self._write(
-            "MESSAGES = [b'abc', ('wait', 5), ('pause', 0.1), b'def']\n"
-        )
+        path = self._write("MESSAGES = [b'abc', ('wait', 5), ('pause', 0.1), b'def']\n")
+
         messages = replay_server.load_script(path)
+
         self.assertEqual(messages, [b"abc", ("wait", 5), ("pause", 0.1), b"def"])
 
     def test_missing_messages_raises(self) -> None:
-        path = self._write("X = 1\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("X = 1\n"))
 
     def test_messages_not_a_list_raises(self) -> None:
-        path = self._write("MESSAGES = b'not-a-list'\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = b'not-a-list'\n"))
 
     def test_bad_entry_raises(self) -> None:
-        path = self._write("MESSAGES = [b'ok', ('bogus', 1)]\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = [b'ok', ('bogus', 1)]\n"))
 
     def test_bad_entry_type_raises(self) -> None:
-        path = self._write("MESSAGES = [42]\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = [42]\n"))
 
     def test_wait_with_non_int_nbytes_raises_at_load_time(self) -> None:
-        """A bad payload type must die loudly at startup (SystemExit), not
-        as a mid-connection TypeError once a real client is waiting."""
-        path = self._write("MESSAGES = [('wait', 'five')]\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        """A bad payload type must die at startup, not as a mid-connection
+        TypeError once a real client is waiting."""
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = [('wait', 'five')]\n"))
 
     def test_wait_with_float_nbytes_raises(self) -> None:
-        path = self._write("MESSAGES = [('wait', 5.5)]\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = [('wait', 5.5)]\n"))
 
     def test_pause_with_non_numeric_seconds_raises(self) -> None:
-        path = self._write("MESSAGES = [('pause', 'a while')]\n")
-        with self.assertRaises(SystemExit):
-            replay_server.load_script(path)
+        with self.assertRaises(ValueError):
+            replay_server.load_script(self._write("MESSAGES = [('pause', 'a while')]\n"))
 
     def test_pause_accepts_int_or_float(self) -> None:
         path = self._write("MESSAGES = [('pause', 1), ('pause', 1.5)]\n")
-        messages = replay_server.load_script(path)
-        self.assertEqual(messages, [("pause", 1), ("pause", 1.5)])
+
+        self.assertEqual(replay_server.load_script(path), [("pause", 1), ("pause", 1.5)])
 
     def test_script_can_compute_messages(self) -> None:
-        """Scripts are exec()'d, not just literal-eval'd -- prove arbitrary
-        (trusted) Python runs, per the module docstring's "trusted
-        developer code" note."""
+        """Scripts are exec()'d, not literal-eval'd -- arbitrary (trusted)
+        Python runs, per the module docstring."""
         path = self._write(
             "def build():\n"
-            "    return [bytes([i]) for i in range(3)]\n"
+            "    return [b'x' * 3, ('wait', 2)]\n"
             "MESSAGES = build()\n"
         )
-        messages = replay_server.load_script(path)
-        self.assertEqual(messages, [b"\x00", b"\x01", b"\x02"])
+
+        self.assertEqual(replay_server.load_script(path), [b"xxx", ("wait", 2)])
 
 
-class TestReplayHandshakeStepByStep(TestCase):
-    """Drives replay_handshake_step_by_step() with a fake client: a queue of canned
-    c2s replies popped by recv_exact().
+class TestCaptureReplay(TestCase):
+    """The handshake goes out a step at a time, against the client's replies."""
+
+    def _factory(self, s2c: bytes, c2s: bytes | None = None, **kwargs) -> replay_server.ReplayFactory:
+        return replay_server.ReplayFactory(
+            capture=replay_server.Capture(s2c=s2c, c2s=c2s, meta=None),
+            client_timeout=None,
+            **kwargs,
+        )
+
+    def test_greeting_goes_out_before_the_client_has_said_anything(self) -> None:
+        s2c = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
+        protocol = start(self._factory(s2c))
+
+        self.assertEqual(written(protocol), VERSION_33)
+
+    def test_rest_of_a_pre38_handshake_follows_the_client_reply(self) -> None:
+        s2c = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
+        protocol = start(self._factory(s2c))
+
+        protocol.dataReceived(VERSION_33)
+        protocol.dataReceived(b"\x01")  # ClientInit, shared=1
+
+        self.assertEqual(written(protocol), s2c)
+
+    def test_client_that_never_replies_gets_nothing_past_the_greeting(self) -> None:
+        s2c = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
+        protocol = start(self._factory(s2c))
+
+        self.assertEqual(written(protocol), VERSION_33)
+        protocol.transport.loseConnection.assert_not_called()
+
+    def test_truncated_capture_sends_what_there_is_and_stops(self) -> None:
+        """A hand-edited or corrupted capture must not blow up mid-connection:
+        the short remainder goes out and the connection ends."""
+        protocol = start(self._factory(b"RFB 003."))
+
+        self.assertEqual(written(protocol), b"RFB 003.")
+        protocol.transport.loseConnection.assert_called_once()
+
+    def test_no_wait_sends_everything_at_once(self) -> None:
+        s2c = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
+        protocol = start(self._factory(s2c, wait_for_client=False))
+
+        self.assertEqual(written(protocol), s2c)
+
+    def test_client_downgrade_still_follows_the_pre37_shape(self) -> None:
+        """A 3.3 reply to a 3.8 greeting: RFC 6143 7.1.1 says the client's
+        reply governs, so the server-chosen-auth path is the right one."""
+        s2c = VERSION_38 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
+        protocol = start(self._factory(s2c))
+
+        protocol.dataReceived(VERSION_33)
+        protocol.dataReceived(b"\x01")
+
+        self.assertEqual(written(protocol), s2c)
+
+
+class TestSecurityTypeDivergence(TestCase):
+    """Recorded bytes past the security-type choice only fit the auth path the
+    original client took; sending them down another desyncs it silently.
     """
 
-    def _run(
-        self, s2c_data: bytes, client_replies: list[bytes], recorded_c2s_data: bytes | None = None
-    ) -> tuple[bytes, "replay_server.HandshakeResult"]:
-        sent = bytearray()
-        replies = list(client_replies)
-
-        def send(data: bytes) -> None:
-            sent.extend(data)
-
-        def recv_exact(nbytes: int) -> bytes:
-            if not replies:
-                return b""
-            chunk = replies.pop(0)
-            assert len(chunk) == nbytes, f"test client reply {chunk!r} does not match requested {nbytes} bytes"
-            return chunk
-
-        result = replay_server.replay_handshake_step_by_step(s2c_data, send, recv_exact, recorded_c2s_data=recorded_c2s_data)
-        return bytes(sent), result
-
-    def test_auth_none_pre38_handshake(self) -> None:
-        """Pre-3.8 + AuthTypes.NONE: greeting, then straight to the 4-byte
-        auth announce (no security-type list), no SecurityResult, then
-        ClientInit's 1 byte is awaited before ServerInit is sent."""
-        greeting = VERSION_33
-        auth_announce = pack("!I", AuthTypes.NONE)
-        s2c_data = greeting + auth_announce + SERVER_INIT_640x480 + b"EXTRA-FBU-BYTES"
-
-        sent, result = self._run(
-            s2c_data,
-            client_replies=[VERSION_33, b"\x01"],  # version reply, then ClientInit shared=1
-        )
-
-        self.assertEqual(sent, greeting + auth_announce + SERVER_INIT_640x480)
-        self.assertEqual(result.offset, len(greeting) + len(auth_announce) + len(SERVER_INIT_640x480))
-        self.assertFalse(result.diverged)
-        self.assertEqual(s2c_data[result.offset :], b"EXTRA-FBU-BYTES")
-
-    def test_client_downgrade_still_finds_the_right_shape(self) -> None:
-        """A 3.3 reply to a 3.8 greeting must follow the pre-3.7
-        direct-auth path, not the security-type-list path."""
-        greeting = b"RFB 003.008\n"
-        auth_announce = pack("!I", AuthTypes.NONE)
-        s2c_data = greeting + auth_announce + SERVER_INIT_640x480
-
-        sent, result = self._run(
-            s2c_data,
-            client_replies=[VERSION_33, b"\x01"],
-        )
-
-        self.assertEqual(sent, greeting + auth_announce + SERVER_INIT_640x480)
-        self.assertEqual(result.offset, len(s2c_data))
-
-    def test_client_disconnects_mid_handshake_stops_sending(self) -> None:
-        """If the fake client never replies (empty recv), sending must stop
-        rather than hang or raise -- the offset reflects only what was
-        actually sent."""
-        greeting = VERSION_33
-        s2c_data = greeting + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480
-
-        sent, result = self._run(s2c_data, client_replies=[])
-
-        self.assertEqual(sent, greeting)
-        self.assertEqual(result.offset, len(greeting))
-
-    def test_truncated_capture_stops_sending_without_raising(self) -> None:
-        """A capture with fewer s2c bytes than the handshake grammar wants
-        next (a hand-edited or corrupted capture) must not raise -- sending
-        stops with whatever was sent so far."""
-        s2c_data = b"RFB 003."  # cut off mid-greeting
-
-        sent, result = self._run(s2c_data, client_replies=[])
-
-        self.assertEqual(sent, b"")
-        self.assertEqual(result.offset, 0)
-
-    def test_security_type_divergence_detected_and_bails(self) -> None:
-        """Recorded session used VNC_AUTHENTICATION, live client picks NONE
-        (e.g. replayed without -p). Both types must be reported and sending must stop:
-        the recorded bytes past this point assume the other path."""
-        num_types_and_list = bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
-        s2c_data = (
+    def setUp(self) -> None:
+        self.offered = bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
+        self.s2c = (
             VERSION_38
-            + num_types_and_list
-            + bytes([0]) * 16  # recorded (scrubbed) challenge -- must never be sent
+            + self.offered
+            + bytes(16)  # scrubbed challenge -- must never reach a client on another path
             + b"MORE-BYTES-THAT-MUST-NOT-BE-SENT"
         )
-        recorded_c2s_data = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
-        live_replies = [VERSION_38, bytes([AuthTypes.NONE])]
+        self.recorded_c2s = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
 
-        sent, result = self._run(s2c_data, client_replies=live_replies, recorded_c2s_data=recorded_c2s_data)
+    def _protocol(self, c2s: bytes | None):
+        return start(
+            replay_server.ReplayFactory(
+                capture=replay_server.Capture(s2c=self.s2c, c2s=c2s, meta=None),
+                client_timeout=None,
+            )
+        )
 
-        self.assertTrue(result.diverged)
-        self.assertEqual(result.recorded_security_type, AuthTypes.VNC_AUTHENTICATION)
-        self.assertEqual(result.live_security_type, AuthTypes.NONE)
-        self.assertEqual(sent, VERSION_38 + num_types_and_list)
-        self.assertEqual(result.offset, len(VERSION_38) + len(num_types_and_list))
+    def test_divergence_closes_the_connection_before_the_challenge(self) -> None:
+        protocol = self._protocol(self.recorded_c2s)
+
+        protocol.dataReceived(VERSION_38)
+        with self.assertLogs(replay_server.log, "ERROR") as logged:
+            protocol.dataReceived(bytes([AuthTypes.NONE]))
+
+        self.assertEqual(written(protocol), VERSION_38 + self.offered)
+        protocol.transport.loseConnection.assert_called_once()
+        self.assertIn("divergence", logged.output[0])
 
     def test_matching_security_type_does_not_diverge(self) -> None:
-        """The control case for the divergence check: recorded and live
-        both choose VNC_AUTHENTICATION -- sending proceeds normally and
-        `diverged` stays False."""
-        num_types_and_list = bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
-        challenge = bytes(range(16))
-        s2c_data = VERSION_38 + num_types_and_list + challenge
-        recorded_c2s_data = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
-        live_replies = [VERSION_38, bytes([AuthTypes.VNC_AUTHENTICATION]), bytes(range(200, 216))]
+        protocol = self._protocol(self.recorded_c2s)
 
-        sent, result = self._run(s2c_data, client_replies=live_replies, recorded_c2s_data=recorded_c2s_data)
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.VNC_AUTHENTICATION]))
 
-        self.assertFalse(result.diverged)
-        self.assertEqual(sent, s2c_data)
-        self.assertEqual(result.offset, len(s2c_data))
+        self.assertIn(bytes(16), written(protocol))
 
-    def test_no_recorded_c2s_data_skips_divergence_check(self) -> None:
-        """Without c2s.bin there is nothing to compare against, so sending
-        proceeds and never sets `diverged`."""
-        auth_announce = pack("!I", AuthTypes.NONE)
-        s2c_data = VERSION_33 + auth_announce + SERVER_INIT_640x480
+    def test_without_recorded_c2s_there_is_nothing_to_compare(self) -> None:
+        """No c2s.bin means no divergence check, so the same mismatch that
+        closes the connection above carries on regardless."""
+        protocol = self._protocol(None)
 
-        sent, result = self._run(s2c_data, client_replies=[VERSION_33, b"\x01"])
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.NONE]))
 
-        self.assertFalse(result.diverged)
-        self.assertEqual(sent, s2c_data)
+        self.assertGreater(len(written(protocol)), len(VERSION_38 + self.offered))
+        protocol.transport.loseConnection.assert_not_called()
 
 
 class TestRecordedSecurityType(TestCase):
-    """_recorded_security_type() walks fully-recorded s2c/c2s bytes (no
-    live client at all) to learn what a capture's original session
-    negotiated -- the other half of the divergence check."""
+    def test_pre38_none(self) -> None:
+        s2c = VERSION_33 + pack("!I", AuthTypes.NONE)
 
-    def test_pre38_none_from_recorded_bytes(self) -> None:
-        s2c_data = VERSION_33 + pack("!I", AuthTypes.NONE)
-        c2s_data = VERSION_33
+        self.assertEqual(replay_server.recorded_security_type(s2c, VERSION_33), AuthTypes.NONE)
 
-        result = replay_server._recorded_security_type(s2c_data, c2s_data)
+    def test_negotiated_vnc_auth(self) -> None:
+        s2c = VERSION_38 + bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
+        c2s = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
 
-        self.assertEqual(result, AuthTypes.NONE)
+        self.assertEqual(
+            replay_server.recorded_security_type(s2c, c2s), AuthTypes.VNC_AUTHENTICATION
+        )
 
-    def test_negotiated_vnc_auth_from_recorded_bytes(self) -> None:
-        s2c_data = VERSION_38 + bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
-        c2s_data = VERSION_38 + bytes([AuthTypes.VNC_AUTHENTICATION])
-
-        result = replay_server._recorded_security_type(s2c_data, c2s_data)
-
-        self.assertEqual(result, AuthTypes.VNC_AUTHENTICATION)
-
-    def test_truncated_recorded_streams_return_none(self) -> None:
-        result = replay_server._recorded_security_type(b"RFB 003.", b"")
-        self.assertIsNone(result)
+    def test_streams_running_out_is_not_an_answer(self) -> None:
+        self.assertIsNone(replay_server.recorded_security_type(VERSION_38, b""))
 
 
-class TestClientReaderTimeouts(TestCase):
-    """ClientReader's timeout handling. .start() is never called, so the
-    buffer never fills and the Condition's wait-timeout logic is what runs."""
+class TestScriptReplay(TestCase):
+    def _protocol(self, messages: list):
+        return start(replay_server.ReplayFactory(messages=messages, client_timeout=None))
 
-    def test_read_exact_times_out_and_warns(self) -> None:
-        reader = replay_server.ClientReader(sock=None)
+    def test_bytes_are_sent_in_order(self) -> None:
+        protocol = self._protocol([b"one", b"two"])
 
-        stderr = io.StringIO()
-        start = time.monotonic()
-        with redirect_stderr(stderr):
-            data = reader.read_exact(10, timeout=0.05)
-        elapsed = time.monotonic() - start
+        self.assertEqual(written(protocol), b"onetwo")
+        protocol.transport.loseConnection.assert_called_once()
 
-        self.assertEqual(data, b"")
-        self.assertLess(elapsed, 2.0, "read_exact did not respect its timeout")
-        self.assertIn("timed out", stderr.getvalue())
-        self.assertIn("10 bytes", stderr.getvalue())
+    def test_wait_blocks_until_the_client_has_sent_enough(self) -> None:
+        protocol = self._protocol([b"first", ("wait", 4), b"second"])
 
-    def test_wait_for_total_times_out_and_warns(self) -> None:
-        reader = replay_server.ClientReader(sock=None)
+        self.assertEqual(written(protocol), b"first")
 
-        stderr = io.StringIO()
-        start = time.monotonic()
-        with redirect_stderr(stderr):
-            reached = reader.wait_for_total(10, timeout=0.05)
-        elapsed = time.monotonic() - start
+        protocol.dataReceived(b"ab")
+        self.assertEqual(written(protocol), b"first")
 
-        self.assertFalse(reached)
-        self.assertLess(elapsed, 2.0, "wait_for_total did not respect its timeout")
-        self.assertIn("timed out", stderr.getvalue())
+        protocol.dataReceived(b"cd")
+        self.assertEqual(written(protocol), b"firstsecond")
 
-    def test_read_exact_returns_immediately_once_satisfied(self) -> None:
-        """A satisfied read returns without waiting: feed the buffer
-        directly, bypassing the socket-reading thread."""
-        reader = replay_server.ClientReader(sock=None)
-        reader._buf += b"0123456789"
+    def test_pause_defers_the_rest_without_blocking(self) -> None:
+        with mock.patch.object(replay_server.reactor, "callLater") as later:
+            protocol = self._protocol([b"first", ("pause", 0.5), b"second"])
 
-        data = reader.read_exact(5, timeout=5)
+            self.assertEqual(written(protocol), b"first")
+            later.assert_called_once_with(0.5, protocol.advance)
 
-        self.assertEqual(data, b"01234")
-        self.assertEqual(bytes(reader._buf), b"56789")
+            protocol.advance()
+
+        self.assertEqual(written(protocol), b"firstsecond")
