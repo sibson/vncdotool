@@ -36,11 +36,8 @@ release: test-unit
 docs:
 	$(MAKE) -C docs/ html
 
-# Makefile.venv builds .venv with the first python3 it finds, which in a
-# checkout with no interpreter pin is whatever the system ships. Checked
-# here because the alternative failure is a pip resolver dump about a
-# dependency's Requires-Python, which reads like a broken pin rather than
-# a wrong interpreter.
+# Unenforced, a too-old python3 surfaces as a pip resolver error about a
+# dependency's Requires-Python, which does not read as a wrong interpreter.
 PYTHON_FLOOR = 3.10
 
 .PHONY: check-python
@@ -63,12 +60,8 @@ test-unit: check-python
 
 # Needs `make servers-up`; unreachable servers skip rather than fail, so
 # this still runs without docker.
-# $(VENV) goes on PATH because these tests shell out to the `vncdo` console
-# script: without it the script is whichever one PATH happens to offer,
-# which in a second working tree is the other one's.
-#
-# Not $(PYTHON): that is one of GNU make's built-ins, defaulting to
-# python3, so it runs the system interpreter rather than this venv.
+# $(VENV) on PATH decides which `vncdo` the tests shell out to. Not
+# $(PYTHON): that is a GNU make built-in, python3, not this venv.
 .PHONY: test-func
 test-func: check-python
 	PATH="$(VENV):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .

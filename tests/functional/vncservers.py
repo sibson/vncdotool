@@ -227,12 +227,8 @@ def wait_until_ready(
 def assert_cli_under_test() -> None:
     """Fail unless the `vncdo` these tests shell out to is this checkout.
 
-    Nothing else notices when it isn't. The suite passes, against a
-    different copy of vncdotool, and reports that copy's behaviour as this
-    branch's -- so a fix looks landed when it was never exercised. The
-    usual way in is borrowing another checkout's .venv, whose editable
-    install still points where it was created; `make venv` builds one per
-    working tree for exactly this reason.
+    Nothing else notices: the suite passes against another copy of
+    vncdotool and reports its behaviour as this branch's.
     """
     on_path = shutil.which(VNCDO)
     if on_path is None:
@@ -242,10 +238,8 @@ def assert_cli_under_test() -> None:
             "environment running these tests."
         )
 
-    # What this process imports proves nothing: running from the working
-    # tree puts it on sys.path, so `import vncdotool` finds this checkout
-    # even when the console script would not. Ask the script's own
-    # interpreter instead, from a directory that shadows nothing.
+    # Running from the working tree puts it on sys.path, so what this
+    # process imports says nothing about what the console script will.
     try:
         shebang = Path(on_path).read_text(errors="replace").splitlines()[0]
     except (OSError, IndexError):
