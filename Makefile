@@ -37,12 +37,10 @@ docs:
 	$(MAKE) -C docs/ html
 
 # Makefile.venv builds .venv with the first python3 it finds, which in a
-# fresh worktree is whatever the system ships: the interpreter pin is not
-# tracked, so a version manager has nothing to activate there. Left to
-# itself that surfaces as a pip resolver dump about a dependency's
-# Requires-Python, which reads like a broken pin rather than a wrong
-# interpreter -- and the tempting fix is to borrow another checkout's
-# .venv, which silently tests that checkout's code instead of this one.
+# checkout with no interpreter pin is whatever the system ships. Checked
+# here because the alternative failure is a pip resolver dump about a
+# dependency's Requires-Python, which reads like a broken pin rather than
+# a wrong interpreter.
 PYTHON_FLOOR = 3.10
 
 .PHONY: check-python
@@ -67,13 +65,10 @@ test-unit: check-python
 # this still runs without docker.
 # $(VENV) goes on PATH because these tests shell out to the `vncdo` console
 # script: without it the script is whichever one PATH happens to offer,
-# which in a second working tree is the other one's -- the suite then
-# reports that checkout's behaviour as this branch's.
+# which in a second working tree is the other one's.
 #
-# It used to run $(PYTHON), which reads like a project variable but is one
-# of GNU make's built-ins, defaulting to python3. So this target ran the
-# system interpreter and never the venv it just built; CI hid that by
-# installing into the same system interpreter it invokes.
+# Not $(PYTHON): that is one of GNU make's built-ins, defaulting to
+# python3, so it runs the system interpreter rather than this venv.
 .PHONY: test-func
 test-func: check-python
 	PATH="$(VENV):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
