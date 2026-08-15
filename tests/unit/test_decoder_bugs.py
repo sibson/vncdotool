@@ -1,28 +1,8 @@
-"""
-Runnable pins for two known decoder bugs.
+"""Runnable pins for two known decoder bugs.
 
-A hand-crafted FramebufferUpdate is fed to a client on a mocked transport
-and ``client.screen`` is asserted pixel-exactly. Fixture bytes are always
-inlined as literals, never checked in as binary blobs, so a fixture can
-only change via a reviewable diff.
-
-**These are bug pins, not verified goldens, and the distinction is the
-whole point.** Bytes derived by hand from RFC 6143 and checked against our
-own decoder can only pin what the decoder already does -- a decoder wrong
-in the way we read the spec still passes. That is worthless as
-verification but perfectly good as a bug marker: both tests below fail
-today, and each says "this is still broken" without needing to be right
-about the exact correct pixels.
-
-Goldens that genuinely verify a decoder need an oracle that is not ours:
-real server bytes via ``vnclog --capture-raw``, replayed through
-``tests/tools/replay_server.py``, decoded by both vncdotool and
-libvncclient, compared. Raw arrives that way first, since
-``VNCDoToolClient.encoding`` is pinned to Raw and no other encoding can be
-captured until a ``--encoding`` flag exists. Hand-derived Raw, RRE,
-Hextile and ZRLE fixtures were deliberately dropped rather than kept as
-decoration: a test that cannot fail for the right reason is worse than no
-test, because it occupies the space where the real one would go.
+Both tests fail today. They pin that these decoders are broken, not what
+correct output looks like: bytes hand-derived from RFC 6143 and checked
+against our own decoder cannot verify that decoder.
 """
 from __future__ import annotations
 
@@ -113,9 +93,7 @@ class TestDecoderBugs(unittest.TestCase):
     def test_copyrect(self) -> None:
         """CopyRect actually copies the source region to the destination.
 
-        Currently fails: RFBClient.copyRectangle() is a no-op stub and
-        nothing overrides it, so the rectangle parses but decodes to
-        nothing.
+        RFBClient.copyRectangle() is a no-op stub nothing overrides.
         """
         width = height = 4
         handshake(self.cli, width, height)
@@ -138,12 +116,9 @@ class TestDecoderBugs(unittest.TestCase):
     def test_corre(self) -> None:
         """CoRRE decodes a background plus multiple subrects.
 
-        Currently fails on two bugs in _handleDecodeCORRERectangles: the
-        subrect format string is missing its f-prefix, and `while pos < sz`
-        bounds on one subrect's size instead of the block length. The
-        second subrect below is what pins the latter -- with one subrect
-        the bound happens to terminate correctly, so fixing only the
-        f-prefix would turn a one-subrect test green.
+        Two subrects, because _handleDecodeCORRERectangles is broken twice:
+        with one, its loop bound terminates correctly by accident and
+        fixing only the missing f-prefix would look like a fix.
         """
         width = height = 4
         handshake(self.cli, width, height)
