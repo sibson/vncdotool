@@ -36,17 +36,35 @@ release: test-unit
 docs:
 	$(MAKE) -C docs/ html
 
+# Unenforced, a too-old python3 surfaces as a pip resolver error about a
+# dependency's Requires-Python, which does not read as a wrong interpreter.
+PYTHON_FLOOR = 3.10
+
+.PHONY: check-python
+check-python:
+	@$(PY) -c 'import sys; sys.exit(sys.version_info[:2] < tuple(int(p) for p in "$(PYTHON_FLOOR)".split(".")))' \
+	  || { \
+	    echo "$(PY) is $$($(PY) -c 'import sys; print("%d.%d" % sys.version_info[:2])'), but this project needs >=$(PYTHON_FLOOR)."; \
+	    echo "Point make at a newer one, e.g.:"; \
+	    echo "    make $(MAKECMDGOALS) PY=python3.13"; \
+	    echo "Do not symlink another checkout's .venv: its editable install"; \
+	    echo "points at that checkout, so the tests would exercise its code."; \
+	    exit 1; \
+	  }
+
 .PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
-test-unit:
+test-unit: check-python
 	$(VENV)/python -m unittest discover tests/unit
 
 # Needs `make servers-up`; unreachable servers skip rather than fail, so
 # this still runs without docker.
+# $(VENV) on PATH decides which `vncdo` the tests shell out to. Not
+# $(PYTHON): that is a GNU make built-in, python3, not this venv.
 .PHONY: test-func
-test-func:
-	$(PYTHON) -m unittest discover -s tests/functional -t .
+test-func: check-python
+	PATH="$(VENV):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 

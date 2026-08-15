@@ -16,9 +16,11 @@ written twice.
 """
 
 import os
+import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
@@ -39,6 +41,7 @@ READY_DEADLINE = 180.0
 
 # A console_scripts entry point, so only on PATH once vncdotool is installed.
 VNCDO = "vncdo"
+REPO_ROOT = Path(__file__).resolve().parents[2]
 # Added to the server's response budget for interpreter start-up and handshake.
 SUBPROCESS_TIMEOUT_HEADROOM = 10.0
 
@@ -219,6 +222,52 @@ def wait_until_ready(
 
     print(f"{server.name}: never completed an RFB round trip")
     return False
+
+
+def assert_cli_under_test() -> None:
+    """Fail unless the `vncdo` these tests shell out to is this checkout.
+
+    Nothing else notices: the suite passes against another copy of
+    vncdotool and reports its behaviour as this branch's.
+    """
+    on_path = shutil.which(VNCDO)
+    if on_path is None:
+        raise AssertionError(
+            f"`{VNCDO}` is not on PATH. It is a console_scripts entry point, so run "
+            "`make venv` in this working tree, or `pip install -e .` into the "
+            "environment running these tests."
+        )
+
+    # Running from the working tree puts it on sys.path, so what this
+    # process imports says nothing about what the console script will.
+    try:
+        shebang = Path(on_path).read_text(errors="replace").splitlines()[0]
+    except (OSError, IndexError):
+        return  # not a script we can read, e.g. a Windows .exe wrapper
+    if not shebang.startswith("#!"):
+        return
+    interpreter = shebang[2:].strip()
+
+    with tempfile.TemporaryDirectory() as neutral:
+        found = subprocess.run(
+            [interpreter, "-c", "import vncdotool; print(vncdotool.__file__)"],
+            capture_output=True, text=True, cwd=neutral, timeout=60,
+        )
+    if found.returncode != 0:
+        raise AssertionError(f"`{VNCDO}`'s interpreter cannot import vncdotool:\n{found.stderr}")
+
+    installed = Path(found.stdout.strip()).resolve()
+    if REPO_ROOT not in installed.parents:
+        raise AssertionError(
+            f"`{VNCDO}` on PATH ({on_path}) imports vncdotool from {installed}, not this "
+            f"checkout at {REPO_ROOT}. These tests shell out to it, so they would report "
+            "that copy's behaviour as this branch's. Run `make venv` in this working tree "
+            "(and do not symlink another one's .venv -- its editable install still points "
+            "where it was created)."
+        )
+
+
+assert_cli_under_test()
 
 
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
