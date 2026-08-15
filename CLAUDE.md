@@ -26,6 +26,10 @@ longer block needs a reason to be longer. Do not restate what the next line
 does, and do not narrate what a change replaced -- that belongs in the
 commit message. Design rationale belongs in `docs/`.
 
+Test each one by deleting it and asking what the reader lost. Being able
+to justify a comment is not the same as needing it: shortening an
+unnecessary comment leaves an unnecessary comment.
+
 A cross-reference is worth a clause when it saves the reader real work
 (`see docs/capture.rst`), so an explanation lives in exactly one place
 rather than being repeated. What it must not become is a paragraph
