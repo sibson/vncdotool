@@ -109,26 +109,78 @@ replay/distill time, so the format never needs versioning:
     meta.json     # server version string, security types offered,
                   # vncdotool version, geometry, timestamps
 
-**Scrubbing happens at capture time, before bytes touch disk**: password
-bytes and the VNC auth challenge/response are redacted in the recorded
-streams. The paved-road doc tells contributors what the capture does and
-does not contain.
+**Auth is stripped at capture time, before bytes touch disk.** The recorded
+handshake is not the credential exchange that happened; it is a synthetic
+`none`-auth one that vnclog writes in its place:
 
-**Replay tool** (in-repo, never shipped, never a CI fixture — no recorded
-capture is ever replayed in CI, though one inline-bytes end-to-end test,
-`tests/functional/test_replay.py`, does run in CI to guard the tool's own
-handshake logic):
-`tests/tools/replay_capture.py` — listens on a port, forks `vncdo` on the
-archive's recorded `session.vdo`, and plays the captured `s2c.bin` (or a
-hand-written script of protocol messages) back at it. Two uses:
+    s2c.bin:  <recorded greeting> <none-only security list>
+              [<SecurityResult ok>] <recorded ServerInit onwards>
+    c2s.bin:  <recorded greeting> [<chosen type: none>]
+              <recorded ClientInit onwards>
 
-- replaying a contributor's capture at the real client/CLI to find the bug;
-- *forcing* server behaviors that are hard to trigger live (the
-  issue-90-style scripted TightVNC reproduction).
+The bracketed steps depend on the version the original client negotiated —
+pre-3.7 has the server pick the type in a 4-byte field, and pre-3.8 `none`
+carries no SecurityResult. Nothing from the real auth exchange is written:
+not zeroed, not shortened, *absent*.
 
-The end product of any capture investigation is a distilled unit test with
-inline bytes; the capture itself is issue-thread evidence, not a repo
-fixture.
+This replaces equal-length zero redaction, and is a stronger guarantee for
+a contributor to reason about — "the archive contains no credential bytes"
+rather than "the credential bytes are zeros". It is also what makes replay
+a dumb byte-pusher: the archive already describes a session any client can
+connect to without a password, whatever the original server demanded.
+
+**Stripping requires following the handshake.** Skipping the auth exchange
+means knowing where it ends, which needs a grammar for it. vncdotool has
+one for `none`, VNC auth and ARD, and none for tight, vencrypt, rsa-aes or
+MS-Logon — so a session negotiating one of those still aborts the capture
+by default, exactly as the zero-redaction design did, with the reason
+restated: not "we cannot find the secret" but "we cannot find the end of
+it". The escape hatch below is the same one.
+
+**`--capture-raw-unsafe` records the handshake verbatim**, every auth type
+alike, for the bug that lives in the negotiation itself — and for ARD,
+whose Diffie-Hellman exchange stripping now removes along with everything
+else. Its archives carry a real key exchange and whatever credentials it
+protected; the paved-road doc says so, and says to use a disposable
+password and rotate it. It supersedes `--capture-raw-unsafe-auth`, which is
+removed rather than aliased: the kit is unreleased.
+
+**Replay tool** — `vncdo-replay`, a shipped console script, two modes:
+
+    vncdo-replay --server capture.zip    # serve the recorded s2c.bin
+    vncdo-replay capture.zip             # run the recorded session.vdo
+
+The two are separate processes on purpose. An earlier revision had the
+server fork its own client so a single command reproduced the whole
+session; driving it turned out to be the wrong job for the thing serving
+the bytes, and it made the tool awkward to point at a GUI viewer or at a
+`vncdo` invocation with an extra command appended. Two composable tools,
+one terminal each.
+
+`--server` listens on a port and plays `s2c.bin` back at whatever connects,
+pacing the handshake against the client's real replies — the same grammar
+the capture side uses, which is what keeps the two from drifting — and
+holding the recorded framebuffer until the client's first
+FramebufferUpdateRequest. A capture holds one finite recording of the
+screen, so those bytes get exactly one chance to be useful; sent before the
+client asked, they go past a client that asks a moment later, which then
+waits forever. There is no security-type divergence check: a stripped
+archive offers `none` and cannot diverge, and an unsafe one is served
+as-is and left to desync if the live client chose differently.
+
+Client mode is a thin wrapper: pull `session.vdo` out of the archive and
+hand it to `vncdo`, defaulting `-s` to the replay server's own
+`127.0.0.1::5999`. Trailing arguments pass through, so
+`vncdo-replay capture.zip capture screen.png` replays the recorded input
+and then takes a screenshot. Being faithful to what the original client
+sent is the point: a replay driven by different events is a different
+session, and a replay of a different session is not evidence.
+
+No recorded capture is ever replayed in CI. One inline-bytes end-to-end
+test, `tests/functional/test_replay.py`, does run in CI to guard the
+server's own handshake logic. The end product of any capture investigation
+is a distilled unit test with inline bytes; the capture itself is
+issue-thread evidence, not a repo fixture.
 
 ## What this removes
 
@@ -168,8 +220,8 @@ revisit only if someone asks for it.
    terrain.)
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
    delete golden-PNG suite.
-3. `--capture-raw` flag + scrubbing + contributor paved-road doc.
-4. `tests/tools/replay_capture.py` as distillation aid.
+3. `--capture-raw` flag + auth stripping + contributor paved-road doc.
+4. `vncdo-replay` as distillation aid.
 5. In-process API lifecycle suite against one container.
 
 Each phase is independently landable; 1 and 2 remove the most CI fragility
