@@ -76,11 +76,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Extends base's check with the event sink: the port evidences only half of
-# what this container promises, and the sink loses a startup race often
-# enough that readiness has to wait for it.
+# Extends base's liveness check with the event sink, which is the second
+# thing this container promises and the one that loses a startup race. The
+# probe stays connectionless for the same reason base's does, and leaves
+# "is there content on screen" to wait_for_servers.py along with every
+# other server.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready && pgrep -f "xev -root" >/dev/null'
+    CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "xev -root" >/dev/null
 
 ENTRYPOINT ["/entrypoint.sh"]
 
