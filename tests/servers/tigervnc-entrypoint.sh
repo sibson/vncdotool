@@ -15,18 +15,20 @@ if [ -n "$VNC_PASSWORD" ]; then
     mkdir -p /root/.vnc
     printf '%s' "$VNC_PASSWORD" | vncpasswd -f > /root/.vnc/passwd
     chmod 600 /root/.vnc/passwd
-    # Xvnc counts every connection that closes before authenticating as a
-    # failed attempt, so the HEALTHCHECK's port probe blacklists 127.0.0.1
-    # within seconds of start-up and later authenticated sessions are
-    # refused. Disable the threshold rather than have results depend on how
-    # long the container has been up.
-    set -- -SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd -BlacklistThreshold=1000000
+    set -- -SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd
 else
     set -- -SecurityTypes None
 fi
 
+# Xvnc counts every connection that closes before authenticating as a
+# failed attempt, so the HEALTHCHECK's port probe blacklists 127.0.0.1
+# within seconds of start-up and later sessions are refused. The count is
+# cumulative for the container's whole life, so whether a suite passes
+# depends on how long the fleet has been up and how often it was probed.
+# SecurityTypes None is no exemption: the probe still closes mid-handshake.
 Xvnc :0 \
     "$@" \
+    -BlacklistThreshold=1000000 \
     -rfbport 5900 \
     -geometry 1024x768 \
     -depth 24 \
