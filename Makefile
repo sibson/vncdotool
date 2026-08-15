@@ -36,17 +36,47 @@ release: test-unit
 docs:
 	$(MAKE) -C docs/ html
 
+# Makefile.venv builds .venv with the first python3 it finds, which in a
+# fresh worktree is whatever the system ships: the interpreter pin is not
+# tracked, so a version manager has nothing to activate there. Left to
+# itself that surfaces as a pip resolver dump about a dependency's
+# Requires-Python, which reads like a broken pin rather than a wrong
+# interpreter -- and the tempting fix is to borrow another checkout's
+# .venv, which silently tests that checkout's code instead of this one.
+PYTHON_FLOOR = 3.10
+
+.PHONY: check-python
+check-python:
+	@$(PY) -c 'import sys; sys.exit(sys.version_info[:2] < tuple(int(p) for p in "$(PYTHON_FLOOR)".split(".")))' \
+	  || { \
+	    echo "$(PY) is $$($(PY) -c 'import sys; print("%d.%d" % sys.version_info[:2])'), but this project needs >=$(PYTHON_FLOOR)."; \
+	    echo "Point make at a newer one, e.g.:"; \
+	    echo "    make $(MAKECMDGOALS) PY=python3.13"; \
+	    echo "Do not symlink another checkout's .venv: its editable install"; \
+	    echo "points at that checkout, so the tests would exercise its code."; \
+	    exit 1; \
+	  }
+
 .PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
-test-unit:
+test-unit: check-python
 	$(VENV)/python -m unittest discover tests/unit
 
 # Needs `make servers-up`; unreachable servers skip rather than fail, so
 # this still runs without docker.
+# $(VENV) goes on PATH because these tests shell out to the `vncdo` console
+# script: without it the script is whichever one PATH happens to offer,
+# which in a second working tree is the other one's -- the suite then
+# reports that checkout's behaviour as this branch's.
+#
+# It used to run $(PYTHON), which reads like a project variable but is one
+# of GNU make's built-ins, defaulting to python3. So this target ran the
+# system interpreter and never the venv it just built; CI hid that by
+# installing into the same system interpreter it invokes.
 .PHONY: test-func
-test-func:
-	$(PYTHON) -m unittest discover -s tests/functional -t .
+test-func: check-python
+	PATH="$(VENV):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 
