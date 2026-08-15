@@ -60,10 +60,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xvfb \
         x11vnc \
         x11-utils \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 COPY x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+# Extends base's check with the event sink: the port evidences only half of
+# what this container promises, and the sink loses a startup race often
+# enough that readiness has to wait for it.
+HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
+    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready && pgrep -f "xev -root" >/dev/null'
 
 ENTRYPOINT ["/entrypoint.sh"]
 
