@@ -1,18 +1,10 @@
 #!/bin/sh
-# Put a trivial X client on the display so captures aren't pure black.
-# Without one the framebuffer is flat, and a flat capture is
-# indistinguishable from "we never received an update" --
-# tests/functional/test_servers.py asserts captures aren't flat.
+# Put a trivial X client on the display so captures aren't pure black: a
+# flat capture is indistinguishable from "we never received an update".
 #
-# This script does not decide readiness. Whether the content actually
-# arrived is settled by `tests/functional/wait_for_servers.py docker`,
-# which connects and captures until the screen holds what the server is
-# supposed to render.
-#
-# The waits below still have to be loud, because xlogo needs a display to
-# draw on: a wait that silently gives up leaves this drawing nothing on a
-# screen that later reports itself ready. So a missing tool is a hard
-# error, and so is a wait that runs out.
+# Readiness is decided elsewhere, by wait_for_servers.py. The waits below
+# still fail hard rather than give up quietly, because xlogo needs a
+# display to draw on and this would otherwise draw nothing at all.
 set -e
 
 export DISPLAY="${DISPLAY:-:0}"

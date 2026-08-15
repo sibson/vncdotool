@@ -25,22 +25,14 @@ RUN chmod +x /draw-content.sh
 
 EXPOSE 5900
 
-# Liveness only: the process came up and bound its port. Whether the server
-# is ready to serve is decided out of band by
-# `tests/functional/wait_for_servers.py docker`, which connects, captures,
-# and requires the content the server is supposed to render -- the same
-# assertion the tests make, so there is one definition of readiness for the
-# Docker fleet and the OS-hosted servers rather than a weaker in-container
-# imitation of it.
+# Liveness only; readiness is `tests/functional/wait_for_servers.py docker`.
 #
-# This must never open an RFB connection. Xvnc counts every connection
+# This must never open an RFB connection: Xvnc counts every connection
 # closed before a successful authentication towards BlacklistThreshold
-# (default 5), so a probe that connects and hangs up blacklists 127.0.0.1
-# within ~10s and refuses every later session. Completing the RFB version
-# handshake first does not help -- measured against TigerVNC 1.12.0, a bare
-# connect, a version exchange, and a version-plus-security-types exchange
-# all trip the counter identically. `ss` reads the kernel's socket table
-# instead, so the port is confirmed listening without a connection existing.
+# (default 5), so a connecting probe blacklists 127.0.0.1 within ~10s and
+# refuses every later session. Speaking more of the protocol first does not
+# help -- measured against TigerVNC 1.12.0, a bare connect, a version
+# exchange and a version-plus-security-types exchange trip it identically.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
     CMD ss -H -ltn 'sport = :5900' | grep -q .
 
@@ -76,11 +68,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Extends base's liveness check with the event sink, which is the second
-# thing this container promises and the one that loses a startup race. The
-# probe stays connectionless for the same reason base's does, and leaves
-# "is there content on screen" to wait_for_servers.py along with every
-# other server.
+# The event sink is the second thing this container promises, and the one
+# that loses a startup race.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
     CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "xev -root" >/dev/null
 
