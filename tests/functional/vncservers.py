@@ -350,7 +350,7 @@ class _VNCServerTestMixin:
 
     def setUp(self) -> None:
         if not port_open(HOST, self.server.port):
-            self.skipTest(
+            self.fail(
                 f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
                 f"{self.server.how_to_start}"
             )

@@ -24,7 +24,7 @@ _SERVER = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
 class TestCLI(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, _SERVER.port):
-            self.skipTest(
+            self.fail(
                 f"tigervnc-auth not reachable on {HOST}:{_SERVER.port} -- "
                 "start the servers first with `make servers-up`"
             )
