@@ -31,6 +31,12 @@ A cross-reference is worth a clause when it saves the reader real work
 rather than being repeated. What it must not become is a paragraph
 re-explaining what the other file already says.
 
+Check the protocol documents before implementing anything that touches the
+wire -- a new encoding, security type, message or client command. The repo
+carries no copy of the spec; `DEVELOP.rst` says which of RFC 6143 and
+rfbproto covers what. Guessing a message layout from the surrounding code
+produces something that works against one server and no other.
+
 Lint is plain flake8, configured in `setup.cfg`: line length 127,
 `extend-ignore = E203`. CI runs `flake8 --count --statistics vncdotool tests`,
 so run that before pushing. No black, no isort.

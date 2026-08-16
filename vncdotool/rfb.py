@@ -5,7 +5,8 @@ Override :class:`RFBClient` and :class:`RFBFactory` in your application.
 See vncviewer.py for an example.
 
 Reference:
-http://www.realvnc.com/docs/rfbproto.pdf
+https://www.rfc-editor.org/rfc/rfc6143
+https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 """
 # (C) 2003 cliechti@gmx.net
 #
