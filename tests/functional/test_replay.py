@@ -1,8 +1,6 @@
 """End-to-end test for the `vncdo-replay` CLI, on a hand-built capture.
 
-The only place replay meets a real client rather than a mocked transport.
-No docker, no fleet, and no recorded capture is ever replayed here.
-"""
+The only place replay meets a real client. No recorded capture is replayed."""
 
 from __future__ import annotations
 

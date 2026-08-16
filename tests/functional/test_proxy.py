@@ -210,9 +210,7 @@ class TestVnclogCapture(TestCase):
 class TestVnclogCaptureVNCAuth(TestCase):
     """`vnclog --capture-raw FILE.zip` against tigervnc-auth.
 
-    The unit tests strip a scripted challenge/response; only a live run
-    proves it against tigervnc's real handshake.
-    """
+    Only a live run proves the strip against a real handshake."""
 
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC_AUTH.port):
@@ -250,10 +248,7 @@ class TestVnclogCaptureVNCAuth(TestCase):
             len(c2s), HANDSHAKE_ONLY, f"c2s.bin looks truncated at the handshake: {len(c2s)} bytes: {c2s!r}"
         )
 
-        # tigervnc-auth negotiated VNC auth, but what was recorded is a
-        # none-auth handshake: the greeting, then a one-type `none` offer on
-        # the server side and the client picking it, with no challenge or
-        # response in between.
+        # Negotiated VNC auth; recorded as none-auth, with no challenge or response.
         self.assertEqual(meta["security_type"], int(AuthTypes.VNC_AUTHENTICATION))
         self.assertEqual(meta["auth"], "stripped")
         self.assertEqual(s2c[12:14], bytes([1, AuthTypes.NONE]), f"handshake was not stripped: {s2c[:32]!r}")

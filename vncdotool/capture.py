@@ -1,13 +1,6 @@
 """Raw wire capture for the ``vnclog --capture-raw`` discovery kit.
 
-The recorded handshake is a synthetic ``none``-auth one; the real auth
-exchange is never written. The handshake is followed by walking a state
-machine rather than by pattern matching, since credentials are
-indistinguishable by content from any other span of the same length --
-and since following it is the only way to know where the exchange ends.
-
-See ``docs/capture.rst`` for what an archive does and does not contain.
-"""
+Records a synthetic ``none``-auth handshake; see ``docs/capture.rst``."""
 
 from __future__ import annotations
 
@@ -59,11 +52,7 @@ class _Want(NamedTuple):
 class HandshakeScrubber:
     """Tracks an RFB handshake across both directions of a proxied stream.
 
-    Feed arriving bytes to :attr:`s2c` or :attr:`c2s`; each returns what that
-    direction should record, which through the handshake is a synthetic
-    ``none``-auth exchange rather than the bytes fed in. Once the handshake
-    is done both pass bytes straight through.
-    """
+    Feed :attr:`s2c` / :attr:`c2s`; each returns what that side records."""
 
     def __init__(self, preserve_auth: bool = False) -> None:
         self.s2c = Tap(self, "s2c")
@@ -111,9 +100,7 @@ class HandshakeScrubber:
     def _give_up(self, why: str) -> None:
         """Stop the capture when we can no longer follow the handshake.
 
-        Not knowing where the credentials end means not being able to strip
-        them, so nothing is written unless a human asked for it.
-        """
+        Not knowing where the credentials end means not being able to strip them."""
         if self.preserve_auth:
             return
         self.abort_reason = (
@@ -228,9 +215,8 @@ class HandshakeScrubber:
             yield _Want(self.c2s, 16)  # response
             self._record(b"")
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
-            # ARD / Apple Screen Sharing, laid out as RFBClient._handleDHAuth
-            # reads it. The DH values are public, but a `none` handshake has
-            # nowhere to put them, so they go with the credentials.
+            # ARD, laid out as RFBClient._handleDHAuth reads it. A `none`
+            # handshake has nowhere for the DH values, so they go too.
             head = yield _Want(self.s2c, 4)
             self._record(b"")
             _generator, key_len = unpack("!HH", head)
@@ -268,8 +254,7 @@ class HandshakeScrubber:
             (result,) = unpack("!I", result_b)
             if result != 0:
                 return  # auth failed/too-many-tries; reason string not tracked
-            # The synthetic handshake is `none`, which carries a
-            # SecurityResult only from 3.8 on.
+            # `none` carries a SecurityResult only from 3.8 on.
             self._record(pack("!I", 0) if negotiated >= (3, 8) else b"")
 
         yield _Want(self.c2s, 1)  # ClientInit: shared flag

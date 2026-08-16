@@ -640,9 +640,7 @@ def vncdo() -> None:
 def vncdo_replay() -> None:
     """Replay a `vnclog --capture-raw` archive: serve it, or drive it.
 
-    Two processes rather than one, so anything can take the client side.
-    See docs/capture.rst.
-    """
+    Two processes, so anything can take the client side. See docs/capture.rst."""
     from vncdotool import __version__
     from .replay import (
         DEFAULT_BIND,
@@ -752,9 +750,7 @@ def _replay_client(
 ) -> None:
     """Run the archive's recorded session through `vncdo`.
 
-    The recorded events, not hand-typed ones: a replay of a different
-    session is not evidence.
-    """
+    Recorded events, not hand-typed: another session is not evidence."""
     if not capture.session_vdo.strip() and not extra:
         op.error(
             f"{archive} records no session.vdo (a GUI-driven capture records events, not "

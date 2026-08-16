@@ -64,9 +64,8 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.security_types, [AuthTypes.VNC_AUTHENTICATION])
         self.assertIsNone(s.unstrippable_auth)
 
-        # Pre-3.8 `none` carries no SecurityResult, so the real one is dropped
-        # rather than passed through: the recorded handshake has to be a
-        # handshake a client can actually follow.
+        # Pre-3.8 `none` carries no SecurityResult, so the real one is dropped:
+        # the recorded handshake has to be one a client can follow.
         self.assertEqual(s.s2c.feed(SECURITY_RESULT_OK), b"")
         self.assertEqual(s.c2s.feed(b"\x01"), b"\x01")
         self.assertEqual(s.s2c.feed(SERVER_INIT_640x480), SERVER_INIT_640x480)

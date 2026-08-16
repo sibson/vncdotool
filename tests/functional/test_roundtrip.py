@@ -1,9 +1,6 @@
 """Capture and replay, joined: does what vnclog writes still decode the same?
 
-A capture vnclog writes but replay cannot serve passes test_proxy.py and
-test_replay.py both. tigervnc demands a password; the archive of it does
-not, which is the point of stripping.
-"""
+tigervnc demands a password; the archive of it does not."""
 
 import subprocess
 import time
@@ -39,9 +36,8 @@ class TestCaptureReplayRoundtrip(TestCase):
         self.addCleanup(_stop_proxy, self.proxy)
 
     def test_replayed_capture_decodes_to_the_same_screenshot(self) -> None:
-        # A relative filename, run from its own directory: the replayed
-        # session takes the same screenshot, and an absolute path would have
-        # it overwrite the very file it is compared against.
+        # Relative, from its own directory: an absolute path would have the
+        # replay overwrite the file it is compared against.
         proxied = TIGERVNC._replace(port=ROUNDTRIP_PROXY_PORT)
         result = subprocess.run(
             vncdo_argv(proxied, "capture", SCREENSHOT),
@@ -82,11 +78,7 @@ class TestCaptureReplayRoundtrip(TestCase):
             )
 
     def _start_replay(self) -> subprocess.Popen:
-        """Serve the capture, waiting until the port answers.
-
-        --forever, so this readiness probe does not consume the one
-        connection the replay had to give.
-        """
+        """Serve the capture, waiting until the port answers."""
         server = subprocess.Popen(
             [
                 "vncdo-replay", "--server", str(self.capture),

@@ -1,8 +1,6 @@
 """Unit coverage for vncdotool.replay, the `vncdo-replay --server` half.
 
-`client_timeout=None` throughout: the stall warning is the one thing here
-that would touch the global reactor.
-"""
+`client_timeout=None` throughout: the stall warning would touch the reactor."""
 
 from __future__ import annotations
 
