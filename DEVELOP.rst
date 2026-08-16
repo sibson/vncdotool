@@ -44,7 +44,25 @@ both paths named, because nothing else notices.
 
 The RFB/VNC Protocol
 ------------------------
-There is a community effort to document the protcol, _rfbproto_.
+
+Two documents cover RFB, and which one answers a question depends on how
+far past the baseline it sits.
+
+`RFC 6143`_ is the normative specification. It defines RFB 3.8 and the
+encodings and security types that shipped with it, and it is the one to
+cite when the wire format is in dispute.
+
+rfbproto_ is a community effort to document everything servers grew
+afterwards: the later encodings and pseudo-encodings, the security types,
+the message extensions, and the vendor quirks the RFC never covered.
+Reach for it whenever the answer is not in the RFC -- which, for most of
+what vncdotool implements, it is not.
+
+rfbproto is a living document with no releases or version numbers, so link
+a commit permalink rather than ``master`` when a comment depends on its
+wording. Neither document describes how any particular server actually
+behaves; where one is known to diverge, ``docs/server-compatibility-plan.md``
+records what we do about it.
 
 
 Preparing a Release
@@ -54,4 +72,5 @@ Preparing a Release
   1. ``make release``
   1. blog post/twitter
 
+.. _RFC 6143: https://www.rfc-editor.org/rfc/rfc6143
 .. _rfbproto: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
