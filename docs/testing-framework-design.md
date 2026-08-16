@@ -88,10 +88,10 @@ coverage of its *lifecycle*, not of server compatibility — `api.connect`,
 error propagation, timeouts, `api.shutdown` cleanliness — against a single
 known-good container. One reactor per process means exactly one module
 (`test_api_lifecycle.py`) may ever touch `vncdotool.api` in-process; it is
-safe inside the shared functional discover because it sorts first and every
-other module is subprocess-only, and `make test-api` runs it alone. It does
-not fan out across the fleet: server compatibility is already proven by the
-subprocess grid.
+safe inside the shared functional discover because every other module is
+subprocess-only and never touches that reactor, regardless of run order —
+`make test-api` also runs it alone. It does not fan out across the fleet:
+server compatibility is already proven by the subprocess grid.
 
 ### 3. Capture kit (discovery for unhosted servers)
 
