@@ -33,7 +33,6 @@ TIGERVNC = next(s for s in DOCKER_SERVERS if s.name == "tigervnc")
 # observed to flake under load.
 HAPPY_TIMEOUT = TIGERVNC.timeout + SUBPROCESS_TIMEOUT_HEADROOM
 
-# Tight budget for the cases that want to observe a timeout quickly.
 SHORT_TIMEOUT = 2.0
 
 # join() budget for the closed-port helper thread: long enough to fail
@@ -43,7 +42,7 @@ HANG_GUARD_TIMEOUT = 10.0
 
 def setUpModule() -> None:
     if not port_open(HOST, TIGERVNC.port):
-        raise unittest.SkipTest(
+        raise RuntimeError(
             f"tigervnc not reachable on {HOST}:{TIGERVNC.port} -- "
             "start the servers first with `make servers-up`"
         )
@@ -188,8 +187,6 @@ class _SilentListener:
                 continue  # idle poll; socket.timeout IS an OSError, catch it first
             except OSError:
                 return
-            # Accept and go silent: read nothing, write nothing, until
-            # told to stop.
             while not self._stopped.is_set():
                 time.sleep(0.1)
             conn.close()
