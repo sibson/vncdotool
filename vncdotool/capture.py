@@ -1,20 +1,12 @@
 """Raw wire capture for the ``vnclog --capture-raw`` discovery kit.
 
-The recorded handshake is not the one that happened. Credentials are not
-redacted but *replaced*: the capture writes a synthetic ``none``-auth
-handshake -- the real greeting, a ``none``-only security list, the real
-ServerInit onwards -- and the auth exchange between them is never written
-at all. So the archive holds no credential bytes rather than holding zeroed
-ones, and it describes a session any client can replay without a password.
+The recorded handshake is a synthetic ``none``-auth one; the real auth
+exchange is never written. The handshake is followed by walking a state
+machine rather than by pattern matching, since credentials are
+indistinguishable by content from any other span of the same length --
+and since following it is the only way to know where the exchange ends.
 
-The handshake is followed by walking a state machine, never by pattern
-matching: credentials are high-entropy and indistinguishable from any other
-span of the same length by content alone. Following it is also what locates
-the *end* of the auth exchange, so an auth type with no grammar here cannot
-be stripped and aborts the capture unless the contributor passes
-``--capture-raw-unsafe``, which records the handshake whole.
-
-Stripping stops at the end of the handshake; see ``docs/capture.rst``.
+See ``docs/capture.rst`` for what an archive does and does not contain.
 """
 
 from __future__ import annotations
@@ -119,9 +111,8 @@ class HandshakeScrubber:
     def _give_up(self, why: str) -> None:
         """Stop the capture when we can no longer follow the handshake.
 
-        Losing track means we no longer know where the credentials end, so
-        the same rule as an auth type with no grammar applies: nothing is
-        written unless a human asked for it.
+        Not knowing where the credentials end means not being able to strip
+        them, so nothing is written unless a human asked for it.
         """
         if self.preserve_auth:
             return
@@ -238,10 +229,8 @@ class HandshakeScrubber:
             self._record(b"")
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
             # ARD / Apple Screen Sharing, laid out as RFBClient._handleDHAuth
-            # reads it. The DH values are public by construction, but a
-            # `none` handshake has nowhere to put them, so stripping takes
-            # the exchange whole; --capture-raw-unsafe is how an ARD bug
-            # gets its key exchange into an archive.
+            # reads it. The DH values are public, but a `none` handshake has
+            # nowhere to put them, so they go with the credentials.
             head = yield _Want(self.s2c, 4)
             self._record(b"")
             _generator, key_len = unpack("!HH", head)
@@ -349,9 +338,8 @@ class CaptureWriter:
             "vncdotool_version": vncdotool_version,
             "capture_timestamp": self.capture_timestamp,
             "protocol_version": self.scrubber.protocol_version,
-            # The types the server offered and the one the session chose --
-            # evidence about the server, not a description of what is in
-            # s2c.bin, which by default records a `none` handshake instead.
+            # Evidence about the server, not a description of s2c.bin, which
+            # by default records a `none` handshake instead.
             "security_types": self.scrubber.security_types,
             "security_type": self.scrubber.security_type,
             "auth": "preserved" if self.scrubber.preserve_auth else "stripped",

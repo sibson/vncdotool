@@ -1,7 +1,7 @@
 """Unit coverage for vncdotool.replay, the `vncdo-replay --server` half.
 
 `client_timeout=None` throughout: the stall warning is the one thing here
-that would put a delayed call on the global reactor.
+that would touch the global reactor.
 """
 
 from __future__ import annotations
@@ -136,8 +136,8 @@ class TestSawUpdateRequest(TestCase):
         )
 
     def test_an_unmeasurable_message_serves_the_capture_rather_than_stall(self) -> None:
-        """Losing the message boundary means never recognising the request, so
-        a replay that stopped here would hang instead of showing the bug."""
+        """Losing the boundary means never seeing the request, so stopping
+        here would hang instead of showing the bug."""
         with self.assertLogs(replay.log, "WARNING"):
             self.assertTrue(replay.saw_update_request(bytearray([MsgC2S.FILE_TRANSFER, 0])))
 
@@ -209,8 +209,7 @@ class TestReplayProtocol(TestCase):
         protocol.transport.loseConnection.assert_not_called()
 
     def test_truncated_capture_sends_what_there_is_and_stops(self) -> None:
-        """A hand-edited or corrupted capture must not blow up mid-connection:
-        the short remainder goes out and nothing follows it."""
+        """A corrupted capture must not blow up mid-connection."""
         protocol = start(b"RFB 003.")
 
         self.assertEqual(written(protocol), b"RFB 003.")
@@ -218,9 +217,7 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), b"RFB 003.")
 
     def test_a_preserved_auth_capture_is_served_verbatim(self) -> None:
-        """--capture-raw-unsafe archives keep the original handshake, so the
-        recorded challenge goes out as recorded and the client is left to
-        answer it."""
+        """--capture-raw-unsafe archives keep the original handshake."""
         challenge = bytes(range(16))
         s2c = (
             VERSION_38

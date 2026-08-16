@@ -5,18 +5,8 @@
   - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
   - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
   - Protocol errors abort the session instead of only being logged, reported through the new ``RFBClient.vncProtocolError`` hook (@sibson, #345)
-  - Add ``vnclog --capture-raw FILE.zip`` for raw wire captures, written as one
-    upload-ready archive, for filing bug reports against servers we can't host.
-    The auth exchange is not redacted but stripped: the archive records a
-    synthetic ``none``-auth handshake in its place, so it holds no credential
-    bytes and replays without a password whatever the server demanded. An auth
-    type vncdotool cannot follow -- and so cannot find the end of -- aborts the
-    capture unless ``--capture-raw-unsafe`` is given, which records the
-    handshake whole. ``meta.json`` records which encodings the server actually
-    sent, and which security type the session really negotiated
-  - Add ``vncdo-replay``, which serves a capture back at a real VNC client
-    (``vncdo-replay --server FILE.zip``) or runs the session recorded inside
-    one (``vncdo-replay FILE.zip [CMD ...]``) (@sibson, #352)
+  - Add ``vnclog --capture-raw FILE.zip``, an upload-ready wire capture for filing bugs against servers we can't host. The auth exchange is stripped rather than redacted, so the archive holds no credential bytes and replays without a password; ``--capture-raw-unsafe`` records the handshake whole. See docs/capture.rst (@sibson, #352)
+  - Add ``vncdo-replay``, serving a capture back at a real client (``--server``) or running the session recorded inside it (@sibson, #352)
   - Add ``vnclog --one-shot``, serving a single session then exiting; implied
     by ``--capture-raw``
   - [BREAKING] ``vnclog --forever`` is renamed ``--file-per-client``. It never

@@ -1,13 +1,7 @@
-"""End-to-end test for the `vncdo-replay` CLI.
+"""End-to-end test for the `vncdo-replay` CLI, on a hand-built capture.
 
-No docker, no fleet: a hand-built capture is served by `vncdo-replay
---server` in its own process, `vncdo-replay` drives the client side from
-another, and the resulting PNG is checked pixel-exactly. Two processes
-rather than threads, because each runs its own Twisted reactor -- which is
-also why the tool is two commands rather than one.
-
-This is the only place replay meets a real client instead of a mocked
-transport; no recorded capture is ever replayed here.
+The only place replay meets a real client rather than a mocked transport.
+No docker, no fleet, and no recorded capture is ever replayed here.
 """
 
 from __future__ import annotations
@@ -40,11 +34,8 @@ def _pixel(r: int, g: int, b: int) -> bytes:
 
 
 def _build_s2c() -> bytes:
-    """greeting + pre-3.8 AuthTypes.NONE handshake + ServerInit + one raw FBU.
-
-    The shape a stripped capture has: `vnclog --capture-raw` writes a
-    none-auth handshake whatever the server demanded.
-    """
+    """greeting + pre-3.8 AuthTypes.NONE handshake + ServerInit + one raw FBU,
+    the shape `vnclog --capture-raw` writes whatever the server demanded."""
     auth_none = pack("!I", AuthTypes.NONE)
     server_init = pack("!HH16sI", WIDTH, HEIGHT, PIXEL_FORMAT.to_bytes(), 0)
     body = b"".join(_pixel(*p) for p in PIXELS)
@@ -121,8 +112,7 @@ class TestReplayEndToEnd(TestCase):
             self.assertEqual(image.getpixel((x, y)), want, f"pixel mismatch at ({x}, {y})")
 
     def test_a_plain_vncdo_can_take_the_client_side_instead(self) -> None:
-        """The two halves are separate processes so that anything can be the
-        client -- a GUI viewer, or vncdo driven by hand."""
+        """Anything can be the client: a GUI viewer, or vncdo by hand."""
         server = self._serve()
         out_png = self.tmp / "byhand.png"
         try:

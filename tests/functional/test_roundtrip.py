@@ -1,14 +1,8 @@
 """Capture and replay, joined: does what vnclog writes still decode the same?
 
-test_proxy.py checks a capture by reading the archive, test_replay.py
-checks replay against bytes the test itself built. A capture vnclog writes
-but replay cannot serve passes both.
-
-tigervnc demands a password, so this also covers the point of stripping:
-the archive it produces replays with no password at all.
-
-The two screenshots decode from the same recorded bytes, so they are
-identical by construction, not by the server holding still.
+A capture vnclog writes but replay cannot serve passes test_proxy.py and
+test_replay.py both. tigervnc demands a password; the archive of it does
+not, which is the point of stripping.
 """
 
 import subprocess

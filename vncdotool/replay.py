@@ -1,10 +1,6 @@
 """Serving a ``vnclog --capture-raw`` archive back at a real VNC client.
 
-The archive already describes a ``none``-auth session -- stripping happens
-at capture time, see :mod:`vncdotool.capture` -- so this is close to a byte
-pusher. What it does not do is push all the bytes at once: the handshake is
-a conversation, and the recorded framebuffer is finite and gets one chance
-to be useful. See ``docs/capture.rst``.
+See ``docs/capture.rst`` for what replay can and cannot reproduce.
 """
 
 from __future__ import annotations
@@ -42,20 +38,14 @@ class Capture(NamedTuple):
 
     @property
     def auth_preserved(self) -> bool:
-        """Was this recorded with ``--capture-raw-unsafe``?
-
-        Such an archive holds the original handshake, so it replays only to
-        a client configured the way the original one was.
-        """
+        """Recorded with ``--capture-raw-unsafe``, so the handshake is the real one."""
         return bool(self.meta and self.meta.get("auth") == "preserved")
 
 
 def load_capture(archive_path: str) -> Capture:
-    """Read ``s2c.bin`` (required), ``session.vdo`` and ``meta.json``
-    (optional) out of a ``vnclog --capture-raw`` zip archive.
+    """Read ``s2c.bin`` (required), ``session.vdo`` and ``meta.json`` (optional).
 
-    ``c2s.bin`` is evidence for a human, not input to replay: the live
-    client speaks for itself.
+    ``c2s.bin`` is evidence for a human: the live client speaks for itself.
     """
     if not os.path.isfile(archive_path):
         raise ValueError(f"{archive_path!r}: no such file")
@@ -79,16 +69,9 @@ def load_capture(archive_path: str) -> Capture:
         )
 
 
-def read_session_vdo(archive_path: str) -> bytes:
-    """The recorded session script, for the client half of the tool."""
-    return load_capture(archive_path).session_vdo
-
-
 def server_init_end(s2c_data: bytes, offset: int) -> Optional[int]:
-    """Where ServerInit ends: 24 fixed bytes plus the server's name.
-
-    None if the capture is too short to hold the whole thing.
-    """
+    """Where ServerInit ends: 24 fixed bytes plus the server's name, or None
+    if the capture is too short to hold it."""
     if len(s2c_data) < offset + 24:
         return None
     (name_len,) = unpack("!I", s2c_data[offset + 20 : offset + 24])
@@ -123,13 +106,7 @@ def client_message_length(buffer: bytes) -> int:
 
 
 def saw_update_request(buffer: bytearray) -> bool:
-    """Take whole client messages off `buffer` until one asks for a framebuffer.
-
-    A capture holds a finite recording, so the framebuffer bytes get exactly
-    one chance to be useful: sending them before the client has asked means
-    a client that asks a moment later waits for an update that already went
-    past it.
-    """
+    """Take whole client messages off `buffer` until one asks for a framebuffer."""
     while buffer:
         length = client_message_length(buffer)
         if length == UNKNOWN_MESSAGE:
@@ -152,12 +129,9 @@ def saw_update_request(buffer: bytearray) -> bool:
 class ReplayProtocol(Protocol):  # type: ignore[misc]
     """Play a recorded ``s2c.bin`` back at whatever connects.
 
-    The handshake goes out a step at a time, against the client's real
-    replies, because a client replies partway through and what it says next
-    depends on what it was sent. The steps come from HandshakeScrubber's
-    grammar, at the cost of reaching into its private ``_want`` state: if
-    that moves, this moves with it. Sharing the grammar with the capture
-    side is what keeps the two from drifting apart.
+    Paces the handshake off HandshakeScrubber's grammar, at the cost of
+    reaching into its private ``_want`` state: if that moves, this moves
+    with it. Sharing the grammar is what keeps replay and capture in step.
     """
 
     def connectionMade(self) -> None:
@@ -205,7 +179,12 @@ class ReplayProtocol(Protocol):  # type: ignore[misc]
         self._serve_session()
 
     def _serve_session(self) -> None:
-        """Send ServerInit, then hold the framebuffer until it is asked for."""
+        """Send ServerInit, then hold the framebuffer until it is asked for.
+
+        A capture records one finite screen, so those bytes get one chance:
+        sent before the client asked, they go past a client that asks a
+        moment later, which then waits forever.
+        """
         s2c = self.factory.capture.s2c
         # `scrubber.width` is set by parsing ServerInit, so its 24 fixed
         # bytes are behind `pos` and only the server name is still to come.
@@ -223,9 +202,8 @@ class ReplayProtocol(Protocol):  # type: ignore[misc]
             self.transport.write(remainder)
             self.pos = len(s2c)
         self.exhausted = True
-        # The connection stays open: the original server hung up because its
-        # client did, and closing here instead would cut short whatever the
-        # live client is still doing with the bytes it has.
+        # Left open: the original server hung up because its client did, and
+        # closing here would cut short what the live client is still doing.
         log.info("capture exhausted; holding the connection open until the client closes it")
 
     def expect(self, nbytes: int) -> None:

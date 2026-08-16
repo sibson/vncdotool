@@ -88,8 +88,7 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.security_types, [AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
 
     def test_a_failed_auth_stops_the_rewrite(self) -> None:
-        """A non-zero SecurityResult means no session followed, so there is
-        nothing to make replayable; record what happened."""
+        """No session followed, so there is nothing to make replayable."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -101,8 +100,7 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.s2c.feed(pack("!I", 1)), pack("!I", 1))
 
     def test_refused_connection_is_recorded_as_it_happened(self) -> None:
-        """Zero offered types is a refusal, not a session: nothing was
-        negotiated, so there is no handshake to rewrite."""
+        """Zero offered types is a refusal: nothing negotiated, nothing to rewrite."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -176,12 +174,8 @@ class TestHandshakeScrubber(TestCase):
         self.server_key = b"G" * key_len
 
     def test_ard_key_exchange_goes_with_the_credentials(self) -> None:
-        """The whole ARD exchange is dropped, DH values included.
-
-        They are public by construction and ARD bugs live in them, but a
-        `none` handshake has nowhere to put them; --capture-raw-unsafe is
-        how an ARD bug gets its key exchange into an archive.
-        """
+        """The whole ARD exchange goes, DH values included: they are public,
+        but a `none` handshake has nowhere to put them."""
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
 
@@ -228,8 +222,7 @@ class TestHandshakeScrubber(TestCase):
         self.assertIsNone(s.abort_reason)
 
     def test_no_credential_byte_survives_stripping(self) -> None:
-        """The point of stripping over redaction: the bytes are absent, not
-        zeroed, so the archive is shorter than the session that made it."""
+        """Absent, not zeroed."""
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
         s.s2c.feed(self.dh_params + self.modulus + self.server_key)
