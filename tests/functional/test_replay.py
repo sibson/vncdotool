@@ -1,6 +1,4 @@
-"""End-to-end test for the `vncdo-replay` CLI, on a hand-built capture.
-
-The only place replay meets a real client. No recorded capture is replayed."""
+"""The only place replay meets a real client. No recorded capture is replayed."""
 
 from __future__ import annotations
 
@@ -32,8 +30,7 @@ def _pixel(r: int, g: int, b: int) -> bytes:
 
 
 def _build_s2c() -> bytes:
-    """greeting + pre-3.8 AuthTypes.NONE handshake + ServerInit + one raw FBU,
-    the shape `vnclog --capture-raw` writes whatever the server demanded."""
+    """None-auth whatever the server demanded, as a stripped capture records it."""
     auth_none = pack("!I", AuthTypes.NONE)
     server_init = pack("!HH16sI", WIDTH, HEIGHT, PIXEL_FORMAT.to_bytes(), 0)
     body = b"".join(_pixel(*p) for p in PIXELS)

@@ -78,7 +78,6 @@ class TestCaptureReplayRoundtrip(TestCase):
             )
 
     def _start_replay(self) -> subprocess.Popen:
-        """Serve the capture, waiting until the port answers."""
         server = subprocess.Popen(
             [
                 "vncdo-replay", "--server", str(self.capture),

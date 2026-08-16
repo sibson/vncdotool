@@ -1,6 +1,4 @@
-"""Unit coverage for vncdotool.replay, the `vncdo-replay --server` half.
-
-`client_timeout=None` throughout: the stall warning would touch the reactor."""
+"""`client_timeout=None` throughout: the stall warning would touch the reactor."""
 
 from __future__ import annotations
 
@@ -31,12 +29,10 @@ NONE_33 = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480 + FRAMEB
 
 
 def written(protocol) -> bytes:
-    """Everything the protocol has sent, in order."""
     return b"".join(call.args[0] for call in protocol.transport.write.call_args_list)
 
 
 def start(s2c: bytes, **kwargs) -> replay.ReplayProtocol:
-    """Build a protocol on a mocked transport and open the connection."""
     factory = replay.ReplayFactory(
         capture=replay.Capture(s2c=s2c, session_vdo=b"", meta=None),
         client_timeout=None,
@@ -107,8 +103,6 @@ class TestLoadCapture(TestCase):
 
 
 class TestSawUpdateRequest(TestCase):
-    """Stepping over client messages to find the one that asks for a framebuffer."""
-
     def test_a_request_on_its_own(self) -> None:
         self.assertTrue(replay.saw_update_request(bytearray(UPDATE_REQUEST)))
 
@@ -141,8 +135,6 @@ class TestSawUpdateRequest(TestCase):
 
 
 class TestReplayProtocol(TestCase):
-    """The handshake goes out a step at a time, against the client's replies."""
-
     def test_greeting_goes_out_before_the_client_has_said_anything(self) -> None:
         protocol = start(NONE_38)
 

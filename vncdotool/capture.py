@@ -80,7 +80,6 @@ class HandshakeScrubber:
         self._advance(None)
 
     def _record(self, data: bytes) -> None:
-        """Record `data` in place of the chunk the handshake just read."""
         self._recording = data
 
     # -- driving the handshake state machine --------------------------------
@@ -137,8 +136,6 @@ class HandshakeScrubber:
                 break
             chunk = bytes(buf[:want.nbytes])
             del buf[:want.nbytes]
-            # What to record is decided by the handshake once it has seen
-            # the chunk -- which step this was is often only knowable then.
             self._recording = None
             self._advance(chunk)
             out += chunk if self._recording is None or self.preserve_auth else self._recording
@@ -229,8 +226,7 @@ class HandshakeScrubber:
             yield _Want(self.c2s, key_len)  # client public key
             self._record(b"")
         elif sectype not in (AuthTypes.NONE, AuthTypes.INVALID):
-            # No grammar for this type, so its exchange has no known end and
-            # cannot be skipped. Name it, and stop.
+            # No grammar for this type, so its exchange has no known end.
             looked_up = AuthTypes.lookup(sectype)
             name = getattr(looked_up, "name", None) or str(looked_up)
             self.unstrippable_auth = f"{name.lower().replace('_', '-')}({int(sectype)})"

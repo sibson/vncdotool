@@ -48,8 +48,6 @@ SERVER_INIT_640x480 = (
 
 
 class TestHandshakeScrubber(TestCase):
-    """The recorded handshake is a synthetic none-auth one, not the real one."""
-
     def test_vnc_auth_stripped_pre37(self) -> None:
         s = HandshakeScrubber()
         self.assertEqual(s.s2c.feed(VERSION_33), VERSION_33)
