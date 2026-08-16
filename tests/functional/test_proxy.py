@@ -9,6 +9,8 @@ import zipfile
 from pathlib import Path
 from unittest import TestCase
 
+from vncdotool.const import AuthTypes
+
 from .vncservers import DOCKER_SERVERS, HOST, VNCEV, port_open, run_vncdo
 
 TIGERVNC_AUTH = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
@@ -208,9 +210,7 @@ class TestVnclogCapture(TestCase):
 class TestVnclogCaptureVNCAuth(TestCase):
     """`vnclog --capture-raw FILE.zip` against tigervnc-auth.
 
-    The unit tests scrub a scripted challenge/response; only a live run
-    proves it against tigervnc's real handshake.
-    """
+    Only a live run proves the strip against a real handshake."""
 
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC_AUTH.port):
@@ -224,7 +224,7 @@ class TestVnclogCaptureVNCAuth(TestCase):
     def tearDown(self) -> None:
         _stop_proxy(self.proxy)
 
-    def test_capture_scrubs_vnc_auth_challenge_and_response(self) -> None:
+    def test_capture_strips_the_vnc_auth_handshake(self) -> None:
         proxied = TIGERVNC_AUTH._replace(port=CAPTURE_AUTH_PROXY_PORT)
         result = run_vncdo(proxied, "key", "z")
         self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
@@ -241,23 +241,19 @@ class TestVnclogCaptureVNCAuth(TestCase):
         self.assertTrue(s2c.startswith(b"RFB "), f"s2c.bin did not start with the server greeting: {s2c[:16]!r}")
         self.assertTrue(c2s.startswith(b"RFB "), f"c2s.bin did not start with the client's version reply: {c2s[:16]!r}")
 
-        # More than the handshake: post-auth client traffic proves nothing
-        # truncated the recording at the auth exchange.
-        HANDSHAKE_ONLY = 12 + 1 + 16
+        # Greeting (12) + none-auth choice (1) + ClientInit (1): the whole
+        # handshake with zero post-auth traffic.
+        HANDSHAKE_ONLY = 12 + 1 + 1
         self.assertGreater(
             len(c2s), HANDSHAKE_ONLY, f"c2s.bin looks truncated at the handshake: {len(c2s)} bytes: {c2s!r}"
         )
 
-        # The challenge sits at a fixed offset too: 12-byte greeting, the
-        # count of security types, the one type on offer, then the 16 bytes
-        # that must have been zeroed.
-        self.assertEqual(s2c[14:30], bytes(16), f"auth challenge was not scrubbed: {s2c[:32]!r}")
-
-        # The response sits at a fixed offset on the 3.8 path: 12-byte
-        # version reply, 1-byte security type, then the 16 bytes that must
-        # have been zeroed.
-        self.assertEqual(c2s[13:29], bytes(16), f"auth response was not scrubbed: {c2s[:32]!r}")
-        self.assertIsNone(meta.get("unscrubbable_auth"))
+        # Negotiated VNC auth; recorded as none-auth, with no challenge or response.
+        self.assertEqual(meta["security_type"], int(AuthTypes.VNC_AUTHENTICATION))
+        self.assertEqual(meta["auth"], "stripped")
+        self.assertEqual(s2c[12:14], bytes([1, AuthTypes.NONE]), f"handshake was not stripped: {s2c[:32]!r}")
+        self.assertEqual(s2c[14:18], bytes(4), f"SecurityResult missing after the strip: {s2c[:32]!r}")
+        self.assertEqual(c2s[12:14], bytes([AuthTypes.NONE, 1]), f"handshake was not stripped: {c2s[:32]!r}")
 
         self.assertIn("keydown z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")
         self.assertIn("keyup z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")

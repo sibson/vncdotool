@@ -88,7 +88,7 @@ supersedes this section's original sketch on several points. Summary:
   containerized **LibVNCServer examples**; later noVNC/websockify,
   wayvnc. The native libvncserver source build and the pexpect harness
   are retired.
-- The capture kit (`vncdolog --capture`, scrub-at-capture) plus an
+- The capture kit (`vnclog --capture-raw`, strip-at-capture) plus an
   in-repo replay tool cover servers we cannot host — discovery evidence,
   not CI fixtures.
 - A generated `docs/compatibility.rst` is **not** a requirement; the CI
@@ -278,13 +278,13 @@ community, so contributing a capture must be a paved road (detailed in
    client (or a `vncdo` script) and their server; out comes a capture
    directory — `session.vdo`, raw `s2c.bin`/`c2s.bin` streams, and
    `meta.json` (server version string, security types offered, geometry).
-   The proxy scrubs secrets by construction: password bytes and auth
-   challenges/responses are redacted at capture time, never trusted to
-   manual editing.
+   The proxy removes secrets by construction: the auth exchange is stripped
+   at capture time and a `none`-auth handshake recorded in its place, never
+   trusted to manual editing.
 2. **Submit**: attach the capture to a "compatibility bug" or "server
    report" issue. Captures are issue-thread evidence, not repo fixtures.
 3. **Distill**: a maintainer replays the capture at the real client with
-   the in-repo replay tool (`tests/tools/replay_server.py`), finds the
+   the in-repo replay tool (`vncdo-replay`), finds the
    bug, and lands a byte-level unit test — that test, not the capture,
    is the permanent regression guard.
 

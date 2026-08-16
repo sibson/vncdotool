@@ -305,6 +305,40 @@ def run_vncdo(
         ) from exc
 
 
+def start_replay_server(
+    testcase: TestCase, archive: Path, port: int, deadline: float = 10.0
+) -> subprocess.Popen:
+    """Start `vncdo-replay --server ARCHIVE --listen PORT --forever`, cleanup registered.
+
+    Fails fast, with its stderr, if the process exits before listening."""
+    try:
+        server = subprocess.Popen(
+            ["vncdo-replay", "--server", str(archive), "--listen", str(port), "--forever"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise AssertionError(
+            "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
+            "so its console script is available"
+        ) from exc
+    testcase.addCleanup(server.kill)
+    testcase.addCleanup(server.stdout.close)
+    testcase.addCleanup(server.stderr.close)
+
+    deadline_at = time.monotonic() + deadline
+    while time.monotonic() < deadline_at:
+        if server.poll() is not None:
+            testcase.fail(f"vncdo-replay --server exited before listening; stderr:\n{server.stderr.read()}")
+        if port_open(HOST, port):
+            return server
+        time.sleep(0.2)
+    server.kill()
+    testcase.fail(f"vncdo-replay --server never listened on {port}: {server.communicate()[1]}")
+
+
 class _VNCServerTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 

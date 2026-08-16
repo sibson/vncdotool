@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import os.path
+import shlex
 import socket
 import sys
 import time
@@ -309,7 +310,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         if self.factory.capture_path:
             self.capture = CaptureWriter(
                 server=self.factory.server_address,
-                scrubber=HandshakeScrubber(allow_unsafe_auth=self.factory.capture_unsafe_auth),
+                scrubber=HandshakeScrubber(preserve_auth=self.factory.capture_preserve_auth),
             )
 
     def connectionLost(self, reason: Failure) -> None:
@@ -407,7 +408,9 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
-        rev = REVERSE_MAP.get(key, chr(key))
+        # Unmapped keysyms fall back to a raw char (', ", #, \) that shlex
+        # would otherwise treat as quoting or a comment on replay.
+        rev = shlex.quote(REVERSE_MAP.get(key, chr(key)))
 
         cmds = ["pause", "%.4f" % (now - self.last_event)]
         self.last_event = now
@@ -461,7 +464,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     session_taken: bool = False
 
     capture_path: str | None = None
-    capture_unsafe_auth: bool = False
+    capture_preserve_auth: bool = False
     # Aborted or unwritable: read by the CLI to pick a non-zero exit status.
     capture_failed: bool = False
     server_address: str = ""
