@@ -191,6 +191,29 @@ class TestHandshakeScrubber(TestCase):
         rest = b"some-server-name-bytes"
         self.assertEqual(s.s2c.feed(rest), rest)
 
+    def test_named_server_init_name_is_consumed_by_the_grammar(self) -> None:
+        """The grammar reads the name itself now, rather than ending at the
+        24 fixed ServerInit bytes and leaving the name for passthrough."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.NONE]))
+        s.c2s.feed(bytes([AuthTypes.NONE]))
+        s.s2c.feed(SECURITY_RESULT_OK)
+        s.c2s.feed(b"\x01")
+
+        named_init = SERVER_INIT_640x480[:-4] + pack("!I", 4)
+        self.assertEqual(s.s2c.feed(named_init), named_init)
+        self.assertEqual(s.width, 640)
+        self.assertEqual(s.height, 480)
+        self.assertEqual(s.waiting(), ("s2c", 4))
+
+        self.assertEqual(s.s2c.feed(b"NAME"), b"NAME")
+        self.assertIsNone(s.waiting())
+
+        rest = b"framebuffer-bytes-follow"
+        self.assertEqual(s.s2c.feed(rest), rest)
+
     def _ard_to_credentials(self, s: HandshakeScrubber, key_len: int = 8) -> None:
         """Drive an ARD handshake up to the client's credential block."""
         s.s2c.feed(VERSION_38)
@@ -334,6 +357,21 @@ class TestHandshakeScrubber(TestCase):
 
         self.assertEqual(s.s2c.flush(), b"")
         self.assertEqual(s.c2s.flush(), b"")
+
+    def test_flush_drops_a_partial_server_name(self) -> None:
+        """The grammar now watches the name too, so a connection dropped
+        mid-name is still mid-rewrite and loses the partial bytes."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.NONE]))
+        s.c2s.feed(bytes([AuthTypes.NONE]))
+        s.s2c.feed(SECURITY_RESULT_OK)
+        s.c2s.feed(b"\x01")
+        s.s2c.feed(SERVER_INIT_640x480[:-4] + pack("!I", 4))
+        s.s2c.feed(b"NA")  # connection drops mid-name
+
+        self.assertEqual(s.s2c.flush(), b"")
 
     def test_flush_emits_pending_bytes_once_the_rewrite_has_finished(self) -> None:
         """Once the handshake generator has run to completion there is no

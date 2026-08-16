@@ -108,6 +108,12 @@ class HandshakeScrubber:
             "password you rotate afterwards, if you need this session captured."
         )
 
+    def waiting(self) -> tuple[str, int] | None:
+        """Direction ("s2c"/"c2s") and byte count the grammar is waiting on next, or None once the handshake is complete."""
+        if self._want is None:
+            return None
+        return (self._want.tap.name, self._want.nbytes)
+
     def _waiting_on(self, tap: Tap) -> _Want | None:
         """What the handshake wants from `tap`, if it is watching it at all."""
         if self._gen is None or self._want is None or self._want.tap is not tap:
@@ -258,7 +264,12 @@ class HandshakeScrubber:
         server_init = yield _Want(self.s2c, 24)
         self.width, self.height = unpack("!HH", server_init[:4])
 
-        # Server name follows; nothing past it carries a tracked secret.
+        # Server name follows; nothing in it is a tracked secret, so the
+        # default (verbatim) recording applies once it is read.
+        (name_len,) = unpack("!I", server_init[20:24])
+        if name_len:
+            yield _Want(self.s2c, name_len)
+
         return
 
 

@@ -20,12 +20,14 @@ SERVER_INIT_640x480 = (
     b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
     b"\x00\x00\x00\x00"  # name-len=0
 )
+SERVER_INIT_NAMED = SERVER_INIT_640x480[:-4] + pack("!I", 4) + b"NAME"
 FRAMEBUFFER = b"THE-RECORDED-FRAMEBUFFER"
 UPDATE_REQUEST = pack("!BBHHHH", MsgC2S.FRAMEBUFFER_UPDATE_REQUEST, 0, 0, 0, 640, 480)
 
 # What a stripped capture holds: a none-auth handshake and then the session.
 NONE_38 = VERSION_38 + bytes([1, AuthTypes.NONE]) + pack("!I", 0) + SERVER_INIT_640x480 + FRAMEBUFFER
 NONE_33 = VERSION_33 + pack("!I", AuthTypes.NONE) + SERVER_INIT_640x480 + FRAMEBUFFER
+NONE_38_NAMED = VERSION_38 + bytes([1, AuthTypes.NONE]) + pack("!I", 0) + SERVER_INIT_NAMED + FRAMEBUFFER
 
 
 def written(protocol) -> bytes:
@@ -190,6 +192,20 @@ class TestReplayProtocol(TestCase):
         protocol.dataReceived(UPDATE_REQUEST)
         self.assertEqual(written(protocol), NONE_33)
 
+    def test_a_named_server_is_served_through_the_name_before_the_framebuffer(self) -> None:
+        """The grammar now ends after the server name, not the 24 fixed
+        ServerInit bytes; a name-len=0 fixture alone would never catch a
+        pacing offset that only shows up once a name is present."""
+        protocol = start(NONE_38_NAMED)
+
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.NONE]))
+        protocol.dataReceived(b"\x01")  # ClientInit, shared=1
+        self.assertEqual(written(protocol), NONE_38_NAMED[: -len(FRAMEBUFFER)])
+
+        protocol.dataReceived(UPDATE_REQUEST)
+        self.assertEqual(written(protocol), NONE_38_NAMED)
+
     def test_an_exhausted_capture_leaves_the_connection_to_the_client(self) -> None:
         """An exhausted capture does not hang up; the client closes when it is done."""
         protocol = start(NONE_33)
@@ -210,6 +226,26 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), b"RFB 003.")
         protocol.dataReceived(VERSION_38)
         self.assertEqual(written(protocol), b"RFB 003.")
+
+    def test_a_capture_truncated_mid_name_sends_what_there_is_and_stops(self) -> None:
+        """The grammar now watches the server name too, so a capture cut off
+        inside it must stop cleanly rather than wait forever for the rest."""
+        cut_short = (
+            VERSION_38
+            + bytes([1, AuthTypes.NONE])
+            + pack("!I", 0)
+            + SERVER_INIT_640x480[:-4]
+            + pack("!I", 4)
+            + b"NA"  # only half the 4-byte name arrived
+        )
+        protocol = start(cut_short)
+
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.NONE]))
+        protocol.dataReceived(b"\x01")  # ClientInit, shared=1
+
+        self.assertEqual(written(protocol), cut_short)
+        self.assertTrue(protocol.exhausted)
 
     def test_a_preserved_auth_capture_is_served_verbatim(self) -> None:
         """--capture-raw-unsafe archives keep the original handshake."""
@@ -318,18 +354,3 @@ class TestVersionMatch(TestCase):
 
         self.assertEqual(written(protocol), NONE_38)
         protocol.transport.loseConnection.assert_not_called()
-
-
-class TestServerInitEnd(TestCase):
-    def test_a_named_server_pushes_the_boundary_out(self) -> None:
-        named = SERVER_INIT_640x480[:-4] + pack("!I", 4) + b"NAME"
-
-        self.assertEqual(replay.server_init_end(named, 0), 28)
-
-    def test_a_capture_cut_short_of_the_name_has_no_boundary(self) -> None:
-        named = SERVER_INIT_640x480[:-4] + pack("!I", 4) + b"NA"
-
-        self.assertIsNone(replay.server_init_end(named, 0))
-
-    def test_a_capture_cut_short_of_server_init_has_no_boundary(self) -> None:
-        self.assertIsNone(replay.server_init_end(SERVER_INIT_640x480[:10], 0))

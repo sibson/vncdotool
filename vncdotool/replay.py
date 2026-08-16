@@ -73,16 +73,6 @@ def load_capture(archive_path: str) -> Capture:
         )
 
 
-def server_init_end(s2c_data: bytes, offset: int) -> Optional[int]:
-    """Where ServerInit ends: 24 fixed bytes plus the server's name, or None
-    if the capture is too short to hold it."""
-    if len(s2c_data) < offset + 24:
-        return None
-    (name_len,) = unpack("!I", s2c_data[offset + 20 : offset + 24])
-    end = offset + 24 + name_len
-    return end if len(s2c_data) >= end else None
-
-
 def client_message_length(buffer: bytes) -> int:
     """Size of the client message at the head of `buffer`, or ``NEED_MORE`` /
     ``UNKNOWN_MESSAGE`` if it cannot be measured yet, or at all."""
@@ -134,8 +124,8 @@ def saw_update_request(buffer: bytearray) -> bool:
 
 
 class ReplayProtocol(Protocol):
-    """Play a recorded ``s2c.bin`` back at whatever connects, paced off
-    HandshakeScrubber so the two cannot drift apart."""
+    """Play a recorded ``s2c.bin`` back at whatever connects, paced through
+    HandshakeScrubber's public contract: ``waiting()`` plus ``s2c.feed()``/``c2s.feed()``."""
 
     def connectionMade(self) -> None:
         self.buffer = bytearray()
@@ -167,9 +157,9 @@ class ReplayProtocol(Protocol):
         if self.exhausted:
             return
         scrubber = self.scrubber
-        while scrubber._want is not None:
-            tap, nbytes = scrubber._want
-            if tap is scrubber.s2c:
+        while (waiting := scrubber.waiting()) is not None:
+            direction, nbytes = waiting
+            if direction == "s2c":
                 chunk = self.factory.capture.s2c[self.pos : self.pos + nbytes]
                 if len(chunk) < nbytes:
                     # Truncated capture: leave the short remainder to the
@@ -177,14 +167,14 @@ class ReplayProtocol(Protocol):
                     break
                 self.transport.write(chunk)
                 self.pos += nbytes
-                tap.feed(chunk)
+                scrubber.s2c.feed(chunk)
             else:
                 if len(self.buffer) < nbytes:
                     self.expect(nbytes)
                     return
                 chunk = bytes(self.buffer[:nbytes])
                 del self.buffer[:nbytes]
-                tap.feed(chunk)
+                scrubber.c2s.feed(chunk)
                 if self._version_mismatch():
                     return
         self._serve_session()
@@ -210,21 +200,18 @@ class ReplayProtocol(Protocol):
         return True
 
     def _serve_session(self) -> None:
-        """Send ServerInit, then hold the framebuffer until it is asked for."""
+        """Hold the framebuffer until the client asks for one."""
         s2c = self.factory.capture.s2c
-        # `scrubber.width` is set by parsing ServerInit, so its 24 fixed
-        # bytes are behind `pos` and only the server name is still to come.
-        if not self.awaiting_request and self.scrubber.width is not None:
-            end = server_init_end(s2c, self.pos - 24)
-            if end is not None:
-                self.transport.write(s2c[self.pos : end])
-                self.pos = end
-                self.awaiting_request = True
+        handshake_done = self.scrubber.waiting() is None
+        # `advance` already wrote everything through the server name; here
+        # we only gate on the update request once the grammar has finished.
+        if not self.awaiting_request and handshake_done and self.scrubber.width is not None:
+            self.awaiting_request = True
         if self.awaiting_request and not saw_update_request(self.buffer):
             self.expect(10)
             return
         remainder = s2c[self.pos :]
-        if remainder and self.scrubber._want is None and self.scrubber.width is None:
+        if remainder and handshake_done and self.scrubber.width is None:
             log.warning(
                 "could not pace %s past the handshake; serving the rest of the "
                 "capture unpaced, which may desync a client that hasn't caught up",
