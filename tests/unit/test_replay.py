@@ -11,7 +11,7 @@ from struct import pack
 from unittest import TestCase, mock
 
 from vncdotool import replay
-from vncdotool.const import AuthTypes, MsgC2S
+from vncdotool.const import AuthTypes, MsgC2S, QemuClientMessage
 
 VERSION_33 = b"RFB 003.003\n"
 VERSION_38 = b"RFB 003.008\n"
@@ -32,10 +32,10 @@ def written(protocol) -> bytes:
     return b"".join(call.args[0] for call in protocol.transport.write.call_args_list)
 
 
-def start(s2c: bytes, **kwargs) -> replay.ReplayProtocol:
+def start(s2c: bytes, meta: dict | None = None, client_timeout: float | None = None, **kwargs) -> replay.ReplayProtocol:
     factory = replay.ReplayFactory(
-        capture=replay.Capture(s2c=s2c, session_vdo=b"", meta=None),
-        client_timeout=None,
+        capture=replay.Capture(s2c=s2c, session_vdo=b"", meta=meta),
+        client_timeout=client_timeout,
         **kwargs,
     )
     protocol = factory.buildProtocol(("127.0.0.1", 0))
@@ -133,6 +133,15 @@ class TestSawUpdateRequest(TestCase):
         with self.assertLogs(replay.log, "WARNING"):
             self.assertTrue(replay.saw_update_request(bytearray([MsgC2S.FILE_TRANSFER, 0])))
 
+    def test_a_qemu_extended_key_event_is_stepped_over(self) -> None:
+        qemu_extended_key_event = pack(
+            "!BBHII", MsgC2S.QEMU_CLIENT_MESSAGE, QemuClientMessage.EXTENDED_KEY_EVENT, 1, 0x61, 30
+        )
+        buffer = bytearray(qemu_extended_key_event + UPDATE_REQUEST)
+
+        self.assertTrue(replay.saw_update_request(buffer))
+        self.assertEqual(bytes(buffer), b"")
+
 
 class TestReplayProtocol(TestCase):
     def test_greeting_goes_out_before_the_client_has_said_anything(self) -> None:
@@ -167,9 +176,7 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), NONE_33)
 
     def test_framebuffer_waits_for_the_client_to_ask_for_one(self) -> None:
-        """A capture holds one finite recording of the framebuffer, so sending
-        it before the client asked means the client that asks a moment later
-        waits for an update that already went past it."""
+        """The recorded framebuffer is held back until a FramebufferUpdateRequest arrives."""
         protocol = start(NONE_33)
 
         protocol.dataReceived(VERSION_33)
@@ -184,9 +191,7 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), NONE_33)
 
     def test_an_exhausted_capture_leaves_the_connection_to_the_client(self) -> None:
-        """Hanging up here would cut short whatever the client is still doing
-        with the bytes it has; the original server only closed because its
-        own client did."""
+        """An exhausted capture does not hang up; the client closes when it is done."""
         protocol = start(NONE_33)
 
         protocol.dataReceived(VERSION_33)
@@ -223,6 +228,96 @@ class TestReplayProtocol(TestCase):
         protocol.dataReceived(bytes([AuthTypes.VNC_AUTHENTICATION]))
 
         self.assertIn(challenge, written(protocol))
+
+    def test_an_unfollowable_auth_type_cannot_be_paced_so_the_remainder_is_served_unpaced(self) -> None:
+        """A preserved archive whose auth type has no grammar can't be paced past the
+        handshake; the remainder still goes out, with a warning, instead of hanging."""
+        s2c = VERSION_38 + bytes([1, AuthTypes.TIGHT]) + b"UNPACED-REMAINDER"
+        protocol = start(s2c)
+
+        protocol.dataReceived(VERSION_38)
+        with self.assertLogs(replay.log, "WARNING"):
+            protocol.dataReceived(bytes([AuthTypes.TIGHT]))
+
+        self.assertIn(b"UNPACED-REMAINDER", written(protocol))
+
+    def test_data_received_after_exhaustion_does_not_grow_the_buffer(self) -> None:
+        protocol = start(NONE_33)
+        protocol.dataReceived(VERSION_33)
+        protocol.dataReceived(b"\x01")
+        protocol.dataReceived(UPDATE_REQUEST)
+        self.assertTrue(protocol.exhausted)
+
+        protocol.dataReceived(pack("!BBHH", MsgC2S.POINTER_EVENT, 0, 0, 0))
+
+        self.assertEqual(protocol.buffer, bytearray())
+
+    def test_a_zero_client_timeout_disables_the_stall_warning(self) -> None:
+        protocol = start(NONE_38, client_timeout=0)
+
+        with mock.patch.object(replay.reactor, "callLater") as call_later:
+            protocol.expect(10)
+
+        call_later.assert_not_called()
+
+    def test_a_connection_that_never_sent_bytes_does_not_stop_the_reactor(self) -> None:
+        """A port-poll readiness probe (connect, close, no bytes) must not kill a
+        one-shot server before the real client connects."""
+        protocol = start(NONE_38)
+
+        with (
+            mock.patch.object(replay.reactor, "running", True),
+            mock.patch.object(replay.reactor, "stop") as stop,
+        ):
+            protocol.connectionLost()
+
+        stop.assert_not_called()
+
+    def test_a_connection_that_sent_bytes_stops_the_reactor(self) -> None:
+        protocol = start(NONE_38)
+        protocol.dataReceived(VERSION_38)
+
+        with (
+            mock.patch.object(replay.reactor, "running", True),
+            mock.patch.object(replay.reactor, "stop") as stop,
+        ):
+            protocol.connectionLost()
+
+        stop.assert_called_once()
+
+
+class TestVersionMatch(TestCase):
+    def test_a_version_mismatch_between_the_live_client_and_the_capture_closes_the_connection(self) -> None:
+        """The archive's shape is fixed to the version the ORIGINAL client negotiated;
+        a live client replying with a different version would otherwise desync it."""
+        protocol = start(NONE_38, meta={"negotiated_version": [3, 8]})
+
+        with self.assertLogs(replay.log, "ERROR"):
+            protocol.dataReceived(VERSION_33)
+
+        protocol.transport.loseConnection.assert_called_once()
+
+    def test_a_version_match_proceeds_as_normal(self) -> None:
+        protocol = start(NONE_38, meta={"negotiated_version": [3, 8]})
+
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.NONE]))
+        protocol.dataReceived(b"\x01")
+        protocol.dataReceived(UPDATE_REQUEST)
+
+        self.assertEqual(written(protocol), NONE_38)
+        protocol.transport.loseConnection.assert_not_called()
+
+    def test_an_archive_without_a_recorded_version_paces_off_the_live_reply(self) -> None:
+        protocol = start(NONE_38)
+
+        protocol.dataReceived(VERSION_38)
+        protocol.dataReceived(bytes([AuthTypes.NONE]))
+        protocol.dataReceived(b"\x01")
+        protocol.dataReceived(UPDATE_REQUEST)
+
+        self.assertEqual(written(protocol), NONE_38)
+        protocol.transport.loseConnection.assert_not_called()
 
 
 class TestServerInitEnd(TestCase):

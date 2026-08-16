@@ -6,7 +6,6 @@ import pathlib
 import socket
 import subprocess
 import tempfile
-import time
 import zipfile
 from struct import pack
 from unittest import TestCase
@@ -16,11 +15,12 @@ from PIL import Image
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 from vncdotool.rfb import PixelFormat
 
+from .vncservers import start_replay_server
+
 PIXEL_FORMAT = PixelFormat()
 WIDTH, HEIGHT = 2, 2
 PIXELS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
 GREETING = b"RFB 003.003\n"
-LISTEN_TIMEOUT = 10
 CLIENT_TIMEOUT = 20
 EXIT_TIMEOUT = 10
 
@@ -45,16 +45,6 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def _wait_until_listening(port: int, deadline: float) -> bool:
-    while time.monotonic() < deadline:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=0.5):
-                return True
-        except OSError:
-            time.sleep(0.1)
-    return False
-
-
 class TestReplayEndToEnd(TestCase):
     def setUp(self) -> None:
         self.tmp = pathlib.Path(tempfile.mkdtemp())
@@ -65,23 +55,9 @@ class TestReplayEndToEnd(TestCase):
         self.port = _free_port()
 
     def _serve(self) -> subprocess.Popen:
-        # --forever, so the readiness probe below is just another client
-        # rather than the one connection this server had to give.
-        argv = ["vncdo-replay", "--server", str(self.archive), "--listen", str(self.port), "--forever"]
-        try:
-            server = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        except FileNotFoundError as exc:
-            raise AssertionError(
-                "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
-                "so its console script is available"
-            ) from exc
-        self.addCleanup(server.kill)
-        self.addCleanup(server.stdout.close)
-        self.addCleanup(server.stderr.close)
-        if not _wait_until_listening(self.port, time.monotonic() + LISTEN_TIMEOUT):
-            server.kill()
-            self.fail(f"vncdo-replay --server never listened on {self.port}: {server.communicate()[1]}")
-        return server
+        # --forever: the readiness probe is just another client, not the
+        # one connection this server had to give.
+        return start_replay_server(self, self.archive, self.port)
 
     def test_recorded_session_replays_and_decodes_expected_pixels(self) -> None:
         server = self._serve()

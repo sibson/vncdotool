@@ -241,9 +241,9 @@ class TestVnclogCaptureVNCAuth(TestCase):
         self.assertTrue(s2c.startswith(b"RFB "), f"s2c.bin did not start with the server greeting: {s2c[:16]!r}")
         self.assertTrue(c2s.startswith(b"RFB "), f"c2s.bin did not start with the client's version reply: {c2s[:16]!r}")
 
-        # More than the handshake: post-auth client traffic proves nothing
-        # truncated the recording at the auth exchange.
-        HANDSHAKE_ONLY = 12 + 1
+        # Greeting (12) + none-auth choice (1) + ClientInit (1): the whole
+        # handshake with zero post-auth traffic.
+        HANDSHAKE_ONLY = 12 + 1 + 1
         self.assertGreater(
             len(c2s), HANDSHAKE_ONLY, f"c2s.bin looks truncated at the handshake: {len(c2s)} bytes: {c2s!r}"
         )

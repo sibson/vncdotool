@@ -96,6 +96,37 @@ class TestHandshakeScrubber(TestCase):
 
         self.assertEqual(s.s2c.feed(pack("!I", 1)), pack("!I", 1))
 
+    def test_failed_auth_pre37_records_no_security_result(self) -> None:
+        """Pre-3.8 `none` has no SecurityResult slot; recording a real
+        failure there would leave the archive unparseable."""
+        s = HandshakeScrubber()
+        s2c = bytearray()
+        s2c += s.s2c.feed(VERSION_33)
+        s.c2s.feed(VERSION_33)
+        auth_announce = b"\x00\x00\x00" + bytes([AuthTypes.VNC_AUTHENTICATION])
+        s2c += s.s2c.feed(auth_announce)
+        s2c += s.s2c.feed(CHALLENGE)
+        s.c2s.feed(RESPONSE)
+        s2c += s.s2c.feed(pack("!I", 1))  # auth failed
+
+        self.assertEqual(bytes(s2c), VERSION_33 + NONE_AUTH_33)
+
+    def test_failed_auth_37_records_no_security_result(self) -> None:
+        """3.7 negotiates security types via the list, but SecurityResult
+        itself is a 3.8 addition, so the rewritten `none` still lacks it."""
+        s = HandshakeScrubber()
+        version_37 = b"RFB 003.007\n"
+        s2c = bytearray()
+        s2c += s.s2c.feed(version_37)
+        s.c2s.feed(version_37)
+        s2c += s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s2c += s.s2c.feed(CHALLENGE)
+        s.c2s.feed(RESPONSE)
+        s2c += s.s2c.feed(pack("!I", 1))  # auth failed
+
+        self.assertEqual(bytes(s2c), version_37 + NONE_OFFER)
+
     def test_refused_connection_is_recorded_as_it_happened(self) -> None:
         """Zero offered types is a refusal: nothing negotiated, nothing to rewrite."""
         s = HandshakeScrubber()
@@ -227,6 +258,18 @@ class TestHandshakeScrubber(TestCase):
         credentials = b"\xab" * ARD_CREDENTIALS_LEN
         self.assertEqual(s.c2s.feed(credentials), b"")
 
+    def test_forgetting_to_record_inside_auth_still_fails_closed(self) -> None:
+        """A step that omits its _record call during the auth exchange must
+        not leak the raw chunk; simulate that omission directly."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION]))
+
+        with mock.patch.object(s, "_record"):
+            self.assertEqual(s.s2c.feed(CHALLENGE), b"")
+
     def test_unstrippable_auth_aborts_by_default(self) -> None:
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
@@ -276,7 +319,10 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.s2c.flush(), b"", "a half-collected secret must never be flushed in the clear")
         self.assertEqual(s.c2s.flush(), b"")
 
-    def test_flush_emits_pending_non_secret(self) -> None:
+    def test_flush_drops_pending_bytes_mid_rewrite_even_when_not_secret(self) -> None:
+        """A partial SecurityResult has no slot in the rewritten grammar
+        either, so it is dropped alongside genuine partial secrets.
+        """
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -286,8 +332,33 @@ class TestHandshakeScrubber(TestCase):
         s.c2s.feed(RESPONSE)
         s.s2c.feed(SECURITY_RESULT_OK[:2])  # connection drops mid-result, not a secret
 
-        self.assertEqual(s.s2c.flush(), SECURITY_RESULT_OK[:2])
+        self.assertEqual(s.s2c.flush(), b"")
         self.assertEqual(s.c2s.flush(), b"")
+
+    def test_flush_emits_pending_bytes_once_the_rewrite_has_finished(self) -> None:
+        """Once the handshake generator has run to completion there is no
+        grammar left to violate, so anything still buffered flushes."""
+        s = HandshakeScrubber()
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.NONE]))
+        s.c2s.feed(bytes([AuthTypes.NONE]))
+        s.s2c.feed(SECURITY_RESULT_OK)
+        s.c2s.feed(b"\x01")
+        s.s2c.feed(SERVER_INIT_640x480)
+
+        s.s2c.pending += b"trailing-server-name-bytes"
+        self.assertEqual(s.s2c.flush(), b"trailing-server-name-bytes")
+
+    def test_flush_emits_pending_bytes_when_auth_is_preserved(self) -> None:
+        s = HandshakeScrubber(preserve_auth=True)
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_38)
+        s.s2c.feed(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
+        s.c2s.feed(bytes([AuthTypes.VNC_AUTHENTICATION]))
+        s.s2c.feed(CHALLENGE[:6])  # connection drops mid-challenge
+
+        self.assertEqual(s.s2c.flush(), CHALLENGE[:6])
 
 
 class TestCheckCaptureTarget(TestCase):
@@ -361,6 +432,7 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(meta["server"], "host::5900")
         self.assertEqual(meta["vncdotool_version"], "9.9.9")
         self.assertEqual(meta["protocol_version"], "RFB 003.003")
+        self.assertEqual(meta["negotiated_version"], [3, 3])
         self.assertEqual(meta["security_types"], [AuthTypes.VNC_AUTHENTICATION])
         self.assertEqual(meta["security_type"], AuthTypes.VNC_AUTHENTICATION)
         self.assertEqual(meta["auth"], "stripped")
@@ -385,6 +457,7 @@ class TestCaptureWriter(TestCase):
 
         cw.write_archive(self.archive, cw.meta("9.9.9"))
         meta = self.read_meta()
+        self.assertEqual(meta["negotiated_version"], [3, 8])
         self.assertEqual(meta["security_types"], [AuthTypes.NONE])
         self.assertEqual(meta["geometry"], {"width": 640, "height": 480})
 
@@ -401,6 +474,12 @@ class TestCaptureWriter(TestCase):
         self.assertIsNone(cw.abort_reason, "the opt-in must not abort")
         self.assertIn("tight", cw.scrubber.unstrippable_auth)
         self.assertEqual(cw.meta("9.9.9")["auth"], "preserved")
+
+    def test_meta_negotiated_version_absent_before_negotiation(self) -> None:
+        cw = CaptureWriter(server="host::5900")
+        cw.feed_s2c(VERSION_38)  # greeting only; the client reply never arrives
+
+        self.assertIsNone(cw.meta("9.9.9")["negotiated_version"])
 
     def test_encodings_seen_recorded_in_meta(self) -> None:
         """What the server actually sent, named where we know the name."""

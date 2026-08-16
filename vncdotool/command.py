@@ -16,7 +16,6 @@ import logging.handlers
 import optparse
 import os
 import shlex
-import shutil
 import socket
 import sys
 import tempfile
@@ -38,6 +37,7 @@ from .client import (
     factory_connect,
 )
 from .loggingproxy import VNCLoggingServerFactory
+from .replay import Capture
 
 log = logging.getLogger()
 
@@ -541,7 +541,7 @@ def vnclog() -> None:
     sys.exit(reactor.exit_status)
 
 
-def vncdo() -> None:
+def vncdo(argv: list[str] | None = None) -> None:
     from vncdotool import __version__
 
     usage = "%prog [options] CMD CMDARGS|-|filename"
@@ -601,7 +601,7 @@ def vncdo() -> None:
         help='set the "incremental" flag',
     )
 
-    options, args = op.parse_args()
+    options, args = op.parse_args(args=argv)
     if not len(args):
         op.error("no command provided")
 
@@ -673,6 +673,12 @@ def vncdo_replay() -> None:
         help="client mode: the replay server to drive the session against [%default]",
     )
     op.add_option(
+        "-p",
+        "--password",
+        help="client mode: password for a --capture-raw-unsafe archive whose original "
+        "handshake demands one",
+    )
+    op.add_option(
         "--listen",
         type="int",
         metavar="PORT",
@@ -692,7 +698,8 @@ def vncdo_replay() -> None:
         type="float",
         metavar="SECONDS",
         default=DEFAULT_CLIENT_TIMEOUT,
-        help="--server: warn if the client sends nothing for this long [%default]",
+        help="--server: warn if the client sends nothing for this long, "
+        "0 disables the warning [%default]",
     )
     op.add_option(
         "--forever",
@@ -744,28 +751,38 @@ def vncdo_replay() -> None:
 def _replay_client(
     op: optparse.OptionParser,
     options: optparse.Values,
-    capture: object,
+    capture: Capture,
     archive: str,
     extra: list[str],
 ) -> None:
     """Run the archive's recorded session through `vncdo`.
 
     Recorded events, not hand-typed: another session is not evidence."""
-    if not capture.session_vdo.strip() and not extra:
+    session_vdo = capture.session_vdo.strip()
+    if not session_vdo and not extra:
         op.error(
             f"{archive} records no session.vdo (a GUI-driven capture records events, not "
             "vncdo commands), and no commands were given to run instead"
         )
+    if capture.auth_preserved:
+        log.warning(
+            "%s was recorded with --capture-raw-unsafe, so its original handshake demands "
+            "real credentials again: pass -p/--password to match how the original client "
+            "was configured, or the run will hang waiting for one",
+            archive,
+        )
 
-    workdir = tempfile.mkdtemp(prefix="vncdo-replay-")
-    try:
-        script = os.path.join(workdir, "session.vdo")
-        with open(script, "wb") as fh:
-            fh.write(capture.session_vdo)
-        sys.argv = ["vncdo", "-s", options.connect] + ([script] if capture.session_vdo.strip() else []) + extra
-        vncdo()
-    finally:
-        shutil.rmtree(workdir, ignore_errors=True)
+    with tempfile.TemporaryDirectory(prefix="vncdo-replay-") as workdir:
+        built_argv = ["-s", options.connect]
+        if options.password:
+            built_argv += ["-p", options.password]
+        if session_vdo:
+            script = os.path.join(workdir, "session.vdo")
+            with open(script, "wb") as fh:
+                fh.write(capture.session_vdo)
+            built_argv.append(script)
+        built_argv += extra
+        vncdo(built_argv)
 
 
 if __name__ == "__main__":

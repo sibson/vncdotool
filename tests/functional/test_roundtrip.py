@@ -3,7 +3,6 @@
 tigervnc demands a password; the archive of it does not."""
 
 import subprocess
-import time
 from pathlib import Path
 from tempfile import mkdtemp
 from unittest import TestCase
@@ -11,7 +10,7 @@ from unittest import TestCase
 from PIL import Image
 
 from .test_proxy import _await_capture, _start_vnclog, _stop_proxy
-from .vncservers import DOCKER_SERVERS, HOST, port_open, vncdo_argv
+from .vncservers import DOCKER_SERVERS, HOST, port_open, start_replay_server, vncdo_argv
 
 TIGERVNC = next(s for s in DOCKER_SERVERS if s.name == "tigervnc")
 
@@ -48,7 +47,7 @@ class TestCaptureReplayRoundtrip(TestCase):
 
         _await_capture(self.capture).close()
 
-        server = self._start_replay()
+        server = start_replay_server(self, self.capture, REPLAY_PORT, deadline=REPLAY_STARTUP_DEADLINE)
         try:
             # No -p: tigervnc demanded a password, the capture of it does not.
             replayed = subprocess.run(
@@ -76,28 +75,3 @@ class TestCaptureReplayRoundtrip(TestCase):
                 replay.convert("RGB").tobytes(),
                 "replayed capture decoded to different pixels than the session it recorded",
             )
-
-    def _start_replay(self) -> subprocess.Popen:
-        server = subprocess.Popen(
-            [
-                "vncdo-replay", "--server", str(self.capture),
-                "--listen", str(REPLAY_PORT),
-                "--forever",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-        )
-        self.addCleanup(server.kill)
-        self.addCleanup(server.stdout.close)
-        self.addCleanup(server.stderr.close)
-        deadline = time.monotonic() + REPLAY_STARTUP_DEADLINE
-        while time.monotonic() < deadline and not port_open(HOST, REPLAY_PORT):
-            if server.poll() is not None:
-                self.fail(f"vncdo-replay --server exited before listening; stderr:\n{server.stderr.read()}")
-            time.sleep(0.2)
-        if not port_open(HOST, REPLAY_PORT):
-            server.kill()
-            self.fail(f"vncdo-replay --server never listened on {REPLAY_PORT}")
-        return server

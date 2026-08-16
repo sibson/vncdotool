@@ -136,9 +136,15 @@ class HandshakeScrubber:
                 break
             chunk = bytes(buf[:want.nbytes])
             del buf[:want.nbytes]
+            # Fail closed inside the auth exchange: a step that forgets to
+            # call _record must drop the chunk, not leak it.
+            fail_closed_default = b"" if self._in_auth and not self.preserve_auth else chunk
             self._recording = None
             self._advance(chunk)
-            out += chunk if self._recording is None or self.preserve_auth else self._recording
+            if self.preserve_auth:
+                out += chunk
+            else:
+                out += fail_closed_default if self._recording is None else self._recording
 
         # No longer watched, so flush rather than hold these back forever.
         if buf and self._waiting_on(tap) is None:
@@ -148,13 +154,9 @@ class HandshakeScrubber:
         return bytes(out)
 
     def _flush(self, tap: Tap) -> bytes:
-        """Bytes left buffered on `tap` when the connection ends.
-
-        Bytes buffered mid-secret are dropped instead of returned: half a
-        challenge is still a fragment of a secret.
-        """
-        mid_secret = self._in_auth and not self.preserve_auth
-        out = b"" if mid_secret and self._waiting_on(tap) is not None else bytes(tap.pending)
+        """Bytes left buffered on `tap`; dropped while a partial handshake is still being rewritten."""
+        mid_rewrite = self._gen is not None and not self.preserve_auth
+        out = b"" if mid_rewrite and tap.pending else bytes(tap.pending)
         del tap.pending[:]
         return out
 
@@ -208,23 +210,16 @@ class HandshakeScrubber:
 
         if sectype == AuthTypes.VNC_AUTHENTICATION:
             yield _Want(self.s2c, 16)  # challenge
-            self._record(b"")
             yield _Want(self.c2s, 16)  # response
-            self._record(b"")
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
             # ARD, laid out as RFBClient._handleDHAuth reads it. A `none`
             # handshake has nowhere for the DH values, so they go too.
             head = yield _Want(self.s2c, 4)
-            self._record(b"")
             _generator, key_len = unpack("!HH", head)
             yield _Want(self.s2c, key_len)  # modulus
-            self._record(b"")
             yield _Want(self.s2c, key_len)  # server public key
-            self._record(b"")
             yield _Want(self.c2s, ARD_CREDENTIALS_LEN)  # username + password
-            self._record(b"")
             yield _Want(self.c2s, key_len)  # client public key
-            self._record(b"")
         elif sectype not in (AuthTypes.NONE, AuthTypes.INVALID):
             # No grammar for this type, so its exchange has no known end.
             looked_up = AuthTypes.lookup(sectype)
@@ -249,6 +244,10 @@ class HandshakeScrubber:
             result_b = yield _Want(self.s2c, 4)
             (result,) = unpack("!I", result_b)
             if result != 0:
+                # Pre-3.8 `none` has no SecurityResult slot to put a real
+                # failure in; recording it there would desync the replay.
+                if negotiated < (3, 8):
+                    self._record(b"")
                 return  # auth failed/too-many-tries; reason string not tracked
             # `none` carries a SecurityResult only from 3.8 on.
             self._record(pack("!I", 0) if negotiated >= (3, 8) else b"")
@@ -319,6 +318,9 @@ class CaptureWriter:
             "vncdotool_version": vncdotool_version,
             "capture_timestamp": self.capture_timestamp,
             "protocol_version": self.scrubber.protocol_version,
+            "negotiated_version": (
+                list(self.scrubber.negotiated_version) if self.scrubber.negotiated_version is not None else None
+            ),
             # Evidence about the server, not a description of s2c.bin, which
             # by default records a `none` handshake instead.
             "security_types": self.scrubber.security_types,

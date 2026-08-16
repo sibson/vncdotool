@@ -13,7 +13,7 @@ from twisted.internet import reactor
 from twisted.internet.protocol import Protocol, ServerFactory
 
 from .capture import HandshakeScrubber
-from .const import MsgC2S
+from .const import MsgC2S, QemuClientMessage
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +37,14 @@ class Capture(NamedTuple):
     def auth_preserved(self) -> bool:
         """Recorded with ``--capture-raw-unsafe``, so the handshake is the real one."""
         return bool(self.meta and self.meta.get("auth") == "preserved")
+
+    @property
+    def negotiated_version(self) -> Optional[tuple[int, int]]:
+        """The RFB version the ORIGINAL client and server agreed on, if recorded.
+
+        None for an archive with no meta, or an older one predating this field."""
+        value = self.meta.get("negotiated_version") if self.meta else None
+        return tuple(value) if value else None
 
 
 def load_capture(archive_path: str) -> Capture:
@@ -95,6 +103,12 @@ def client_message_length(buffer: bytes) -> int:
         if len(buffer) < 8:
             return NEED_MORE
         return 8 + unpack("!I", buffer[4:8])[0]
+    if kind == MsgC2S.QEMU_CLIENT_MESSAGE:
+        if len(buffer) < 2:
+            return NEED_MORE
+        if buffer[1] == QemuClientMessage.EXTENDED_KEY_EVENT:
+            return 12
+        return UNKNOWN_MESSAGE
     return UNKNOWN_MESSAGE
 
 
@@ -121,7 +135,7 @@ def saw_update_request(buffer: bytearray) -> bool:
 
 class ReplayProtocol(Protocol):
     """Play a recorded ``s2c.bin`` back at whatever connects, paced off
-    HandshakeScrubber's private ``_want`` so the two cannot drift apart."""
+    HandshakeScrubber so the two cannot drift apart."""
 
     def connectionMade(self) -> None:
         self.buffer = bytearray()
@@ -130,10 +144,16 @@ class ReplayProtocol(Protocol):
         self.pos = 0
         self.exhausted = False
         self.awaiting_request = False
+        self.served = False
+        self._version_checked = False
         self.scrubber = HandshakeScrubber()
         self.advance()
 
     def dataReceived(self, data: bytes) -> None:
+        if data:
+            self.served = True
+        if self.exhausted:
+            return
         self.buffer += data
         log.debug("client -> server: %s", data.hex())
         self._cancel_stall()
@@ -141,7 +161,7 @@ class ReplayProtocol(Protocol):
 
     def connectionLost(self, reason: Any = None) -> None:
         self._cancel_stall()
-        self.factory.connection_finished()
+        self.factory.connection_finished(self.served)
 
     def advance(self) -> None:
         if self.exhausted:
@@ -165,12 +185,32 @@ class ReplayProtocol(Protocol):
                 chunk = bytes(self.buffer[:nbytes])
                 del self.buffer[:nbytes]
                 tap.feed(chunk)
+                if self._version_mismatch():
+                    return
         self._serve_session()
 
-    def _serve_session(self) -> None:
-        """Send ServerInit, then hold the framebuffer until it is asked for.
+    def _version_mismatch(self) -> bool:
+        """True, and the connection closed, if the live client just negotiated
+        a version other than the one this capture's shape is fixed to."""
+        if self._version_checked or self.scrubber.negotiated_version is None:
+            return False
+        self._version_checked = True
+        archived = self.factory.capture.negotiated_version
+        if archived is None or archived == self.scrubber.negotiated_version:
+            return False
+        log.error(
+            "client negotiated RFB %d.%d, but this capture was recorded against a client "
+            "that negotiated RFB %d.%d; it can only be replayed by a client negotiating the "
+            "recorded version",
+            *self.scrubber.negotiated_version,
+            *archived,
+        )
+        self.transport.loseConnection()
+        self.exhausted = True
+        return True
 
-        One finite recording, so those bytes get one chance to be useful."""
+    def _serve_session(self) -> None:
+        """Send ServerInit, then hold the framebuffer until it is asked for."""
         s2c = self.factory.capture.s2c
         # `scrubber.width` is set by parsing ServerInit, so its 24 fixed
         # bytes are behind `pos` and only the server name is still to come.
@@ -184,6 +224,12 @@ class ReplayProtocol(Protocol):
             self.expect(10)
             return
         remainder = s2c[self.pos :]
+        if remainder and self.scrubber._want is None and self.scrubber.width is None:
+            log.warning(
+                "could not pace %s past the handshake; serving the rest of the "
+                "capture unpaced, which may desync a client that hasn't caught up",
+                self.scrubber.unstrippable_auth or "this capture",
+            )
         if remainder:
             self.transport.write(remainder)
             self.pos = len(s2c)
@@ -193,7 +239,7 @@ class ReplayProtocol(Protocol):
     def expect(self, nbytes: int) -> None:
         """Arm the stall warning while waiting for `nbytes` from the client."""
         timeout = self.factory.client_timeout
-        if timeout is None or self._stall_call is not None:
+        if timeout is None or timeout <= 0 or self._stall_call is not None:
             return
         self._stall_call = reactor.callLater(timeout, self._stalled, nbytes)
 
@@ -228,7 +274,9 @@ class ReplayFactory(ServerFactory):
         protocol.factory = self
         return protocol
 
-    def connection_finished(self) -> None:
+    def connection_finished(self, served: bool) -> None:
         log.info("client disconnected")
-        if not self.forever and reactor.running:
+        # An unsent probe connection (port check: connect, then close with no
+        # bytes) must not stop a one-shot server before the real client arrives.
+        if served and not self.forever and reactor.running:
             reactor.stop()

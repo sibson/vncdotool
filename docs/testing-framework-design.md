@@ -157,24 +157,11 @@ the bytes, and it made the tool awkward to point at a GUI viewer or at a
 `vncdo` invocation with an extra command appended. Two composable tools,
 one terminal each.
 
-`--server` listens on a port and plays `s2c.bin` back at whatever connects,
-pacing the handshake against the client's real replies — the same grammar
-the capture side uses, which is what keeps the two from drifting — and
-holding the recorded framebuffer until the client's first
-FramebufferUpdateRequest. A capture holds one finite recording of the
-screen, so those bytes get exactly one chance to be useful; sent before the
-client asked, they go past a client that asks a moment later, which then
-waits forever. There is no security-type divergence check: a stripped
-archive offers `none` and cannot diverge, and an unsafe one is served
-as-is and left to desync if the live client chose differently.
-
-Client mode is a thin wrapper: pull `session.vdo` out of the archive and
-hand it to `vncdo`, defaulting `-s` to the replay server's own
-`127.0.0.1::5999`. Trailing arguments pass through, so
-`vncdo-replay capture.zip capture screen.png` replays the recorded input
-and then takes a screenshot. Being faithful to what the original client
-sent is the point: a replay driven by different events is a different
-session, and a replay of a different session is not evidence.
+There is no security-type divergence check: a stripped archive offers
+`none` and cannot diverge, and an unsafe one is served as-is and left to
+desync if the live client chose differently. Rationale for the handshake
+pacing, the framebuffer-hold behaviour, and the client-mode wrapper is in
+`docs/capture.rst`.
 
 No recorded capture is ever replayed in CI. One inline-bytes end-to-end
 test, `tests/functional/test_replay.py`, does run in CI to guard the

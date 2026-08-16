@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import logging
 import os.path
+import shlex
 import socket
 import sys
 import time
@@ -407,7 +408,9 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
-        rev = REVERSE_MAP.get(key, chr(key))
+        # Unmapped keysyms fall back to a raw char (', ", #, \) that shlex
+        # would otherwise treat as quoting or a comment on replay.
+        rev = shlex.quote(REVERSE_MAP.get(key, chr(key)))
 
         cmds = ["pause", "%.4f" % (now - self.last_event)]
         self.last_event = now
