@@ -52,7 +52,7 @@ class _Want(NamedTuple):
 class HandshakeScrubber:
     """Tracks an RFB handshake across both directions of a proxied stream.
 
-    Feed :attr:`s2c` / :attr:`c2s`; each returns what that side records."""
+    ``s2c.feed(data)`` / ``c2s.feed(data)`` return what to record."""
 
     def __init__(self, preserve_auth: bool = False) -> None:
         self.s2c = Tap(self, "s2c")
@@ -63,16 +63,13 @@ class HandshakeScrubber:
         self.security_types: list[int] = []
         self.security_type: int | None = None
         self.unstrippable_auth: str | None = None
-        # Set when an auth type we cannot follow is selected without an
-        # opt-in; the caller drops the capture.
         self.abort_reason: str | None = None
         self.width: int | None = None
         self.height: int | None = None
 
         self._gen: Generator[_Want, bytes, None] | None = self._run()
         self._want: _Want | None = None
-        # What to record for the chunk just read, decided by the handshake
-        # after seeing it: None records the bytes themselves.
+        # Overrides what the current chunk records; None means verbatim.
         self._recording: bytes | None = None
         # True across the auth exchange, so a half-arrived credential is
         # dropped at disconnect rather than flushed.
@@ -97,9 +94,6 @@ class HandshakeScrubber:
             self._want = None
 
     def _give_up(self, why: str) -> None:
-        """Stop the capture when we can no longer follow the handshake.
-
-        Not knowing where the credentials end means not being able to strip them."""
         if self.preserve_auth:
             return
         self.abort_reason = (

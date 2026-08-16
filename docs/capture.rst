@@ -139,7 +139,7 @@ Past ServerInit the recorded framebuffer waits for the client's first
 FramebufferUpdateRequest. A capture holds one finite recording of the screen,
 so those bytes get exactly one chance to be useful: sent before the client
 asked, they go past a client that asks a moment later, which then waits
-forever for an update that has already been and gone.
+forever for an update it already missed.
 
 Once the recording runs out the connection is left open. The original server
 hung up because its client did, and hanging up here instead would cut short

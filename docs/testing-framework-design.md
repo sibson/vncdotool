@@ -139,8 +139,8 @@ it". The escape hatch below is the same one.
 
 **`--capture-raw-unsafe` records the handshake verbatim**, every auth type
 alike, for the bug that lives in the negotiation itself — and for ARD,
-whose Diffie-Hellman exchange stripping now removes along with everything
-else. Its archives carry a real key exchange and whatever credentials it
+whose Diffie-Hellman exchange is now removed by stripping along with
+everything else. Its archives carry a real key exchange and whatever credentials it
 protected; the paved-road doc says so, and says to use a disposable
 password and rotate it. It supersedes `--capture-raw-unsafe-auth`, which is
 removed rather than aliased: the kit is unreleased.

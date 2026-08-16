@@ -1,6 +1,5 @@
-"""Capture and replay, joined: does what vnclog writes still decode the same?
-
-tigervnc demands a password; the archive of it does not."""
+"""Capture tigervnc (password-protected), replay without a password, and
+compare screenshots: the stripped archive should decode identically."""
 
 import subprocess
 from pathlib import Path

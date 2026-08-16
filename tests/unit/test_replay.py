@@ -178,14 +178,13 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), NONE_33)
 
     def test_framebuffer_waits_for_the_client_to_ask_for_one(self) -> None:
-        """The recorded framebuffer is held back until a FramebufferUpdateRequest arrives."""
         protocol = start(NONE_33)
 
         protocol.dataReceived(VERSION_33)
         protocol.dataReceived(b"\x01")
         self.assertEqual(written(protocol), NONE_33[: -len(FRAMEBUFFER)])
 
-        # SetEncodings, which a client sends first and which owes it nothing.
+        # SetEncodings: real clients send it first, and it requires no reply.
         protocol.dataReceived(pack("!BxH", MsgC2S.SET_ENCODING, 1) + pack("!i", 0))
         self.assertEqual(written(protocol), NONE_33[: -len(FRAMEBUFFER)])
 
@@ -193,9 +192,9 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), NONE_33)
 
     def test_a_named_server_is_served_through_the_name_before_the_framebuffer(self) -> None:
-        """The grammar now ends after the server name, not the 24 fixed
-        ServerInit bytes; a name-len=0 fixture alone would never catch a
-        pacing offset that only shows up once a name is present."""
+        """The grammar ends after the server name, not the 24 fixed ServerInit
+        bytes, so a name-len=0 fixture alone would never catch a pacing
+        offset that only shows up once a name is present."""
         protocol = start(NONE_38_NAMED)
 
         protocol.dataReceived(VERSION_38)
@@ -228,7 +227,7 @@ class TestReplayProtocol(TestCase):
         self.assertEqual(written(protocol), b"RFB 003.")
 
     def test_a_capture_truncated_mid_name_sends_what_there_is_and_stops(self) -> None:
-        """The grammar now watches the server name too, so a capture cut off
+        """The grammar watches the server name too, so a capture cut off
         inside it must stop cleanly rather than wait forever for the rest."""
         cut_short = (
             VERSION_38

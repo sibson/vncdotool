@@ -85,7 +85,7 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.security_types, [AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])
 
     def test_a_failed_auth_stops_the_rewrite(self) -> None:
-        """No session followed, so there is nothing to make replayable."""
+        """Auth failed before a session began, so there's nothing to rewrite into one."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -273,7 +273,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertIsNone(s.abort_reason)
 
     def test_no_credential_byte_survives_stripping(self) -> None:
-        """Absent, not zeroed."""
         s = HandshakeScrubber()
         self._ard_to_credentials(s)
         s.s2c.feed(self.dh_params + self.modulus + self.server_key)
@@ -359,8 +358,8 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.c2s.flush(), b"")
 
     def test_flush_drops_a_partial_server_name(self) -> None:
-        """The grammar now watches the name too, so a connection dropped
-        mid-name is still mid-rewrite and loses the partial bytes."""
+        """The grammar watches the name too, so a connection dropped mid-name
+        is still mid-rewrite and loses the partial bytes."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)

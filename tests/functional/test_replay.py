@@ -30,7 +30,8 @@ def _pixel(r: int, g: int, b: int) -> bytes:
 
 
 def _build_s2c() -> bytes:
-    """None-auth whatever the server demanded, as a stripped capture records it."""
+    """A none-auth handshake, as a stripped capture would record it regardless
+    of what the server actually demanded."""
     auth_none = pack("!I", AuthTypes.NONE)
     server_init = pack("!HH16sI", WIDTH, HEIGHT, PIXEL_FORMAT.to_bytes(), 0)
     body = b"".join(_pixel(*p) for p in PIXELS)
