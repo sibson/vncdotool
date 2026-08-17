@@ -37,9 +37,8 @@ report() {
         coverage report --data-file="combined/$name" --format=markdown
         printf '\n'
     } >> "$detail"
-    # Into a subdirectory: `combined/$name.xml` is itself a `combined/$name.*`
-    # match, so the next report of that tier tries to combine the XML as if it
-    # were a data file.
+    # Not `combined/$name.xml`: that matches `combined/$name.*`, so the next
+    # report of the tier combines the XML as one of its data files.
     coverage xml --data-file="combined/$name" -o "combined/xml/$name.xml"
 }
 
