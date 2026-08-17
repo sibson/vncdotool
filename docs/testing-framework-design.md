@@ -194,12 +194,20 @@ revisit only if someone asks for it.
 
 - **#340** (digest pins, versions.md, image build cache): orthogonal and
   compatible — proceed.
-- **#341** (scenario registry framework): superseded by this design. The
-  registry's consumers (recorder replaying Python scenario bodies, Tier 3
-  checklist generation) no longer exist — the Tier 3 artifact is a `.vdo`
-  script, which is already data. Salvage: the capability model (reduced),
-  the server descriptors, and any container/mixin plumbing that maps onto
-  the plain-method grid. Close or rework accordingly.
+- **#341** (scenario registry framework): closed, superseded by this
+  design. Its `Scenario`/`ScenarioContext`/`SCENARIOS` registry, the
+  capability-gated `requires` matching, and the generated
+  `test_<scenario>` methods all existed to serve the recorder-replay and
+  Tier 3 checklist consumers that never landed; nothing else in the fleet
+  reads them, so none of it carried forward. The one genuine idea inside
+  it — a server declaring what it can do, so a test can skip a capability
+  it lacks rather than weaken its own assertion — stays deferred rather
+  than added speculatively: `renders_desktop` and `size` already gate
+  inline where the plain-method grid needs it, and a `capabilities`
+  property with no caller is exactly the unused abstraction this repo's
+  own conventions rule out. Revisit if a second plain method needs the
+  same gate. The other salvageable piece, the deferred input-reactive
+  surface, is recorded below instead of in code.
 - **#342** (issue-90 byte-level reproduction): the template for leg 1
   distilled tests; lands independently.
 
@@ -232,6 +240,14 @@ and can proceed while 3–5 follow.
   than the one-key-per-server smoke case that exists today.
 - **Fleet expansion** (TightVNC, QEMU, more): follows the plan's tier
   process; this framework adds a server as one descriptor + one subclass.
+- **Input-reactive test surface**: nothing in the fleet reacts to input at
+  a known screen position — `tests/servers/draw-content.sh` paints static
+  content once at start-up — so a keyboard/mouse test can only assert "some
+  repaint happened" or "the session didn't disconnect," never "the right
+  pixels changed." Needs a deterministic reactive surface in the container
+  desktop (e.g. a full-screen `xterm` echoing keystrokes at a fixed
+  position, plus a pointer-tracking app), which is image work with real
+  flakiness risk (font rendering, timing) and its own spike.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
   client, per-test subprocess timeouts can tighten, and the in-process API
   suite can grow adversarial cases (misbehaving-server lifecycle) using the
