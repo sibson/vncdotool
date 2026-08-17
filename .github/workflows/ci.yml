@@ -163,8 +163,6 @@ jobs:
     # Runs on a red build too, so a failing suite still reports what it
     # reached before it stopped.
     if: always()
-    # `secrets` is not available in a step-level `if` and `env` is, so the
-    # upload steps can only skip a fork's empty token by reading it here.
     env:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
@@ -208,8 +206,6 @@ jobs:
           path: htmlcov/
           if-no-files-found: ignore
 
-      # Codecov rejects the documented tokenless upload for this repo, so the
-      # token is not optional; see DEVELOP.rst.
       - name: Upload unit coverage to Codecov
         if: always() && env.CODECOV_TOKEN != ''
         continue-on-error: true

@@ -1,16 +1,12 @@
-# Off deliberately and permanently, not pending setup; see DEVELOP.rst.
 coverage:
   status:
     project: off
     patch: off
 
-# carryforward because either job can fail or be skipped, and a missing
-# upload should hold the flag rather than read as a collapse to zero.
 flags:
   unit:
     carryforward: true
   fleet:
     carryforward: true
 
-# Same noise the repo's own coverage comment was dropped for.
 comment: false

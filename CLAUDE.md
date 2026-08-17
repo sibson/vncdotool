@@ -20,23 +20,30 @@ so a hang is contained by the kernel reaping the subprocess rather than by
 anything in-process. See `docs/testing-framework-design.md` and
 `tests/functional/vncservers.py`.
 
-Keep comments and docstrings short. A comment earns its place by recording
-a *why* the code cannot show -- a protocol quirk, a server's misbehaviour,
-why the obvious alternative was rejected. One or two lines is the norm; a
-longer block needs a reason to be longer. Do not restate what the next line
-does, and do not narrate what a change replaced or reference the current
-task, fix, or callers ("used by X", "added for the Y flow", "handles the
-case from issue #123") -- that belongs in the commit message. Design
-rationale belongs in `docs/`.
+Every reader pays for every comment; almost none of them needed it.
+Default to writing none.
 
-Test each one by deleting it and asking what the reader lost. Being able
-to justify a comment is not the same as needing it: shortening an
-unnecessary comment leaves an unnecessary comment.
+A comment earns its place only when being wrong about this would be
+*silent* -- code that looks right, runs, passes, and is wrong anyway. A
+protocol quirk, a server that lies, an ordering nothing enforces. When
+the mistake breaks loudly instead -- CI red, a test failing, an
+exception, a name that already says it -- the failure is the
+documentation, and the comment is noise. "Someone might otherwise
+change this" is not a reason: they will change it, it will break, and
+they will know within a minute.
 
-A cross-reference is worth a clause when it saves the reader real work
-(`see docs/capture.rst`), so an explanation lives in exactly one place
-rather than being repeated. What it must not become is a paragraph
-re-explaining what the other file already says.
+Write for a competent reader. Do not explain what a named option does,
+restate the next line, guard against carelessness, or record how the
+code reached its current state -- the alternative you rejected, the
+thing that used to be here, who calls it, which issue it came from.
+That is commit-message material, and design rationale is `docs/`
+material. A pointer to prose elsewhere is not a reason to add a comment:
+if the code does not need one, it does not need a `see DEVELOP.rst`
+either.
+
+Test by deleting it. Keep it only if the reader would then be *wrong*,
+not merely less informed. Shortening an unnecessary comment leaves an
+unnecessary comment. One or two lines is the norm.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
