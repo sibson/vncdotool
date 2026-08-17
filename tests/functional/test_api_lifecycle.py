@@ -2,14 +2,12 @@
 use, reconnection, error propagation, timeouts, ``shutdown()`` cleanliness.
 Server compatibility belongs to the subprocess grid in test_servers.py.
 
-THIS IS THE ONE MODULE ALLOWED TO CALL api.connect().
------------------------------------------------------
-
 ``api.connect()`` starts the Twisted reactor in a daemon thread, and a
 reactor cannot be restarted once stopped, so one process gets one reactor
-for its whole lifetime. A second in-process module would either race this
-one for it or leave its own reactor thread wedged on exit -- new in-process
-tests belong in *this* file, sharing *this* reactor.
+for its whole lifetime: this is the only module allowed to call it. A
+second in-process module would either race this one for it or leave its
+own reactor thread wedged on exit -- new in-process tests belong in
+*this* file, sharing *this* reactor.
 
 ``setUpModule`` makes the first connection itself, so the reactor is
 running before any test method does -- no test depends on being first.
@@ -77,9 +75,7 @@ class TestApiLifecycle(unittest.TestCase):
             client.keyPress("x")
 
     def test_sequential_reconnects(self) -> None:
-        """The reactor survives a disconnect and serves a second connection.
-
-        ``shutdown()`` is what's terminal, not ``disconnect()``: otherwise no
+        """``shutdown()`` is what's terminal, not ``disconnect()``: otherwise no
         long-running application could reconnect after a single drop.
         """
         for _ in range(2):
@@ -87,10 +83,7 @@ class TestApiLifecycle(unittest.TestCase):
                 client.refreshScreen()
 
     def test_timeout_raises_timeout_error(self) -> None:
-        """A call against a port that never speaks RFB raises TimeoutError
-        instead of hanging.
-
-        ``api.connect()`` is fire-and-forget and never raises here; the
+        """``api.connect()`` is fire-and-forget and never raises here; the
         timeout comes from the first call that has to wait on the
         never-completing handshake.
         """
@@ -113,9 +106,7 @@ class TestApiLifecycle(unittest.TestCase):
         self.assertLess(elapsed, SHORT_TIMEOUT + 1.0)
 
     def test_closed_port_raises_promptly(self) -> None:
-        """connect() to a port nothing listens on fails fast, not hangs.
-
-        Bounded twice over -- a per-client timeout, and a helper thread
+        """Bounded twice over -- a per-client timeout, and a helper thread
         joined with a deadline -- so even a wedge fails only this test,
         not the suite.
 
