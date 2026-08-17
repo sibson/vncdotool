@@ -20,29 +20,24 @@ so a hang is contained by the kernel reaping the subprocess rather than by
 anything in-process. See `docs/testing-framework-design.md` and
 `tests/functional/vncservers.py`.
 
-Every reader pays for every comment; almost none of them needed it.
-Default to writing none.
+A comment carries what the reader cannot get anywhere else: something
+surprising, particular to this code, and absent from the language, the
+library's documentation, the RFB specs and the code itself. A server
+that ignores what it was asked, an ordering nothing enforces, an obvious
+approach that does not work here. `loggingproxy.py` has the shape of it:
+"SetEncodings only says what the client asked for, and a server may
+ignore it."
 
-A comment earns its place only when being wrong about this would be
-*silent* -- code that looks right, runs, passes, and is wrong anyway. A
-protocol quirk, a server that lies, an ordering nothing enforces. When
-the mistake breaks loudly instead -- CI red, a test failing, an
-exception, a name that already says it -- the failure is the
-documentation, and the comment is noise. "Someone might otherwise
-change this" is not a reason: they will change it, it will break, and
-they will know within a minute.
+The reader knows the tools and can read the code, and an AI reader has
+every public document already. Anything they could look up, infer from a
+name, or learn by running it is not worth writing, and neither is
+anything about the change rather than the code -- the alternative you
+rejected, what used to be here, who calls it, the issue or PR it came
+from. That is commit-message and `docs/` material. Point elsewhere only
+when there is something surprising there too long to state here.
 
-Write for a competent reader. Do not explain what a named option does,
-restate the next line, guard against carelessness, or record how the
-code reached its current state -- the alternative you rejected, the
-thing that used to be here, who calls it, which issue it came from.
-That is commit-message material, and design rationale is `docs/`
-material. A pointer to prose elsewhere is not a reason to add a comment:
-if the code does not need one, it does not need a `see DEVELOP.rst`
-either.
-
-Test by deleting it. Keep it only if the reader would then be *wrong*,
-not merely less informed. Shortening an unnecessary comment leaves an
+Test by deleting it: keep it only if an intelligent reader would still
+be surprised later. Shortening an unnecessary comment leaves an
 unnecessary comment. One or two lines is the norm.
 
 Check the protocol documents before implementing anything that touches the
