@@ -25,9 +25,7 @@ from twisted.internet.protocol import Factory, Protocol
 
 from vncdotool import api
 
-from .vncservers import DOCKER_SERVERS, HOST, SUBPROCESS_TIMEOUT_HEADROOM, connect, port_open
-
-LIBVNC = next(s for s in DOCKER_SERVERS if s.name == "libvncserver-example")
+from .vncservers import HOST, LIBVNCSERVER_EXAMPLE as LIBVNC, SUBPROCESS_TIMEOUT_HEADROOM, connect, port_open
 
 # Same headroom the subprocess grid adds: the bare 5s server budget was
 # observed to flake under load.

@@ -9,9 +9,7 @@ from unittest import TestCase
 from PIL import Image
 
 from .test_proxy import _await_capture, _start_vnclog, _stop_proxy
-from .vncservers import DOCKER_SERVERS, HOST, port_open, start_replay_server, vncdo_argv
-
-TIGERVNC_AUTH = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
+from .vncservers import HOST, TIGERVNC_AUTH, port_open, start_replay_server, vncdo_argv
 
 ROUNDTRIP_PROXY_PORT = 5996
 REPLAY_PORT = 5997

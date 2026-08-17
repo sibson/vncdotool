@@ -11,9 +11,7 @@ from unittest import TestCase
 
 from vncdotool.const import AuthTypes
 
-from .vncservers import DOCKER_SERVERS, HOST, VNCEV, port_open, run_vncdo
-
-TIGERVNC_AUTH = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
+from .vncservers import HOST, TIGERVNC_AUTH, VNCEV, port_open, run_vncdo
 
 PROXY_PORT = 5993
 CAPTURE_PROXY_PORT = 5994
