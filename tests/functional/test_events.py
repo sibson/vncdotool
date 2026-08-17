@@ -61,7 +61,7 @@ def wait_for_log_line(
     return logs
 
 
-class TestVncevSink(TestCase):
+class TestVNCEVSink(TestCase):
     """Client conformance: what vncev saw the client actually send."""
 
     def setUp(self) -> None:
