@@ -79,7 +79,7 @@ def _stop_proxy(proxy: subprocess.Popen) -> None:
             proxy.wait(timeout=PROXY_SHUTDOWN_TIMEOUT)
 
 
-class TestVnclogProxy(TestCase):
+class TestVNCLOGProxy(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, VNCEV.port):
             self.skipTest(
@@ -141,7 +141,7 @@ class TestVnclogProxy(TestCase):
         self.assertIn("keyup z", recorded, f"vnclog recorded:\n{recorded!r}")
 
 
-class TestVnclogCapture(TestCase):
+class TestVNCLOGCapture(TestCase):
     """`vnclog --capture-raw FILE.zip` against vncev, which uses auth None."""
 
     def setUp(self) -> None:
@@ -207,7 +207,7 @@ class TestVnclogCapture(TestCase):
         self.assertIn("already exists", second.stderr.lower())
 
 
-class TestVnclogCaptureVNCAuth(TestCase):
+class TestVNCLOGCaptureVNCAuth(TestCase):
     """`vnclog --capture-raw FILE.zip` against tigervnc-auth.
 
     Only a live run proves the strip against a real handshake."""
