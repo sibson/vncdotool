@@ -192,7 +192,6 @@ def distinct_colours(image: Image.Image) -> Optional[int]:
 
 
 def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
-    """Whether a capture of ``colours`` distinct colours is what ``server`` should serve."""
     if not server.renders_desktop:
         return True
     return colours != 1
