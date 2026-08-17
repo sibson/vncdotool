@@ -13,6 +13,7 @@ help:
 	@echo "test-os-server:	run functional tests against this OS's VNC server"
 	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
+	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
@@ -63,10 +64,33 @@ test-unit: check-python
 # this still runs without docker.
 # $(VENV) on PATH decides which `vncdo` the tests shell out to. Not
 # $(PYTHON): that is a GNU make built-in, python3, not this venv.
+# $(abspath ...) because $(VENV) is relative, and a test that runs the CLI
+# with a cwd= of its own would resolve it against that directory instead.
 .PHONY: test-func
 test-func: check-python
-	PATH="$(VENV):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
+	PATH="$(abspath $(VENV)):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 
 include Makefile.venv
+
+# Coverage, kept off the plain `test` targets because measuring costs
+# runtime not worth paying on every edit-run loop. See DEVELOP.rst.
+#
+# Below the include because $(VENV) is defined there, and prerequisites
+# are expanded where they are written, not where they are used.
+.PHONY: coverage coverage-unit coverage-func coverage-report
+coverage: coverage-unit coverage-func coverage-report
+
+coverage-unit: check-python | venv
+	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
+
+coverage-func: check-python | venv
+	PATH="$(abspath $(VENV)):$$PATH" \
+	  $(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
+
+coverage-report: | venv
+	$(VENV)/coverage combine
+	$(VENV)/coverage report
+	$(VENV)/coverage html
+	@echo "open htmlcov/index.html"

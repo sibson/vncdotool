@@ -323,6 +323,18 @@ def run_vncdo(
         ) from exc
 
 
+def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
+    """Ask `process` to exit cleanly, falling back to killing it."""
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=timeout)
+
+
 def start_replay_server(
     testcase: TestCase, archive: Path, port: int, deadline: float = 10.0
 ) -> subprocess.Popen:
@@ -342,7 +354,9 @@ def start_replay_server(
             "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
             "so its console script is available"
         ) from exc
-    testcase.addCleanup(server.kill)
+    # Not kill(): Twisted's SIGTERM handler stops the reactor, so the
+    # process exits through atexit and flushes what it still owes.
+    testcase.addCleanup(_terminate, server)
     testcase.addCleanup(server.stdout.close)
     testcase.addCleanup(server.stderr.close)
 

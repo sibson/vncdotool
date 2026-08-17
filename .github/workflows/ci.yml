@@ -47,7 +47,16 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run unittests
-        run: python -m unittest discover tests/unit
+        run: coverage run --parallel-mode -m unittest discover tests/unit
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.python-version }}
+          path: .coverage.*
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   lint:
     name: Lint
@@ -114,7 +123,16 @@ jobs:
         run: docker compose -f tests/servers/docker-compose.yml ps
 
       - name: Run functional tests
-        run: python -m unittest discover -v -s tests/functional -t .
+        run: coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fleet
+          path: .coverage.*
+          include-hidden-files: true
+          if-no-files-found: ignore
 
       - name: Capture screenshots and build the gallery
         if: always()
@@ -136,3 +154,52 @@ jobs:
       - name: Stop the VNC test servers
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml down
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test, servers]
+    # Runs on a red build too, so a failing suite still reports what it
+    # reached before it stopped.
+    if: always()
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Download unit tier coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-unit-*
+          path: data/unit
+          merge-multiple: true
+
+      - name: Download fleet tier coverage data
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coverage-fleet
+          path: data/fleet
+
+      - name: Report
+        run: |
+          .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
+          cat combined/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the annotated HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          if-no-files-found: ignore

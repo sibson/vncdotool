@@ -26,6 +26,39 @@ out to is the one it just installed. A server that isn't reachable is
 skipped rather than failing the run, so this also degrades gracefully
 without Docker.
 
+Coverage
+------------------------
+
+::
+
+    make coverage
+
+runs both suites under coverage and writes ``htmlcov/index.html``. The
+targets are separate from ``make test`` because measuring costs runtime
+that is not worth paying on every edit-run loop.
+
+Almost everything the functional suite covers happens in a ``vncdo``,
+``vnclog`` or ``vncdo-replay`` subprocess, which a plain ``coverage run``
+does not see. ``patch = subprocess`` in ``setup.cfg`` is what measures
+them, so it needs coverage 7.10 or newer. A child that is ``kill``\ ed
+rather than asked to stop never gets to write its data, so tests that
+stop a long-running process terminate it and let Twisted's SIGTERM
+handler shut the reactor down.
+
+CI reports the unit and fleet tiers separately as well as combined. Two
+tiers, two meanings: a fall in the unit number is a regression in the
+diff, while a fall in the fleet number can also mean a server container
+did not come up. Nothing is gated -- there is no threshold, and no build
+fails on the number.
+
+The numbers are at the top of the run's job summary, one line per tier,
+with the per-file tables folded away underneath and ``coverage-html`` an
+artifact on the same run.
+
+``.github/scripts/coverage-summary.sh unit=DIR fleet=DIR`` is what CI
+runs. It writes ``combined/summary.md`` and prints it, so the same report
+can be produced locally.
+
 Working with more than one checkout
 ------------------------------------
 

@@ -4,6 +4,9 @@ dist
 MANIFEST
 vncdotool.egg-info
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
 .tox
 docs/_build
 .venv/
