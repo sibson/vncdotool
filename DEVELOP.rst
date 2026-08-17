@@ -57,10 +57,16 @@ artifact on the same run.
 
 The browsable report is https://app.codecov.io/gh/sibson/vncdotool --
 line-by-line annotation, history, and the ``unit`` and ``fleet`` flags
-graphed separately. CI uploads one Cobertura file per tier there;
-uploads from a public repo need no token. ``codecov.yml`` turns the
-project and patch status checks off and suppresses the PR comment, so
-Codecov observes and never votes.
+graphed separately. CI uploads one Cobertura file per tier there.
+
+Codecov documents tokenless uploads for public repos, but rejects them
+with ``Token required because branch is protected`` on a branch that is
+not protected, so the upload uses the ``CODECOV_TOKEN`` secret. A pull
+request from a fork cannot read it and skips the upload; the job summary
+carries the same numbers either way.
+
+``codecov.yml`` turns the project and patch status checks off and
+suppresses the PR comment, so Codecov observes and never votes.
 
 ``.github/scripts/coverage-summary.sh unit=DIR fleet=DIR`` is what CI
 runs. It writes ``combined/summary.md`` and prints it, so the same report

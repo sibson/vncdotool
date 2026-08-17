@@ -163,6 +163,10 @@ jobs:
     # Runs on a red build too, so a failing suite still reports what it
     # reached before it stopped.
     if: always()
+    # Lifted to the job so the upload steps can test it: `secrets` is not
+    # available in a step-level `if`, `env` is. Empty on a fork PR.
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -205,11 +209,14 @@ jobs:
           if-no-files-found: ignore
 
       # A flag per tier, so Codecov keeps the split the summary reports and
-      # merges them itself for the project number. Public repos upload
-      # without a token. continue-on-error because coverage gates nothing;
-      # a Codecov outage must not turn a green run red.
+      # merges them itself for the project number. Tokenless is documented
+      # to work for public repos but is rejected in practice with "branch is
+      # protected" on an unprotected branch, so the token is not optional.
+      # A fork PR cannot read it and its upload is skipped: nothing gates on
+      # coverage, and continue-on-error keeps a Codecov outage from turning
+      # a green run red.
       - name: Upload unit coverage to Codecov
-        if: always()
+        if: always() && env.CODECOV_TOKEN != ''
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
@@ -217,9 +224,10 @@ jobs:
           flags: unit
           disable_search: true
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload fleet coverage to Codecov
-        if: always()
+        if: always() && env.CODECOV_TOKEN != ''
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
@@ -227,3 +235,4 @@ jobs:
           flags: fleet
           disable_search: true
           fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
