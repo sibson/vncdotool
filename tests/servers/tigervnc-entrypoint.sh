@@ -11,6 +11,11 @@ set -e
 
 trap 'kill -TERM "$XVNC_PID" 2>/dev/null; exit 0' TERM INT
 
+# `docker compose restart` reuses the container filesystem, and a lock left
+# by an Xvnc that did not exit cleanly makes the next start die with
+# "Server is already active for display 0".
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
+
 if [ -n "$VNC_PASSWORD" ]; then
     mkdir -p /root/.vnc
     printf '%s' "$VNC_PASSWORD" | vncpasswd -f > /root/.vnc/passwd
