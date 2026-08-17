@@ -23,8 +23,10 @@ Keep comments and docstrings short. A comment earns its place by recording
 a *why* the code cannot show -- a protocol quirk, a server's misbehaviour,
 why the obvious alternative was rejected. One or two lines is the norm; a
 longer block needs a reason to be longer. Do not restate what the next line
-does, and do not narrate what a change replaced -- that belongs in the
-commit message. Design rationale belongs in `docs/`.
+does, and do not narrate what a change replaced or reference the current
+task, fix, or callers ("used by X", "added for the Y flow", "handles the
+case from issue #123") -- that belongs in the commit message. Design
+rationale belongs in `docs/`.
 
 A cross-reference is worth a clause when it saves the reader real work
 (`see docs/capture.rst`), so an explanation lives in exactly one place
