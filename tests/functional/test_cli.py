@@ -8,9 +8,9 @@ duplicated per server.
 from unittest import TestCase
 
 from .vncservers import (
-    DOCKER_SERVERS,
     PNG_MAGIC,
     HOST,
+    TIGERVNC_AUTH,
     port_open,
     run_vncdo,
     screenshot_dir,
@@ -18,7 +18,7 @@ from .vncservers import (
 
 # The one fleet server with a password, so the only one that can prove a
 # wrong password is rejected rather than ignored.
-_SERVER = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
+_SERVER = TIGERVNC_AUTH
 
 
 class TestCLI(TestCase):
