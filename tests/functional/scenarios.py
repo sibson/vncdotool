@@ -2,25 +2,9 @@
 
 `tests/functional/vncservers.py` describes *servers*; this module describes
 *scenarios* -- the things we do against a server and the assertions that
-follow. Splitting them out (rather than adding `test_mouse`, `test_expect`,
-... as sibling methods on the existing test mixin) matters because the same
-scenario list has to serve three consumers, only one of which is unittest:
-
-1. **unittest** -- ``vncservers.register_server_tests()`` builds the servers
-   x scenarios cross product, one ``test_<scenario>`` per server, so CI
-   reports a pass/fail/skip grid.
-2. **the recorder** -- the compatibility plan's `vncdo record` wrapper over
-   `loggingproxy` drives a scenario against a server and writes a fixture
-   directory. That only works if a scenario is callable outside a
-   ``TestCase``.
-3. **the Tier 3 checklist** -- the "short scripted scenario checklist" a
-   community contributor runs by hand against a server we cannot host. It
-   has to be printable/enumerable, i.e. data (name + description), not
-   buried in test method bodies.
-
-So a ``Scenario`` is a `NamedTuple` (data) wrapping a plain function (the
-callable), and ``SCENARIOS`` is the ordered registry both unittest and the
-future recorder consume.
+follow. A ``Scenario`` is a ``NamedTuple`` (data) wrapping a plain function
+(the callable), consumed by unittest, the recorder, and the Tier 3
+checklist alike. See docs/server-compatibility-plan.md.
 """
 
 from pathlib import Path
@@ -42,8 +26,8 @@ MAX_COLOURS = 256
 # ---------------------------------------------------------------------------
 # Assertion-level helpers
 #
-# Input scenarios (keyboard/mouse, PR 3b) assert at the strongest level the
-# server's capabilities support. Each level raises plain ``AssertionError``
+# Input scenarios assert at the strongest level the server's capabilities
+# support. Each level raises plain ``AssertionError``
 # rather than using ``self.assertX`` -- a ``Scenario.run`` body is a plain
 # function, not a ``TestCase`` method, and unittest treats an
 # ``AssertionError`` raised inside a generated test method as an ordinary
@@ -130,11 +114,7 @@ class Scenario(NamedTuple):
 
 
 def _run_connect(client: "api.ThreadedVNCClientProxy", ctx: ScenarioContext) -> None:
-    """Handshake completes; record what was negotiated.
-
-    This is the seed of the ``vncdo probe`` output Phase 4 wants: which
-    protocol version and security type a server actually speaks.
-    """
+    """Handshake completes; record the negotiated protocol version and security type."""
     PROTOCOL(client)
 
     version = getattr(client, "_version", None)
@@ -188,10 +168,6 @@ def _run_capture(client: "api.ThreadedVNCClientProxy", ctx: ScenarioContext) -> 
 
 # Order is stable and meaningful (connect first) because the recorder
 # replays scenarios in order and the Tier 3 checklist prints them in order.
-#
-# Only connect/capture are here in this PR -- authenticate/keyboard/mouse/
-# expect land in the follow-up PR once this abstraction has been reviewed
-# with a small number of users rather than six at once.
 SCENARIOS: List[Scenario] = [
     Scenario(
         name="connect",

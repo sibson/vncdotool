@@ -73,9 +73,7 @@ class VNCServer(NamedTuple):
     # failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
     # Whether the desktop visibly changes in a *known region* in response
-    # to input. Deferred: no Tier 1 server sets this yet, because
-    # tests/servers/draw-content.sh paints static content -- see the
-    # "input-reactive test surface" follow-up in
+    # to input. Deferred; see "input-reactive test surface" in
     # docs/server-compatibility-plan.md.
     input_reactive: bool = False
     # How long to wait for the server to answer a single request. The
