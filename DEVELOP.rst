@@ -52,15 +52,13 @@ diff, while a fall in the fleet number can also mean a server container
 did not come up. Nothing is gated -- there is no threshold, and no build
 fails on the number.
 
-A pull request gets the three numbers as a comment, edited in place on
-each push rather than piling up. The per-file tables are in the run's job
-summary, and ``coverage-html`` is an artifact on the same run. A pull
-request from a fork gets a read-only token and so no comment; the job
-summary still has everything.
+The numbers are at the top of the run's job summary, one line per tier,
+with the per-file tables folded away underneath and ``coverage-html`` an
+artifact on the same run.
 
 ``.github/scripts/coverage-summary.sh unit=DIR fleet=DIR`` is what CI
-runs. It writes ``combined/summary.md`` and ``combined/comment.md`` and
-prints the short one, so the same report can be produced locally.
+runs. It writes ``combined/summary.md`` and prints it, so the same report
+can be produced locally.
 
 Working with more than one checkout
 ------------------------------------

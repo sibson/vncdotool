@@ -4,22 +4,19 @@
 #
 # Usage: coverage-summary.sh NAME=DIR [NAME=DIR ...]
 #
-# Writes three things, all under combined/, and prints the short one:
-#   combined/summary.md   per-file tables, one per tier -- the job summary
-#   combined/comment.md   one line per tier -- the PR comment
-#   combined/<name>       the combined data file for each tier, and total
-# htmlcov/ is written from the total. Nothing here is CI-specific, so the
-# same report can be produced locally.
+# Writes combined/summary.md -- a table of one number per tier, with the
+# per-file tables folded away underneath it -- and prints it. htmlcov/ is
+# written from the total, and combined/<name> holds each tier's combined
+# data. Nothing here is CI-specific, so the same report can be produced
+# locally.
 set -euo pipefail
 
 mkdir -p combined
 summary=combined/summary.md
-comment=combined/comment.md
-: > "$summary"
-{
-    printf '### Coverage\n\n'
-    printf '| tier | coverage |\n| --- | --- |\n'
-} > "$comment"
+detail=combined/detail.md
+totals=combined/totals.md
+: > "$detail"
+printf '## Coverage\n\n| tier | coverage |\n| --- | --- |\n' > "$totals"
 
 # `coverage combine` discovers inputs by the name of the data file it
 # writes, so --data-file=combined/unit would look for `combined/unit.*` and
@@ -29,18 +26,17 @@ report() {
     local name=$1
     shift
     if ! coverage combine --keep "$@" >/dev/null 2>&1; then
-        printf '### %s coverage\n\nNo data.\n\n' "$name" >> "$summary"
-        printf '| %s | no data |\n' "$name" >> "$comment"
+        printf '| %s | no data |\n' "$name" >> "$totals"
         return 1
     fi
     mv .coverage "combined/$name"
+    printf '| %s | %s%% |\n' \
+        "$name" "$(coverage report --data-file="combined/$name" --format=total)" >> "$totals"
     {
-        printf '### %s coverage\n\n' "$name"
+        printf '#### %s\n\n' "$name"
         coverage report --data-file="combined/$name" --format=markdown
         printf '\n'
-    } >> "$summary"
-    printf '| %s | %s%% |\n' \
-        "$name" "$(coverage report --data-file="combined/$name" --format=total)" >> "$comment"
+    } >> "$detail"
 }
 
 dirs=()
@@ -53,4 +49,10 @@ if report total "${dirs[@]}"; then
     coverage html --data-file=combined/total
 fi
 
-cat "$comment"
+{
+    cat "$totals"
+    printf '\n<details><summary>Per-file detail</summary>\n\n'
+    cat "$detail"
+    printf '</details>\n'
+} > "$summary"
+cat "$summary"
