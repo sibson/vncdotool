@@ -11,7 +11,7 @@ from PIL import Image
 from .test_proxy import _await_capture, _start_vnclog, _stop_proxy
 from .vncservers import DOCKER_SERVERS, HOST, port_open, start_replay_server, vncdo_argv
 
-TIGERVNC = next(s for s in DOCKER_SERVERS if s.name == "tigervnc")
+TIGERVNC_AUTH = next(s for s in DOCKER_SERVERS if s.name == "tigervnc-auth")
 
 ROUNDTRIP_PROXY_PORT = 5996
 REPLAY_PORT = 5997
@@ -22,21 +22,21 @@ SCREENSHOT = "screen.png"
 
 class TestCaptureReplayRoundtrip(TestCase):
     def setUp(self) -> None:
-        if not port_open(HOST, TIGERVNC.port):
-            self.fail(f"tigervnc not reachable on {HOST}:{TIGERVNC.port} -- {TIGERVNC.how_to_start}")
+        if not port_open(HOST, TIGERVNC_AUTH.port):
+            self.fail(f"tigervnc-auth not reachable on {HOST}:{TIGERVNC_AUTH.port} -- {TIGERVNC_AUTH.how_to_start}")
         self.tmp = Path(mkdtemp())
         self.live = self.tmp / "live"
         self.replayed = self.tmp / "replayed"
         self.live.mkdir()
         self.replayed.mkdir()
         self.capture = self.tmp / "roundtrip.zip"
-        self.proxy = _start_vnclog(ROUNDTRIP_PROXY_PORT, f"{HOST}::{TIGERVNC.port}", self.capture)
+        self.proxy = _start_vnclog(ROUNDTRIP_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", self.capture)
         self.addCleanup(_stop_proxy, self.proxy)
 
     def test_replayed_capture_decodes_to_the_same_screenshot(self) -> None:
         # Relative, from its own directory: an absolute path would have the
         # replay overwrite the file it is compared against.
-        proxied = TIGERVNC._replace(port=ROUNDTRIP_PROXY_PORT)
+        proxied = TIGERVNC_AUTH._replace(port=ROUNDTRIP_PROXY_PORT)
         result = subprocess.run(
             vncdo_argv(proxied, "capture", SCREENSHOT),
             capture_output=True, text=True, timeout=TIMEOUT,
