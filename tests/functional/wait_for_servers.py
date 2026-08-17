@@ -1,13 +1,8 @@
 #!/usr/bin/env python3
 """Wait until a group of VNC test servers can actually serve a screen.
 
-Used as a readiness gate before the functional tests run, so a server that
-is slow to become usable shows up here -- as a wait, with per-attempt
-reasons -- rather than as a mysterious timeout inside a test.
-
 Takes the same server group as capture_screenshots.py: ``docker``, ``os``,
-or ``all`` (see vncservers.py). Exits non-zero if any server in the group
-never became ready.
+or ``all``. Exits non-zero if any server never became ready.
 """
 
 import sys
@@ -30,10 +25,7 @@ def main(argv: List[str]) -> int:
     group = argv[1] if len(argv) > 1 else DEFAULT_GROUP
     ready = [wait_until_ready(server) for server in select_servers(group)]
 
-    # api.connect() starts a background Twisted reactor thread that outlives
-    # any individual client connection -- without stopping it here this
-    # script hangs on exit instead of finishing.
-    api.shutdown()
+    api.shutdown()  # the reactor thread outlives its clients; this script hangs without it
 
     return 0 if all(ready) else 1
 

@@ -1,36 +1,46 @@
 #!/bin/sh
-# Wait for the X display to accept connections, draw a trivial X client on
-# it, and only then signal readiness via a marker file. Without a client
-# the framebuffer is pure black, and a black capture is indistinguishable
-# from "we never received an update" -- tests/functional/test_servers.py
-# asserts captures aren't flat.
+# Put a trivial X client on the display so captures aren't pure black: a
+# flat capture is indistinguishable from "we never received an update".
 #
-# The marker file matters because "the RFB port accepts connections" is
-# not the same thing as "there is content on screen": Xvnc in particular
-# starts accepting connections the instant it launches, well before this
-# script's backgrounded xlogo has mapped a window, so a probe of the port
-# alone lets the image report healthy while the framebuffer is still
-# flat. The image HEALTHCHECK checks for this file's existence in
-# addition to the port so `docker compose up --wait` only reports the
-# container ready once there is actually something to capture.
+# Readiness is decided elsewhere, by wait_for_servers.py. The waits below
+# still fail hard rather than give up quietly, because xlogo needs a
+# display to draw on and this would otherwise draw nothing at all.
 set -e
 
 export DISPLAY="${DISPLAY:-:0}"
-READY_FILE="${DRAW_CONTENT_READY_FILE:-/tmp/draw-content-ready}"
 
-for _ in $(seq 1 30); do
-    xdpyinfo >/dev/null 2>&1 && break
-    sleep 0.5
-done
+require() {
+    command -v "$1" >/dev/null 2>&1 || {
+        echo "draw-content: $1 is not installed in this image" >&2
+        exit 1
+    }
+}
+
+# wait_for <attempts> <delay> <command...>
+wait_for() {
+    attempts=$1
+    delay=$2
+    shift 2
+    while [ "$attempts" -gt 0 ]; do
+        if "$@" >/dev/null 2>&1; then
+            return 0
+        fi
+        attempts=$((attempts - 1))
+        sleep "$delay"
+    done
+    echo "draw-content: gave up waiting for: $*" >&2
+    return 1
+}
+
+require xdpyinfo
+require xwininfo
+require xlogo
+
+wait_for 30 0.5 xdpyinfo
 
 xlogo -geometry 200x200+50+50 &
 XLOGO_PID=$!
 
-for _ in $(seq 1 30); do
-    xwininfo -name xlogo >/dev/null 2>&1 && break
-    sleep 0.2
-done
-
-touch "$READY_FILE"
+wait_for 30 0.2 xwininfo -name xlogo
 
 wait "$XLOGO_PID"

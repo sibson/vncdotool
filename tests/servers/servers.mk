@@ -6,9 +6,14 @@ SCREENSHOT_DIR?=tests/servers/screenshots
 # tests/functional/vncservers.py.
 SCREENSHOT_GROUP?=docker
 
+# `up --wait` only gets as far as the containers' HEALTHCHECK, which is
+# liveness: the port is bound. wait_for_servers.py is the readiness gate --
+# it captures until each server serves the content it should, the same
+# assertion the tests make, and the same gate the OS-hosted servers use.
 .PHONY: servers-up
 servers-up:
 	$(DOCKER_COMPOSE) -f $(SERVERS_COMPOSE) up -d --build --wait
+	$(PYTHON) tests/functional/wait_for_servers.py docker
 
 .PHONY: servers-down
 servers-down:

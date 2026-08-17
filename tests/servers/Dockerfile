@@ -14,8 +14,10 @@ FROM debian:bookworm-slim AS base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         x11-apps \
+        x11-utils \
         xauth \
         procps \
+        iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY draw-content.sh /draw-content.sh
@@ -23,16 +25,16 @@ RUN chmod +x /draw-content.sh
 
 EXPOSE 5900
 
-# bash's /dev/tcp rather than `nc`: same "is the RFB port accepting
-# connections" probe without pulling netcat into every image. That alone
-# isn't sufficient readiness, though -- Xvnc in particular starts
-# accepting connections the instant it launches, before draw-content.sh's
-# backgrounded xlogo has drawn anything, so a port-only check can report
-# healthy against a still-flat framebuffer. draw-content.sh only creates
-# /tmp/draw-content-ready once xlogo's window is actually mapped, so the
-# check also requires that file to exist.
+# Liveness only; readiness is `tests/functional/wait_for_servers.py docker`.
+#
+# This must never open an RFB connection: Xvnc counts every connection
+# closed before a successful authentication towards BlacklistThreshold
+# (default 5), so a connecting probe blacklists 127.0.0.1 within ~10s and
+# refuses every later session. Speaking more of the protocol first does not
+# help -- measured against TigerVNC 1.12.0, a bare connect, a version
+# exchange and a version-plus-security-types exchange trip it identically.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready'
+    CMD ss -H -ltn 'sport = :5900' | grep -q .
 
 
 # TigerVNC's own X server. Serves with no authentication by default, or
@@ -66,11 +68,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Extends base's check with the event sink: the port evidences only half of
-# what this container promises, and the sink loses a startup race often
-# enough that readiness has to wait for it.
+# The event sink is the second thing this container promises, and the one
+# that loses a startup race.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900 && test -f /tmp/draw-content-ready && pgrep -f "xev -root" >/dev/null'
+    CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "xev -root" >/dev/null
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -103,8 +104,8 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release . \
     && cmake --build . --target examples_vncev examples_example -- -j"$(nproc)"
 
 
-# Event sink: prints events, renders no desktop, so the HEALTHCHECK drops
-# base's draw-content marker.
+# Event sink: prints events and renders no desktop, so vncservers.py marks
+# it renders_desktop=False and readiness stops at the handshake.
 FROM base AS vncev
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -115,13 +116,11 @@ COPY --from=libvncserver-build /tmp/libvncserver/examples/vncev /usr/local/bin/v
 COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
 RUN ldconfig
 
-HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
-
 ENTRYPOINT ["vncev", "-rfbport", "5900", "-rfbwait", "1000"]
 
 
-# Self-animated canvas, so there is no draw-content.sh marker to wait for.
+# Self-animated canvas, so it draws its own content rather than needing
+# draw-content.sh to put an X client on the screen.
 FROM base AS libvncserver-example
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -131,8 +130,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=libvncserver-build /tmp/libvncserver/examples/example /usr/local/bin/example
 COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib/
 RUN ldconfig
-
-HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD bash -c 'exec 3<>/dev/tcp/127.0.0.1/5900'
 
 ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]

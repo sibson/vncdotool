@@ -157,6 +157,7 @@ def screenshot_dir() -> Path:
 
 
 def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool:
+    """Whether ``port`` accepts a connection. Cheap liveness, not readiness."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -190,23 +191,29 @@ def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] =
     return path
 
 
+def distinct_colours(image: Image.Image) -> Optional[int]:
+    """How many colours ``image`` contains, or None above ``MAX_COLOURS``."""
+    colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
+    return colours if colours is None else len(colours)
+
+
+def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
+    if not server.renders_desktop:
+        return True
+    return colours != 1
+
+
 def wait_until_ready(
     server: VNCServer,
     deadline_seconds: float = READY_DEADLINE,
     attempt_timeout: float = READY_ATTEMPT_TIMEOUT,
 ) -> bool:
-    """Block until ``server`` completes a whole RFB round trip, or give up.
+    """Block until ``server`` serves the screen the tests expect, or give up.
 
-    An open port is not readiness. The Docker servers need a drawn-content
-    marker on top of it (tests/servers/draw-content.sh); an OS-hosted
-    server needs this instead, because the first connection can stall
-    indefinitely while the next one succeeds at once -- macOS Screen
-    Sharing is socket-activated, so that first connection is also what
-    starts the server.
-
-    Retrying a whole connection is therefore the only probe that means
-    anything: a per-request timeout can't rescue a connection that never
-    finished its handshake.
+    Servers accept connections before they have anything to show, so
+    readiness has to be a capture. The whole connection is retried because
+    macOS Screen Sharing is socket-activated: the first connection starts
+    it and can stall indefinitely while the next succeeds at once.
     """
     deadline = time.monotonic() + deadline_seconds
     attempt = 0
@@ -216,15 +223,22 @@ def wait_until_ready(
             time.sleep(RETRY_DELAY)
             continue
         try:
-            with connect(server, timeout=attempt_timeout) as client:
-                client.refreshScreen()
+            with tempfile.TemporaryDirectory() as tmp:
+                probe = Path(tmp) / f"{server.name}-ready.png"
+                capture_screenshot(server, probe, timeout=attempt_timeout)
+                with Image.open(probe) as image:
+                    colours = distinct_colours(image)
         except Exception as exc:  # noqa: BLE001 - any failure means try again
             print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
+            continue
+        if not has_expected_content(server, colours):
+            print(f"{server.name}: not ready yet (attempt {attempt}: capture is flat)")
+            time.sleep(RETRY_DELAY)
             continue
         print(f"{server.name}: ready after {attempt} attempt(s)")
         return True
 
-    print(f"{server.name}: never completed an RFB round trip")
+    print(f"{server.name}: never served the content it is expected to render")
     return False
 
 
@@ -409,9 +423,8 @@ class _VNCServerTestMixin:
                     self.server.size,
                     f"{self.server.name}: capture is not the size the server serves",
                 )
-            colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
+            distinct = distinct_colours(image)
 
-        distinct = colours if colours is None else len(colours)
         if not self.server.renders_desktop:
             print(
                 f"{self.server.name}: {distinct} colours captured; content is not "
@@ -419,9 +432,8 @@ class _VNCServerTestMixin:
             )
             return
 
-        self.assertNotEqual(
-            distinct,
-            1,
+        self.assertTrue(
+            has_expected_content(self.server, distinct),
             f"{self.server.name}: capture is a single flat colour, "
             "no screen content was decoded",
         )
