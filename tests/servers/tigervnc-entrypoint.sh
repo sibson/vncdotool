@@ -17,13 +17,9 @@ if [ -n "$VNC_PASSWORD" ]; then
     chmod 600 /root/.vnc/passwd
     # Xvnc counts every connection closed before a successful authentication
     # towards BlacklistThreshold, and a successful authentication clears the
-    # host's blackmark. The harness leaves a few such closes even though the
-    # readiness probe never connects (see the HEALTHCHECK in Dockerfile):
-    # about seven port_open() reachability probes per full run, plus the one
-    # deliberate wrong password in tests/functional/test_cli.py. A full run
-    # interleaves enough successful authentications to stay under the default
-    # of 5, but running test_cli.py alone, repeatedly, chains them without one.
-    # 50 absorbs several such runs while still capping real password guessing.
+    # host's blackmark. The readiness probe never authenticates (see the
+    # HEALTHCHECK in Dockerfile), so a generous threshold avoids blacklisting
+    # the harness itself while still capping real password guessing.
     set -- -SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd -BlacklistThreshold=50
 else
     set -- -SecurityTypes None
