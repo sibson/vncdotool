@@ -11,27 +11,29 @@ for its whole lifetime. A second in-process module would either race this
 one for it or leave its own reactor thread wedged on exit -- new in-process
 tests belong in *this* file, sharing *this* reactor.
 
-Ordering matters for the same reason: every case here shares that reactor,
-torn down once by ``tearDownModule``. The one case that could wedge it (the
-closed-port case) is ordered last so a hang there poisons nothing before it.
+``setUpModule`` makes the first connection itself, so the reactor is
+running before any test method does -- no test depends on being first.
 """
 
+import queue
 import socket
 import threading
 import time
 import unittest
 
+from twisted.internet import reactor
 from twisted.internet.error import ConnectError
+from twisted.internet.protocol import Factory, Protocol
 
 from vncdotool import api
 
 from .vncservers import DOCKER_SERVERS, HOST, SUBPROCESS_TIMEOUT_HEADROOM, connect, port_open
 
-TIGERVNC = next(s for s in DOCKER_SERVERS if s.name == "tigervnc")
+LIBVNC = next(s for s in DOCKER_SERVERS if s.name == "libvncserver-example")
 
 # Same headroom the subprocess grid adds: the bare 5s server budget was
 # observed to flake under load.
-HAPPY_TIMEOUT = TIGERVNC.timeout + SUBPROCESS_TIMEOUT_HEADROOM
+HAPPY_TIMEOUT = LIBVNC.timeout + SUBPROCESS_TIMEOUT_HEADROOM
 
 SHORT_TIMEOUT = 2.0
 
@@ -39,13 +41,20 @@ SHORT_TIMEOUT = 2.0
 # promptly, short enough that a real hang doesn't stall the suite.
 HANG_GUARD_TIMEOUT = 10.0
 
+# Bound for a call dispatched onto the reactor thread via callFromThread --
+# a local listenTCP/stopListening, not network I/O, so this is generous
+# only relative to how fast that actually is.
+REACTOR_CALL_TIMEOUT = 2.0
+
 
 def setUpModule() -> None:
-    if not port_open(HOST, TIGERVNC.port):
+    if not port_open(HOST, LIBVNC.port):
         raise RuntimeError(
-            f"tigervnc not reachable on {HOST}:{TIGERVNC.port} -- "
+            f"libvncserver-example not reachable on {HOST}:{LIBVNC.port} -- "
             "start the servers first with `make servers-up`"
         )
+    with connect(LIBVNC, timeout=HAPPY_TIMEOUT) as client:
+        client.refreshScreen()
 
 
 def tearDownModule() -> None:
@@ -55,37 +64,29 @@ def tearDownModule() -> None:
 
 
 class TestApiLifecycle(unittest.TestCase):
-    """Ordered lifecycle cases against the tigervnc:5931 container.
+    """Lifecycle cases against the libvncserver-example:5935 container.
 
-    Names are prefixed to fix run order: well-behaved cases first, the
-    potentially-hanging one last.
+    Independent of each other and of run order: the one case that could
+    wedge the shared reactor (the closed-port case) is bounded by its own
+    timeout and helper thread, not by being run last.
     """
 
-    def test_a_connect_op_disconnect(self) -> None:
-        """connect -> one trivial op -> disconnect: clean, no exception."""
-        client = api.connect(f"{HOST}::{TIGERVNC.port}")
-        client.timeout = HAPPY_TIMEOUT
-        try:
-            client.refreshScreen()
-        finally:
-            client.disconnect()
-
-    def test_b_context_manager(self) -> None:
+    def test_context_manager_connect(self) -> None:
         """The documented ``with api.connect(...) as client:`` pattern works."""
-        with connect(TIGERVNC, timeout=HAPPY_TIMEOUT) as client:
+        with connect(LIBVNC, timeout=HAPPY_TIMEOUT) as client:
             client.keyPress("x")
 
-    def test_c_sequential_connects(self) -> None:
+    def test_sequential_reconnects(self) -> None:
         """The reactor survives a disconnect and serves a second connection.
 
         ``shutdown()`` is what's terminal, not ``disconnect()``: otherwise no
         long-running application could reconnect after a single drop.
         """
         for _ in range(2):
-            with connect(TIGERVNC, timeout=HAPPY_TIMEOUT) as client:
+            with connect(LIBVNC, timeout=HAPPY_TIMEOUT) as client:
                 client.refreshScreen()
 
-    def test_d_timeout_raises_timeout_error(self) -> None:
+    def test_timeout_raises_timeout_error(self) -> None:
         """A call against a port that never speaks RFB raises TimeoutError
         instead of hanging.
 
@@ -106,17 +107,17 @@ class TestApiLifecycle(unittest.TestCase):
             client.refreshScreen()
         elapsed = time.monotonic() - start
 
-        # Generous bound: proves the timeout fired, without being a
-        # flakiness trap on a loaded CI box.
-        self.assertLess(elapsed, SHORT_TIMEOUT + 5.0)
+        # Tight bound: the timeout path costs mild thread-wakeup slack at
+        # most. Padding this further would hide a real regression instead
+        # of catching one.
+        self.assertLess(elapsed, SHORT_TIMEOUT + 1.0)
 
-    def test_z_closed_port_raises_promptly(self) -> None:
+    def test_closed_port_raises_promptly(self) -> None:
         """connect() to a port nothing listens on fails fast, not hangs.
 
-        Ordered last (``z`` prefix): a regression here could wedge the
-        shared reactor, so it must not run before anything else. Bounded
-        twice over -- a per-client timeout, and a helper thread joined with
-        a deadline -- so even a wedge fails this test rather than the suite.
+        Bounded twice over -- a per-client timeout, and a helper thread
+        joined with a deadline -- so even a wedge fails only this test,
+        not the suite.
 
         Twisted's ``ConnectionRefusedError`` is a ``ConnectError``, not the
         stdlib ``OSError`` of the same name, so assert on that base class.
@@ -147,8 +148,7 @@ class TestApiLifecycle(unittest.TestCase):
             self.fail(
                 f"connect()/refreshScreen() against a closed port did not "
                 f"return within {HANG_GUARD_TIMEOUT}s -- this would have "
-                "hung the process; see the docstring above for why this "
-                "test is ordered last"
+                "hung the process"
             )
 
         self.assertIn("exception", outcome, f"expected an exception, got: {outcome}")
@@ -157,40 +157,30 @@ class TestApiLifecycle(unittest.TestCase):
         self.assertIsInstance(outcome["exception"], ConnectError)
 
 
+class _SilentProtocol(Protocol):
+    """Accepts the connection and never sends or reads anything."""
+
+
 class _SilentListener:
-    """A TCP listener that accepts and then never speaks, forcing a
-    protocol-level timeout rather than a connection-refused.
+    """A TCP listener on api.connect()'s own reactor that accepts and then
+    never speaks, forcing a protocol-level timeout rather than a
+    connection-refused. This process gets exactly one reactor, so this
+    reuses it rather than starting a second one via raw sockets.
     """
 
-    def __init__(self) -> None:
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self._socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self._socket.bind((HOST, 0))
-        self.port = self._socket.getsockname()[1]
-        self._socket.listen(1)
-        self._thread = threading.Thread(target=self._serve, daemon=True)
-        self._stopped = threading.Event()
-
     def start(self) -> None:
-        self._thread.start()
+        ready: "queue.Queue[None]" = queue.Queue()
+
+        def _listen() -> None:
+            self._port = reactor.listenTCP(0, Factory.forProtocol(_SilentProtocol), interface=HOST)
+            ready.put(None)
+
+        reactor.callFromThread(_listen)
+        ready.get(timeout=REACTOR_CALL_TIMEOUT)
+        self.port = self._port.getHost().port
 
     def stop(self) -> None:
-        self._stopped.set()
-        self._socket.close()
-
-    def _serve(self) -> None:
-        self._socket.settimeout(1.0)
-        while not self._stopped.is_set():
-            try:
-                conn, _ = self._socket.accept()
-            except TimeoutError:
-                continue  # idle poll; socket.timeout IS an OSError, catch it first
-            except OSError:
-                return
-            while not self._stopped.is_set():
-                time.sleep(0.1)
-            conn.close()
-            return
+        reactor.callFromThread(self._port.stopListening)
 
 
 def _closed_port() -> int:
