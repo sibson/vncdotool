@@ -170,6 +170,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test, servers]
+    permissions:
+      contents: read
+      pull-requests: write
     # Runs on a red build too, so a failing suite still reports what it
     # reached before it stopped.
     if: always()
@@ -200,7 +203,25 @@ jobs:
           path: data/fleet
 
       - name: Report
-        run: .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
+        run: |
+          .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
+          cat combined/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # A fork's token is read-only, so this cannot post there. The job
+      # summary carries the same numbers either way.
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        run: |
+          {
+            echo
+            echo "Per-file detail in the [job summary]($RUN_URL), line by line in its \`coverage-html\` artifact."
+          } >> combined/comment.md
+          .github/scripts/pr-sticky-comment.sh coverage-summary "$PR_NUMBER" combined/comment.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Upload the annotated HTML report
         if: always()
