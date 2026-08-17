@@ -213,7 +213,7 @@ jobs:
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
-          files: combined/unit.xml
+          files: combined/xml/unit.xml
           flags: unit
           disable_search: true
           fail_ci_if_error: false
@@ -223,7 +223,7 @@ jobs:
         continue-on-error: true
         uses: codecov/codecov-action@v7
         with:
-          files: combined/fleet.xml
+          files: combined/xml/fleet.xml
           flags: fleet
           disable_search: true
           fail_ci_if_error: false
