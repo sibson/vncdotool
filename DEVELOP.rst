@@ -48,9 +48,13 @@ and let Twisted's SIGTERM handler shut the reactor down.
 
 CI reports the unit and fleet tiers separately as well as combined, in
 each run's job summary. Two tiers, two meanings: a fall in the unit
-number is a regression in the diff, while a fall in the fleet number
-usually means a server container did not come up. Nothing is gated --
-there is no threshold, and no build fails on the number.
+number is a regression in the diff, while a fall in the fleet number can
+also mean a server container did not come up. Nothing is gated -- there
+is no threshold, and no build fails on the number.
+
+``.github/scripts/coverage-summary.sh unit=DIR fleet=DIR`` is what CI
+runs, and it prints to stdout when ``GITHUB_STEP_SUMMARY`` is unset, so
+the same report can be produced locally.
 
 Working with more than one checkout
 ------------------------------------

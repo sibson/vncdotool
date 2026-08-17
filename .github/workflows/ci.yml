@@ -170,8 +170,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test, servers]
-    # Runs on a red build too: the fleet job is the flakiest one here, and
-    # its coverage is most interesting exactly when it failed.
+    # Runs on a red build too, so a failing suite still reports what it
+    # reached before it stopped.
     if: always()
     steps:
       - name: Check out source
@@ -200,26 +200,7 @@ jobs:
           path: data/fleet
 
       - name: Report
-        run: |
-          mkdir -p combined
-          # `coverage combine` discovers inputs by the name of the data file
-          # it writes, so --data-file=.coverage.unit would look for
-          # `.coverage.unit.*` and find nothing. Hence combine then rename,
-          # into a directory the next pass will not read back in.
-          report() {
-            name="$1" out="$2"; shift 2
-            if ! coverage combine --keep "$@" 2>/dev/null; then
-              echo "### $name coverage: no data" >> "$GITHUB_STEP_SUMMARY"
-              return
-            fi
-            mv .coverage "combined/$out"
-            printf '### %s coverage\n\n' "$name" >> "$GITHUB_STEP_SUMMARY"
-            coverage report --data-file="combined/$out" --format=markdown >> "$GITHUB_STEP_SUMMARY"
-          }
-          report Unit unit.coverage data/unit
-          report Fleet fleet.coverage data/fleet
-          report Combined total.coverage data/unit data/fleet
-          coverage html --data-file=combined/total.coverage || true
+        run: .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
 
       - name: Upload the annotated HTML report
         if: always()
