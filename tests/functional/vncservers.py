@@ -76,14 +76,16 @@ class VNCServer(NamedTuple):
     how_to_start: str = "start the servers first with `make servers-up`"
 
 
-# One entry per service in tests/servers/docker-compose.yml.
-DOCKER_SERVERS = [
-    VNCServer("tigervnc", 5931),
-    VNCServer("tigervnc-auth", 5932, password="vncdotool"),
-    VNCServer("x11vnc", 5933),
-    # 800x600 is the demo's hard-coded size; it takes no -geometry option.
-    VNCServer("libvncserver-example", 5935, size=(800, 600)),
-]
+# One constant per service in tests/servers/docker-compose.yml, named so a
+# test that needs a specific one can import it directly instead of
+# searching DOCKER_SERVERS by name.
+TIGERVNC = VNCServer("tigervnc", 5931)
+TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
+X11VNC = VNCServer("x11vnc", 5933)
+# 800x600 is the demo's hard-coded size; it takes no -geometry option.
+LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
+
+DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.

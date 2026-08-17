@@ -14,12 +14,10 @@ from pathlib import Path
 from typing import List
 from unittest import TestCase
 
-from .vncservers import DOCKER_SERVERS, HOST, VNCEV, port_open, run_vncdo
+from .vncservers import HOST, VNCEV, X11VNC, port_open, run_vncdo
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "tests" / "servers" / "docker-compose.yml"
-
-X11VNC = next(s for s in DOCKER_SERVERS if s.name == "x11vnc")
 
 LOG_POLL_INTERVAL = 0.5
 LOG_POLL_DEADLINE = 15.0
