@@ -375,11 +375,7 @@ Tier 1 follow-ups:
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 - **Done:** the `servers` job's base image is now pinned by digest
-  (`tests/servers/Dockerfile`). Every pin this plan asks for — base image
-  digests, distro server packages, `LIBVNCSERVER_VERSION`, the UltraVNC
-  Chocolatey package, and the Tier 2 runner images — is now inventoried in
-  `tests/servers/versions.md`, with where each pin lives and how to bump
-  it.
+  (`tests/servers/Dockerfile`).
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow
