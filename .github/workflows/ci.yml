@@ -44,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt 'coverage>=7'
+          pip install -r requirements-dev.txt
 
       - name: Run unittests
         run: coverage run --parallel-mode -m unittest discover tests/unit
@@ -55,8 +55,6 @@ jobs:
         with:
           name: coverage-unit-${{ matrix.python-version }}
           path: .coverage.*
-          # The data files are dotfiles, which upload-artifact skips by
-          # default -- without this the coverage job silently sees nothing.
           include-hidden-files: true
           if-no-files-found: ignore
 
@@ -103,19 +101,9 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt 'coverage>=7'
+          pip install -r requirements-dev.txt
           # The functional suite shells out to `vncdo`, so it has to be on PATH.
           pip install -e .
-
-      # A subprocess measures itself only if coverage starts before it
-      # imports anything; see DEVELOP.rst.
-      - name: Enable coverage in subprocesses
-        run: |
-          python - <<'PY'
-          import pathlib, sysconfig
-          pth = pathlib.Path(sysconfig.get_paths()["purelib"], "coverage-subprocess.pth")
-          pth.write_text("import coverage; coverage.process_startup()\n")
-          PY
 
       - name: Build and start the VNC test servers
         run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
@@ -131,8 +119,6 @@ jobs:
         run: docker compose -f tests/servers/docker-compose.yml ps
 
       - name: Run functional tests
-        env:
-          COVERAGE_PROCESS_START: ${{ github.workspace }}/setup.cfg
         run: coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 
       - name: Upload coverage data
@@ -181,9 +167,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
-      - name: Install coverage
-        run: pip install 'coverage>=7'
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
 
       - name: Download unit tier coverage data
         uses: actions/download-artifact@v4

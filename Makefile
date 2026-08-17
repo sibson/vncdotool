@@ -82,20 +82,14 @@ include Makefile.venv
 .PHONY: coverage coverage-unit coverage-func coverage-report
 coverage: coverage-unit coverage-func coverage-report
 
-coverage-unit: check-python | $(VENV)/coverage
+coverage-unit: check-python | venv
 	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
 
-coverage-func: check-python $(VENV)/.coverage-subprocess-installed
-	COVERAGE_PROCESS_START=$(CURDIR)/setup.cfg PATH="$(abspath $(VENV)):$$PATH" \
+coverage-func: check-python | venv
+	PATH="$(abspath $(VENV)):$$PATH" \
 	  $(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
 
-$(VENV)/.coverage-subprocess-installed: | $(VENV)/coverage
-	$(VENV)/python -c "import pathlib, sysconfig; \
-	  pathlib.Path(sysconfig.get_paths()['purelib'], 'coverage-subprocess.pth') \
-	    .write_text('import coverage; coverage.process_startup()\n')"
-	$(call touch,$@)
-
-coverage-report: | $(VENV)/coverage
+coverage-report: | venv
 	$(VENV)/coverage combine
 	$(VENV)/coverage report
 	$(VENV)/coverage html

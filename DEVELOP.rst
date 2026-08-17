@@ -38,13 +38,12 @@ targets are separate from ``make test`` because measuring costs runtime
 that is not worth paying on every edit-run loop.
 
 Almost everything the functional suite covers happens in a ``vncdo``,
-``vnclog`` or ``vncdo-replay`` subprocess, which measures itself only if
-coverage starts before it imports anything. ``make coverage-func``
-arranges that by dropping a ``.pth`` into the venv's ``site-packages``
-and setting ``COVERAGE_PROCESS_START``; the equivalent steps run in CI.
-A child that is ``kill``\ ed rather than asked to stop never gets to
-write its data, so tests that stop a long-running process terminate it
-and let Twisted's SIGTERM handler shut the reactor down.
+``vnclog`` or ``vncdo-replay`` subprocess, which a plain ``coverage run``
+does not see. ``patch = subprocess`` in ``setup.cfg`` is what measures
+them, so it needs coverage 7.10 or newer. A child that is ``kill``\ ed
+rather than asked to stop never gets to write its data, so tests that
+stop a long-running process terminate it and let Twisted's SIGTERM
+handler shut the reactor down.
 
 CI reports the unit and fleet tiers separately as well as combined. Two
 tiers, two meanings: a fall in the unit number is a regression in the
