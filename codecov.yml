@@ -1,5 +1,4 @@
-# Coverage is reported, never gated: no status check may fail a build.
-# See DEVELOP.rst.
+# Off deliberately and permanently, not pending setup; see DEVELOP.rst.
 coverage:
   status:
     project: off
