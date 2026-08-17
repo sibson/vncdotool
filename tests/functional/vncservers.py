@@ -169,6 +169,10 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
     Remember that the returned client is a context manager, and that
     ``api.shutdown()`` still has to be called once before the process exits.
+    And that shutdown is terminal for the whole process: after it, no
+    further ``connect()`` can ever work again (the reactor cannot restart),
+    which is why only ONE test module -- test_api_lifecycle.py -- may use
+    this in-process; everything else shells out via run_vncdo().
     """
     client = api.connect(
         f"{HOST}::{server.port}",

@@ -11,6 +11,7 @@ help:
 	@echo "servers-down:	stop the docker VNC test servers"
 	@echo "test-servers:	run functional tests against the VNC test servers"
 	@echo "test-os-server:	run functional tests against this OS's VNC server"
+	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"

@@ -25,6 +25,13 @@ test-servers:
 test-os-server:
 	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_os_servers.py'
 
+# The in-process vncdotool.api lifecycle suite, against libvncserver-example
+# alone. Runs on its own because one process gets one Twisted reactor -- see
+# tests/functional/test_api_lifecycle.py.
+.PHONY: test-api
+test-api:
+	$(PYTHON) -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_api_lifecycle.py'
+
 # Screenshot every running test server into $(SCREENSHOT_DIR), including an
 # index.html gallery of them all, for eyeballing what the servers render.
 .PHONY: screenshots
