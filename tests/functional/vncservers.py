@@ -340,9 +340,8 @@ def start_replay_server(
             "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
             "so its console script is available"
         ) from exc
-    # terminate(), not kill(): Twisted's own SIGTERM handler stops the
-    # reactor, so the process exits through atexit and flushes whatever it
-    # was holding -- its coverage data, and any file it still owes.
+    # Not kill(): Twisted's SIGTERM handler stops the reactor, so the
+    # process exits through atexit and flushes what it still owes.
     testcase.addCleanup(_terminate, server)
     testcase.addCleanup(server.stdout.close)
     testcase.addCleanup(server.stderr.close)

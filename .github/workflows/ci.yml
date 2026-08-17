@@ -107,10 +107,8 @@ jobs:
           # The functional suite shells out to `vncdo`, so it has to be on PATH.
           pip install -e .
 
-      # Every line the functional suite covers is executed in a `vncdo`,
-      # `vnclog` or `vncdo-replay` subprocess. They only measure themselves
-      # if coverage starts before they import anything, which is what this
-      # .pth does; COVERAGE_PROCESS_START tells them where the config is.
+      # A subprocess measures itself only if coverage starts before it
+      # imports anything; see DEVELOP.rst.
       - name: Enable coverage in subprocesses
         run: |
           python - <<'PY'
@@ -172,9 +170,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [test, servers]
-    # Coverage is reported, never gated: no threshold, and no dependency on
-    # the suites passing. The fleet job is the flakiest one here, and its
-    # coverage is most interesting exactly when it went red.
+    # Runs on a red build too: the fleet job is the flakiest one here, and
+    # its coverage is most interesting exactly when it failed.
     if: always()
     steps:
       - name: Check out source
@@ -202,18 +199,13 @@ jobs:
           name: coverage-fleet
           path: data/fleet
 
-      # Per tier as well as combined: a drop in the unit tier is a
-      # regression in the diff, a drop in the fleet tier usually means a
-      # container did not come up. One blended number cannot tell them
-      # apart. `--keep` leaves the inputs for the passes that follow.
       - name: Report
         run: |
           mkdir -p combined
-          # `coverage combine` always writes to the configured data file and
-          # discovers inputs by that same name -- passing --data-file would
-          # make it look for `.coverage.unit.*` and find nothing. So combine
-          # normally and rename, keeping the results out of the working
-          # directory where the next pass would slurp them back in.
+          # `coverage combine` discovers inputs by the name of the data file
+          # it writes, so --data-file=.coverage.unit would look for
+          # `.coverage.unit.*` and find nothing. Hence combine then rename,
+          # into a directory the next pass will not read back in.
           report() {
             name="$1" out="$2"; shift 2
             if ! coverage combine --keep "$@" 2>/dev/null; then

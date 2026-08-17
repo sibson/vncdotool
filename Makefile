@@ -74,21 +74,17 @@ include tests/servers/servers.mk
 
 include Makefile.venv
 
-# Coverage. Reported, never gated -- see DEVELOP.rst. Kept off the
-# plain `test` targets because measuring costs runtime that is not worth
-# paying on every edit-run loop.
+# Coverage, kept off the plain `test` targets because measuring costs
+# runtime not worth paying on every edit-run loop. See DEVELOP.rst.
 #
-# Below the include because $(VENV) is defined there, and prerequisites are
-# expanded where they are written, not where they are used.
+# Below the include because $(VENV) is defined there, and prerequisites
+# are expanded where they are written, not where they are used.
 .PHONY: coverage coverage-unit coverage-func coverage-report
 coverage: coverage-unit coverage-func coverage-report
 
 coverage-unit: check-python | $(VENV)/coverage
 	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
 
-# The functional suite's coverage all comes from `vncdo` subprocesses, and
-# a subprocess only measures itself if site-packages carries a .pth that
-# starts coverage before it imports anything.
 coverage-func: check-python $(VENV)/.coverage-subprocess-installed
 	COVERAGE_PROCESS_START=$(CURDIR)/setup.cfg PATH="$(abspath $(VENV)):$$PATH" \
 	  $(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
