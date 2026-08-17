@@ -2,9 +2,8 @@
 
 See tests/servers/docker-compose.yml and tests/servers/servers.mk. The test
 servers are expected to already be running (e.g. via ``make servers-up``)
-before this module executes; a server whose port isn't open is skipped with
-a clear message rather than failing the whole run, so this module is also
-safe to run outside of that make target.
+before this module executes; a server whose port isn't open fails with a
+clear message rather than passing silently as skipped.
 
 The servers themselves, and the round trip run against each of them, are
 described in vncservers.py and shared with the OS-hosted servers tested by

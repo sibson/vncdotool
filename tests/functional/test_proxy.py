@@ -82,7 +82,7 @@ def _stop_proxy(proxy: subprocess.Popen) -> None:
 class TestVNCLOGProxy(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, VNCEV.port):
-            self.skipTest(
+            self.fail(
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
@@ -146,7 +146,7 @@ class TestVNCLOGCapture(TestCase):
 
     def setUp(self) -> None:
         if not port_open(HOST, VNCEV.port):
-            self.skipTest(
+            self.fail(
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
@@ -214,7 +214,7 @@ class TestVNCLOGCaptureVNCAuth(TestCase):
 
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC_AUTH.port):
-            self.skipTest(
+            self.fail(
                 f"tigervnc-auth not reachable on {HOST}:{TIGERVNC_AUTH.port} -- "
                 "start the servers first with `make servers-up`"
             )

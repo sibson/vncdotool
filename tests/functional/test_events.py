@@ -66,9 +66,9 @@ class TestVNCEVSink(TestCase):
 
     def setUp(self) -> None:
         if not _docker_compose_available():
-            self.skipTest("docker not available")
+            self.fail("docker not available")
         if not port_open(HOST, VNCEV.port):
-            self.skipTest(
+            self.fail(
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
@@ -137,9 +137,9 @@ class TestX11SideSink(TestCase):
 
     def setUp(self) -> None:
         if not _docker_compose_available():
-            self.skipTest("docker not available")
+            self.fail("docker not available")
         if not port_open(HOST, X11VNC.port):
-            self.skipTest(
+            self.fail(
                 f"x11vnc not reachable on {HOST}:{X11VNC.port} -- start the servers first "
                 "with `make servers-up`"
             )

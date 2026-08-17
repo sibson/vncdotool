@@ -23,7 +23,7 @@ SCREENSHOT = "screen.png"
 class TestCaptureReplayRoundtrip(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC.port):
-            self.skipTest(f"tigervnc not reachable on {HOST}:{TIGERVNC.port} -- {TIGERVNC.how_to_start}")
+            self.fail(f"tigervnc not reachable on {HOST}:{TIGERVNC.port} -- {TIGERVNC.how_to_start}")
         self.tmp = Path(mkdtemp())
         self.live = self.tmp / "live"
         self.replayed = self.tmp / "replayed"
