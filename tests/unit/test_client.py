@@ -208,7 +208,7 @@ class TestVNCDoToolClient(TestCase):
 
     # A framebuffer update whose only rectangle is the DesktopSize
     # pseudo-encoding carries no pixel data; TightVNC answers the first
-    # non-incremental update request this way (#90).
+    # non-incremental update request this way.
     MSG_FBU_DESKTOP_SIZE_ONLY = (
         b"\x00"  # FRAMEBUFFER_UPDATE
         b"\x00"  # padding

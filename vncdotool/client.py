@@ -381,7 +381,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.deferred:
             if not rectangles:
                 # A pixel-free update, e.g. only a DesktopSize pseudo-rectangle
-                # (TightVNC answers the first update request this way, #90).
+                # (TightVNC answers the first update request this way).
                 # Completing the refresh now would hand over the bare black
                 # canvas, so request again and wait for real content.
                 self.framebufferUpdateRequest()
