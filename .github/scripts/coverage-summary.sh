@@ -7,8 +7,8 @@
 # Writes combined/summary.md -- a table of one number per tier, with the
 # per-file tables folded away underneath it -- and prints it. htmlcov/ is
 # written from the total, and combined/<name> holds each tier's combined
-# data. Nothing here is CI-specific, so the same report can be produced
-# locally.
+# data alongside combined/<name>.xml for tools that want Cobertura.
+# Nothing here is CI-specific, so the same report can be produced locally.
 set -euo pipefail
 
 mkdir -p combined
@@ -37,6 +37,7 @@ report() {
         coverage report --data-file="combined/$name" --format=markdown
         printf '\n'
     } >> "$detail"
+    coverage xml --data-file="combined/$name" -o "combined/$name.xml"
 }
 
 dirs=()

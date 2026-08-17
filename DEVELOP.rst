@@ -55,6 +55,13 @@ The numbers are at the top of the run's job summary, one line per tier,
 with the per-file tables folded away underneath and ``coverage-html`` an
 artifact on the same run.
 
+The browsable report is https://app.codecov.io/gh/sibson/vncdotool --
+line-by-line annotation, history, and the ``unit`` and ``fleet`` flags
+graphed separately. CI uploads one Cobertura file per tier there;
+uploads from a public repo need no token. ``codecov.yml`` turns the
+project and patch status checks off and suppresses the PR comment, so
+Codecov observes and never votes.
+
 ``.github/scripts/coverage-summary.sh unit=DIR fleet=DIR`` is what CI
 runs. It writes ``combined/summary.md`` and prints it, so the same report
 can be produced locally.

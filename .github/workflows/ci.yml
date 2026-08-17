@@ -203,3 +203,27 @@ jobs:
           name: coverage-html
           path: htmlcov/
           if-no-files-found: ignore
+
+      # A flag per tier, so Codecov keeps the split the summary reports and
+      # merges them itself for the project number. Public repos upload
+      # without a token. continue-on-error because coverage gates nothing;
+      # a Codecov outage must not turn a green run red.
+      - name: Upload unit coverage to Codecov
+        if: always()
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          files: combined/unit.xml
+          flags: unit
+          disable_search: true
+          fail_ci_if_error: false
+
+      - name: Upload fleet coverage to Codecov
+        if: always()
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          files: combined/fleet.xml
+          flags: fleet
+          disable_search: true
+          fail_ci_if_error: false

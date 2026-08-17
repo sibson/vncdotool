@@ -1,0 +1,19 @@
+# Coverage is reported, never gated: no status check may fail a build.
+# See DEVELOP.rst.
+coverage:
+  status:
+    project: off
+    patch: off
+
+# The two tiers CI uploads separately. carryforward because either job can
+# fail or be skipped, and a missing upload should leave that flag at its
+# last known value rather than reading as a collapse to zero.
+flags:
+  unit:
+    carryforward: true
+  fleet:
+    carryforward: true
+
+# The repo's own PR comment was removed as noise; Codecov's would be the
+# same noise from a different sender.
+comment: false
