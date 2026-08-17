@@ -361,23 +361,25 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
-- **Stop paying the image build tax on every run.** GitHub-hosted runners
-  start with an empty Docker cache, so layer caching only helps within a
-  run — each CI run rebuilds from scratch (~35s of the ~70s total).
-  Options: `docker/build-push-action` with `cache-from/to: type=gha`, or
-  publish the images to GHCR once and have CI pull pinned digests, which
-  folds into the digest-pinning item below.
+- **Stop paying the image build tax on every run — evaluated, rejected.**
+  Tried `docker/setup-buildx-action` + `docker/bake-action` with
+  `cache-from`/`cache-to: type=gha`. It works (58s to 20s on the build
+  step) but the `gha` cache backend needs the docker-container driver,
+  which builds into its own store rather than dockerd, so the images then
+  have to be exported and re-imported for compose to find them — an
+  export/import tax that ate most of the saving. Net: 11s off a ~105s
+  job, not worth a new overlay file, a third-party action, and the
+  bake/compose path-resolution gotchas it takes. Worth revisiting only if
+  the critical path passes ~10 minutes or the repo goes private. Full
+  measurements in #364.
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 - **Done:** the `servers` job's base image is now pinned by digest
-  (`tests/servers/Dockerfile`), and the build uses `docker/setup-buildx-action`
-  + `docker/bake-action` with `cache-from`/`cache-to: type=gha` ahead of a
-  build-less `docker compose up --wait`, so a run with no Dockerfile changes
-  hits the Actions cache instead of rebuilding. Every pin this plan asks for
-  — base image digests, distro server packages, `LIBVNCSERVER_VERSION`, the
-  UltraVNC Chocolatey package, and the Tier 2 runner images — is now
-  inventoried in `tests/servers/versions.md`, with where each pin lives and
-  how to bump it.
+  (`tests/servers/Dockerfile`). Every pin this plan asks for — base image
+  digests, distro server packages, `LIBVNCSERVER_VERSION`, the UltraVNC
+  Chocolatey package, and the Tier 2 runner images — is now inventoried in
+  `tests/servers/versions.md`, with where each pin lives and how to bump
+  it.
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow

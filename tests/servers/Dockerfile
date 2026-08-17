@@ -11,9 +11,7 @@
 # server means one stage, not another near-copy of this file.
 
 # Pinned by digest rather than tag so "debian:bookworm-slim" can't
-# silently move to a new point release underneath us -- reproducible test
-# server images are what make gold-file regeneration meaningful (see
-# docs/server-compatibility-plan.md, "Gold files"). Bump via
+# silently move to a new point release underneath us. Bump via
 # tests/servers/versions.md, which explains how to resolve a fresh digest.
 FROM debian:bookworm-slim@sha256:abd67ffcfa541b485a3dff59865ab629aa048a6c613e639d36e7456b0b229241 AS base
 
