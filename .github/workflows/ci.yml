@@ -44,10 +44,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements-dev.txt 'coverage>=7'
 
       - name: Run unittests
-        run: python -m unittest discover tests/unit
+        run: coverage run --parallel-mode -m unittest discover tests/unit
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-${{ matrix.python-version }}
+          path: .coverage.*
+          # The data files are dotfiles, which upload-artifact skips by
+          # default -- without this the coverage job silently sees nothing.
+          include-hidden-files: true
+          if-no-files-found: ignore
 
   lint:
     name: Lint
@@ -92,9 +103,21 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements-dev.txt 'coverage>=7'
           # The functional suite shells out to `vncdo`, so it has to be on PATH.
           pip install -e .
+
+      # Every line the functional suite covers is executed in a `vncdo`,
+      # `vnclog` or `vncdo-replay` subprocess. They only measure themselves
+      # if coverage starts before they import anything, which is what this
+      # .pth does; COVERAGE_PROCESS_START tells them where the config is.
+      - name: Enable coverage in subprocesses
+        run: |
+          python - <<'PY'
+          import pathlib, sysconfig
+          pth = pathlib.Path(sysconfig.get_paths()["purelib"], "coverage-subprocess.pth")
+          pth.write_text("import coverage; coverage.process_startup()\n")
+          PY
 
       - name: Build and start the VNC test servers
         run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
@@ -110,7 +133,18 @@ jobs:
         run: docker compose -f tests/servers/docker-compose.yml ps
 
       - name: Run functional tests
-        run: python -m unittest discover -v -s tests/functional -t .
+        env:
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/setup.cfg
+        run: coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fleet
+          path: .coverage.*
+          include-hidden-files: true
+          if-no-files-found: ignore
 
       - name: Capture screenshots and build the gallery
         if: always()
@@ -132,3 +166,73 @@ jobs:
       - name: Stop the VNC test servers
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml down
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [test, servers]
+    # Coverage is reported, never gated: no threshold, and no dependency on
+    # the suites passing. The fleet job is the flakiest one here, and its
+    # coverage is most interesting exactly when it went red.
+    if: always()
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install coverage
+        run: pip install 'coverage>=7'
+
+      - name: Download unit tier coverage data
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-unit-*
+          path: data/unit
+          merge-multiple: true
+
+      - name: Download fleet tier coverage data
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: coverage-fleet
+          path: data/fleet
+
+      # Per tier as well as combined: a drop in the unit tier is a
+      # regression in the diff, a drop in the fleet tier usually means a
+      # container did not come up. One blended number cannot tell them
+      # apart. `--keep` leaves the inputs for the passes that follow.
+      - name: Report
+        run: |
+          mkdir -p combined
+          # `coverage combine` always writes to the configured data file and
+          # discovers inputs by that same name -- passing --data-file would
+          # make it look for `.coverage.unit.*` and find nothing. So combine
+          # normally and rename, keeping the results out of the working
+          # directory where the next pass would slurp them back in.
+          report() {
+            name="$1" out="$2"; shift 2
+            if ! coverage combine --keep "$@" 2>/dev/null; then
+              echo "### $name coverage: no data" >> "$GITHUB_STEP_SUMMARY"
+              return
+            fi
+            mv .coverage "combined/$out"
+            printf '### %s coverage\n\n' "$name" >> "$GITHUB_STEP_SUMMARY"
+            coverage report --data-file="combined/$out" --format=markdown >> "$GITHUB_STEP_SUMMARY"
+          }
+          report Unit unit.coverage data/unit
+          report Fleet fleet.coverage data/fleet
+          report Combined total.coverage data/unit data/fleet
+          coverage html --data-file=combined/total.coverage || true
+
+      - name: Upload the annotated HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: htmlcov/
+          if-no-files-found: ignore
