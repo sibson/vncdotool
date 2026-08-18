@@ -28,7 +28,9 @@ class TestCaptureReplayRoundtrip(TestCase):
         self.live.mkdir()
         self.replayed.mkdir()
         self.capture = self.tmp / "roundtrip.zip"
-        self.proxy = _start_vnclog(ROUNDTRIP_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", self.capture)
+        self.proxy = _start_vnclog(
+            ROUNDTRIP_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", "--capture-raw", str(self.capture)
+        )
         self.addCleanup(_stop_proxy, self.proxy)
 
     def test_replayed_capture_decodes_to_the_same_screenshot(self) -> None:
