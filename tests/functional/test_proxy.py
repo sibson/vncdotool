@@ -36,8 +36,7 @@ def _await_capture(archive: Path) -> zipfile.ZipFile:
 
 
 def _start_vnclog(listen_port: int, server: str, *recorder_args: str) -> subprocess.Popen:
-    """Start `vnclog` with the given recorder flags, e.g. `--capture-raw FILE`
-    or `--file-per-client DIR`, waiting until it is actually listening.
+    """Start `vnclog`, waiting until it is actually listening.
 
     Readiness comes from vnclog's stderr, never a port probe: the probe can
     race the forwarded greeting into looking like a real session.
@@ -65,10 +64,7 @@ def _start_vnclog(listen_port: int, server: str, *recorder_args: str) -> subproc
 
 
 def _await_recorded(output_dir: Path, marker: str, deadline_seconds: float = PROXY_SHUTDOWN_TIMEOUT) -> str:
-    """Wait for `marker` to appear in `output_dir`'s .vdo files, then return their contents.
-
-    The flush lands when the recorder notices the client disconnect, which can lag vncdo's own exit.
-    """
+    """The flush lands when the recorder notices the client disconnect, which can lag vncdo's own exit."""
     deadline = time.monotonic() + deadline_seconds
     recorded = ""
     while time.monotonic() < deadline and marker not in recorded:
@@ -111,9 +107,6 @@ class TestVNCLOGProxy(TestCase):
 
 
 class TestVNCLOGProxyAuth(TestCase):
-    """RFB 3.7+ VNC-auth's 16-byte challenge response is easy to miss: skip
-    it or the next byte is misread as ClientInit's `shared` flag."""
-
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC_AUTH.port):
             self.fail(
