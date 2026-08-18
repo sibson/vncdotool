@@ -72,7 +72,6 @@ class TestHandshakeScrubber(TestCase):
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
-        # server offers None + VNC auth, client picks VNC auth
         self.assertEqual(
             s.s2c.feed(bytes([2, AuthTypes.NONE, AuthTypes.VNC_AUTHENTICATION])),
             NONE_OFFER,
@@ -192,8 +191,8 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.s2c.feed(rest), rest)
 
     def test_named_server_init_name_is_consumed_by_the_grammar(self) -> None:
-        """The grammar reads the name itself now, rather than ending at the
-        24 fixed ServerInit bytes and leaving the name for passthrough."""
+        """ServerInit's name field is variable length, so the grammar must
+        consume exactly the announced byte count before passthrough resumes."""
         s = HandshakeScrubber()
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
@@ -215,7 +214,6 @@ class TestHandshakeScrubber(TestCase):
         self.assertEqual(s.s2c.feed(rest), rest)
 
     def _ard_to_credentials(self, s: HandshakeScrubber, key_len: int = 8) -> None:
-        """Drive an ARD handshake up to the client's credential block."""
         s.s2c.feed(VERSION_38)
         s.c2s.feed(VERSION_38)
         s.s2c.feed(bytes([1, AuthTypes.DIFFIE_HELLMAN]))
@@ -406,7 +404,7 @@ class TestCheckCaptureTarget(TestCase):
     def test_accepts_missing_zip_and_creates_nothing(self) -> None:
         """Validation only: the archive is written when the session ends."""
         target = os.path.join(self.tmp, "capture.zip")
-        check_capture_target(target)  # must not raise
+        check_capture_target(target)
         self.assertFalse(os.path.exists(target))
 
     def test_refuses_non_zip_suffix(self) -> None:
@@ -619,15 +617,13 @@ class TestProxyCaptureWiring(TestCase):
         sp, cp = self.server_proxy, self.client_proxy
         sp.capture = None
 
-        # should not raise even though nothing is listening for bytes
         cp.dataReceived(VERSION_33)
         sp.dataReceived(VERSION_33)
 
     def test_vnc_auth_over_negotiated_security_does_not_desync_rfbserver(self) -> None:
-        """_handle_security used to jump from the security-type selection
-        straight to ClientInit without skipping the 16-byte VNC-auth
-        response, desyncing everything after it. Asserts the fix: ClientInit
-        is reached cleanly and startLogging fires.
+        """ClientInit follows the 16-byte VNC-auth response, and nothing else
+        enforces that byte count: a parser off by one silently corrupts
+        everything after it.
         """
         sp, cp = self.server_proxy, self.client_proxy
         sp.factory.password_required = False  # force the 3.7+ security-byte path
@@ -637,9 +633,9 @@ class TestProxyCaptureWiring(TestCase):
         cp.dataReceived(bytes([1, AuthTypes.VNC_AUTHENTICATION]))
         sp.dataReceived(bytes([AuthTypes.VNC_AUTHENTICATION]))
         cp.dataReceived(CHALLENGE)
-        sp.dataReceived(RESPONSE)  # now correctly consumed as the auth response, not `shared`
+        sp.dataReceived(RESPONSE)  # the 16-byte auth response, not ClientInit's shared byte
         cp.dataReceived(b"\x00\x00\x00\x00")  # security result OK
-        sp.dataReceived(b"\x01")  # ClientInit: shared=1, reached cleanly this time
+        sp.dataReceived(b"\x01")  # ClientInit: shared=1
 
         self.assertEqual(bytes(sp.capture.c2s), VERSION_38 + NONE_CHOICE + b"\x01")
         self.assertEqual(bytes(sp.capture.s2c), VERSION_38 + NONE_OFFER + SECURITY_RESULT_OK)
@@ -758,7 +754,7 @@ class TestProxyCaptureWiring(TestCase):
         """
         factory = VNCLoggingServerFactory("localhost", 5900)
         factory.one_shot = True
-        factory.session_taken = True  # a live session holds it
+        factory.session_taken = True
         factory.capture_path = "/tmp/some-capture.zip"
         live_recorder = factory.getRecorder()  # the live session's session.vdo
         live_recorder("pause 0.1\n")
