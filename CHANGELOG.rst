@@ -17,6 +17,7 @@
   - [BREAKING] ``vncdotool.rfb.Rect`` is gone; annotate rectangles as ``tuple[int, int, int, int]`` (@sibson, #415)
   - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
   - Fix ``make release`` tagging an empty version (@sibson, #382)
+  - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
 
 1.4.1 (2026-08-19)
 ----------------------

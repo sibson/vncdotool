@@ -76,11 +76,19 @@ class ThreadedVNCClientProxy:
         def on_disconnected(reason: Any) -> None:
             event.set()
 
-        def disconnector(protocol: VNCDoToolClient) -> None:
+        def disconnector(_: Any) -> None:
+            # addBoth, not addCallback: a prior command's failure leaves
+            # factory.deferred errored, and self.protocol -- not the
+            # chained result, which would be a Failure -- is what's still
+            # good to disconnect.
+            protocol = self.protocol
+            if protocol is None:
+                event.set()
+                return
             self.factory._disconnect_callbacks.append(on_disconnected)
             protocol.transport.loseConnection()
 
-        reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
+        reactor.callFromThread(self.factory.deferred.addBoth, disconnector)
         event.wait(timeout=self.timeout)
 
     def __getattr__(self, attr: str) -> Any:

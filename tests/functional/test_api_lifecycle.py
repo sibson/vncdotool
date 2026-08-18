@@ -126,6 +126,23 @@ class TestApiLifecycle(unittest.TestCase):
                 "factory_connect ran outside the reactor thread",
             )
 
+    def test_disconnect_after_command_error_returns_promptly(self) -> None:
+        """A failed command must not stop ``disconnect()`` from firing.
+
+        ``disconnect()`` chains onto ``factory.deferred``, which a failed
+        ``captureScreen`` leaves in an errored state -- see #146.
+        """
+        client = connect(LIBVNC, timeout=SHORT_TIMEOUT)
+
+        with self.assertRaises(FileNotFoundError):
+            client.captureScreen("no/such/dir/test.png")
+
+        start = time.monotonic()
+        client.disconnect()
+        elapsed = time.monotonic() - start
+
+        self.assertLess(elapsed, SHORT_TIMEOUT / 2)
+
     def test_closed_port_raises_promptly(self) -> None:
         """Bounded twice over -- a per-client timeout, and a helper thread
         joined with a deadline -- so even a wedge fails only this test,
