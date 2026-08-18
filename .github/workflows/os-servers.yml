@@ -2,7 +2,7 @@ name: OS-hosted VNC servers
 
 # Live, OS-bound VNC servers (UltraVNC on Windows, Apple Screen Sharing on
 # macOS) that only exist on GitHub-hosted windows-latest / macos-latest VMs --
-# see docs/server-compatibility-plan.md, Tier 2. These are the only place
+# see specs/server-compatibility-plan.md, Tier 2. These are the only place
 # UltraVNC and Screen Sharing compatibility can be exercised live, so this
 # job runs on real changes rather than never, but it is deliberately
 # change-triggered (path-filtered, no schedule) and report-only: see the
@@ -57,7 +57,7 @@ jobs:
     # Chocolatey package surfaces here first. continue-on-error keeps a
     # failure visible (the job shows as failed in the run) without turning
     # it red on the PR. Promote to blocking (drop this line) only once the
-    # job has proven stable -- see docs/server-compatibility-plan.md, Tier 2.
+    # job has proven stable -- see specs/server-compatibility-plan.md, Tier 2.
     continue-on-error: true
     strategy:
       # One OS failing must never take down the other: each is a separate

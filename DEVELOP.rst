@@ -105,7 +105,7 @@ what vncdotool implements, it is not.
 rfbproto is a living document with no releases or version numbers, so link
 a commit permalink rather than ``master`` when a comment depends on its
 wording. Neither document describes how any particular server actually
-behaves; where one is known to diverge, ``docs/server-compatibility-plan.md``
+behaves; where one is known to diverge, ``specs/server-compatibility-plan.md``
 records what we do about it.
 
 

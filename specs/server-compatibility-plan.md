@@ -70,7 +70,7 @@ Goal: every change runs the same scenario suite against a fleet of real
 servers, and the results are visible.
 
 The framework itself is designed in
-[testing-framework-design.md](testing-framework-design.md), which
+[testing-framework.md](testing-framework.md), which
 supersedes this section's original sketch on several points. Summary:
 
 - **Unit tests are the regression layer; live servers are for smoke and
@@ -199,7 +199,7 @@ live test proves we *still* do. Captures are therefore discovery
 evidence for servers we cannot run — never a substitute where live
 access is possible, and never CI fixtures: the durable regression floor
 is the unit test distilled from them
-(see [testing-framework-design.md](testing-framework-design.md)).
+(see [testing-framework.md](testing-framework.md)).
 Concretely:
 
 - Every server sits at the **most-live tier it can occupy**, and tier
@@ -272,7 +272,7 @@ way to run this server live", and each Tier 3 server carries a note on
 what its promotion path would be (emulation, a licensing change, a
 self-hosted runner). Until promoted, the supply chain for these is the
 community, so contributing a capture must be a paved road (detailed in
-[testing-framework-design.md](testing-framework-design.md)):
+[testing-framework.md](testing-framework.md)):
 
 1. **Record**: `vncdolog --capture DIR` sits between the reporter's
    client (or a `vncdo` script) and their server; out comes a capture
