@@ -1119,9 +1119,7 @@ def des_encrypt(key: bytes, data: bytes) -> bytes:
 
 
 def reverse_bits(data: bytes) -> bytes:
-    """Reverse the bit order within each byte.
-
-    The bit-reversal the VNC family applies to a DES key before using it,
+    """The bit-reversal the VNC family applies to a DES key before using it,
     both for the authentication challenge response here and for the
     password obfuscation in ~/.vnc/passwd files."""
     return bytes(

@@ -328,8 +328,6 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
                 if self.capture is not None:
                     self._writeCapture()
             except Exception:
-                # Unwritable path, full disk: the contributor has no archive,
-                # so the exit status has to say so.
                 log.error("--capture-raw: could not write %s", self.factory.capture_path, exc_info=True)
                 self.factory.capture_failed = True
             finally:
@@ -359,11 +357,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.capture = None
 
     def _abortCapture(self, reason: str) -> None:
-        """Drop an in-flight capture we are not allowed to write.
-
-        Nothing reaches disk and the connection ends, so a contributor finds
-        out now rather than after attaching the archive to an issue.
-        """
+        """Drop an in-flight capture we are not allowed to write."""
         log.error("--capture-raw aborted: %s", reason)
         self.factory.capture_failed = True
         self.capture = None
@@ -451,15 +445,11 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
     force_caps = False
 
     password_required = False
-    # Declared so a factory built without the CLI parser still has a value
-    # here rather than raising AttributeError.
     password: str | None = None
 
     output: IO[str] | str = sys.stdout
     _out: IO[str] | None = None
 
-    # --one-shot: serve a single session, then exit. `session_taken` latches
-    # on the connection that gets it, so a concurrent second one is refused.
     one_shot: bool = False
     session_taken: bool = False
 
@@ -495,7 +485,6 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
             return self.output.write
 
     def getRecordedSession(self) -> bytes:
-        """The buffered session.vdo for this capture, for the archive."""
         return self._capture_vdo.getvalue().encode() if self._capture_vdo else b""
 
     def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:

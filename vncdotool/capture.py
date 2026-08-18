@@ -28,7 +28,7 @@ class Tap:
     """
 
     def __init__(self, scrubber: HandshakeScrubber, name: str) -> None:
-        self.name = name  # "s2c" / "c2s", for messages only
+        self.name = name
         self.pending = bytearray()
         self._scrubber = scrubber
 
@@ -43,16 +43,12 @@ class Tap:
 
 
 class _Want(NamedTuple):
-    """What the handshake is waiting for next."""
-
     tap: Tap
     nbytes: int
 
 
 class HandshakeScrubber:
-    """Tracks an RFB handshake across both directions of a proxied stream.
-
-    ``s2c.feed(data)`` / ``c2s.feed(data)`` return what to record."""
+    """Tracks an RFB handshake across both directions of a proxied stream."""
 
     def __init__(self, preserve_auth: bool = False) -> None:
         self.s2c = Tap(self, "s2c")
@@ -78,8 +74,6 @@ class HandshakeScrubber:
 
     def _record(self, data: bytes) -> None:
         self._recording = data
-
-    # -- driving the handshake state machine --------------------------------
 
     def _advance(self, sent: bytes | None) -> None:
         if self._gen is None:
@@ -109,7 +103,6 @@ class HandshakeScrubber:
         return (self._want.tap.name, self._want.nbytes)
 
     def _waiting_on(self, tap: Tap) -> _Want | None:
-        """What the handshake wants from `tap`, if it is watching it at all."""
         if self._gen is None or self._want is None or self._want.tap is not tap:
             return None
         return self._want
@@ -159,8 +152,6 @@ class HandshakeScrubber:
         out = b"" if mid_rewrite and tap.pending else bytes(tap.pending)
         del tap.pending[:]
         return out
-
-    # -- the handshake description -------------------------------------------
 
     def _run(self) -> Generator[_Want, bytes, None]:
         server_head = yield _Want(self.s2c, 12)
@@ -249,7 +240,6 @@ class HandshakeScrubber:
                 if negotiated < (3, 8):
                     self._record(b"")
                 return  # auth failed/too-many-tries; reason string not tracked
-            # `none` carries a SecurityResult only from 3.8 on.
             self._record(pack("!I", 0) if negotiated >= (3, 8) else b"")
 
         yield _Want(self.c2s, 1)  # ClientInit: shared flag
@@ -303,7 +293,6 @@ class CaptureWriter:
         self.c2s += self.scrubber.c2s.flush()
 
     def encodings_list(self) -> list[dict[str, Any]]:
-        """`encodings_seen` as JSON, ordered and named where we know the name."""
         out = []
         for encoding in sorted(self.encodings_seen):
             looked_up = Encoding.lookup(encoding)
@@ -361,9 +350,7 @@ class CaptureWriter:
 
 
 def check_capture_target(path: str) -> None:
-    """Validate `path` is usable as a --capture-raw target.
-
-    Creates nothing: the archive is written when the session ends, so a
+    """Creates nothing: the archive is written when the session ends, so a
     later `op.error()` leaves nothing behind.
     """
     if not path.endswith(".zip"):

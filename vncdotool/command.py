@@ -119,7 +119,6 @@ class VNCDoCLIFactory(VNCDoToolFactory):
 
     @staticmethod
     def status_for(reason: Failure, default: ExitStatus) -> ExitStatus:
-        """Classify a failure, falling back to where it was reported from."""
         for error_type, status in EXIT_STATUS_FOR_ERROR.items():
             if reason.check(error_type):
                 return status
@@ -312,7 +311,6 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
     reactor.exit_status = None
     factory_connect(factory, options.host, options.port, options.address_family)
 
-    # close the connection when we're done, then report how it went
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
     factory.deferred.addCallback(lambda _: factory.done(ExitStatus.SUCCESS))
     factory.deferred.addErrback(factory.error)
@@ -484,7 +482,7 @@ def vnclog() -> None:
     options.address_family, options.host, options.port = parse_server(options.server)
 
     output = None
-    # --capture-raw implies --one-shot, so it inherits the same conflict.
+    # The error names only --one-shot; --capture-raw implies it.
     if (options.one_shot or options.capture_raw) and options.file_per_client:
         op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
     if options.capture_raw:
@@ -633,7 +631,6 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     reactor.run()
 
-    # the reactor stopping without an outcome is itself a failure
     sys.exit(ExitStatus.ERROR if reactor.exit_status is None else reactor.exit_status)
 
 
