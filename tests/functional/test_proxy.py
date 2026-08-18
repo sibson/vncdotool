@@ -16,6 +16,7 @@ from .vncservers import HOST, TIGERVNC_AUTH, VNCEV, VNCLOG, port_open, run_vncdo
 PROXY_PORT = 5993
 CAPTURE_PROXY_PORT = 5994
 CAPTURE_AUTH_PROXY_PORT = 5995
+AUTH_PROXY_PORT = 5998
 PROXY_STARTUP_DEADLINE = 10.0
 PROXY_SHUTDOWN_TIMEOUT = 10.0
 
@@ -34,19 +35,12 @@ def _await_capture(archive: Path) -> zipfile.ZipFile:
     return zipfile.ZipFile(archive)
 
 
-def _start_vnclog(listen_port: int, server: str, capture_path: Path) -> subprocess.Popen:
-    """Start `vnclog --capture-raw`, waiting until it is actually listening.
-
-    Readiness comes from vnclog's stderr, never a port probe: the probe can
+def _start_vnclog(listen_port: int, server: str, *recorder_args: str) -> subprocess.Popen:
+    """Readiness comes from vnclog's stderr, never a port probe: the probe can
     race the forwarded greeting into looking like a real session.
     """
     proxy = subprocess.Popen(
-        [
-            VNCLOG,
-            "-s", server,
-            "--listen", str(listen_port),
-            "--capture-raw", str(capture_path),
-        ],
+        [VNCLOG, "-s", server, "--listen", str(listen_port), *recorder_args],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         stdin=subprocess.DEVNULL,
@@ -67,6 +61,16 @@ def _start_vnclog(listen_port: int, server: str, capture_path: Path) -> subproce
     return proxy
 
 
+def _await_recorded(output_dir: Path, marker: str, deadline_seconds: float = PROXY_SHUTDOWN_TIMEOUT) -> str:
+    """The flush lands when the recorder notices the client disconnect, which can lag vncdo's own exit."""
+    deadline = time.monotonic() + deadline_seconds
+    recorded = ""
+    while time.monotonic() < deadline and marker not in recorded:
+        recorded = "".join(p.read_text() for p in sorted(output_dir.glob("*.vdo")))
+        time.sleep(0.2)
+    return recorded
+
+
 def _stop_proxy(proxy: subprocess.Popen) -> None:
     if proxy.poll() is None:
         proxy.terminate()
@@ -84,57 +88,44 @@ class TestVNCLOGProxy(TestCase):
                 f"vncev not reachable on {HOST}:{VNCEV.port} -- "
                 "start the servers first with `make servers-up`"
             )
-        # --file-per-client with a directory OUTPUT is the one recorder mode that
-        # flushes its .vdo file on client disconnect rather than on clean
-        # process exit, which a tearDown terminate() can't guarantee.
         self.output_dir = Path(tempfile.mkdtemp())
-        self.proxy = subprocess.Popen(
-            [
-                VNCLOG,
-                "-s", f"{HOST}::{VNCEV.port}",
-                "--listen", str(PROXY_PORT),
-                "--file-per-client",
-                str(self.output_dir),
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-        )
-        deadline = time.monotonic() + PROXY_STARTUP_DEADLINE
-        while time.monotonic() < deadline and not port_open(HOST, PROXY_PORT):
-            if self.proxy.poll() is not None:
-                break
-            time.sleep(0.2)
-        if not port_open(HOST, PROXY_PORT):
-            self.proxy.kill()
-            self.proxy.wait(timeout=PROXY_SHUTDOWN_TIMEOUT)
-            self.fail(f"vnclog never listened on {PROXY_PORT}; stderr:\n{self.proxy.stderr.read()}")
+        self.proxy = _start_vnclog(PROXY_PORT, f"{HOST}::{VNCEV.port}", "--file-per-client", str(self.output_dir))
 
     def tearDown(self) -> None:
-        self._stop_proxy()
-
-    def _stop_proxy(self) -> None:
-        if self.proxy.poll() is None:
-            self.proxy.terminate()
-            try:
-                self.proxy.wait(timeout=PROXY_SHUTDOWN_TIMEOUT)
-            except subprocess.TimeoutExpired:
-                self.proxy.kill()
-                self.proxy.wait(timeout=PROXY_SHUTDOWN_TIMEOUT)
+        _stop_proxy(self.proxy)
 
     def test_keypress_is_recorded_and_forwarded(self) -> None:
         proxied = VNCEV._replace(port=PROXY_PORT)
         result = run_vncdo(proxied, "key", "z")
         self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
 
-        # The flush lands when the recorder notices the disconnect, which
-        # can lag the vncdo exit.
-        deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
-        recorded = ""
-        while time.monotonic() < deadline and "keyup z" not in recorded:
-            recorded = "".join(p.read_text() for p in sorted(self.output_dir.glob("*.vdo")))
-            time.sleep(0.2)
+        recorded = _await_recorded(self.output_dir, "keyup z")
+        self.assertIn("keydown z", recorded, f"vnclog recorded:\n{recorded!r}")
+        self.assertIn("keyup z", recorded, f"vnclog recorded:\n{recorded!r}")
+
+
+class TestVNCLOGProxyAuth(TestCase):
+    def setUp(self) -> None:
+        if not port_open(HOST, TIGERVNC_AUTH.port):
+            self.fail(
+                f"tigervnc-auth not reachable on {HOST}:{TIGERVNC_AUTH.port} -- "
+                "start the servers first with `make servers-up`"
+            )
+        self.output_dir = Path(tempfile.mkdtemp())
+        self.proxy = _start_vnclog(
+            AUTH_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", "--file-per-client", str(self.output_dir)
+        )
+
+    def tearDown(self) -> None:
+        _stop_proxy(self.proxy)
+
+    def test_move_and_keypress_are_recorded_and_forwarded(self) -> None:
+        proxied = TIGERVNC_AUTH._replace(port=AUTH_PROXY_PORT)
+        result = run_vncdo(proxied, "move", "10", "10", "key", "z")
+        self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
+
+        recorded = _await_recorded(self.output_dir, "keyup z")
+        self.assertIn("move 10 10", recorded, f"vnclog recorded:\n{recorded!r}")
         self.assertIn("keydown z", recorded, f"vnclog recorded:\n{recorded!r}")
         self.assertIn("keyup z", recorded, f"vnclog recorded:\n{recorded!r}")
 
@@ -149,7 +140,7 @@ class TestVNCLOGCapture(TestCase):
                 "start the servers first with `make servers-up`"
             )
         self.capture = Path(tempfile.mkdtemp()) / "capture.zip"
-        self.proxy = _start_vnclog(CAPTURE_PROXY_PORT, f"{HOST}::{VNCEV.port}", self.capture)
+        self.proxy = _start_vnclog(CAPTURE_PROXY_PORT, f"{HOST}::{VNCEV.port}", "--capture-raw", str(self.capture))
 
     def tearDown(self) -> None:
         _stop_proxy(self.proxy)
@@ -217,7 +208,9 @@ class TestVNCLOGCaptureVNCAuth(TestCase):
                 "start the servers first with `make servers-up`"
             )
         self.capture = Path(tempfile.mkdtemp()) / "capture.zip"
-        self.proxy = _start_vnclog(CAPTURE_AUTH_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", self.capture)
+        self.proxy = _start_vnclog(
+            CAPTURE_AUTH_PROXY_PORT, f"{HOST}::{TIGERVNC_AUTH.port}", "--capture-raw", str(self.capture)
+        )
 
     def tearDown(self) -> None:
         _stop_proxy(self.proxy)

@@ -19,7 +19,7 @@
     copes with should not be cut off by the proxy
   - Fix ``vnclog`` desyncing against RFB 3.7+ servers using VNC password
     authentication (it ate the 16-byte auth response instead of skipping it,
-    then lost track of the client message stream entirely)
+    then lost track of the client message stream entirely) (@sibson, #272)
 
 1.3.0 (2026-04-03)
 ----------------------

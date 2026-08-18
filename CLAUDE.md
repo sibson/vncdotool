@@ -9,6 +9,17 @@ Unit tests need no VNC server: protocol classes are driven directly with a
 mocked Twisted transport (see `tests/unit/test_rfb.py` and `test_client.py`
 for the patterns).
 
+A worktree builds its own `.venv`: run any `make` target needing one (`test-func`,
+`venv`, ...) and it creates `$(WORKDIR)/.venv` with an editable install of that
+checkout. Never symlink another checkout's `.venv` in -- the editable install
+still points at the checkout that created it, so a subprocess run via that venv
+(`vncdo`, `vnclog`) exercises the other checkout's code while in-process imports
+resolve to this one, and the two halves of a functional test disagree about what
+they're testing. `assert_cli_under_test()` in `tests/functional/vncservers.py`
+catches this. If venv creation fails on a too-old `python3` (a worktree may not
+inherit a local, untracked mise/pyenv pin the way the main checkout does), pass
+`make <target> PY=python3.11` or whichever interpreter satisfies `PYTHON_FLOOR`.
+
 Never start the Twisted reactor in a unit test. `vncdotool/api.py` runs the
 reactor in a daemon thread and a reactor cannot be restarted
 (`docs/library.rst` documents this design), so a test that touches
