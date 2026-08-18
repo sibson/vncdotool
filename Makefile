@@ -62,13 +62,9 @@ test-unit: check-python
 
 # Needs `make servers-up`; unreachable servers skip rather than fail, so
 # this still runs without docker.
-# $(VENV) on PATH decides which `vncdo` the tests shell out to. Not
-# $(PYTHON): that is a GNU make built-in, python3, not this venv.
-# $(abspath ...) because $(VENV) is relative, and a test that runs the CLI
-# with a cwd= of its own would resolve it against that directory instead.
 .PHONY: test-func
 test-func: check-python
-	PATH="$(abspath $(VENV)):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
+	$(VENV)/python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 
@@ -86,8 +82,7 @@ coverage-unit: check-python | venv
 	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
 
 coverage-func: check-python | venv
-	PATH="$(abspath $(VENV)):$$PATH" \
-	  $(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
+	$(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
 
 coverage-report: | venv
 	$(VENV)/coverage combine

@@ -11,7 +11,7 @@ from unittest import TestCase
 
 from vncdotool.const import AuthTypes
 
-from .vncservers import HOST, TIGERVNC_AUTH, VNCEV, port_open, run_vncdo
+from .vncservers import HOST, TIGERVNC_AUTH, VNCEV, VNCLOG, port_open, run_vncdo
 
 PROXY_PORT = 5993
 CAPTURE_PROXY_PORT = 5994
@@ -42,7 +42,7 @@ def _start_vnclog(listen_port: int, server: str, capture_path: Path) -> subproce
     """
     proxy = subprocess.Popen(
         [
-            "vnclog",
+            VNCLOG,
             "-s", server,
             "--listen", str(listen_port),
             "--capture-raw", str(capture_path),
@@ -90,7 +90,7 @@ class TestVNCLOGProxy(TestCase):
         self.output_dir = Path(tempfile.mkdtemp())
         self.proxy = subprocess.Popen(
             [
-                "vnclog",
+                VNCLOG,
                 "-s", f"{HOST}::{VNCEV.port}",
                 "--listen", str(PROXY_PORT),
                 "--file-per-client",
@@ -192,7 +192,7 @@ class TestVNCLOGCapture(TestCase):
 
         second = subprocess.run(
             [
-                "vnclog",
+                VNCLOG,
                 "-s", f"{HOST}::{VNCEV.port}",
                 "--listen", str(CAPTURE_PROXY_PORT + 1),
                 "--capture-raw", str(self.capture),
