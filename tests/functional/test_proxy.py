@@ -16,6 +16,7 @@ from .vncservers import HOST, TIGERVNC_AUTH, VNCEV, VNCLOG, port_open, run_vncdo
 PROXY_PORT = 5993
 CAPTURE_PROXY_PORT = 5994
 CAPTURE_AUTH_PROXY_PORT = 5995
+AUTH_PROXY_PORT = 5996
 PROXY_STARTUP_DEADLINE = 10.0
 PROXY_SHUTDOWN_TIMEOUT = 10.0
 
@@ -135,6 +136,72 @@ class TestVNCLOGProxy(TestCase):
         while time.monotonic() < deadline and "keyup z" not in recorded:
             recorded = "".join(p.read_text() for p in sorted(self.output_dir.glob("*.vdo")))
             time.sleep(0.2)
+        self.assertIn("keydown z", recorded, f"vnclog recorded:\n{recorded!r}")
+        self.assertIn("keyup z", recorded, f"vnclog recorded:\n{recorded!r}")
+
+
+class TestVNCLOGProxyAuth(TestCase):
+    """Plain `vnclog` (no --capture-raw) against tigervnc-auth.
+
+    Regression test for #272: RFB 3.7+ servers negotiating VNC-auth send a
+    16-byte challenge response the client-side shadow parser has to skip,
+    or it misreads the response's first byte as ClientInit's `shared` flag
+    and desyncs everything that follows -- including the mouse move and key
+    events this test relies on being logged.
+    """
+
+    def setUp(self) -> None:
+        if not port_open(HOST, TIGERVNC_AUTH.port):
+            self.fail(
+                f"tigervnc-auth not reachable on {HOST}:{TIGERVNC_AUTH.port} -- "
+                "start the servers first with `make servers-up`"
+            )
+        # --file-per-client with a directory OUTPUT is the one recorder mode that
+        # flushes its .vdo file on client disconnect rather than on clean
+        # process exit, which a tearDown terminate() can't guarantee.
+        self.output_dir = Path(tempfile.mkdtemp())
+        self.proxy = subprocess.Popen(
+            [
+                "vnclog",
+                "-s", f"{HOST}::{TIGERVNC_AUTH.port}",
+                "--listen", str(AUTH_PROXY_PORT),
+                "--file-per-client",
+                str(self.output_dir),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+        )
+        deadline = time.monotonic() + PROXY_STARTUP_DEADLINE
+        while time.monotonic() < deadline and not port_open(HOST, AUTH_PROXY_PORT):
+            if self.proxy.poll() is not None:
+                break
+            time.sleep(0.2)
+        if not port_open(HOST, AUTH_PROXY_PORT):
+            self.proxy.kill()
+            self.proxy.wait(timeout=PROXY_SHUTDOWN_TIMEOUT)
+            self.fail(f"vnclog never listened on {AUTH_PROXY_PORT}; stderr:\n{self.proxy.stderr.read()}")
+
+    def tearDown(self) -> None:
+        _stop_proxy(self.proxy)
+
+    def test_keypress_is_recorded_and_forwarded(self) -> None:
+        proxied = TIGERVNC_AUTH._replace(port=AUTH_PROXY_PORT)
+        # A mouse move ahead of the key press: if the auth response desynced
+        # the shadow parser, it is this later message that lands on the
+        # wrong byte boundary and either goes unrecorded or raises.
+        result = run_vncdo(proxied, "move", "10", "10", "key", "z")
+        self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
+
+        # The flush lands when the recorder notices the disconnect, which
+        # can lag the vncdo exit.
+        deadline = time.monotonic() + PROXY_SHUTDOWN_TIMEOUT
+        recorded = ""
+        while time.monotonic() < deadline and "keyup z" not in recorded:
+            recorded = "".join(p.read_text() for p in sorted(self.output_dir.glob("*.vdo")))
+            time.sleep(0.2)
+        self.assertIn("move 10 10", recorded, f"vnclog recorded:\n{recorded!r}")
         self.assertIn("keydown z", recorded, f"vnclog recorded:\n{recorded!r}")
         self.assertIn("keyup z", recorded, f"vnclog recorded:\n{recorded!r}")
 
