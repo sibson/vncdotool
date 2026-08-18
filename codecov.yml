@@ -1,0 +1,12 @@
+coverage:
+  status:
+    project: off
+    patch: off
+
+flags:
+  unit:
+    carryforward: true
+  fleet:
+    carryforward: true
+
+comment: false

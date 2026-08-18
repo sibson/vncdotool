@@ -163,6 +163,8 @@ jobs:
     # Runs on a red build too, so a failing suite still reports what it
     # reached before it stopped.
     if: always()
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -203,3 +205,25 @@ jobs:
           name: coverage-html
           path: htmlcov/
           if-no-files-found: ignore
+
+      - name: Upload unit coverage to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          files: combined/xml/unit.xml
+          flags: unit
+          disable_search: true
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload fleet coverage to Codecov
+        if: always() && env.CODECOV_TOKEN != ''
+        continue-on-error: true
+        uses: codecov/codecov-action@v7
+        with:
+          files: combined/xml/fleet.xml
+          flags: fleet
+          disable_search: true
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

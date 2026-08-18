@@ -20,23 +20,25 @@ so a hang is contained by the kernel reaping the subprocess rather than by
 anything in-process. See `docs/testing-framework-design.md` and
 `tests/functional/vncservers.py`.
 
-Keep comments and docstrings short. A comment earns its place by recording
-a *why* the code cannot show -- a protocol quirk, a server's misbehaviour,
-why the obvious alternative was rejected. One or two lines is the norm; a
-longer block needs a reason to be longer. Do not restate what the next line
-does, and do not narrate what a change replaced or reference the current
-task, fix, or callers ("used by X", "added for the Y flow", "handles the
-case from issue #123") -- that belongs in the commit message. Design
-rationale belongs in `docs/`.
+A comment carries what the reader cannot get anywhere else: something
+surprising, particular to this code, and absent from the language, the
+library's documentation, the RFB specs and the code itself. A server
+that ignores what it was asked, an ordering nothing enforces, an obvious
+approach that does not work here. `loggingproxy.py` has the shape of it:
+"SetEncodings only says what the client asked for, and a server may
+ignore it."
 
-Test each one by deleting it and asking what the reader lost. Being able
-to justify a comment is not the same as needing it: shortening an
-unnecessary comment leaves an unnecessary comment.
+The reader knows the tools and can read the code, and an AI reader has
+every public document already. Anything they could look up, infer from a
+name, or learn by running it is not worth writing, and neither is
+anything about the change rather than the code -- the alternative you
+rejected, what used to be here, who calls it, the issue or PR it came
+from. That is commit-message and `docs/` material. Point elsewhere only
+when there is something surprising there too long to state here.
 
-A cross-reference is worth a clause when it saves the reader real work
-(`see docs/capture.rst`), so an explanation lives in exactly one place
-rather than being repeated. What it must not become is a paragraph
-re-explaining what the other file already says.
+Test by deleting it: keep it only if an intelligent reader would still
+be surprised later. Shortening an unnecessary comment leaves an
+unnecessary comment. One or two lines is the norm.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
