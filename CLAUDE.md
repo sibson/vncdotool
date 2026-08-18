@@ -17,7 +17,7 @@ reactor in a daemon thread and a reactor cannot be restarted
 shells out to the real `vncdo` CLI via `subprocess.run` against the fleet
 (`tests/servers/docker-compose.yml`) rather than calling `api.connect()`,
 so a hang is contained by the kernel reaping the subprocess rather than by
-anything in-process. See `docs/testing-framework-design.md` and
+anything in-process. See `specs/testing-framework.md` and
 `tests/functional/vncservers.py`.
 
 A comment carries what the reader cannot get anywhere else: something
