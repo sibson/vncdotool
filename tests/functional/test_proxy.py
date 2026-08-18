@@ -143,12 +143,9 @@ class TestVNCLOGProxy(TestCase):
 class TestVNCLOGProxyAuth(TestCase):
     """Plain `vnclog` (no --capture-raw) against tigervnc-auth.
 
-    Regression test for #272: RFB 3.7+ servers negotiating VNC-auth send a
-    16-byte challenge response the client-side shadow parser has to skip,
-    or it misreads the response's first byte as ClientInit's `shared` flag
-    and desyncs everything that follows -- including the mouse move and key
-    events this test relies on being logged.
-    """
+    RFB 3.7+ VNC-auth sends a 16-byte challenge response the shadow parser
+    must skip, or it misreads the response's first byte as ClientInit's
+    `shared` flag and desyncs the rest of the client stream."""
 
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC_AUTH.port):
@@ -188,9 +185,8 @@ class TestVNCLOGProxyAuth(TestCase):
 
     def test_keypress_is_recorded_and_forwarded(self) -> None:
         proxied = TIGERVNC_AUTH._replace(port=AUTH_PROXY_PORT)
-        # A mouse move ahead of the key press: if the auth response desynced
-        # the shadow parser, it is this later message that lands on the
-        # wrong byte boundary and either goes unrecorded or raises.
+        # Move before key: a desynced parser drops or mis-decodes whichever
+        # message lands on the wrong byte boundary, not necessarily the first.
         result = run_vncdo(proxied, "move", "10", "10", "key", "z")
         self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
 
