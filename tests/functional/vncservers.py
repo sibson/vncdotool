@@ -64,15 +64,13 @@ class VNCServer(NamedTuple):
     # against it; None where the size is whatever the host display happens
     # to be and therefore can't be asserted.
     size: Optional[Tuple[int, int]] = (1024, 768)
-    # Whether the server has a rendered desktop behind it. False means a
-    # flat, usually all-black, framebuffer is expected rather than a
-    # failure -- see the macOS note in tests/servers/screen-sharing.
+    # False means a flat, usually all-black, framebuffer is expected rather
+    # than a failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
-    # How long to wait for the server to answer a single request. The
-    # default suits a container on loopback; an OS-hosted server sharing a
-    # busy machine's real desktop can be far slower.
+    # The default suits a container on loopback; an OS-hosted server sharing
+    # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
-    # How to get this server running, quoted when a test skips itself.
+    # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
 
 
@@ -129,7 +127,6 @@ SCREEN_SHARING = VNCServer(
     how_to_start="set the server up first with tests/servers/screen-sharing/setup.sh",
 )
 
-# The OS-hosted server for the platform the tests are running on, if any.
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "win32": [ULTRAVNC],
     "darwin": [SCREEN_SHARING],
@@ -137,12 +134,10 @@ OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
 
 
 def os_servers(platform: str = sys.platform) -> List[VNCServer]:
-    """OS-hosted servers testable on this platform, empty on other platforms."""
     return OS_SERVERS_BY_PLATFORM.get(platform, [])
 
 
 def select_servers(group: str) -> List[VNCServer]:
-    """Servers in a named group: ``docker``, ``os``, or ``all``."""
     groups = {"docker": DOCKER_SERVERS, "os": os_servers()}
     if group == "all":
         return [server for servers in groups.values() for server in servers]
@@ -152,14 +147,13 @@ def select_servers(group: str) -> List[VNCServer]:
 
 
 def screenshot_dir() -> Path:
-    """Directory screenshots are written to, created if needed."""
     path = Path(os.environ.get("VNCDOTOOL_SCREENSHOT_DIR", DEFAULT_SCREENSHOT_DIR))
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool:
-    """Whether ``port`` accepts a connection. Cheap liveness, not readiness."""
+    """Cheap liveness check, not readiness -- see wait_until_ready()."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -187,14 +181,12 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
 
 def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
-    """Capture ``server``'s framebuffer to ``path`` as a PNG."""
     with connect(server, timeout=timeout) as client:
         client.captureScreen(str(path))
     return path
 
 
 def distinct_colours(image: Image.Image) -> Optional[int]:
-    """How many colours ``image`` contains, or None above ``MAX_COLOURS``."""
     colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
     return colours if colours is None else len(colours)
 
@@ -291,7 +283,6 @@ assert_cli_under_test()
 
 
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
-    """Build a `vncdo` argv for `server`, with whatever auth its security type needs."""
     argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
     if server.password is not None:
         argv += ["-p", server.password]
@@ -326,7 +317,6 @@ def run_vncdo(
 
 
 def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
-    """Ask `process` to exit cleanly, falling back to killing it."""
     if process.poll() is not None:
         return
     process.terminate()
@@ -390,7 +380,6 @@ class _VNCServerTestMixin:
             )
 
     def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
-        """run_vncdo(), asserting the CLI actually succeeded."""
         result = run_vncdo(self.server, *args)
         self.assertEqual(
             result.returncode,

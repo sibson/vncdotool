@@ -173,7 +173,6 @@ class _SilentListener:
 
 
 def _closed_port() -> int:
-    """A port nothing listens on, found by binding and releasing it."""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.bind((HOST, 0))
     port = s.getsockname()[1]
