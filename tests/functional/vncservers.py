@@ -16,8 +16,11 @@ written twice.
 """
 
 import os
+import shutil
 import socket
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Tuple
@@ -35,6 +38,12 @@ RETRY_DELAY = 2.0
 # is given before it is abandoned, and how long to keep making them.
 READY_ATTEMPT_TIMEOUT = 20.0
 READY_DEADLINE = 180.0
+
+# A console_scripts entry point, so only on PATH once vncdotool is installed.
+VNCDO = "vncdo"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+# Added to the server's response budget for interpreter start-up and handshake.
+SUBPROCESS_TIMEOUT_HEADROOM = 10.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
@@ -67,12 +76,20 @@ class VNCServer(NamedTuple):
     how_to_start: str = "start the servers first with `make servers-up`"
 
 
-# One entry per service in tests/servers/docker-compose.yml.
-DOCKER_SERVERS = [
-    VNCServer("tigervnc", 5931),
-    VNCServer("tigervnc-auth", 5932, password="vncdotool"),
-    VNCServer("x11vnc", 5933),
-]
+# One constant per service in tests/servers/docker-compose.yml, named so a
+# test that needs a specific one can import it directly instead of
+# searching DOCKER_SERVERS by name.
+TIGERVNC = VNCServer("tigervnc", 5931)
+TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
+X11VNC = VNCServer("x11vnc", 5933)
+# 800x600 is the demo's hard-coded size; it takes no -geometry option.
+LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
+
+DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+
+# An event sink rather than a rendering server, so it stays out of the smoke
+# grid; test_events.py still needs its host/port.
+VNCEV = VNCServer("vncev", 5934, renders_desktop=False, size=None)
 
 # Credentials the OS-hosted server setup scripts configure. They are spike
 # credentials for a throwaway runner, deliberately visible; a permanent job
@@ -142,6 +159,7 @@ def screenshot_dir() -> Path:
 
 
 def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool:
+    """Whether ``port`` accepts a connection. Cheap liveness, not readiness."""
     try:
         with socket.create_connection((host, port), timeout=timeout):
             return True
@@ -154,6 +172,10 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
     Remember that the returned client is a context manager, and that
     ``api.shutdown()`` still has to be called once before the process exits.
+    And that shutdown is terminal for the whole process: after it, no
+    further ``connect()`` can ever work again (the reactor cannot restart),
+    which is why only ONE test module -- test_api_lifecycle.py -- may use
+    this in-process; everything else shells out via run_vncdo().
     """
     client = api.connect(
         f"{HOST}::{server.port}",
@@ -171,23 +193,29 @@ def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] =
     return path
 
 
+def distinct_colours(image: Image.Image) -> Optional[int]:
+    """How many colours ``image`` contains, or None above ``MAX_COLOURS``."""
+    colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
+    return colours if colours is None else len(colours)
+
+
+def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
+    if not server.renders_desktop:
+        return True
+    return colours != 1
+
+
 def wait_until_ready(
     server: VNCServer,
     deadline_seconds: float = READY_DEADLINE,
     attempt_timeout: float = READY_ATTEMPT_TIMEOUT,
 ) -> bool:
-    """Block until ``server`` completes a whole RFB round trip, or give up.
+    """Block until ``server`` serves the screen the tests expect, or give up.
 
-    An open port is not readiness. The Docker servers need a drawn-content
-    marker on top of it (tests/servers/draw-content.sh); an OS-hosted
-    server needs this instead, because the first connection can stall
-    indefinitely while the next one succeeds at once -- macOS Screen
-    Sharing is socket-activated, so that first connection is also what
-    starts the server.
-
-    Retrying a whole connection is therefore the only probe that means
-    anything: a per-request timeout can't rescue a connection that never
-    finished its handshake.
+    Servers accept connections before they have anything to show, so
+    readiness has to be a capture. The whole connection is retried because
+    macOS Screen Sharing is socket-activated: the first connection starts
+    it and can stall indefinitely while the next succeeds at once.
     """
     deadline = time.monotonic() + deadline_seconds
     attempt = 0
@@ -197,54 +225,202 @@ def wait_until_ready(
             time.sleep(RETRY_DELAY)
             continue
         try:
-            with connect(server, timeout=attempt_timeout) as client:
-                client.refreshScreen()
+            with tempfile.TemporaryDirectory() as tmp:
+                probe = Path(tmp) / f"{server.name}-ready.png"
+                capture_screenshot(server, probe, timeout=attempt_timeout)
+                with Image.open(probe) as image:
+                    colours = distinct_colours(image)
         except Exception as exc:  # noqa: BLE001 - any failure means try again
             print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
+            continue
+        if not has_expected_content(server, colours):
+            print(f"{server.name}: not ready yet (attempt {attempt}: capture is flat)")
+            time.sleep(RETRY_DELAY)
             continue
         print(f"{server.name}: ready after {attempt} attempt(s)")
         return True
 
-    print(f"{server.name}: never completed an RFB round trip")
+    print(f"{server.name}: never served the content it is expected to render")
     return False
+
+
+def assert_cli_under_test() -> None:
+    """Fail unless the `vncdo` these tests shell out to is this checkout.
+
+    Nothing else notices: the suite passes against another copy of
+    vncdotool and reports its behaviour as this branch's.
+    """
+    on_path = shutil.which(VNCDO)
+    if on_path is None:
+        raise AssertionError(
+            f"`{VNCDO}` is not on PATH. It is a console_scripts entry point, so run "
+            "`make venv` in this working tree, or `pip install -e .` into the "
+            "environment running these tests."
+        )
+
+    # Running from the working tree puts it on sys.path, so what this
+    # process imports says nothing about what the console script will.
+    try:
+        shebang = Path(on_path).read_text(errors="replace").splitlines()[0]
+    except (OSError, IndexError):
+        return  # not a script we can read, e.g. a Windows .exe wrapper
+    if not shebang.startswith("#!"):
+        return
+    interpreter = shebang[2:].strip()
+
+    with tempfile.TemporaryDirectory() as neutral:
+        found = subprocess.run(
+            [interpreter, "-c", "import vncdotool; print(vncdotool.__file__)"],
+            capture_output=True, text=True, cwd=neutral, timeout=60,
+        )
+    if found.returncode != 0:
+        raise AssertionError(f"`{VNCDO}`'s interpreter cannot import vncdotool:\n{found.stderr}")
+
+    installed = Path(found.stdout.strip()).resolve()
+    if REPO_ROOT not in installed.parents:
+        raise AssertionError(
+            f"`{VNCDO}` on PATH ({on_path}) imports vncdotool from {installed}, not this "
+            f"checkout at {REPO_ROOT}. These tests shell out to it, so they would report "
+            "that copy's behaviour as this branch's. Run `make venv` in this working tree "
+            "(and do not symlink another one's .venv -- its editable install still points "
+            "where it was created)."
+        )
+
+
+assert_cli_under_test()
+
+
+def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
+    """Build a `vncdo` argv for `server`, with whatever auth its security type needs."""
+    argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
+    if server.password is not None:
+        argv += ["-p", server.password]
+    if server.username is not None:
+        argv += ["-u", server.username]
+    argv.extend(args)
+    return argv
+
+
+def run_vncdo(
+    server: VNCServer, *args: str, timeout: Optional[float] = None
+) -> subprocess.CompletedProcess:
+    """Run the real `vncdo` CLI against `server` and return the completed process.
+
+    Never api.connect(): a hang is then contained by the kernel reaping the
+    subprocess at `timeout`, not by anything in-process.
+    """
+    argv = vncdo_argv(server, *args)
+    budget = (server.timeout if timeout is None else timeout) + SUBPROCESS_TIMEOUT_HEADROOM
+    try:
+        # stdin closed so an unexpected getpass() prompt fails instead of blocking.
+        return subprocess.run(argv, capture_output=True, text=True, timeout=budget, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError(
+            f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"
+        ) from exc
+    except FileNotFoundError as exc:
+        raise AssertionError(
+            f"{server.name}: `{VNCDO}` not found on PATH -- install vncdotool "
+            "(`pip install -e .`) so its console script is available"
+        ) from exc
+
+
+def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
+    """Ask `process` to exit cleanly, falling back to killing it."""
+    if process.poll() is not None:
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=timeout)
+
+
+def start_replay_server(
+    testcase: TestCase, archive: Path, port: int, deadline: float = 10.0
+) -> subprocess.Popen:
+    """Start `vncdo-replay --server ARCHIVE --listen PORT --forever`, cleanup registered.
+
+    Fails fast, with its stderr, if the process exits before listening."""
+    try:
+        server = subprocess.Popen(
+            ["vncdo-replay", "--server", str(archive), "--listen", str(port), "--forever"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise AssertionError(
+            "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
+            "so its console script is available"
+        ) from exc
+    # Not kill(): Twisted's SIGTERM handler stops the reactor, so the
+    # process exits through atexit and flushes what it still owes.
+    testcase.addCleanup(_terminate, server)
+    testcase.addCleanup(server.stdout.close)
+    testcase.addCleanup(server.stderr.close)
+
+    deadline_at = time.monotonic() + deadline
+    while time.monotonic() < deadline_at:
+        if server.poll() is not None:
+            testcase.fail(f"vncdo-replay --server exited before listening; stderr:\n{server.stderr.read()}")
+        if port_open(HOST, port):
+            return server
+        time.sleep(0.2)
+    server.kill()
+    testcase.fail(f"vncdo-replay --server never listened on {port}: {server.communicate()[1]}")
 
 
 class _VNCServerTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 
-    Deliberately does NOT subclass TestCase: only the generated per-server
-    classes should (otherwise `unittest discover` also collects this shared
-    base as its own, serverless test case).
+    Deliberately does NOT subclass TestCase, or `unittest discover` would
+    also collect this shared base as its own, serverless test case.
     """
 
     server: VNCServer
 
     def setUp(self) -> None:
         if not port_open(HOST, self.server.port):
-            self.skipTest(
+            self.fail(
                 f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
                 f"{self.server.how_to_start}"
             )
 
-    def test_connect_key_and_capture(self) -> None:
-        """End-to-end round trip against one real server.
+    def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
+        """run_vncdo(), asserting the CLI actually succeeded."""
+        result = run_vncdo(self.server, *args)
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"{self.server.name}: `vncdo {' '.join(args)}` exited "
+            f"{result.returncode}, stderr:\n{result.stderr}",
+        )
+        return result
 
-        Passing means, in order:
+    def test_connect(self) -> None:
+        """Handshake and auth succeed: `pause 0` still needs a live connection."""
+        self.run_vncdo_ok("pause", "0")
 
-        * the RFB handshake completed against this server's protocol version
-          and security type (none, VNC password, or ARD/Diffie-Hellman);
-        * a key event was accepted without the server dropping the session;
-        * a framebuffer update was received and encoded to a PNG file;
-        * that PNG is the size the server said it serves, and -- for a server
-          with a desktop rendered behind it -- is not a single flat colour,
-          i.e. we decoded real screen content rather than the all-black
-          framebuffer you get when updates never arrive.
+    def test_keypress(self) -> None:
+        """A key event is accepted without the server dropping the session."""
+        self.run_vncdo_ok("key", "x")
+
+    def test_mousemove(self) -> None:
+        """A pointer event is accepted without the server dropping the session."""
+        self.run_vncdo_ok("move", "10", "10")
+
+    def test_capture(self) -> None:
+        """A framebuffer update is received and encoded to a PNG.
+
+        A flat colour means no content was decoded, so it fails for any
+        server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
 
-        with connect(self.server) as client:
-            client.keyPress("x")
-            client.captureScreen(str(png))
+        self.run_vncdo_ok("capture", str(png))
 
         data = png.read_bytes()
         print(f"{self.server.name}: screenshot written to {png}")
@@ -263,9 +439,8 @@ class _VNCServerTestMixin:
                     self.server.size,
                     f"{self.server.name}: capture is not the size the server serves",
                 )
-            colours = image.convert("RGB").getcolors(maxcolors=MAX_COLOURS)
+            distinct = distinct_colours(image)
 
-        distinct = colours if colours is None else len(colours)
         if not self.server.renders_desktop:
             print(
                 f"{self.server.name}: {distinct} colours captured; content is not "
@@ -273,9 +448,8 @@ class _VNCServerTestMixin:
             )
             return
 
-        self.assertNotEqual(
-            distinct,
-            1,
+        self.assertTrue(
+            has_expected_content(self.server, distinct),
             f"{self.server.name}: capture is a single flat colour, "
             "no screen content was decoded",
         )
@@ -292,7 +466,6 @@ def register_server_tests(servers: List[VNCServer], namespace: Dict[str, object]
         namespace[name] = type(
             name,
             (_VNCServerTestMixin, TestCase),
-            # __module__ so test ids name the module that registered the
-            # case rather than this one.
+            # __module__ so test ids name the registering module, not this one.
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )

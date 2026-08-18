@@ -12,6 +12,8 @@
 # `up --wait` a reliable barrier. Every service publishes its RFB port to
 # localhost only.
 
+name: vncdo-test-servers
+
 services:
   tigervnc:
     build:
@@ -38,3 +40,22 @@ services:
     image: vncdotool-test-x11vnc
     ports:
       - "127.0.0.1:5933:5900"
+
+  # Event sink, not a smoke target: prints events, renders no desktop.
+  # Used by tests/functional/test_events.py.
+  vncev:
+    build:
+      context: .
+      target: vncev
+    image: vncdotool-test-vncev
+    ports:
+      - "127.0.0.1:5934:5900"
+
+  # LibVNCServer's "example" demo, replacing the old libvncserver.mk build.
+  libvncserver-example:
+    build:
+      context: .
+      target: libvncserver-example
+    image: vncdotool-test-libvncserver-example
+    ports:
+      - "127.0.0.1:5935:5900"

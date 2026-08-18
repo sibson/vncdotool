@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import getpass
 import ipaddress
+import enum
 import logging
 import logging.handlers
 import optparse
@@ -17,16 +18,26 @@ import os
 import shlex
 import socket
 import sys
+import tempfile
 from types import TracebackType
 
 from twisted.internet import protocol, reactor
-from twisted.internet.error import ConnectionDone
+from twisted.internet.error import ConnectError, ConnectionClosed, DNSLookupError
 from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
+from .capture import check_capture_target
+from .client import (
+    AuthenticationError,
+    ProtocolError,
+    TClient,
+    VNCDoToolClient,
+    VNCDoToolFactory,
+    factory_connect,
+)
 from .loggingproxy import VNCLoggingServerFactory
+from .replay import Capture
 
 log = logging.getLogger()
 
@@ -35,6 +46,36 @@ SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif", "bmp")
 
 class TimeoutError(RuntimeError):
     pass
+
+
+class ExitStatus(enum.IntEnum):
+    """Exit codes returned by :program:`vncdo`, grouped by cause."""
+
+    SUCCESS = 0
+    ERROR = 1
+    # bad input from whoever invoked us, credentials included
+    USAGE = 2
+    AUTHENTICATION_FAILED = 3
+
+    CONNECTION_FAILED = 10
+    CONNECTION_LOST = 11
+
+    PROTOCOL_ERROR = 20
+
+    COMMAND_FAILED = 30
+
+    TIMEOUT = 40
+
+
+# more specific causes first; the first match decides the exit status
+EXIT_STATUS_FOR_ERROR: dict[type[BaseException], ExitStatus] = {
+    AuthenticationError: ExitStatus.AUTHENTICATION_FAILED,
+    ProtocolError: ExitStatus.PROTOCOL_ERROR,
+    TimeoutError: ExitStatus.TIMEOUT,
+    ConnectError: ExitStatus.CONNECTION_FAILED,
+    DNSLookupError: ExitStatus.CONNECTION_FAILED,
+    ConnectionClosed: ExitStatus.CONNECTION_LOST,
+}
 
 
 def log_exceptions(
@@ -60,19 +101,34 @@ class VNCDoCLIFactory(VNCDoToolFactory):
     protocol = VNCDoCLIClient
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
-        if reason.type == ConnectionDone:
-            self.done(0)
-        else:
-            self.error(reason)
+        # losing the connection is never itself a success: the command chain
+        # reports the outcome, and closing the transport is its last step, so
+        # a close arriving first means the commands never finished
+        self.error(reason, ExitStatus.CONNECTION_LOST)
 
     def clientConnectionFailed(self, connector: IConnector, reason: Failure) -> None:
-        self.error(reason)
+        self.error(reason, ExitStatus.CONNECTION_FAILED)
 
-    def error(self, reason: Failure) -> None:
+    def error(
+        self, reason: Failure, default: ExitStatus = ExitStatus.COMMAND_FAILED
+    ) -> None:
+        if reactor.exit_status is not None:
+            return
         log.critical(reason.getErrorMessage())
-        self.done(10)
+        self.done(self.status_for(reason, default))
 
-    def done(self, exit_code: int) -> None:
+    @staticmethod
+    def status_for(reason: Failure, default: ExitStatus) -> ExitStatus:
+        """Classify a failure, falling back to where it was reported from."""
+        for error_type, status in EXIT_STATUS_FOR_ERROR.items():
+            if reason.check(error_type):
+                return status
+        return default
+
+    def done(self, exit_code: ExitStatus) -> None:
+        # first outcome wins; the expected close follows a completed run
+        if reactor.exit_status is not None:
+            return
         reactor.exit_status = exit_code
         reactor.callLater(0.1, reactor.stop)
 
@@ -248,13 +304,18 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
             factory, args, options.delay, options.warp, options.incremental_refreshes
         )
     except CommandParseError as exc:
-        sys.exit(str(exc))
+        print(exc, file=sys.stderr)
+        sys.exit(ExitStatus.USAGE)
 
+    # no outcome decided yet; set before connecting so a synchronous
+    # connection failure has somewhere to record itself
+    reactor.exit_status = None
     factory_connect(factory, options.host, options.port, options.address_family)
-    reactor.exit_status = 1
 
-    # close the connection when we're done
+    # close the connection when we're done, then report how it went
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
+    factory.deferred.addCallback(lambda _: factory.done(ExitStatus.SUCCESS))
+    factory.deferred.addErrback(factory.error)
 
     return factory
 
@@ -262,6 +323,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
 def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
+    factory.server_address = options.server
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -361,7 +423,7 @@ def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
 def vnclog() -> None:
     from vncdotool import __version__
 
-    usage = "%prog [options] OUTPUT"
+    usage = "%prog [options] [OUTPUT]"
     description = "Capture user interactions with a VNC Server"
     version = "%prog " + __version__
 
@@ -375,9 +437,11 @@ def vnclog() -> None:
         help="listen for client connections on PORT [%default]",
     )
     op.add_option(
-        "--forever",
+        "--file-per-client",
         action="store_true",
-        help="continually accept new connections",
+        default=False,
+        help="record each client connection to its own .vdo in OUTPUT, which must "
+        "be a directory (was --forever, which never controlled how long vnclog ran)",
     )
     op.add_option(
         "--viewer",
@@ -391,15 +455,51 @@ def vnclog() -> None:
         default=False,
         help="a VNC password is required to connect to the server",
     )
+    op.add_option(
+        "--one-shot",
+        action="store_true",
+        default=False,
+        help="serve a single session, then exit; implied by --capture-raw",
+    )
+    op.add_option(
+        "--capture-raw",
+        metavar="FILE.zip",
+        help="write a raw wire capture (auth stripped, replaced by a none-auth "
+        "handshake) to FILE.zip, ready to attach to an issue -- see docs/capture.rst. "
+        "FILE.zip must not exist; OUTPUT is implied (session.vdo inside the archive) "
+        "and should be omitted.",
+    )
+    op.add_option(
+        "--capture-raw-unsafe",
+        action="store_true",
+        default=False,
+        help="record the handshake verbatim instead of stripping it, credential exchange "
+        "and all. Needed for auth types vncdotool cannot follow, and for a bug in the "
+        "negotiation itself. Use a disposable password and rotate it afterwards.",
+    )
     options, args = op.parse_args()
 
     setup_logging(options)
 
     options.address_family, options.host, options.port = parse_server(options.server)
 
-    if len(args) != 1:
+    output = None
+    # --capture-raw implies --one-shot, so it inherits the same conflict.
+    if (options.one_shot or options.capture_raw) and options.file_per_client:
+        op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
+    if options.capture_raw:
+        if args:
+            op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
+        try:
+            check_capture_target(options.capture_raw)
+        except ValueError as exc:
+            op.error(str(exc))
+    elif options.capture_raw_unsafe:
+        op.error("--capture-raw-unsafe is only meaningful with --capture-raw")
+    elif len(args) != 1:
         op.error("incorrect number of arguments")
-    output = args[0]
+    else:
+        output = args[0]
 
     factory = build_proxy(options)
     # stderr, because stdout may carry the recorded session (OUTPUT of `-`)
@@ -409,10 +509,15 @@ def vnclog() -> None:
         flush=True,
     )
 
-    if options.forever and os.path.isdir(output):
+    factory.one_shot = options.one_shot or bool(options.capture_raw)
+
+    if options.capture_raw:
+        factory.capture_path = options.capture_raw
+        factory.capture_preserve_auth = options.capture_raw_unsafe
+    elif options.file_per_client and os.path.isdir(output):
         factory.output = output
-    elif options.forever:
-        op.error("--forever requires OUTPUT to be a directory")
+    elif options.file_per_client:
+        op.error("--file-per-client requires OUTPUT to be a directory")
     elif output == "-":
         factory.output = sys.stdout
     else:
@@ -429,10 +534,14 @@ def vnclog() -> None:
             env=os.environ,
         )
     reactor.run()
+    if factory.capture_failed and not reactor.exit_status:
+        # Aborted or unwritable capture: the contributor has no archive, so
+        # exiting 0 would tell a script the capture succeeded.
+        sys.exit(ExitStatus.COMMAND_FAILED)
     sys.exit(reactor.exit_status)
 
 
-def vncdo() -> None:
+def vncdo(argv: list[str] | None = None) -> None:
     from vncdotool import __version__
 
     usage = "%prog [options] CMD CMDARGS|-|filename"
@@ -492,7 +601,7 @@ def vncdo() -> None:
         help='set the "incremental" flag',
     )
 
-    options, args = op.parse_args()
+    options, args = op.parse_args(args=argv)
     if not len(args):
         op.error("no command provided")
 
@@ -524,7 +633,160 @@ def vncdo() -> None:
 
     reactor.run()
 
-    sys.exit(reactor.exit_status)
+    # the reactor stopping without an outcome is itself a failure
+    sys.exit(ExitStatus.ERROR if reactor.exit_status is None else reactor.exit_status)
+
+
+def vncdo_replay() -> None:
+    """Replay a `vnclog --capture-raw` archive: serve it, or drive it.
+
+    Two processes: --server serves the recorded bytes, and any client (this
+    command without --server, a GUI viewer, or a hand-written vncdo line)
+    can drive the session against it. See docs/capture.rst."""
+    from vncdotool import __version__
+    from .replay import (
+        DEFAULT_BIND,
+        DEFAULT_CLIENT_TIMEOUT,
+        DEFAULT_PORT,
+        DEFAULT_SERVER,
+        ReplayFactory,
+        load_capture,
+    )
+
+    op = VNCDoToolOptionParser(
+        usage="%prog [options] CAPTURE.zip [CMD CMDARGS...]",
+        description="Replay a vnclog --capture-raw archive. Without --server, runs the "
+        "session.vdo recorded inside CAPTURE.zip through vncdo, plus any commands given "
+        "after it. See docs/capture.rst.",
+        version="%prog " + __version__,
+    )
+    op.add_option(
+        "--server",
+        action="store_true",
+        default=False,
+        help="serve the archive's recorded bytes to whatever client connects, instead of "
+        "being the client",
+    )
+    op.add_option(
+        "-s",
+        "--connect",
+        metavar="ADDRESS",
+        default=DEFAULT_SERVER,
+        help="client mode: the replay server to drive the session against [%default]",
+    )
+    op.add_option(
+        "-p",
+        "--password",
+        help="client mode: password for a --capture-raw-unsafe archive whose original "
+        "handshake demands one",
+    )
+    op.add_option(
+        "--listen",
+        type="int",
+        metavar="PORT",
+        default=DEFAULT_PORT,
+        help="--server: TCP port to listen on [%default]",
+    )
+    op.add_option(
+        "--bind",
+        metavar="ADDR",
+        default=DEFAULT_BIND,
+        help="--server: interface to listen on [%default], i.e. local connections only. A "
+        "--capture-raw-unsafe archive replays whatever credentials it carried, so opening "
+        "this up is a deliberate call to make.",
+    )
+    op.add_option(
+        "--client-timeout",
+        type="float",
+        metavar="SECONDS",
+        default=DEFAULT_CLIENT_TIMEOUT,
+        help="--server: warn if the client sends nothing for this long, "
+        "0 disables the warning [%default]",
+    )
+    op.add_option(
+        "--forever",
+        action="store_true",
+        default=False,
+        help="--server: keep accepting a new client after each connection ends",
+    )
+    op.add_option("-v", "--verbose", action="store_true", help="hexdump client->server bytes")
+
+    options, args = op.parse_args()
+    if not args:
+        op.error("no capture archive given")
+    archive, extra = args[0], args[1:]
+
+    logging.basicConfig(
+        level=logging.DEBUG if options.verbose else logging.INFO,
+        format="vncdo-replay: %(levelname)s: %(message)s",
+    )
+
+    try:
+        capture = load_capture(archive)
+    except ValueError as exc:
+        op.error(str(exc))
+
+    if not options.server:
+        _replay_client(op, options, capture, archive, extra)
+        return
+
+    if extra:
+        op.error("--server serves bytes and takes no commands; run those from a client instead")
+    if capture.auth_preserved:
+        log.warning(
+            "%s was recorded with --capture-raw-unsafe, so its original handshake is served "
+            "verbatim: the client has to be configured the way the original one was, and "
+            "whatever credentials that exchange carried are on the wire again",
+            archive,
+        )
+
+    factory = ReplayFactory(
+        capture=capture,
+        client_timeout=options.client_timeout,
+        forever=options.forever,
+    )
+    reactor.listenTCP(options.listen, factory, interface=options.bind)
+    log.info("listening on %s:%s", options.bind, options.listen)
+    reactor.run()
+
+
+def _replay_client(
+    op: optparse.OptionParser,
+    options: optparse.Values,
+    capture: Capture,
+    archive: str,
+    extra: list[str],
+) -> None:
+    """Run the archive's recorded session through `vncdo`.
+
+    Runs the archive's own recorded events rather than commands typed by
+    hand: a replay driven by different input is a different session, which
+    proves nothing about the one that was captured."""
+    session_vdo = capture.session_vdo.strip()
+    if not session_vdo and not extra:
+        op.error(
+            f"{archive} records no session.vdo (a GUI-driven capture records events, not "
+            "vncdo commands), and no commands were given to run instead"
+        )
+    if capture.auth_preserved:
+        log.warning(
+            "%s was recorded with --capture-raw-unsafe, so its original handshake demands "
+            "real credentials again: pass -p/--password to match how the original client "
+            "was configured, or the run will hang waiting for one",
+            archive,
+        )
+
+    with tempfile.TemporaryDirectory(prefix="vncdo-replay-") as workdir:
+        built_argv = ["-s", options.connect]
+        if options.password:
+            built_argv += ["-p", options.password]
+        if session_vdo:
+            script = os.path.join(workdir, "session.vdo")
+            with open(script, "wb") as fh:
+                fh.write(capture.session_vdo)
+            built_argv.append(script)
+        built_argv += extra
+        vncdo(built_argv)
 
 
 if __name__ == "__main__":

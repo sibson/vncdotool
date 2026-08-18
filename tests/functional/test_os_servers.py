@@ -8,19 +8,11 @@ and tests/servers/screen-sharing, and are what CI runs before this module.
 
 On a platform with no OS-hosted server described (Linux, say) there is
 simply nothing to register, and on a platform that has one but hasn't set
-it up the test skips with the command that would set it up.
+it up the test fails with the command that would set it up.
 """
-
-from vncdotool import api
 
 from .vncservers import os_servers, register_server_tests
 
+# Every scenario shells out to the vncdo CLI (see vncservers.run_vncdo), so
+# no reactor ever starts in this process and no api.shutdown() is needed.
 register_server_tests(os_servers(), globals())
-
-
-def tearDownModule() -> None:
-    # api.connect() starts a background Twisted reactor thread that
-    # outlives any individual client connection. Without stopping it here,
-    # the interpreter (and `unittest discover`) hangs on exit after all
-    # tests in this module have finished.
-    api.shutdown()

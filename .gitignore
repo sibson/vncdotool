@@ -4,6 +4,10 @@ dist
 MANIFEST
 vncdotool.egg-info
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
+combined/
 .tox
 docs/_build
 .venv/
@@ -12,3 +16,7 @@ docs/_build
 *~
 #*
 tests/servers/screenshots/
+
+.DS_Store
+.tool-versions
+.vscode/

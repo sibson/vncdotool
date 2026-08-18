@@ -14,6 +14,10 @@
    :target: https://github.com/sibson/vndotool/actions
    :alt: Actions Status
 
+.. image:: https://codecov.io/gh/sibson/vncdotool/branch/main/graph/badge.svg
+   :target: https://app.codecov.io/gh/sibson/vncdotool
+   :alt: Coverage
+
 .. image:: https://readthedocs.org/projects/vncdotool/badge/?version=latest&style=flat
    :target: https://vncdotool.readthedocs.io/en/latest/
    :alt: ReadTheDocs

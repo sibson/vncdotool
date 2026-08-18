@@ -5,7 +5,8 @@ Override :class:`RFBClient` and :class:`RFBFactory` in your application.
 See vncviewer.py for an example.
 
 Reference:
-http://www.realvnc.com/docs/rfbproto.pdf
+https://www.rfc-editor.org/rfc/rfc6143
+https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 """
 # (C) 2003 cliechti@gmx.net
 #
@@ -220,7 +221,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
         elif not self._HEADER.startswith(norm):
-            log.msg(f"invalid initial server response {head!r}")
+            self.vncProtocolError(f"invalid initial server response {head!r}")
             self.transport.loseConnection()
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
@@ -248,7 +249,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             elif sec_type == AuthTypes.DIFFIE_HELLMAN:
                 self.expect(self._handleDHAuth, 4)
         else:
-            log.msg(f"unknown security types: {types!r}")
+            self.vncProtocolError(f"unknown security types: {types!r}")
             self.transport.loseConnection()
 
     def _handleAuth(self, block: bytes) -> None:
@@ -261,7 +262,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
-            log.msg(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+            self.vncProtocolError(f"unknown auth response {AuthTypes.lookup(auth)!r}")
             self.transport.loseConnection()
 
     def _handleConnFailed(self, block: bytes) -> None:
@@ -269,7 +270,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block: bytes) -> None:
-        log.msg(f"Connection refused: {block!r}")
+        self.vncProtocolError(f"Connection refused: {block!r}")
         self.transport.loseConnection()
 
     def _handleVNCAuth(self, block: bytes) -> None:
@@ -390,7 +391,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
-            log.msg(f"unknown message received {MsgS2C.lookup(msgid)!r}")
+            self.vncProtocolError(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
@@ -446,7 +447,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 del self.rectanglePos[-1]  # undo append as this is no real update
                 self._doConnection()
             else:
-                log.msg(f"unknown encoding received {Encoding.lookup(encoding)!r}")
+                self.vncProtocolError(
+                    f"unknown encoding received {Encoding.lookup(encoding)!r}"
+                )
                 self.transport.loseConnection()
         else:
             self._doConnection()
@@ -1027,6 +1030,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """called when the authentication failed.
         the connection is closed."""
         log.msg(f"Cannot connect {reason}")
+
+    def vncProtocolError(self, reason: str) -> None:
+        """called when the server sends something we cannot handle.
+        the connection is closed."""
+        log.msg(reason)
 
     def beginUpdate(self) -> None:
         """called before a series of :meth:`updateRectangle`,

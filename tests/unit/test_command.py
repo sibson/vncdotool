@@ -1,8 +1,16 @@
+import os
 import socket
+import tempfile
 import unittest
 from unittest import mock, skipUnless
 
+from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLookupError
+from twisted.python.failure import Failure
+
 from vncdotool import command
+from vncdotool.client import AuthenticationError, ProtocolError
+from vncdotool.loggingproxy import VNCLoggingServerProxy
+from vncdotool.replay import Capture
 
 
 class TestBuildCommandList(unittest.TestCase):
@@ -147,6 +155,41 @@ class TestBuildCommandList(unittest.TestCase):
         self.assertEqual(self.deferred.addCallback.call_args_list, expected)
 
 
+class TestSessionVdoRoundTrip(unittest.TestCase):
+    """A session.vdo recorded by VNCLoggingServerProxy.handle_keyEvent must
+    parse back cleanly through build_command_list's shlex(posix=True) file
+    reader, including keysyms with no KEYMAP name (', ", #, backslash)."""
+
+    def record_keys(self, chars: str) -> str:
+        sp = VNCLoggingServerProxy()
+        sp.last_event = 0.0
+        recorded: list[str] = []
+        sp.recorder = recorded.append
+        for ch in chars:
+            sp.handle_keyEvent(ord(ch), True)
+            sp.handle_keyEvent(ord(ch), False)
+        return "".join(recorded)
+
+    def build_from_script(self, script_text: str) -> mock.Mock:
+        factory = mock.Mock()
+        with tempfile.NamedTemporaryFile("w", suffix=".vdo", delete=False) as fh:
+            fh.write(script_text)
+            path = fh.name
+        self.addCleanup(os.unlink, path)
+        command.build_command_list(factory, [path])
+        return factory
+
+    def test_quote_and_hash_round_trip(self) -> None:
+        factory = self.build_from_script(self.record_keys("'#"))
+
+        call = factory.deferred.addCallback
+        client = command.VNCDoCLIClient
+        call.assert_any_call(client.keyDown, "'")
+        call.assert_any_call(client.keyUp, "'")
+        call.assert_any_call(client.keyDown, "#")
+        call.assert_any_call(client.keyUp, "#")
+
+
 class TestParseServer(unittest.TestCase):
 
     def test_default(self) -> None:
@@ -252,3 +295,243 @@ class TestVNCDoCLIClient(unittest.TestCase):
         assert command.getpass.getpass.called
         assert cli.factory.password == password
         cli.sendPassword.assert_called_once_with(password)
+
+
+class TestExitStatus(unittest.TestCase):
+
+    def test_documented_values(self) -> None:
+        # these are a published interface, see docs/usage.rst
+        assert dict(command.ExitStatus.__members__.items()) == {
+            'SUCCESS': 0,
+            'ERROR': 1,
+            'USAGE': 2,
+            'AUTHENTICATION_FAILED': 3,
+            'CONNECTION_FAILED': 10,
+            'CONNECTION_LOST': 11,
+            'PROTOCOL_ERROR': 20,
+            'COMMAND_FAILED': 30,
+            'TIMEOUT': 40,
+        }
+
+
+class FakeReactor:
+    """Records the exit status instead of stopping the real reactor.
+
+    A bare Mock would report an auto-created attribute for exit_status, which
+    the factory reads as an outcome having already been decided.
+    """
+
+    def __init__(self) -> None:
+        self.exit_status = None
+
+    def callLater(self, delay, fn, *args, **kwargs) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+
+@mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
+class TestVNCDoCLIFactory(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.factory = command.VNCDoCLIFactory()
+
+    def test_auth_failure(self, reactor) -> None:
+        self.factory.clientConnectionFailed(
+            None, Failure(AuthenticationError('Authentication failure'))
+        )
+
+        assert reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
+
+    def test_protocol_error(self, reactor) -> None:
+        self.factory.clientConnectionFailed(
+            None, Failure(ProtocolError('unknown encoding received'))
+        )
+
+        assert reactor.exit_status == command.ExitStatus.PROTOCOL_ERROR
+
+    def test_connection_refused(self, reactor) -> None:
+        self.factory.clientConnectionFailed(None, Failure(ConnectionRefusedError()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_dns_lookup_failure(self, reactor) -> None:
+        self.factory.clientConnectionFailed(None, Failure(DNSLookupError()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_FAILED
+
+    def test_clean_close_before_commands_run(self, reactor) -> None:
+        # the server hanging up cleanly is not evidence the commands ran
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert reactor.exit_status == command.ExitStatus.CONNECTION_LOST
+
+    def test_command_failure(self, reactor) -> None:
+        self.factory.error(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_timeout(self, reactor) -> None:
+        self.factory.error(Failure(command.TimeoutError('TIMEOUT Exceeded (5s)')))
+
+        assert reactor.exit_status == command.ExitStatus.TIMEOUT
+
+    def test_clean_close_after_commands_run_keeps_success(self, reactor) -> None:
+        self.factory.done(command.ExitStatus.SUCCESS)
+        self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
+
+        assert reactor.exit_status == command.ExitStatus.SUCCESS
+
+    def test_first_outcome_wins(self, reactor) -> None:
+        self.factory.error(Failure(AuthenticationError('denied')))
+        self.factory.done(command.ExitStatus.SUCCESS)
+
+        assert reactor.exit_status == command.ExitStatus.AUTHENTICATION_FAILED
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
+class TestBuildTool(unittest.TestCase):
+
+    def setUp(self) -> None:
+        self.options = mock.Mock(
+            verbose=False,
+            delay=None,
+            warp=1.0,
+            incremental_refreshes=0,
+            host='127.0.0.1',
+            port=5900,
+            address_family=socket.AF_INET,
+        )
+
+    def test_undecided_exit_status_starts_none(self, reactor, connect) -> None:
+        reactor.exit_status = 'left over from an earlier run'
+
+        command.build_tool(self.options, [])
+
+        assert reactor.exit_status is None
+
+    def test_completed_commands_close_connection_and_exit_zero(
+        self, reactor, connect
+    ) -> None:
+        factory = command.build_tool(self.options, [])
+        client = mock.Mock()
+
+        factory.deferred.callback(client)
+
+        client.transport.loseConnection.assert_called_once_with()
+        assert reactor.exit_status == command.ExitStatus.SUCCESS
+
+    def test_failed_command_exits_command_failed(self, reactor, connect) -> None:
+        factory = command.build_tool(self.options, [])
+
+        factory.deferred.errback(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_unparsable_command_exits_usage(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.build_tool(self.options, ['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
+class TestVncdoArgvParameter(unittest.TestCase):
+    """vncdo(argv) must feed optparse instead of mutating sys.argv, so a
+    caller like _replay_client can build a synthetic invocation directly."""
+
+    def test_argv_parameter_is_what_gets_parsed(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_no_argv_reports_missing_command(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo([])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+
+class TestReplayClient(unittest.TestCase):
+    """_replay_client turns a loaded Capture into a `vncdo` invocation."""
+
+    def setUp(self) -> None:
+        self.op = mock.Mock()
+        self.options = mock.Mock(connect='127.0.0.1::5999', password=None)
+
+    def make_capture(self, session_vdo: bytes = b'', auth_preserved: bool = False) -> Capture:
+        meta = {'auth': 'preserved'} if auth_preserved else None
+        return Capture(s2c=b'', session_vdo=session_vdo, meta=meta)
+
+    @mock.patch('vncdotool.command.vncdo')
+    def test_password_forwarded_when_given(self, vncdo) -> None:
+        self.options.password = 'secret'
+        capture = self.make_capture(session_vdo=b'key a\n')
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        argv = vncdo.call_args.args[0]
+        assert argv[:4] == ['-s', '127.0.0.1::5999', '-p', 'secret']
+
+    @mock.patch('vncdotool.command.vncdo')
+    def test_no_password_option_omits_flag(self, vncdo) -> None:
+        capture = self.make_capture(session_vdo=b'key a\n')
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        argv = vncdo.call_args.args[0]
+        assert '-p' not in argv
+
+    @mock.patch('vncdotool.command.vncdo')
+    def test_script_written_passed_and_cleaned_up(self, vncdo) -> None:
+        capture = self.make_capture(session_vdo=b'key a\n')
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        argv = vncdo.call_args.args[0]
+        script = argv[-1]
+        assert os.path.basename(script) == 'session.vdo'
+        assert not os.path.exists(script), "TemporaryDirectory should clean up its workdir"
+
+    @mock.patch('vncdotool.command.vncdo')
+    def test_extra_commands_appended_without_script_when_session_empty(self, vncdo) -> None:
+        capture = self.make_capture(session_vdo=b'   \n')
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', ['key', 'a'])
+
+        argv = vncdo.call_args.args[0]
+        assert argv == ['-s', '127.0.0.1::5999', 'key', 'a']
+
+    @mock.patch('vncdotool.command.vncdo')
+    def test_no_session_and_no_extra_is_a_usage_error(self, vncdo) -> None:
+        capture = self.make_capture(session_vdo=b'')
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        assert self.op.error.called
+        assert 'archive.zip' in self.op.error.call_args.args[0]
+
+    @mock.patch('vncdotool.command.log')
+    @mock.patch('vncdotool.command.vncdo')
+    def test_auth_preserved_warns_in_client_mode(self, vncdo, log) -> None:
+        capture = self.make_capture(session_vdo=b'key a\n', auth_preserved=True)
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        assert log.warning.called
+        args = log.warning.call_args.args
+        message = args[0] % args[1:]
+        assert '-p' in message or 'password' in message
+
+    @mock.patch('vncdotool.command.log')
+    @mock.patch('vncdotool.command.vncdo')
+    def test_auth_not_preserved_does_not_warn(self, vncdo, log) -> None:
+        capture = self.make_capture(session_vdo=b'key a\n', auth_preserved=False)
+
+        command._replay_client(self.op, self.options, capture, 'archive.zip', [])
+
+        assert not log.warning.called

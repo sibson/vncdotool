@@ -2,9 +2,8 @@
 
 See tests/servers/docker-compose.yml and tests/servers/servers.mk. The test
 servers are expected to already be running (e.g. via ``make servers-up``)
-before this module executes; a server whose port isn't open is skipped with
-a clear message rather than failing the whole run, so this module is also
-safe to run outside of that make target.
+before this module executes; a server whose port isn't open fails with a
+clear message rather than passing silently as skipped.
 
 The servers themselves, and the round trip run against each of them, are
 described in vncservers.py and shared with the OS-hosted servers tested by
@@ -16,16 +15,8 @@ default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) so that a failing or
 suspicious capture can be looked at directly after the run.
 """
 
-from vncdotool import api
-
 from .vncservers import DOCKER_SERVERS, register_server_tests
 
+# Every scenario shells out to the vncdo CLI (see vncservers.run_vncdo), so
+# no reactor ever starts in this process and no api.shutdown() is needed.
 register_server_tests(DOCKER_SERVERS, globals())
-
-
-def tearDownModule() -> None:
-    # api.connect() starts a background Twisted reactor thread that
-    # outlives any individual client connection. Without stopping it here,
-    # the interpreter (and `unittest discover`) hangs on exit after all
-    # tests in this module have finished.
-    api.shutdown()

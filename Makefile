@@ -11,7 +11,9 @@ help:
 	@echo "servers-down:	stop the docker VNC test servers"
 	@echo "test-servers:	run functional tests against the VNC test servers"
 	@echo "test-os-server:	run functional tests against this OS's VNC server"
+	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
+	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
@@ -36,16 +38,59 @@ release: test-unit
 docs:
 	$(MAKE) -C docs/ html
 
-.PHONY: test testall test-unit test-func
+# Unenforced, a too-old python3 surfaces as a pip resolver error about a
+# dependency's Requires-Python, which does not read as a wrong interpreter.
+PYTHON_FLOOR = 3.10
+
+.PHONY: check-python
+check-python:
+	@$(PY) -c 'import sys; sys.exit(sys.version_info[:2] < tuple(int(p) for p in "$(PYTHON_FLOOR)".split(".")))' \
+	  || { \
+	    echo "$(PY) is $$($(PY) -c 'import sys; print("%d.%d" % sys.version_info[:2])'), but this project needs >=$(PYTHON_FLOOR)."; \
+	    echo "Point make at a newer one, e.g.:"; \
+	    echo "    make $(MAKECMDGOALS) PY=python3.13"; \
+	    echo "Do not symlink another checkout's .venv: its editable install"; \
+	    echo "points at that checkout, so the tests would exercise its code."; \
+	    exit 1; \
+	  }
+
+.PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
-test-unit:
+test-unit: check-python
 	$(VENV)/python -m unittest discover tests/unit
 
-include libvncserver.mk
-
-test-func: libvnc-examples test-libvnc
+# Needs `make servers-up`; unreachable servers skip rather than fail, so
+# this still runs without docker.
+# $(VENV) on PATH decides which `vncdo` the tests shell out to. Not
+# $(PYTHON): that is a GNU make built-in, python3, not this venv.
+# $(abspath ...) because $(VENV) is relative, and a test that runs the CLI
+# with a cwd= of its own would resolve it against that directory instead.
+.PHONY: test-func
+test-func: check-python
+	PATH="$(abspath $(VENV)):$$PATH" $(VENV)/python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 
 include Makefile.venv
+
+# Coverage, kept off the plain `test` targets because measuring costs
+# runtime not worth paying on every edit-run loop. See DEVELOP.rst.
+#
+# Below the include because $(VENV) is defined there, and prerequisites
+# are expanded where they are written, not where they are used.
+.PHONY: coverage coverage-unit coverage-func coverage-report
+coverage: coverage-unit coverage-func coverage-report
+
+coverage-unit: check-python | venv
+	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
+
+coverage-func: check-python | venv
+	PATH="$(abspath $(VENV)):$$PATH" \
+	  $(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
+
+coverage-report: | venv
+	$(VENV)/coverage combine
+	$(VENV)/coverage report
+	$(VENV)/coverage html
+	@echo "open htmlcov/index.html"

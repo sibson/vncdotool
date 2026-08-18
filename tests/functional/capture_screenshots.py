@@ -116,6 +116,21 @@ def write_gallery(captures: List[Capture], directory: Path) -> Path:
     return index
 
 
+def where_to_see_them() -> str:
+    """One line pointing at the images, linked when the run is known.
+
+    A job summary cannot show the images themselves: it renders no
+    attachments, and the sanitizer drops `data:` URIs.
+    """
+    server = os.environ.get("GITHUB_SERVER_URL")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    run = os.environ.get("GITHUB_RUN_ID")
+    artifact = "the `screenshots` artifact"
+    if server and repo and run:
+        artifact = f"[the `screenshots` artifact]({server}/{repo}/actions/runs/{run}#artifacts)"
+    return f"Full size images are in {artifact}; open `index.html` from it to see them all on one page."
+
+
 def write_job_summary(captures: List[Capture]) -> None:
     """Append a result table to the GitHub Actions job summary, if we're in one."""
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
@@ -131,12 +146,7 @@ def write_job_summary(captures: List[Capture]) -> None:
     for item in captures:
         detail = describe(item.path) if item.path else item.status
         rows.append(f"| {item.server.name} | {item.server.port} | {detail} |")
-    rows += [
-        "",
-        "Full size images are in the `screenshots` artifact for this run; "
-        "open `index.html` from it to see them all on one page.",
-        "",
-    ]
+    rows += ["", where_to_see_them(), ""]
     with open(summary, "a", encoding="utf-8") as handle:
         handle.write("\n".join(rows))
 

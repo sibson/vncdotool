@@ -1,6 +1,26 @@
-1.3.1 (UNRELEASED)
+1.4.0 (UNRELEASED)
 ----------------------
-  - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (#90)
+  - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (@sibson, #90)
+  - Fix the dead protocol reference in the published ``rfb`` module documentation, which pointed at a RealVNC PDF that has been 403 for years; RFC 6143 and the rfbproto community document replace it (@sibson)
+  - Declare python_requires >=3.10, matching the versions CI tests and the development requirements. 3.9 was advertised but neither tested nor able to install the dev environment (@sibson, #357)
+  - [BREAKING] vncdo exit codes now say what went wrong: single digits for bad input, including 3 for authentication, and tens grouped by cause out on the wire, 10s connection, 20s protocol, 30s command, 40s timeout, documented in docs/usage.rst.  Scripts reading the exit code see new values: authentication failure is now 3 and a session cut short 11, both of which used to be 0; an unknown action is now 2, previously 1 (@sibson, #345)
+  - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
+  - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
+  - Protocol errors abort the session instead of only being logged, reported through the new ``RFBClient.vncProtocolError`` hook (@sibson, #345)
+  - Add ``vnclog --capture-raw FILE.zip``, an upload-ready wire capture for filing bugs against servers we can't host. The auth exchange is stripped rather than redacted, so the archive holds no credential bytes and replays without a password; ``--capture-raw-unsafe`` records the handshake whole. See docs/capture.rst (@sibson, #352)
+  - Add ``vncdo-replay``, serving a capture back at a real client (``--server``) or running the session recorded inside it (@sibson, #352)
+  - Add ``vnclog --one-shot``, serving a single session then exiting; implied
+    by ``--capture-raw``
+  - [BREAKING] ``vnclog --forever`` is renamed ``--file-per-client``. It never
+    controlled how long vnclog ran -- vnclog has always accepted connections
+    until stopped -- it selects a separate ``.vdo`` per client connection.
+    Scripts passing ``--forever`` must be updated
+  - ``vnclog`` no longer drops a session when its own logging fails to parse a
+    message: the semantic log is an observer, and a server the real client
+    copes with should not be cut off by the proxy
+  - Fix ``vnclog`` desyncing against RFB 3.7+ servers using VNC password
+    authentication (it ate the 16-byte auth response instead of skipping it,
+    then lost track of the client message stream entirely)
 
 1.3.0 (2026-04-03)
 ----------------------
