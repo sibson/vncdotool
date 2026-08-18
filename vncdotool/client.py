@@ -393,6 +393,11 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
         if self.deferred:
+            if not rectangles:
+                # No rectangle in this update painted self.screen; wait for
+                # one that does before completing the refresh.
+                self.framebufferUpdateRequest()
+                return
             d = self.deferred
             self.deferred = None
             d.callback(self)
