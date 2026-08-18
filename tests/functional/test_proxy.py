@@ -36,9 +36,7 @@ def _await_capture(archive: Path) -> zipfile.ZipFile:
 
 
 def _start_vnclog(listen_port: int, server: str, *recorder_args: str) -> subprocess.Popen:
-    """Start `vnclog`, waiting until it is actually listening.
-
-    Readiness comes from vnclog's stderr, never a port probe: the probe can
+    """Readiness comes from vnclog's stderr, never a port probe: the probe can
     race the forwarded greeting into looking like a real session.
     """
     proxy = subprocess.Popen(
