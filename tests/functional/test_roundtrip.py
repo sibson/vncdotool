@@ -9,7 +9,7 @@ from unittest import TestCase
 from PIL import Image
 
 from .test_proxy import _await_capture, _start_vnclog, _stop_proxy
-from .vncservers import HOST, TIGERVNC_AUTH, port_open, start_replay_server, vncdo_argv
+from .vncservers import HOST, TIGERVNC_AUTH, VNCDO_REPLAY, port_open, start_replay_server, vncdo_argv
 
 ROUNDTRIP_PROXY_PORT = 5996
 REPLAY_PORT = 5997
@@ -49,7 +49,7 @@ class TestCaptureReplayRoundtrip(TestCase):
             # No -p: tigervnc demanded a password, the capture of it does not.
             replayed = subprocess.run(
                 [
-                    "vncdo-replay", "-s", f"{HOST}::{REPLAY_PORT}", str(self.capture),
+                    VNCDO_REPLAY, "-s", f"{HOST}::{REPLAY_PORT}", str(self.capture),
                     "capture", SCREENSHOT,
                 ],
                 capture_output=True, text=True, timeout=TIMEOUT,

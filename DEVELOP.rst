@@ -21,8 +21,10 @@ running::
     make servers-up
     make test-func
 
-``make test-func`` puts ``.venv`` on ``PATH`` so the ``vncdo`` it shells
-out to is the one it just installed. A server that isn't reachable is
+The console scripts are named by full path, taken from the directory of
+the interpreter running the tests, so the CLI exercised is always the one
+installed alongside it -- no ``PATH`` setup, and no way for another
+checkout's ``vncdo`` to stand in. A server that isn't reachable is
 skipped rather than failing the run, so this also degrades gracefully
 without Docker.
 
@@ -79,11 +81,8 @@ is built.
 Do not symlink or reuse another checkout's ``.venv``. An editable install
 records the path it was created from, so its ``vncdotool``, and the
 ``vncdo`` console script beside it, still point at the original checkout.
-Tests then pass against code from somewhere else, and a change looks
-landed when it was never exercised.
-
-The functional suite checks this before it runs anything and fails with
-both paths named, because nothing else notices.
+Tests run through it then pass against code from somewhere else, and a
+change looks landed when it was never exercised.
 
 
 The RFB/VNC Protocol

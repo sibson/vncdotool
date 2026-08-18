@@ -15,7 +15,7 @@ from PIL import Image
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 from vncdotool.rfb import PixelFormat
 
-from .vncservers import start_replay_server
+from .vncservers import VNCDO, VNCDO_REPLAY, start_replay_server
 
 PIXEL_FORMAT = PixelFormat()
 WIDTH, HEIGHT = 2, 2
@@ -66,7 +66,7 @@ class TestReplayEndToEnd(TestCase):
         try:
             result = subprocess.run(
                 [
-                    "vncdo-replay", "-s", f"127.0.0.1::{self.port}", str(self.archive),
+                    VNCDO_REPLAY, "-s", f"127.0.0.1::{self.port}", str(self.archive),
                     "capture", str(out_png),
                 ],
                 capture_output=True, text=True, timeout=CLIENT_TIMEOUT, stdin=subprocess.DEVNULL,
@@ -89,7 +89,7 @@ class TestReplayEndToEnd(TestCase):
         out_png = self.tmp / "byhand.png"
         try:
             result = subprocess.run(
-                ["vncdo", "-s", f"127.0.0.1::{self.port}", "capture", str(out_png)],
+                [VNCDO, "-s", f"127.0.0.1::{self.port}", "capture", str(out_png)],
                 capture_output=True, text=True, timeout=CLIENT_TIMEOUT, stdin=subprocess.DEVNULL,
             )
         finally:

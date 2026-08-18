@@ -16,7 +16,6 @@ written twice.
 """
 
 import os
-import shutil
 import socket
 import subprocess
 import sys
@@ -39,9 +38,14 @@ RETRY_DELAY = 2.0
 READY_ATTEMPT_TIMEOUT = 20.0
 READY_DEADLINE = 180.0
 
-# A console_scripts entry point, so only on PATH once vncdotool is installed.
-VNCDO = "vncdo"
-REPO_ROOT = Path(__file__).resolve().parents[2]
+# Named by full path rather than resolved through PATH: another working tree's
+# .venv can come first there, and the suite would report its behaviour as this
+# branch's.
+_SCRIPTS = Path(sys.executable).parent
+_EXE_SUFFIX = ".exe" if os.name == "nt" else ""
+VNCDO = str(_SCRIPTS / f"vncdo{_EXE_SUFFIX}")
+VNCDO_REPLAY = str(_SCRIPTS / f"vncdo-replay{_EXE_SUFFIX}")
+VNCLOG = str(_SCRIPTS / f"vnclog{_EXE_SUFFIX}")
 # Added to the server's response budget for interpreter start-up and handshake.
 SUBPROCESS_TIMEOUT_HEADROOM = 10.0
 
@@ -236,50 +240,17 @@ def wait_until_ready(
     return False
 
 
-def assert_cli_under_test() -> None:
-    """Fail unless the `vncdo` these tests shell out to is this checkout.
-
-    Nothing else notices: the suite passes against another copy of
-    vncdotool and reports its behaviour as this branch's.
-    """
-    on_path = shutil.which(VNCDO)
-    if on_path is None:
+def assert_cli_installed() -> None:
+    missing = [script for script in (VNCDO, VNCDO_REPLAY, VNCLOG) if not Path(script).exists()]
+    if missing:
         raise AssertionError(
-            f"`{VNCDO}` is not on PATH. It is a console_scripts entry point, so run "
-            "`make venv` in this working tree, or `pip install -e .` into the "
-            "environment running these tests."
-        )
-
-    # Running from the working tree puts it on sys.path, so what this
-    # process imports says nothing about what the console script will.
-    try:
-        shebang = Path(on_path).read_text(errors="replace").splitlines()[0]
-    except (OSError, IndexError):
-        return  # not a script we can read, e.g. a Windows .exe wrapper
-    if not shebang.startswith("#!"):
-        return
-    interpreter = shebang[2:].strip()
-
-    with tempfile.TemporaryDirectory() as neutral:
-        found = subprocess.run(
-            [interpreter, "-c", "import vncdotool; print(vncdotool.__file__)"],
-            capture_output=True, text=True, cwd=neutral, timeout=60,
-        )
-    if found.returncode != 0:
-        raise AssertionError(f"`{VNCDO}`'s interpreter cannot import vncdotool:\n{found.stderr}")
-
-    installed = Path(found.stdout.strip()).resolve()
-    if REPO_ROOT not in installed.parents:
-        raise AssertionError(
-            f"`{VNCDO}` on PATH ({on_path}) imports vncdotool from {installed}, not this "
-            f"checkout at {REPO_ROOT}. These tests shell out to it, so they would report "
-            "that copy's behaviour as this branch's. Run `make venv` in this working tree "
-            "(and do not symlink another one's .venv -- its editable install still points "
-            "where it was created)."
+            f"{', '.join(missing)} missing. These are console_scripts entry points: run "
+            "`make venv` in this working tree, or `pip install -e .` into the environment "
+            "running these tests."
         )
 
 
-assert_cli_under_test()
+assert_cli_installed()
 
 
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
@@ -309,11 +280,6 @@ def run_vncdo(
         raise AssertionError(
             f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"
         ) from exc
-    except FileNotFoundError as exc:
-        raise AssertionError(
-            f"{server.name}: `{VNCDO}` not found on PATH -- install vncdotool "
-            "(`pip install -e .`) so its console script is available"
-        ) from exc
 
 
 def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
@@ -333,19 +299,13 @@ def start_replay_server(
     """Start `vncdo-replay --server ARCHIVE --listen PORT --forever`, cleanup registered.
 
     Fails fast, with its stderr, if the process exits before listening."""
-    try:
-        server = subprocess.Popen(
-            ["vncdo-replay", "--server", str(archive), "--listen", str(port), "--forever"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise AssertionError(
-            "`vncdo-replay` not found on PATH -- install vncdotool (`pip install -e .`) "
-            "so its console script is available"
-        ) from exc
+    server = subprocess.Popen(
+        [VNCDO_REPLAY, "--server", str(archive), "--listen", str(port), "--forever"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
+        text=True,
+    )
     # Not kill(): Twisted's SIGTERM handler stops the reactor, so the
     # process exits through atexit and flushes what it still owes.
     testcase.addCleanup(_terminate, server)
