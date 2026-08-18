@@ -394,9 +394,8 @@ class VNCDoToolClient(rfb.RFBClient):
     def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
         if self.deferred:
             if not rectangles:
-                # A pixel-free update, e.g. only a DesktopSize pseudo-rectangle.
-                # Completing the refresh now would hand over the bare black
-                # canvas, so request again and wait for real content.
+                # No rectangle in this update painted self.screen; wait for
+                # one that does before completing the refresh.
                 self.framebufferUpdateRequest()
                 return
             d = self.deferred
