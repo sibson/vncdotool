@@ -230,7 +230,9 @@ and can proceed while 3–5 follow.
 - **Tier 2 input validation**: Windows/macOS have no event sink today.
   Investigate per-OS agents (AutoHotkey key listener on Windows, an event
   tap on macOS) so `type`/`move` can be verified server-side there rather
-  than remaining connect/screenshot-only smoke.
+  than remaining connect/screenshot-only smoke. UltraVNC/Windows leg
+  designed in [ultravnc-input-sink.md](ultravnc-input-sink.md); macOS
+  event-tap leg is a separate follow-up.
 - **Special keys across servers**: the vncev sink proves which keysym the
   client put on the wire, which is necessary but not sufficient. Reported
   KEYMAP bugs are about what a *server* does with that keysym, and look
