@@ -8,14 +8,6 @@ vncdotool is available on PyPI_, so in most cases you should be able to simply r
 vncdotool relies on a number of libraries, the two major ones are Pillow_, the Python Imaging Library and
 Twisted_, an asynchronous networking library.
 While vncdotool should work with any recent version of these libraries sometimes things break.
-If you are having issues getting things to work you can try using a stable set of libraries
-and if you aren't already using it, and you should be, use a virtualenv_.::
-
-    pip install virtualenv
-    virtualenv venv-vncdotool
-    # XXX requirements.txt from vncdotool source tree
-    pip install -r requirements.txt
-    pip install -e .
 
 
 Windows
@@ -58,5 +50,4 @@ If you are not familiar with Python, the most reliable way to install vncdotool 
 .. _Official Python: https://python.org/downloads/
 .. _Twisted: https://twistedmatrix.com/
 .. _Twisted Downloads: https://pypi.org/project/Twisted/
-.. _virtualenv: https://virtualenv.pypa.io/
 .. _Stackoverflow: https://stackoverflow.com/questions/ask?tags=vncdotool

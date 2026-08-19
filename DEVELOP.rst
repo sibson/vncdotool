@@ -41,7 +41,7 @@ that is not worth paying on every edit-run loop.
 
 Almost everything the functional suite covers happens in a ``vncdo``,
 ``vnclog`` or ``vncdo-replay`` subprocess, which a plain ``coverage run``
-does not see. ``patch = subprocess`` in ``setup.cfg`` is what measures
+does not see. ``patch = subprocess`` in ``pyproject.toml`` is what measures
 them, so it needs coverage 7.10 or newer. A child that is ``kill``\ ed
 rather than asked to stop never gets to write its data, so tests that
 stop a long-running process terminate it and let Twisted's SIGTERM
