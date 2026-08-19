@@ -9,12 +9,12 @@ vncdotool relies on a number of libraries, the two major ones are Pillow_, the P
 Twisted_, an asynchronous networking library.
 While vncdotool should work with any recent version of these libraries sometimes things break.
 If you are having issues getting things to work you can try using a stable set of libraries
-and if you aren't already using it, and you should be, use a virtualenv_.::
+and if you aren't already using it, and you should be, use uv_.::
 
-    pip install virtualenv
-    virtualenv venv-vncdotool
-    source venv-vncdotool/bin/activate
-    pip install -e .
+    uv sync
+
+from a source checkout, which builds ``.venv`` and installs vncdotool into it.
+``uv run vncdo`` then runs that copy.
 
 
 Windows
@@ -52,10 +52,10 @@ If you are not familiar with Python, the most reliable way to install vncdotool 
        Once you get the normal GUI client working try vncdotool again and if you still have problems try the community at Stackoverflow_\ .
 
 .. _PyPI: https://pypi.python.org/pypi
+.. _uv: https://docs.astral.sh/uv/getting-started/installation/
 .. _Pillow: https://python-pillow.org/
 .. _PIL Downloads: https://pypi.org/project/pillow/
 .. _Official Python: https://python.org/downloads/
 .. _Twisted: https://twistedmatrix.com/
 .. _Twisted Downloads: https://pypi.org/project/Twisted/
-.. _virtualenv: https://virtualenv.pypa.io/
 .. _Stackoverflow: https://stackoverflow.com/questions/ask?tags=vncdotool

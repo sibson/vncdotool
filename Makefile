@@ -1,8 +1,6 @@
 #!/usr/bin/make -f
 .DEFAULT: help
 
-# Makefile.venv installs the package from pyproject.toml; the dev
-# dependency group is not something it knows about, so `venv-dev` adds it.
 REQUIREMENTS_TXT=
 
 .PHONY: help
@@ -19,8 +17,6 @@ help:
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
-# --dry-run reports what a bump would write without writing it, so both
-# numbers are known before the first one is applied.
 VERSION := $(shell uv version --bump stable --dry-run --short --no-sync 2>/dev/null)
 NEXT_VERSION := $(shell uv version --bump patch --bump dev=0 --dry-run --short --no-sync 2>/dev/null)
 

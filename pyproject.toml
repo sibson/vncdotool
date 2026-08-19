@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "vncdotool"
-version = "1.4.2.dev0"
+version = "2.0.0.dev0"
 description = "Command line VNC client"
 readme = "README.rst"
 requires-python = ">=3.10"
@@ -46,9 +46,7 @@ vncdo-replay = "vncdotool.command:vncdo_replay"
 
 [dependency-groups]
 dev = [
-    # 7.10 for `patch = subprocess`, which measures the CLI the functional
-    # tests shell out to.
-    "coverage>=7.10",
+    "coverage>=7.10",  # 7.10 for `patch = subprocess`, which measures the vncdo subprocesses
     "flake8",
     "sphinx",
 ]
@@ -56,8 +54,6 @@ dev = [
 [tool.hatch.build.targets.wheel]
 packages = ["vncdotool"]
 
-# Hatchling's default sdist is everything git tracks; this keeps it to what
-# MANIFEST.in used to ship, plus the docs source.
 [tool.hatch.build.targets.sdist]
 include = [
     "vncdotool",
@@ -70,20 +66,12 @@ include = [
 
 [tool.coverage.run]
 branch = true
-# Most of the data arrives from `vncdo` subprocesses, each writing its own
-# file; see DEVELOP.rst.
+# Each `vncdo` subprocess writes its own data file.
 parallel = true
 patch = ["subprocess"]
 concurrency = ["thread"]
 source = ["vncdotool"]
 relative_files = true
-
-[tool.coverage.paths]
-# CI installs editable, so both spellings are the same checkout.
-source = [
-    "vncdotool",
-    "*/site-packages/vncdotool",
-]
 
 [tool.coverage.report]
 show_missing = true
