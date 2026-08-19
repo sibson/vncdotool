@@ -60,8 +60,8 @@ testall: test-unit test-func
 test-unit: check-python
 	$(VENV)/python -m unittest discover tests/unit
 
-# Needs `make servers-up`; unreachable servers skip rather than fail, so
-# this still runs without docker.
+# Needs `make servers-up`: an unreachable server fails its tests rather
+# than skipping them, so a down fleet cannot pass as green.
 .PHONY: test-func
 test-func: check-python
 	$(VENV)/python -m unittest discover -s tests/functional -t .
