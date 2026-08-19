@@ -9,7 +9,7 @@ the evidence when something goes wrong.
 
 ```sh
 sudo bash tests/servers/screen-sharing/setup.sh
-python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 ```
 
 This turns the machine into an unattended remote-control target with a

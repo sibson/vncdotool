@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-env:
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'
-  PIP_NO_PYTHON_VERSION_WARNING: '1'
-
 defaults:
   run:
     shell: bash
@@ -29,25 +25,23 @@ jobs:
       matrix:
         os: [ubuntu-latest] #, windows-latest] tests fail on windows
         python-version: ['3.10', '3.11', '3.12', '3.13']
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
 
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install --group dev -e .
+        run: uv sync
 
       - name: Run unittests
-        run: coverage run --parallel-mode -m unittest discover tests/unit
+        run: uv run coverage run --parallel-mode -m unittest discover tests/unit
 
       - name: Upload coverage data
         if: always()
@@ -66,20 +60,16 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flake8
+        run: uv sync
 
       - name: Run flake8
-        run: flake8 --count --statistics vncdotool tests
+        run: uv run flake8 --count --statistics vncdotool tests
 
   servers:
     name: Test server functional tests
@@ -91,26 +81,20 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          # The functional suite shells out to the console scripts beside this
-          # interpreter, so they have to be installed, not merely importable.
-          pip install --group dev -e .
+        run: uv sync
 
       - name: Build and start the VNC test servers
         run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
 
       - name: Wait for the test servers to serve their screens
         timeout-minutes: 5
-        run: python tests/functional/wait_for_servers.py docker
+        run: uv run python tests/functional/wait_for_servers.py docker
 
       # The steps below are diagnostics and teardown, so they carry
       # `if: always()`: when a test fails, the container status, the
@@ -123,7 +107,7 @@ jobs:
         run: docker compose -f tests/servers/docker-compose.yml ps
 
       - name: Run functional tests
-        run: coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
+        run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 
       - name: Upload coverage data
         if: always()
@@ -137,7 +121,7 @@ jobs:
       - name: Capture screenshots and build the gallery
         if: always()
         timeout-minutes: 3
-        run: python tests/functional/capture_screenshots.py
+        run: uv run python tests/functional/capture_screenshots.py
 
       - name: Dump test server container logs
         if: always()
@@ -169,15 +153,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: '3.13'
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install --group dev -e .
+        run: uv sync
 
       - name: Download unit tier coverage data
         uses: actions/download-artifact@v4
@@ -195,7 +177,7 @@ jobs:
 
       - name: Report
         run: |
-          .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
+          uv run .github/scripts/coverage-summary.sh unit=data/unit fleet=data/fleet
           cat combined/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the annotated HTML report

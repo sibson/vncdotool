@@ -38,8 +38,6 @@ permissions:
   contents: read
 
 env:
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'
-  PIP_NO_PYTHON_VERSION_WARNING: '1'
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
   # Spike credentials for a throwaway runner, deliberately visible as the
   # fallback. A repo secret overrides them without touching this file or
@@ -84,15 +82,13 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: '3.13'
+          enable-cache: true
 
       - name: Install vncdotool
-        run: |
-          python -m pip install --upgrade pip
-          pip install --group dev -e .
+        run: uv sync
 
       - name: Set up the VNC server
         run: ${{ matrix.setup }}
@@ -101,10 +97,10 @@ jobs:
       # Sharing is what starts it, and that connection can stall for good
       # while the next one succeeds immediately.
       - name: Wait for the server to serve a screen
-        run: python tests/functional/wait_for_servers.py os
+        run: uv run python tests/functional/wait_for_servers.py os
 
       - name: Run OS server functional tests
-        run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+        run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 
       # Everything below is diagnostics and artifact collection, so it runs
       # with if: always() -- a failing test is exactly when the screenshot
@@ -113,7 +109,7 @@ jobs:
       - name: Capture screenshots and build the gallery
         if: always()
         timeout-minutes: 3
-        run: python tests/functional/capture_screenshots.py os
+        run: uv run python tests/functional/capture_screenshots.py os
 
       - name: Collect server diagnostics
         if: always()
