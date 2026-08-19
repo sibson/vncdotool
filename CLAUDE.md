@@ -74,8 +74,9 @@ rather than the issue number.
 
 # Release Process
 
-Version lives in `vncdotool/__init__.py` and is bumped by the release target.
-Always release from `main`; the target runs the unit tests, stamps
-`CHANGELOG.rst`, tags `vX.Y.Z`, and pushes:
+Version lives in `[project] version` in `pyproject.toml`; `vncdotool.__version__`
+reads it back from the installed distribution's metadata. Always release from
+`main`; the target runs the unit tests, bumps the version with `uv version`,
+stamps `CHANGELOG.rst`, tags `vX.Y.Z`, and pushes:
 
     make release
