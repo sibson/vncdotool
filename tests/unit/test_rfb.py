@@ -1,3 +1,4 @@
+import warnings
 from unittest import TestCase, mock
 
 from vncdotool import rfb
@@ -105,3 +106,43 @@ class TestRFB(TestCase):
             mock.call(b"\x01"),  # AuthTypes.NONE
             mock.call(b"\x00"),  # shared
         ])
+
+
+class TestRFBClientSubclassWarning(TestCase):
+
+    def test_overriding_updateRectangle_warns(self):
+        with self.assertWarns(FutureWarning):
+            class Sub(rfb.RFBClient):
+                def updateRectangle(self, x, y, width, height, data):
+                    pass
+
+    def test_overriding_fillRectangle_warns(self):
+        with self.assertWarns(FutureWarning):
+            class Sub(rfb.RFBClient):
+                def fillRectangle(self, x, y, width, height, color):
+                    pass
+
+    def test_overriding_unrelated_method_does_not_warn(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
+            class Sub(rfb.RFBClient):
+                def bell(self):
+                    pass
+
+    def test_subclass_not_overriding_changing_hooks_does_not_warn(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+
+            class Sub(rfb.RFBClient):
+                pass
+
+    def test_override_from_vncdotool_module_does_not_warn(self):
+        def updateRectangle(self, x, y, width, height, data):
+            pass
+
+        updateRectangle.__module__ = "vncdotool.client"
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            type("Sub", (rfb.RFBClient,), {"updateRectangle": updateRectangle})
