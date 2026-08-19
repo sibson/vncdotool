@@ -8,13 +8,6 @@ vncdotool is available on PyPI_, so in most cases you should be able to simply r
 vncdotool relies on a number of libraries, the two major ones are Pillow_, the Python Imaging Library and
 Twisted_, an asynchronous networking library.
 While vncdotool should work with any recent version of these libraries sometimes things break.
-If you are having issues getting things to work you can try using a stable set of libraries
-and if you aren't already using it, and you should be, use uv_.::
-
-    uv sync
-
-from a source checkout, which builds ``.venv`` and installs vncdotool into it.
-``uv run vncdo`` then runs that copy.
 
 
 Windows
@@ -52,7 +45,6 @@ If you are not familiar with Python, the most reliable way to install vncdotool 
        Once you get the normal GUI client working try vncdotool again and if you still have problems try the community at Stackoverflow_\ .
 
 .. _PyPI: https://pypi.python.org/pypi
-.. _uv: https://docs.astral.sh/uv/getting-started/installation/
 .. _Pillow: https://python-pillow.org/
 .. _PIL Downloads: https://pypi.org/project/pillow/
 .. _Official Python: https://python.org/downloads/
