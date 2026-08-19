@@ -1,5 +1,6 @@
 1.4.2.dev0 (UNRELEASED)
 ----------------------
+  - Fix ``make release`` tagging an empty version: it read the current and next version by running bare ``python``, which need not be on PATH (@sibson, #382)
 
 1.4.1 (2026-08-19)
 ----------------------
