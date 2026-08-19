@@ -42,9 +42,6 @@ READY_DEADLINE = 180.0
 # .venv can come first there, and the suite would report its behaviour as this
 # branch's.
 _INTERPRETER_DIR = Path(sys.executable).parent
-# venvs put console scripts beside the interpreter on every platform; a
-# non-venv Windows install (e.g. actions/setup-python on windows-latest) puts
-# them in a sibling Scripts\ instead.
 _SCRIPT_DIRS = [_INTERPRETER_DIR, _INTERPRETER_DIR / "Scripts"] if os.name == "nt" else [_INTERPRETER_DIR]
 _EXE_SUFFIX = ".exe" if os.name == "nt" else ""
 
