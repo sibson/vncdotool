@@ -3,16 +3,14 @@
 Running Tests
 ------------------------
 
-``make`` builds a virtualenv in ``.venv`` beside the ``Makefile`` and
-installs vncdotool into it in editable mode, so unit tests need nothing
-set up first::
+Install uv_, then::
 
     make test
 
-Python 3.10 or newer is required. ``make`` uses the first ``python3`` on
-``PATH``; pass ``PY`` to choose another::
-
-    make test PY=python3.13
+``uv run`` resolves the interpreter from ``.python-version``, downloading it
+if needed, and syncs an editable install of vncdotool plus the dev
+dependency group into ``.venv`` before running -- unit tests need nothing
+else set up first.
 
 The functional tests exercise the real ``vncdo`` CLI via ``subprocess.run``
 against the Docker Compose VNC test server fleet, which needs to be
@@ -24,9 +22,8 @@ running::
 The console scripts are named by full path, taken from the directory of
 the interpreter running the tests, so the CLI exercised is always the one
 installed alongside it -- no ``PATH`` setup, and no way for another
-checkout's ``vncdo`` to stand in. A server that isn't reachable is
-skipped rather than failing the run, so this also degrades gracefully
-without Docker.
+checkout's ``vncdo`` to stand in. A server that isn't reachable fails its
+tests rather than being skipped, so a down fleet cannot pass as green.
 
 Coverage
 ------------------------
@@ -75,8 +72,9 @@ can be produced locally.
 Working with more than one checkout
 ------------------------------------
 
-Each working tree needs **its own** ``.venv``. Run ``make`` in it and one
-is built.
+uv keys its project environment to the project directory, so each working
+tree gets **its own** ``.venv`` automatically; run ``uv run`` or ``make`` in
+it and one is built.
 
 Do not symlink or reuse another checkout's ``.venv``. An editable install
 records the path it was created from, so its ``vncdotool``, and the
@@ -117,3 +115,4 @@ Preparing a Release
 
 .. _RFC 6143: https://www.rfc-editor.org/rfc/rfc6143
 .. _rfbproto: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
+.. _uv: https://docs.astral.sh/uv/getting-started/installation/
