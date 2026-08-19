@@ -1,4 +1,4 @@
-1.4.1 (UNRELEASED)
+1.4.1 (2026-08-19)
 ----------------------
   - Start the pluggable-decoders migration (see ``specs/decoder-architecture.md``): subclassing ``RFBClient.fillRectangle`` or ``RFBClient.updateRectangle``, or reading/writing ``VNCDoToolClient.image_mode``, now raises a ``FutureWarning``, since both contracts will change once decoders move out of ``rfb.py``. No behavior changes yet; comment on #385 if you rely on either (@sibson, #385)
 
