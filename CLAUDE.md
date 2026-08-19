@@ -72,6 +72,13 @@ fix the underlying bug, move the test into the topical file, drop its
 `@unittest.expectedFailure` marker, and rename it for the behaviour it checks
 rather than the issue number.
 
+A pull request description is read by someone deciding where to spend their
+attention, not by the archive: a title plus a few sentences saying what
+changed, what a reviewer would not guess from the diff, and what was tested.
+Under ~15 lines. The commit bodies already carry the full rationale, and
+restaging them in the description only makes the reviewer read it twice.
+Findings outside the diff get a line and a pointer, not a section.
+
 # Release Process
 
 Version lives in `vncdotool/__init__.py` and is bumped by the release target.
