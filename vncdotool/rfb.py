@@ -34,6 +34,7 @@ from typing import (
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives import hashes
+from cryptography.utils import CryptographyDeprecationWarning
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector
@@ -313,8 +314,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         p = int.from_bytes(self.modulus, "big")
         sk = int.from_bytes(self.serverKey, "big")
-        param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
-        server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
+        with warnings.catch_warnings():
+            # ARD auth is specified over classic finite-field DH; the server
+            # picks p/g and there is no other algorithm to negotiate into.
+            # Tracking upstream removal: https://github.com/sibson/vncdotool/issues/388
+            warnings.simplefilter("ignore", CryptographyDeprecationWarning)
+            param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
+            server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
 
         params = param_nums.parameters()
         private_key = params.generate_private_key()
