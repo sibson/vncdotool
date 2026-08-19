@@ -245,7 +245,7 @@ def assert_cli_installed() -> None:
     if missing:
         raise AssertionError(
             f"{', '.join(missing)} missing. These are console_scripts entry points: run "
-            "`make venv` in this working tree, or `pip install -e .` into the environment "
+            "`uv sync` in this working tree, or `pip install -e .` into the environment "
             "running these tests."
         )
 

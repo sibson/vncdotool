@@ -1,5 +1,8 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Local development moves from a vendored Makefile.venv + pip to uv: ``make``
+    targets run under ``uv run``, and a host's ``python3`` version no longer
+    matters (@sibson, #383)
   - Fix ``make release`` tagging an empty version: it read the current and next version by running bare ``python``, which need not be on PATH (@sibson, #382)
 
 1.4.1 (2026-08-19)

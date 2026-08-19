@@ -1,7 +1,9 @@
 #!/usr/bin/make -f
 .DEFAULT: help
 
-REQUIREMENTS_TXT=
+ifeq ($(shell command -v uv 2>/dev/null),)
+$(error uv is required. Install it with `brew install uv`, `winget install astral-sh.uv`, or https://astral.sh/uv/install.sh)
+endif
 
 .PHONY: help
 help:
@@ -37,60 +39,35 @@ release: test-unit
 
 .PHONY: docs
 docs:
-	$(MAKE) -C docs/ html
-
-# Unenforced, a too-old python3 surfaces as a pip resolver error about a
-# dependency's Requires-Python, which does not read as a wrong interpreter.
-PYTHON_FLOOR = 3.10
-
-.PHONY: check-python
-check-python:
-	@$(PY) -c 'import sys; sys.exit(sys.version_info[:2] < tuple(int(p) for p in "$(PYTHON_FLOOR)".split(".")))' \
-	  || { \
-	    echo "$(PY) is $$($(PY) -c 'import sys; print("%d.%d" % sys.version_info[:2])'), but this project needs >=$(PYTHON_FLOOR)."; \
-	    echo "Point make at a newer one, e.g.:"; \
-	    echo "    make $(MAKECMDGOALS) PY=python3.13"; \
-	    echo "Do not symlink another checkout's .venv: its editable install"; \
-	    echo "points at that checkout, so the tests would exercise its code."; \
-	    exit 1; \
-	  }
+	uv run $(MAKE) -C docs/ html
 
 .PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
-test-unit: check-python
-	$(VENV)/python -m unittest discover tests/unit
+test-unit:
+	uv run python -m unittest discover tests/unit
 
 # Needs `make servers-up`: an unreachable server fails its tests rather
 # than skipping them, so a down fleet cannot pass as green.
 .PHONY: test-func
-test-func: check-python
-	$(VENV)/python -m unittest discover -s tests/functional -t .
+test-func:
+	uv run python -m unittest discover -s tests/functional -t .
 
 include tests/servers/servers.mk
 
-include Makefile.venv
-
 # Coverage, kept off the plain `test` targets because measuring costs
 # runtime not worth paying on every edit-run loop. See DEVELOP.rst.
-#
-# Below the include because $(VENV) is defined there, and prerequisites
-# are expanded where they are written, not where they are used.
-.PHONY: venv-dev
-venv-dev: | venv
-	$(VENV)/pip install --group dev .
-
 .PHONY: coverage coverage-unit coverage-func coverage-report
 coverage: coverage-unit coverage-func coverage-report
 
-coverage-unit: check-python | venv-dev
-	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
+coverage-unit:
+	uv run coverage run --parallel-mode -m unittest discover tests/unit
 
-coverage-func: check-python | venv-dev
-	$(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
+coverage-func:
+	uv run coverage run --parallel-mode -m unittest discover -s tests/functional -t .
 
-coverage-report: | venv-dev
-	$(VENV)/coverage combine
-	$(VENV)/coverage report
-	$(VENV)/coverage html
+coverage-report:
+	uv run coverage combine
+	uv run coverage report
+	uv run coverage html
 	@echo "open htmlcov/index.html"
