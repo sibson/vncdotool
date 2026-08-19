@@ -107,6 +107,10 @@ jobs:
       - name: Run OS server functional tests
         run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 
+      - name: 'SPIKE: verify an AHK hook shares UltraVNC''s Windows session'
+        if: matrix.runner == 'windows-latest'
+        run: pwsh tests/servers/ultravnc/spike-check-session.ps1
+
       # Everything below is diagnostics and artifact collection, so it runs
       # with if: always() -- a failing test is exactly when the screenshot
       # and the server's own logs are worth having. The steps above are the
