@@ -135,9 +135,13 @@ jobs:
           path: screenshots/
           if-no-files-found: ignore
 
+      # vncev and libvncserver-example run their upstream binary as PID 1
+      # with no SIGTERM handling, so the default 10s stop grace period is
+      # pure dead time -- the tigervnc/x11vnc entrypoints' traps already
+      # exit in well under a second. Nothing here needs a clean shutdown.
       - name: Stop the VNC test servers
         if: always()
-        run: docker compose -f tests/servers/docker-compose.yml down
+        run: docker compose -f tests/servers/docker-compose.yml down --timeout 2
 
   coverage:
     name: Coverage
