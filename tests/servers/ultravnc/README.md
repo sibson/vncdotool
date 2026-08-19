@@ -8,7 +8,7 @@ connect/type/capture round trip used for the Docker servers, and
 
 ```powershell
 pwsh tests/servers/ultravnc/setup.ps1
-python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 ```
 
 This turns the machine into an unattended remote-control target with a

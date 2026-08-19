@@ -64,7 +64,7 @@ function Write-UltraVncIni {
     # The helper writes the hex to a file rather than to stdout, so the
     # value never lands in the step log; read it back and drop the file.
     $passwdFile = Join-Path ([System.IO.Path]::GetTempPath()) 'ultravnc-passwd.hex'
-    python $PasswdScript $Password $passwdFile
+    uv run python $PasswdScript $Password $passwdFile
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $passwdFile)) {
         throw 'could not compute the ultravnc.ini password hex'
     }
