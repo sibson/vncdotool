@@ -1,7 +1,9 @@
 #!/usr/bin/make -f
 .DEFAULT: help
 
-REQUIREMENTS_TXT?=requirements-dev.txt
+# Makefile.venv installs the package from pyproject.toml; the dev
+# dependency group is not something it knows about, so `venv-dev` adds it.
+REQUIREMENTS_TXT=
 
 .PHONY: help
 help:
@@ -17,20 +19,23 @@ help:
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
-VERSION := $(shell python -c "import vncdotool; print(vncdotool.__version__.split('.dev')[0])")
-NEXT_VERSION := $(shell python -c "v='$(VERSION)'.split('.'); v[-1]=str(int(v[-1])+1); print('.'.join(v)+'.dev0')")
+# --dry-run reports what a bump would write without writing it, so both
+# numbers are known before the first one is applied.
+VERSION := $(shell uv version --bump stable --dry-run --short --no-sync 2>/dev/null)
+NEXT_VERSION := $(shell uv version --bump patch --bump dev=0 --dry-run --short --no-sync 2>/dev/null)
 
 .PHONY: release
 release: test-unit
 	@echo "Releasing $(VERSION)"
+	uv version --bump stable --no-sync
 	sd "^$(VERSION) \(UNRELEASED\)" "$(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.rst
-	git add CHANGELOG.rst
+	git add pyproject.toml CHANGELOG.rst
 	git commit -m "Release $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
-	sd '__version__ = .*' '__version__ = "$(NEXT_VERSION)"' vncdotool/__init__.py
+	uv version --bump patch --bump dev=0 --no-sync
 	printf '$(NEXT_VERSION) (UNRELEASED)\n----------------------\n\n' | cat - CHANGELOG.rst > CHANGELOG.rst.tmp && mv CHANGELOG.rst.tmp CHANGELOG.rst
-	git add vncdotool/__init__.py CHANGELOG.rst
+	git add pyproject.toml CHANGELOG.rst
 	git commit -m "Bump version to $(NEXT_VERSION)"
 	git push origin main
 
@@ -75,16 +80,20 @@ include Makefile.venv
 #
 # Below the include because $(VENV) is defined there, and prerequisites
 # are expanded where they are written, not where they are used.
+.PHONY: venv-dev
+venv-dev: | venv
+	$(VENV)/pip install --group dev .
+
 .PHONY: coverage coverage-unit coverage-func coverage-report
 coverage: coverage-unit coverage-func coverage-report
 
-coverage-unit: check-python | venv
+coverage-unit: check-python | venv-dev
 	$(VENV)/coverage run --parallel-mode -m unittest discover tests/unit
 
-coverage-func: check-python | venv
+coverage-func: check-python | venv-dev
 	$(VENV)/coverage run --parallel-mode -m unittest discover -s tests/functional -t .
 
-coverage-report: | venv
+coverage-report: | venv-dev
 	$(VENV)/coverage combine
 	$(VENV)/coverage report
 	$(VENV)/coverage html

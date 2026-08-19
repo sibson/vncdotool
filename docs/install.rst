@@ -13,8 +13,7 @@ and if you aren't already using it, and you should be, use a virtualenv_.::
 
     pip install virtualenv
     virtualenv venv-vncdotool
-    # XXX requirements.txt from vncdotool source tree
-    pip install -r requirements.txt
+    source venv-vncdotool/bin/activate
     pip install -e .
 
 

@@ -1,0 +1,93 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vncdotool"
+version = "1.4.2.dev0"
+description = "Command line VNC client"
+readme = "README.rst"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE.txt"]
+authors = [{ name = "Marc Sibson", email = "sibson+vncdotool@gmail.com" }]
+keywords = ["VNC", "RFB"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Framework :: Twisted",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics :: Viewers",
+    "Topic :: Software Development :: Testing",
+]
+dependencies = [
+    "Twisted",
+    "Pillow",
+    "cryptography",
+]
+
+[project.urls]
+Homepage = "http://github.com/sibson/vncdotool"
+
+[project.scripts]
+vncdo = "vncdotool.command:vncdo"
+vncdotool = "vncdotool.command:vncdo"
+vnclog = "vncdotool.command:vnclog"
+vncdo-replay = "vncdotool.command:vncdo_replay"
+
+[dependency-groups]
+dev = [
+    # 7.10 for `patch = subprocess`, which measures the CLI the functional
+    # tests shell out to.
+    "coverage>=7.10",
+    "flake8",
+    "sphinx",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["vncdotool"]
+
+# Hatchling's default sdist is everything git tracks; this keeps it to what
+# MANIFEST.in used to ship, plus the docs source.
+[tool.hatch.build.targets.sdist]
+include = [
+    "vncdotool",
+    "tests",
+    "docs",
+    "*.rst",
+    "*.txt",
+    "pyproject.toml",
+]
+
+[tool.coverage.run]
+branch = true
+# Most of the data arrives from `vncdo` subprocesses, each writing its own
+# file; see DEVELOP.rst.
+parallel = true
+patch = ["subprocess"]
+concurrency = ["thread"]
+source = ["vncdotool"]
+relative_files = true
+
+[tool.coverage.paths]
+# CI installs editable, so both spellings are the same checkout.
+source = [
+    "vncdotool",
+    "*/site-packages/vncdotool",
+]
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

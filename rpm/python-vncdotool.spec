@@ -16,7 +16,7 @@ BuildArch:      noarch
 BuildRequires:  gcc
 BuildRequires:  redhat-rpm-config
 BuildRequires:  python3-devel
-BuildRequires:  python3-setuptools
+BuildRequires:  python3-hatchling
 Requires:       python3-twisted
 
 
@@ -28,17 +28,17 @@ A command line VNC client and python library
 %setup -q -n vncdotool-%{version}
 
 %build
-%{__python3} setup.py build
+%pyproject_wheel
 
 %install
-%{__python3} setup.py install -O1 --skip-build --root $RPM_BUILD_ROOT
+%pyproject_install
 
 %files
 %defattr(-,root,root,-)
 #%doc README.txt
 %{python3_sitelib}/vncdotool/*.py*
 %{python3_sitelib}/vncdotool/__pycache__/*.cpython-3*.py*
-%{python3_sitelib}/vncdotool-*.egg-info
+%{python3_sitelib}/vncdotool-*.dist-info
 /usr/bin/vncdo
 /usr/bin/vncdotool
 /usr/bin/vnclog

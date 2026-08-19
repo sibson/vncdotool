@@ -1,5 +1,0 @@
--r requirements.txt
-# 7.10 for `patch = subprocess`, which measures the CLI the functional
-# tests shell out to.
-coverage>=7.10
-sphinx
