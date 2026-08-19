@@ -1,4 +1,4 @@
-1.4.0 (UNRELEASED)
+1.4.0 (2026-08-19)
 ----------------------
   - Fix: ``api.connect()`` now hands the connection setup to the reactor thread rather than running it on the calling thread. Previously DNS resolution and connector setup ran on the application thread, reaching into reactor internals from outside the reactor (@sibson, #192)
   - Start the pluggable-decoders migration (see ``specs/decoder-architecture.md``): subclassing ``RFBClient.fillRectangle`` or ``RFBClient.updateRectangle``, or reading/writing ``VNCDoToolClient.image_mode``, now raises a ``FutureWarning``, since both contracts will change once decoders move out of ``rfb.py``. No behavior changes yet; comment on #385 if you rely on either (@sibson, #385)
