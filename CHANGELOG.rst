@@ -1,4 +1,4 @@
-1.4.0 (UNRELEASED)
+1.4.0 (2026-08-19)
 ----------------------
   - Fix: ``api.connect()`` now hands the connection setup to the reactor thread rather than running it on the calling thread. Previously DNS resolution and connector setup ran on the application thread, reaching into reactor internals from outside the reactor (@sibson, #192)
   - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (@sibson, #90)
