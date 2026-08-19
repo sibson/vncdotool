@@ -23,12 +23,12 @@ NEXT_VERSION := $(shell python -c "v='$(VERSION)'.split('.'); v[-1]=str(int(v[-1
 .PHONY: release
 release: test-unit
 	@echo "Releasing $(VERSION)"
-	sed -i'' "s/^$(VERSION) (UNRELEASED)/$(VERSION) ($(shell date +%Y-%m-%d))/" CHANGELOG.rst
+	sd "^$(VERSION) \(UNRELEASED\)" "$(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.rst
 	git add CHANGELOG.rst
 	git commit -m "Release $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
-	sed -i'' "s/__version__ = .*/__version__ = \"$(NEXT_VERSION)\"/" vncdotool/__init__.py
+	sd '__version__ = .*' '__version__ = "$(NEXT_VERSION)"' vncdotool/__init__.py
 	printf '$(NEXT_VERSION) (UNRELEASED)\n----------------------\n\n' | cat - CHANGELOG.rst > CHANGELOG.rst.tmp && mv CHANGELOG.rst.tmp CHANGELOG.rst
 	git add vncdotool/__init__.py CHANGELOG.rst
 	git commit -m "Bump version to $(NEXT_VERSION)"
