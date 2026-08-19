@@ -1,5 +1,6 @@
 from unittest import TestCase, mock
 import io
+import warnings
 
 from vncdotool import client
 from vncdotool.keys import Key
@@ -307,3 +308,62 @@ class TestVNCDoToolFactory(TestCase):
         self.factory.clientConnectionFailed(connector, reason)
 
         deferred.errback.assert_called_once_with(reason)
+
+
+class TestImageMode(TestCase):
+
+    def setUp(self) -> None:
+        self.client = client.VNCDoToolClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+
+    def test_image_mode_warns_on_access(self):
+        with self.assertWarns(FutureWarning):
+            self.client.image_mode
+
+    def test_image_mode_returns_negotiated_mode(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "RGBX"
+
+    def test_setImageMode_does_not_warn(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = client.RGB24
+        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            self.client.setImageMode()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "RGB"
+
+    def test_setImageMode_falls_back_for_apple_remote_desktop(self):
+        self.client._version_server = (3, 889)
+        self.client.pixel_format = mock.Mock()  # unrecognised by PF2IM
+        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+
+        self.client.setImageMode()
+
+        self.client.setPixelFormat.assert_called_once_with(client.BGR16)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "BGR;16"
+
+    @mock.patch('PIL.Image.frombytes')
+    def test_updateRectangle_does_not_warn(self, frombytes):
+        cli = self.client
+        cli.image = mock.Mock()
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            cli.updateRectangle(0, 0, 100, 200, mock.Mock())
+
+    def test_updateCursor_does_not_warn(self):
+        cli = self.client
+        cli.factory.nocursor = False
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", FutureWarning)
+            cli.updateCursor(0, 0, 4, 4, b"\x00" * (4 * 4 * 4), b"\x00" * 4)

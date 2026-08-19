@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import socket
+import warnings
 from pathlib import Path
 from struct import pack
 from typing import IO, Any, Callable, Iterator, TypeVar, Union
@@ -79,7 +80,7 @@ class VNCDoToolClient(rfb.RFBClient):
     y = 0
     buttons = 0
     screen: Image.Image | None = None
-    image_mode = PF2IM[rfb.PixelFormat()]
+    _image_mode = PF2IM[rfb.PixelFormat()]
     deferred: Deferred | None = None
 
     cursor: Image.Image | None = None
@@ -304,10 +305,20 @@ class VNCDoToolClient(rfb.RFBClient):
 
         returnValue(self)
 
+    @property
+    def image_mode(self) -> str:
+        warnings.warn(
+            "image_mode will change in a future release; please comment on "
+            "https://github.com/sibson/vncdotool/issues/385 if you rely on it",
+            FutureWarning,
+            stacklevel=2,
+        )
+        return self._image_mode
+
     def setImageMode(self) -> None:
         """Check support for PixelFormats announced by server or select client supported alternative."""
         try:
-            self.image_mode = PF2IM[self.pixel_format]
+            self._image_mode = PF2IM[self.pixel_format]
         except LookupError:
             if self._version_server == (3, 889):  # Apple Remote Desktop
                 pixel_format = BGR16
@@ -315,7 +326,7 @@ class VNCDoToolClient(rfb.RFBClient):
                 pixel_format = RGB32
 
             self.setPixelFormat(pixel_format)
-            self.image_mode = PF2IM[pixel_format]
+            self._image_mode = PF2IM[pixel_format]
 
     #
     # base customizations
@@ -371,7 +382,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
 
         size = (width, height)
-        update = Image.frombytes("RGB", size, data, "raw", self.image_mode)
+        update = Image.frombytes("RGB", size, data, "raw", self._image_mode)
         if not self.screen:
             self.screen = update
         # track upward screen resizes, often occurs during os boot of VMs
@@ -412,7 +423,7 @@ class VNCDoToolClient(rfb.RFBClient):
             self.cursor = None
 
         self.cursor = Image.frombytes(
-            "RGB", (width, height), image, "raw", self.image_mode
+            "RGB", (width, height), image, "raw", self._image_mode
         )
         self.cmask = Image.frombytes("1", (width, height), mask)
         self.cfocus = x, y

@@ -173,6 +173,20 @@ class RFBClient(Protocol):  # type: ignore[misc]
     _HEADER = b"RFB 000.000\n"
     _HEADER_TRANSLATE = bytes.maketrans(b"0123456789", b"0" * 10)
 
+    _CHANGING_HOOKS = ("fillRectangle", "updateRectangle")
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        for name in cls._CHANGING_HOOKS:
+            if not getattr(cls, name).__module__.startswith("vncdotool."):
+                warnings.warn(
+                    f"{name} will change in a future release; please comment "
+                    "on https://github.com/sibson/vncdotool/issues/385 if "
+                    "you rely on it",
+                    FutureWarning,
+                    stacklevel=2,
+                )
+
     def __init__(self) -> None:
         self._packet = bytearray()
         self._handler = self._handleInitial
