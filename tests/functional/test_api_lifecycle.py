@@ -18,10 +18,12 @@ import socket
 import threading
 import time
 import unittest
+from unittest import mock
 
 from twisted.internet import reactor
 from twisted.internet.error import ConnectError
 from twisted.internet.protocol import Factory, Protocol
+from twisted.python import threadable
 
 from vncdotool import api
 
@@ -102,6 +104,27 @@ class TestApiLifecycle(unittest.TestCase):
         # most. Padding this further would hide a real regression instead
         # of catching one.
         self.assertLess(elapsed, SHORT_TIMEOUT + 1.0)
+
+    def test_connect_dispatches_onto_reactor_thread(self) -> None:
+        """Asserts on thread identity rather than on an outcome: a connect
+        dispatched off the reactor thread still succeeds in practice, so
+        there is no failure to observe.
+        """
+        in_io_thread: "queue.Queue[bool]" = queue.Queue()
+        real_factory_connect = api.factory_connect
+
+        def spy(*args, **kwargs):
+            in_io_thread.put(threadable.isInIOThread())
+            return real_factory_connect(*args, **kwargs)
+
+        with mock.patch.object(api, "factory_connect", spy):
+            client = api.connect(f"{HOST}::{LIBVNC.port}", password=LIBVNC.password)
+            client.timeout = HAPPY_TIMEOUT
+            self.addCleanup(client.disconnect)
+            self.assertTrue(
+                in_io_thread.get(timeout=REACTOR_CALL_TIMEOUT),
+                "factory_connect ran outside the reactor thread",
+            )
 
     def test_closed_port_raises_promptly(self) -> None:
         """Bounded twice over -- a per-client timeout, and a helper thread

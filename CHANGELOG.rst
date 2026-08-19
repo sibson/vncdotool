@@ -1,5 +1,6 @@
 1.4.0 (UNRELEASED)
 ----------------------
+  - Fix: ``api.connect()`` now hands the connection setup to the reactor thread rather than running it on the calling thread. Previously DNS resolution and connector setup ran on the application thread, reaching into reactor internals from outside the reactor (@sibson, #192)
   - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (@sibson, #90)
   - Fix the dead protocol reference in the published ``rfb`` module documentation, which pointed at a RealVNC PDF that has been 403 for years; RFC 6143 and the rfbproto community document replace it (@sibson)
   - Declare python_requires >=3.10, matching the versions CI tests and the development requirements. 3.9 was advertised but neither tested nor able to install the dev environment (@sibson, #357)

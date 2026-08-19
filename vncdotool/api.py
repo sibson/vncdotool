@@ -68,7 +68,7 @@ class ThreadedVNCClientProxy:
             return protocol
 
         self.factory.deferred.addCallback(capture_protocol)
-        reactor.callWhenRunning(factory_connect, self.factory, host, port, family)
+        reactor.callFromThread(factory_connect, self.factory, host, port, family)
 
     def disconnect(self) -> None:
         event = threading.Event()
