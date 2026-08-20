@@ -1,4 +1,3 @@
-"""The scene generator behind the committed PNGs in tests/goldens/scenes/."""
 from __future__ import annotations
 
 import unittest
@@ -7,8 +6,9 @@ from tests.goldens import scenes
 
 
 class TestScenes(unittest.TestCase):
-    def test_base_is_not_flat(self) -> None:
-        # A flat screen is indistinguishable from "no update arrived".
+    def test_base_has_more_than_one_colour(self) -> None:
+        # A single-colour capture is what the fleet's readiness probe reads
+        # as "this server has not drawn anything yet".
         self.assertGreater(len(scenes.base().getcolors(maxcolors=4096) or []), 1)
 
     def test_base_is_the_declared_size(self) -> None:

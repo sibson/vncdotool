@@ -5,11 +5,7 @@
 # apt in the base distro rather than by whatever a random upstream image
 # happens to bundle.
 #
-# docker-compose.yml selects a stage per service with `target:`. The base
-# stage holds everything the servers have in common -- the scene app that
-# draws the base screen at start-up and repaints on a keypress, so captures
-# aren't pure black, and the readiness probe -- so adding a server means one
-# stage, not another near-copy of this file.
+# docker-compose.yml selects a stage per service with `target:`.
 
 FROM debian:bookworm-slim AS base
 

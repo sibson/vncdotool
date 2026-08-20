@@ -1,7 +1,6 @@
-"""Capture a golden fixture from a running fleet server. Manual:
-`uv run python -m tests.goldens.capture`.
+"""Capture a golden fixture from a running fleet server.
 
-Never runs in CI. CI runs the fixtures this writes.
+Run by hand, via `make goldens`; CI replays the fixtures this writes.
 """
 from __future__ import annotations
 

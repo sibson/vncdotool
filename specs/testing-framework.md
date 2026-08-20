@@ -172,13 +172,18 @@ server's own handshake logic. The end product of any capture investigation
 is a distilled unit test with inline bytes; the capture itself is
 issue-thread evidence, not a repo fixture.
 
-## The screen-change source (Phase 2 prerequisite)
+## The screen-change source
 
 Decoder goldens need fixtures captured from a real server, and a fixture is
-only as good as the screen change that produced it. Nothing in the fleet
-produces a controlled one: `draw-content.sh` paints once at start-up, and
-the libvncserver examples we build do not help either. Measured against
-LibVNCServer 0.9.14:
+only as good as the screen change that produced it. The fleet now has one:
+`tests/servers/scene_app.py` blits a committed PNG per keypress inside the
+X-based containers, so a `vncdo` script chooses what the server has to send.
+[decoder-goldens.md](decoder-goldens.md) designs it, the capture path and the
+fixtures.
+
+The rest of this section records why the obvious alternative — a libvncserver
+example that dictates its own rectangles — was not what got built, and what it
+would still buy. Measured against LibVNCServer 0.9.14:
 
 | Example | Update behaviour |
 |---|---|
@@ -199,25 +204,18 @@ may chop a rectangle further to respect its own size limits (ZLIB, Ultra,
 Tight), which is transport slicing and not change detection. Only x11vnc
 diffs, because it polls an X framebuffer it does not own.
 
-So the source of screen changes is ours to write: an image-sequence server
-off `pnmshow`, loading a directory of pnms and, on a timer, copying the next
-one in and marking the rectangles the fixture script names. Naming the
-rectangles in the script rather than deriving them from the images is the
-point — the wire layout of every fixture becomes an input, so Tier 3's cases
-(large solid regions, dense detail, many scattered rectangles, resize via
-`rfbNewFramebuffer`) are chosen rather than hoped for. CopyRect is the one
-case marking cannot reach: it needs an explicit `rfbDoCopyRect` /
-`rfbScheduleCopyRect`, which `vncev.c` already demonstrates.
+A server off `pnmshow` that marked named rectangles would therefore make the
+wire layout of a fixture an input rather than an observation, which is what
+the harder cases need: many scattered rectangles, resize via
+`rfbNewFramebuffer`, and CopyRect, which marking cannot reach at all —
+it needs an explicit `rfbDoCopyRect`, as `vncev.c` demonstrates. It costs one
+`cmake --build` target and one image stage, since the fleet already compiles
+libvncserver from a pinned release in `libvncserver-build`.
 
-It costs one `cmake --build` target and one image stage: the fleet already
-compiles libvncserver from a pinned release in `libvncserver-build`.
-
-That server is not what got built first, though. An X-side scene app reaches
-tigervnc and x11vnc as well, is stepped by the client rather than a timer, and
-doubles as the input-reactive surface below, so it takes the job and the
-pnm-server stays deferred for the rectangle layouts only it can dictate.
-[decoder-goldens.md](decoder-goldens.md) designs the app, the capture path and
-the fixtures.
+The scene app took the job first because it reaches tigervnc and x11vnc rather
+than libvncserver alone, is stepped by the client rather than a timer, and
+doubles as the input-reactive surface below. What it gives up is dictating
+rectangle layout: the server still decides how a screen change becomes rects.
 
 ## What this removes
 
@@ -264,7 +262,9 @@ revisit only if someone asks for it.
    tests in; retire pexpect and the native build. (Reworks #341's branch
    terrain.)
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
-   delete golden-PNG suite.
+   delete golden-PNG suite. Scaffolded at Raw and one pixel format; the
+   remaining matrix values arrive with the client features that can request
+   them, per `decoder-goldens.md`.
 3. `--capture-raw` flag + auth stripping + contributor paved-road doc.
 4. `vncdo-replay` as distillation aid.
 5. In-process API lifecycle suite against one container.

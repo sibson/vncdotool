@@ -8,7 +8,7 @@ import gzip
 import json
 import unittest
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from unittest import mock
 
 from PIL import Image
@@ -54,22 +54,27 @@ class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
 
-    def test_every_fixture_decodes_to_its_oracle(self) -> None:
-        for fixture in fixtures():
-            with self.subTest(fixture=fixture.name):
-                conditions = json.loads((fixture / "conditions.json").read_text())
-                tolerance = conditions["tolerance"]
-                cli = make_client()
-                cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
-                for step in sorted(fixture.glob("step-*.bin.gz")):
-                    cli.dataReceived(gzip.decompress(step.read_bytes()))
-                    key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
-                    expected = Image.open(SCENES_DIR / f"{key}.png")
-                    self.assertIsNotNone(cli.screen, f"{step.name}: no framebuffer after the update")
-                    difference = first_difference(cli.screen, expected, tolerance)
-                    if difference is not None:
-                        x, y, got, want = difference
-                        self.fail(f"{fixture.name} {step.name}: pixel ({x},{y}) decoded {got}, expected {want}")
+    def replay(self, fixture: Path) -> None:
+        tolerance = json.loads((fixture / "conditions.json").read_text())["tolerance"]
+        cli = make_client()
+        cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
+        for step in sorted(fixture.glob("step-*.bin.gz")):
+            cli.dataReceived(gzip.decompress(step.read_bytes()))
+            key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
+            expected = Image.open(SCENES_DIR / f"{key}.png")
+            self.assertIsNotNone(cli.screen, f"{step.name}: no framebuffer after the update")
+            difference = first_difference(cli.screen, expected, tolerance)
+            if difference is not None:
+                x, y, got, want = difference
+                self.fail(f"{fixture.name} {step.name}: pixel ({x},{y}) decoded {got}, expected {want}")
+
+
+def _replays(fixture: Path) -> Callable[[TestGoldens], None]:
+    return lambda self: self.replay(fixture)
+
+
+for _fixture in fixtures():
+    setattr(TestGoldens, f"test_{_fixture.name.replace('-', '_')}", _replays(_fixture))
 
 
 if __name__ == "__main__":
