@@ -138,7 +138,7 @@ label.
 
 A fixture is a whole capture session, not a single update:
 
-    tests/unit/fixtures/goldens/tigervnc-raw-native/
+    tests/unit/fixtures/goldens/tigervnc-raw-bgrx8888/
       init.bin.gz          # ServerInit onward
       step-01-0.bin.gz     # the key names the scene, and so the oracle
       step-02-s.bin.gz
@@ -249,7 +249,7 @@ a missing feature, build the feature.
 
 1. scene player, golden geometry, fleet wiring. Proven by one functional test:
    pressing `s` changes the screen.
-2. Distiller, fixture format, `make goldens`. Commit `tigervnc-raw-native`.
+2. Distiller, fixture format, `make goldens`. Commit `tigervnc-raw-bgrx8888`.
 3. `test_goldens.py` green against it.
 
 Then: adding `rgb565` to the matrix fails for want of a flag, which builds
