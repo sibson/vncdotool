@@ -18,8 +18,9 @@ SIZE = (256, 192)
 
 # A capture archive keeps the two stream directions apart, so a distilled
 # step learns which key produced it only from this patch inside the frame.
-PATCH_ORIGIN = (0, 0)
-PATCH_SIZE = 8
+# Centred in whatever it is stamped on, so the label survives a server
+# serving a geometry these scenes were not drawn for.
+PATCH_SIZE = 48
 _PATCH_GREEN = 0x5A
 _PATCH_BLUE = 0xA5
 
@@ -123,15 +124,21 @@ SCENES: Dict[str, Callable[[Image.Image], Image.Image]] = {
 }
 
 
+def _centre(image: Image.Image) -> tuple:
+    width, height = image.size
+    return width // 2, height // 2
+
+
 def stamp_patch(image: Image.Image, key: str) -> None:
-    left, top = PATCH_ORIGIN
+    x, y = _centre(image)
+    half = PATCH_SIZE // 2
     colour = (ord(key), _PATCH_GREEN, _PATCH_BLUE)
-    ImageDraw.Draw(image).rectangle([left, top, left + PATCH_SIZE - 1, top + PATCH_SIZE - 1], fill=colour)
+    box = [max(x - half, 0), max(y - half, 0), min(x + half - 1, image.size[0] - 1), min(y + half - 1, image.size[1] - 1)]
+    ImageDraw.Draw(image).rectangle(box, fill=colour)
 
 
 def read_patch(image: Image.Image) -> Optional[str]:
-    left, top = PATCH_ORIGIN
-    red, green, blue = image.convert("RGB").getpixel((left + PATCH_SIZE // 2, top + PATCH_SIZE // 2))
+    red, green, blue = image.convert("RGB").getpixel(_centre(image))
     if (green, blue) != (_PATCH_GREEN, _PATCH_BLUE):
         return None
     key = chr(red)

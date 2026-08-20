@@ -5,7 +5,7 @@
   ],
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-20T11:50:36Z",
+    "capture_timestamp": "2026-08-20T12:08:38Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -20,7 +20,7 @@
       {
         "encoding": 0,
         "name": "raw",
-        "rectangles": 88
+        "rectangles": 87
       }
     ],
     "geometry": {
