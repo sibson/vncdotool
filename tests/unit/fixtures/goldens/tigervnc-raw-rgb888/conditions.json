@@ -3,10 +3,9 @@
     256,
     192
   ],
-  "image_digest": "sha256:4b320e83542a768934016938623b284beecf79995af960b73466fb5c567322a6",
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-20T11:33:42Z",
+    "capture_timestamp": "2026-08-20T11:46:11Z",
     "encodings_seen": [
       {
         "encoding": -258,
