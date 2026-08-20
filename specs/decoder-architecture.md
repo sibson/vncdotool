@@ -445,6 +445,10 @@ obtained by replaying the same script with Raw negotiated. The oracle is the
 server itself rendering the same screen under an encoding we already trust — not
 our own decoder, and not our own reading of the spec.
 
+No fleet server can be scripted into a screen change today, and libvncserver
+detects none of its own: the server we have to write for this is designed in
+[testing-framework.md](testing-framework.md#the-screen-change-source-phase-2-prerequisite).
+
 **Tier 1 — unit, offline.** Captured wire bytes into the decoder, compare the
 resulting buffer against the Raw ground truth. Fast, no fleet, no reactor.
 Canonical output is what makes this comparison possible across captures from

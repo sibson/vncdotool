@@ -172,6 +172,46 @@ server's own handshake logic. The end product of any capture investigation
 is a distilled unit test with inline bytes; the capture itself is
 issue-thread evidence, not a repo fixture.
 
+## The screen-change source (Phase 2 prerequisite)
+
+Decoder goldens need fixtures captured from a real server, and a fixture is
+only as good as the screen change that produced it. Nothing in the fleet
+produces a controlled one: `draw-content.sh` paints once at start-up, and
+the libvncserver examples we build do not help either. Measured against
+LibVNCServer 0.9.14:
+
+| Example | Update behaviour |
+|---|---|
+| `pnmshow`, `pnmshow24` | one image loaded before `rfbInitServer`, never marked modified again |
+| `camera` | synthesizes frames, marks the whole screen for each one |
+| `zippy`, `rotatetemplate` | whole screen |
+| `example` | marks sub-rects, but only where a client drags or types |
+| `vncev` | `rfbDoCopyRect` on scroll; renders no desktop |
+
+There is no image-sequence example, and none that emits partial rectangles
+without a client driving it.
+
+**LibVNCServer does not detect changes.** It has no framebuffer comparator:
+`rfbMarkRectAsModified` ORs the rect into each client's `modifiedRegion`,
+and `rfbSendFramebufferUpdate` emits one rectangle per piece of that region.
+Rectangle granularity is exactly what the application asked for. An encoder
+may chop a rectangle further to respect its own size limits (ZLIB, Ultra,
+Tight), which is transport slicing and not change detection. Only x11vnc
+diffs, because it polls an X framebuffer it does not own.
+
+So the source of screen changes is ours to write: an image-sequence server
+off `pnmshow`, loading a directory of pnms and, on a timer, copying the next
+one in and marking the rectangles the fixture script names. Naming the
+rectangles in the script rather than deriving them from the images is the
+point — the wire layout of every fixture becomes an input, so Tier 3's cases
+(large solid regions, dense detail, many scattered rectangles, resize via
+`rfbNewFramebuffer`) are chosen rather than hoped for. CopyRect is the one
+case marking cannot reach: it needs an explicit `rfbDoCopyRect` /
+`rfbScheduleCopyRect`, which `vncev.c` already demonstrates.
+
+It costs one `cmake --build` target and one image stage: the fleet already
+compiles libvncserver from a pinned release in `libvncserver-build`.
+
 ## What this removes
 
 - **pexpect**: replaced by `subprocess.run` + event-sink log assertions.
@@ -247,7 +287,12 @@ and can proceed while 3–5 follow.
   pixels changed." Needs a deterministic reactive surface in the container
   desktop (e.g. a full-screen `xterm` echoing keystrokes at a fixed
   position, plus a pointer-tracking app), which is image work with real
-  flakiness risk (font rendering, timing) and its own spike.
+  flakiness risk (font rendering, timing) and its own spike. Distinct from
+  the screen-change source above, which changes the screen on a timer with
+  no client involved; this one has to change it *because of* an input event.
+  libvncserver's `example` is the nearest existing thing — it paints where a
+  client drags — but it renders no text, so it cannot answer "which keysym
+  arrived", which is what the KEYMAP issues need.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
   client, per-test subprocess timeouts can tighten, and the in-process API
   suite can grow adversarial cases (misbehaving-server lifecycle) using the
