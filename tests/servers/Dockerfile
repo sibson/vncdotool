@@ -25,11 +25,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # /tests/__init__.py has no in-context source: the build context is
-# tests/servers/, so the package marker one level up is written directly.
+# tests/, so the package marker one level up is written directly.
 RUN mkdir -p /tests && printf '"""Test suite package for vncdotool."""\n' > /tests/__init__.py
-COPY __init__.py /tests/servers/__init__.py
-COPY scenes.py /tests/servers/scenes.py
-COPY scene_app.py /tests/servers/scene_app.py
+COPY servers/__init__.py /tests/servers/__init__.py
+COPY servers/scene_app.py /tests/servers/scene_app.py
+COPY goldens/scenes/ /tests/servers/scenes/
 
 EXPOSE 5900
 
@@ -56,7 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tigervnc-tools \
     && rm -rf /var/lib/apt/lists/*
 
-COPY tigervnc-entrypoint.sh /entrypoint.sh
+COPY servers/tigervnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
@@ -73,7 +73,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
-COPY x11vnc-entrypoint.sh /entrypoint.sh
+COPY servers/x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # The event sink is the second thing this container promises, and the one

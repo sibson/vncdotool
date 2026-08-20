@@ -1,9 +1,9 @@
-"""The scene generator, which runs in the fleet containers and offline here."""
+"""The scene generator behind the committed PNGs in tests/goldens/scenes/."""
 from __future__ import annotations
 
 import unittest
 
-from tests.servers import scenes
+from tests.goldens import scenes
 
 
 class TestScenes(unittest.TestCase):

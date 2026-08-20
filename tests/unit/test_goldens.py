@@ -16,6 +16,7 @@ from PIL import Image
 from vncdotool import client
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
+SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
 
 def fixtures() -> List[Path]:
@@ -62,7 +63,8 @@ class TestGoldens(unittest.TestCase):
                 cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
                 for step in sorted(fixture.glob("step-*.bin.gz")):
                     cli.dataReceived(gzip.decompress(step.read_bytes()))
-                    expected = Image.open(step.with_suffix("").with_suffix(".png"))
+                    key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
+                    expected = Image.open(SCENES_DIR / f"{key}.png")
                     self.assertIsNotNone(cli.screen, f"{step.name}: no framebuffer after the update")
                     difference = first_difference(cli.screen, expected, tolerance)
                     if difference is not None:

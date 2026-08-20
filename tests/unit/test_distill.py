@@ -10,8 +10,7 @@ from struct import pack
 
 from PIL import Image
 
-from tests.goldens import distill
-from tests.servers import scenes
+from tests.goldens import distill, scenes
 from vncdotool import rfb
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 
@@ -69,12 +68,12 @@ class TestWriteFixture(unittest.TestCase):
         init, steps = distill.split(stream)
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / "fixture"
-            distill.write_fixture(directory, init, steps, {"server": "tigervnc-golden"})
+            distill.write_fixture(directory, init, steps, {"server": "tigervnc"})
             self.assertEqual(gzip.decompress((directory / "init.bin.gz").read_bytes()), init)
             self.assertTrue((directory / "step-01-0.bin.gz").exists())
-            self.assertTrue((directory / "step-02-s.png").exists())
+            self.assertTrue((directory / "step-02-s.bin.gz").exists())
             self.assertEqual(
-                json.loads((directory / "conditions.json").read_text())["server"], "tigervnc-golden"
+                json.loads((directory / "conditions.json").read_text())["server"], "tigervnc"
             )
 
 

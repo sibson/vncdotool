@@ -16,7 +16,7 @@ from unittest import mock
 
 from PIL import Image
 
-from tests.servers import scenes
+from tests.goldens import scenes
 from vncdotool import client
 
 
@@ -25,15 +25,14 @@ class Step:
     index: int
     key: Optional[str]
     data: bytes
-    screen: Image.Image
 
 
 class _Recorder(client.VNCDoToolClient):
     """A client that notes how far the stream had been read at each boundary.
 
-    ``consumed`` is set by the caller before every byte is handed over, so a
-    hook firing inside ``dataReceived`` sees the offset of the byte that
-    completed the message.
+    ``consumed`` is set before every byte is handed over, so a hook firing
+    inside ``dataReceived`` sees the offset of the byte that completed the
+    message.
     """
 
     def __init__(self) -> None:
@@ -43,14 +42,31 @@ class _Recorder(client.VNCDoToolClient):
         self.consumed = 0
 
     def vncConnectionMade(self) -> None:
-        # _handleServerInit leaves the desktop name unread; this fires once
-        # that name has been consumed too, so the handshake really has ended.
         super().vncConnectionMade()
         self.init_end = self.consumed
 
     def commitUpdate(self, rectangles: Optional[list] = None) -> None:
         super().commitUpdate(rectangles)
         self.update_ends.append(self.consumed)
+
+    def split(self, s2c: bytes) -> Tuple[bytes, List[Step]]:
+        screens: List[Image.Image] = []
+        for offset in range(len(s2c)):
+            self.consumed = offset + 1
+            self.dataReceived(s2c[offset:offset + 1])
+            if len(self.update_ends) > len(screens):
+                assert self.screen is not None
+                screens.append(self.screen.copy())
+
+        if self.init_end is None:
+            raise ValueError("stream carries no ServerInit; it is not a whole recorded session")
+
+        steps: List[Step] = []
+        start = self.init_end
+        for index, (end, screen) in enumerate(zip(self.update_ends, screens), start=1):
+            steps.append(Step(index=index, key=scenes.read_patch(screen), data=s2c[start:end]))
+            start = end
+        return s2c[: self.init_end], steps
 
 
 def _make_client() -> _Recorder:
@@ -68,35 +84,13 @@ def _make_client() -> _Recorder:
 
 
 def split(s2c: bytes) -> Tuple[bytes, List[Step]]:
-    recorder = _make_client()
-    screens: List[Image.Image] = []
-    for offset in range(len(s2c)):
-        recorder.consumed = offset + 1
-        recorder.dataReceived(s2c[offset:offset + 1])
-        if len(recorder.update_ends) > len(screens):
-            assert recorder.screen is not None
-            screens.append(recorder.screen.copy())
-
-    if recorder.init_end is None:
-        raise ValueError("stream carries no ServerInit; it is not a whole recorded session")
-
-    steps: List[Step] = []
-    start = recorder.init_end
-    for index, (end, screen) in enumerate(zip(recorder.update_ends, screens), start=1):
-        steps.append(Step(index=index, key=scenes.read_patch(screen), data=s2c[start:end], screen=screen))
-        start = end
-    return s2c[: recorder.init_end], steps
+    return _make_client().split(s2c)
 
 
 def write_fixture(directory: Path, init: bytes, steps: List[Step], conditions: Dict[str, Any]) -> None:
-    """The PNG written here is what our own decoder produced, so it is a debug
-    artifact rather than the oracle: capture.py overwrites it with the scene
-    app's own PNG once the fixture is written.
-    """
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "init.bin.gz").write_bytes(gzip.compress(init))
     for step in steps:
         stem = f"step-{step.index:02d}-{step.key or 'unknown'}"
         (directory / f"{stem}.bin.gz").write_bytes(gzip.compress(step.data))
-        step.screen.save(directory / f"{stem}.png")
     (directory / "conditions.json").write_text(json.dumps(conditions, indent=2, sort_keys=True) + "\n")

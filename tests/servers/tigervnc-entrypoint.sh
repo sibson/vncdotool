@@ -39,6 +39,6 @@ Xvnc :0 \
     -localhost=0 &
 XVNC_PID=$!
 
-DISPLAY=:0 python3 /tests/servers/scene_app.py &
+DISPLAY=:0 python3 -m tests.servers.scene_app &
 
 wait "$XVNC_PID"

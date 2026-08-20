@@ -1,46 +1,28 @@
-"""Capture a golden fixture from a running fleet server. Manual: `make goldens`.
+"""Capture a golden fixture from a running fleet server. Manual:
+`uv run python -m tests.goldens.capture`.
 
 Never runs in CI. CI runs the fixtures this writes.
 """
 from __future__ import annotations
 
 import argparse
+import json
 import select
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import zipfile
 from pathlib import Path
 
-from PIL import Image
+from tests.functional.vncservers import HOST, TIGERVNC, VNCDO, VNCLOG
+from tests.goldens import distill, scenes
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-from tests.functional.vncservers import HOST, TIGERVNC_GOLDEN, VNCDO, VNCLOG  # noqa: E402
-from tests.goldens import distill  # noqa: E402
-from tests.servers import scenes  # noqa: E402
-
-FIXTURE_ROOT = Path(__file__).resolve().parents[1] / "unit" / "fixtures" / "goldens"
+FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
+SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
 PROXY_PORT = 5999
 PROXY_STARTUP_DEADLINE = 10.0
 CAPTURE_DEADLINE = 60.0
-SCENE_ORDER = ["0", "s", "d", "x", "g", "p", "c", "f"]
-
-
-def scene_script(directory: Path) -> Path:
-    """The .vdo that drives the scenes -- it travels inside the archive."""
-    lines = []
-    for index, key in enumerate(SCENE_ORDER, start=1):
-        lines.append(f"key {key}")
-        # The app repaints on its own X event loop, so the capture request
-        # can otherwise overtake the scene it is meant to record.
-        lines.append("pause 0.3")
-        lines.append(f"capture {directory}/driver-{index:02d}-{key}.png")
-    path = directory / "scene.vdo"
-    path.write_text("\n".join(lines) + "\n")
-    return path
 
 
 def image_digest(service: str) -> str:
@@ -52,20 +34,9 @@ def image_digest(service: str) -> str:
     return result.stdout.strip()
 
 
-def container_oracles(service: str, into: Path) -> dict:
-    """Copy the scene app's own PNGs out of the container: the real oracle."""
-    into.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["docker", "compose", "-f", "tests/servers/docker-compose.yml", "cp",
-         f"{service}:/oracles/.", str(into)],
-        check=True,
-    )
-    return {path.name.split("-")[2].removesuffix(".png"): path for path in sorted(into.glob("oracle-*.png"))}
-
-
 def _start_vnclog(archive: Path) -> subprocess.Popen:
     proxy = subprocess.Popen(
-        [VNCLOG, "-s", f"{HOST}::{TIGERVNC_GOLDEN.port}", "--listen", str(PROXY_PORT),
+        [VNCLOG, "-s", f"{HOST}::{TIGERVNC.port}", "--listen", str(PROXY_PORT),
          "--capture-raw", str(archive)],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
     )
@@ -94,9 +65,10 @@ def main() -> int:
         archive = work / "capture.zip"
         proxy = _start_vnclog(archive)
 
+        # scene.vdo's `capture` lines use relative paths, so they land here.
         subprocess.run(
-            [VNCDO, "-s", f"{HOST}::{PROXY_PORT}", str(scene_script(work))],
-            check=True, timeout=CAPTURE_DEADLINE,
+            [VNCDO, "-s", f"{HOST}::{PROXY_PORT}", str(SCENE_VDO)],
+            check=True, timeout=CAPTURE_DEADLINE, cwd=work,
         )
         proxy.wait(timeout=CAPTURE_DEADLINE)
 
@@ -105,29 +77,21 @@ def main() -> int:
             meta = zipped.read("meta.json").decode()
 
         init, steps = distill.split(s2c)
-        oracles = container_oracles(TIGERVNC_GOLDEN.name, work / "oracles")
+        for step in steps:
+            if step.key is None:
+                raise SystemExit(f"step {step.index} carries no keysym patch; capture is unusable")
 
         directory = FIXTURE_ROOT / args.name
         if directory.exists():
             shutil.rmtree(directory)
         conditions = {
-            "server": TIGERVNC_GOLDEN.name,
-            "image_digest": image_digest(TIGERVNC_GOLDEN.name),
-            "meta": meta,
-            "scene_order": SCENE_ORDER,
-            "scene_script": scene_script(work).read_text(),
+            "server": TIGERVNC.name,
+            "image_digest": image_digest(TIGERVNC.name),
+            "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance": 0,
         }
         distill.write_fixture(directory, init, steps, conditions)
-
-        for step in steps:
-            if step.key is None:
-                raise SystemExit(f"step {step.index} carries no keysym patch; capture is unusable")
-            oracle = oracles.get(step.key)
-            if oracle is None:
-                raise SystemExit(f"no oracle PNG for key {step.key!r}")
-            Image.open(oracle).save(directory / f"step-{step.index:02d}-{step.key}.png")
 
         print(f"wrote {directory} ({len(steps)} steps)")
     return 0

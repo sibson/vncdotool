@@ -7,22 +7,22 @@ from unittest import TestCase
 
 from PIL import Image
 
-from tests.servers import scenes
+from tests.goldens import scenes
 
-from .vncservers import TIGERVNC_GOLDEN, port_open, HOST, run_vncdo
+from .vncservers import TIGERVNC, port_open, HOST, run_vncdo
 
 
 class TestSceneApp(TestCase):
     def setUp(self) -> None:
-        if not port_open(HOST, TIGERVNC_GOLDEN.port):
-            self.fail(f"{TIGERVNC_GOLDEN.name} is not listening on {TIGERVNC_GOLDEN.port}; {TIGERVNC_GOLDEN.how_to_start}")
+        if not port_open(HOST, TIGERVNC.port):
+            self.fail(f"{TIGERVNC.name} is not listening on {TIGERVNC.port}; {TIGERVNC.how_to_start}")
 
     def _capture(self, *args: str) -> Image.Image:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "screen.png"
             # The scene app repaints asynchronously to the key event reaching
             # the X server, so an immediate capture can still see the prior frame.
-            result = run_vncdo(TIGERVNC_GOLDEN, *args, "pause", "0.3", "capture", str(path))
+            result = run_vncdo(TIGERVNC, *args, "pause", "0.3", "capture", str(path))
             if result.returncode != 0:
                 self.fail(f"vncdo failed ({result.returncode}): {result.stderr}")
             return Image.open(path).copy()

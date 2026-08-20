@@ -1,7 +1,8 @@
 """Screen content for golden capture, as pure functions of the prior screen.
 
-Runs both inside the fleet containers (via scene_app.py) and offline in the
-unit suite, so it must import nothing X-specific.
+Committed to PNGs by make_scenes.py, played back by scene_app.py and used
+directly by distillation and the unit suite -- it must import nothing
+X-specific.
 """
 from __future__ import annotations
 

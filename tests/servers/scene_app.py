@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Fullscreen X client that paints a scene per keypress, for golden capture.
+"""Fullscreen X client that blits a committed scene PNG per keypress.
 
-Runs inside the fleet containers. Scenes are composed in memory and pushed
-whole with PutImage, so what reaches the X framebuffer is a buffer this
-process holds rather than the result of a rendering stack -- that buffer,
-saved as a PNG, is the oracle a golden fixture is checked against.
+Run as `python3 -m tests.servers.scene_app [DIR]` inside the fleet
+containers. Each PNG under DIR already is the oracle a golden fixture is
+checked against -- this process composes nothing itself.
 """
 from __future__ import annotations
 
@@ -15,11 +14,7 @@ from pathlib import Path
 from PIL import Image
 from Xlib import X, display
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-
-from tests.servers import scenes  # noqa: E402
-
-ORACLE_DIR = Path(os.environ.get("SCENE_ORACLE_DIR", "/oracles"))
+DEFAULT_SCENE_DIR = Path(__file__).resolve().parent / "scenes"
 # PutImage carries the whole request in one X message; splitting into bands
 # keeps every request well inside the server's maximum request length.
 BAND_ROWS = 32
@@ -30,13 +25,15 @@ def _to_zpixmap(image: Image.Image) -> bytes:
     return image.convert("RGB").tobytes("raw", "BGRX")
 
 
-class SceneApp:
-    def __init__(self) -> None:
+class ScenePlayer:
+    def __init__(self, scene_dir: Path) -> None:
+        self.scene_dir = scene_dir
         self.display = display.Display()
         if self.display.display.info.image_byte_order != 0:
             raise SystemExit("scene_app: X server is not LSBFirst; ZPixmap byte order would be wrong")
         screen = self.display.screen()
-        width, height = scenes.SIZE
+        self.screen_image = Image.open(self.scene_dir / "0.png")
+        width, height = self.screen_image.size
         self.window = screen.root.create_window(
             0, 0, width, height, 0, screen.root_depth,
             X.InputOutput, X.CopyFromParent,
@@ -50,15 +47,10 @@ class SceneApp:
         screen.root.change_attributes(event_mask=X.KeyPressMask)
         self.gc = self.window.create_gc()
         self.window.map()
-        self.screen_image = scenes.base()
-        scenes.stamp_patch(self.screen_image, "0")
-        self.applied = 0
-        ORACLE_DIR.mkdir(parents=True, exist_ok=True)
         self.paint()
-        self.write_oracle("0")
 
     def paint(self) -> None:
-        width, height = scenes.SIZE
+        width, height = self.screen_image.size
         data = _to_zpixmap(self.screen_image)
         stride = width * 4
         for top in range(0, height, BAND_ROWS):
@@ -69,18 +61,14 @@ class SceneApp:
             )
         self.display.flush()
 
-    def write_oracle(self, key: str) -> None:
-        self.applied += 1
-        self.screen_image.save(ORACLE_DIR / f"oracle-{self.applied:02d}-{key}.png")
-
     def handle_key(self, keycode: int) -> None:
         keysym = self.display.keycode_to_keysym(keycode, 0)
-        key = keysym_to_key(keysym)
-        if key not in scenes.SCENES:
+        key = self.keysym_to_key(keysym)
+        path = self.scene_dir / f"{key}.png"
+        if not key or not path.exists():
             return
-        self.screen_image = scenes.apply(key, self.screen_image)
+        self.screen_image = Image.open(path)
         self.paint()
-        self.write_oracle(key)
 
     def run(self) -> None:
         while True:
@@ -90,13 +78,19 @@ class SceneApp:
             elif event.type == X.KeyPress:
                 self.handle_key(event.detail)
 
+    @staticmethod
+    def keysym_to_key(keysym: int) -> str:
+        """XK.keysym_to_string() returns None for plain letters and digits, whose
+        keysym value is already their ASCII code.
+        """
+        return chr(keysym) if 0x20 <= keysym < 0x7F else ""
 
-def keysym_to_key(keysym: int) -> str:
-    """XK.keysym_to_string() returns None for plain letters and digits, whose
-    keysym value is already their ASCII code.
-    """
-    return chr(keysym) if 0x20 <= keysym < 0x7F else ""
+
+def _scene_dir() -> Path:
+    if len(sys.argv) > 1:
+        return Path(sys.argv[1])
+    return Path(os.environ.get("SCENE_DIR", str(DEFAULT_SCENE_DIR)))
 
 
 if __name__ == "__main__":
-    SceneApp().run()
+    ScenePlayer(_scene_dir()).run()

@@ -47,4 +47,4 @@ screenshots:
 # CI replays the fixtures this writes. See specs/decoder-goldens.md.
 .PHONY: goldens
 goldens:
-	uv run python tests/goldens/capture.py
+	uv run python -m tests.goldens.capture
