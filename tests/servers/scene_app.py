@@ -89,11 +89,8 @@ class SceneApp:
 
 
 def keysym_to_key(keysym: int) -> str:
-    """Map a keysym to the character vncdo's `key` command sent.
-
-    XK.keysym_to_string() only covers a curated subset (mostly non-printing
-    keys); every keysym this app cares about is a plain ASCII letter or
-    digit, whose keysym value equals its ASCII code.
+    """XK.keysym_to_string() returns None for plain letters and digits, whose
+    keysym value is already their ASCII code.
     """
     return chr(keysym) if 0x20 <= keysym < 0x7F else ""
 

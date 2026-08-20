@@ -2,9 +2,6 @@
 
 Runs both inside the fleet containers (via scene_app.py) and offline in the
 unit suite, so it must import nothing X-specific.
-
-Every scene is a deterministic function of the screen it is handed: an
-update is a delta, so what a decoder sees depends on what was there before.
 """
 from __future__ import annotations
 
@@ -15,9 +12,8 @@ from PIL import Image, ImageDraw
 
 SIZE = (256, 192)
 
-# The patch is how a distilled step learns which key produced it: the
-# archive keeps the two stream directions apart, so a key event in the
-# client stream cannot be aligned against an offset in the server's.
+# A capture archive keeps the two stream directions apart, so a distilled
+# step learns which key produced it only from this patch inside the frame.
 PATCH_ORIGIN = (0, 0)
 PATCH_SIZE = 8
 _PATCH_GREEN = 0x5A
@@ -99,7 +95,7 @@ def _palette(screen: Image.Image) -> Image.Image:
 
 
 def _scroll(screen: Image.Image) -> Image.Image:
-    """Move a region up, which is what makes a server emit CopyRect at all."""
+    """Scrolling is what makes a server emit CopyRect at all."""
     image = screen.copy()
     region = image.crop((0, 32, SIZE[0], SIZE[1]))
     image.paste(region, (0, 16))

@@ -2,9 +2,8 @@
 
 The recorded server stream is fed to a real client one byte at a time, so
 the boundary between two FramebufferUpdates is exactly where the client
-finished one and asked for the next -- no second parser of the wire, and
-the byte-at-a-time feed doubles as the segmentation property the decoder
-pump has to satisfy anyway.
+finished one and asked for the next, rather than somewhere a second parser
+of the wire believes it to be.
 """
 from __future__ import annotations
 
@@ -44,9 +43,8 @@ class _Recorder(client.VNCDoToolClient):
         self.consumed = 0
 
     def vncConnectionMade(self) -> None:
-        # ServerInit's block only carries the fixed fields; the server name
-        # that follows it is read separately, and this is the callback that
-        # fires once that name has also been consumed.
+        # _handleServerInit leaves the desktop name unread; this fires once
+        # that name has been consumed too, so the handshake really has ended.
         super().vncConnectionMade()
         self.init_end = self.consumed
 
@@ -91,11 +89,9 @@ def split(s2c: bytes) -> Tuple[bytes, List[Step]]:
 
 
 def write_fixture(directory: Path, init: bytes, steps: List[Step], conditions: Dict[str, Any]) -> None:
-    """Write a fixture directory: init bytes, one bytes+PNG pair per step, conditions.
-
-    The PNG here is what our own decoder produced from the step's bytes, so
-    it is a debug artifact, not the oracle -- capture.py overwrites it with
-    the scene app's own PNG once the fixture is written.
+    """The PNG written here is what our own decoder produced, so it is a debug
+    artifact rather than the oracle: capture.py overwrites it with the scene
+    app's own PNG once the fixture is written.
     """
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "init.bin.gz").write_bytes(gzip.compress(init))

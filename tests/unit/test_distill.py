@@ -27,7 +27,6 @@ def handshake_bytes() -> bytes:
 
 
 def raw_update(image: Image.Image) -> bytes:
-    """One FramebufferUpdate carrying the whole screen as a Raw rectangle."""
     header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
     rectangle = pack("!HHHHi", 0, 0, SIZE[0], SIZE[1], Encoding.RAW)
     return header + rectangle + image.convert("RGB").tobytes("raw", "RGBX")
