@@ -286,10 +286,10 @@ def run_vncdo(
 
 
 def native_pixel_format(server: VNCServer) -> Optional[str]:
-    """The ServerInit pixel format `server` announced, as `rfb.py` logged it.
+    """Parse the ServerInit pixel format out of `vncdo -v` stderr.
 
-    Read out of `vncdo -v` stderr rather than from a client object: only
-    test_api_lifecycle.py may hold one in-process.
+    Not read from a client object: only test_api_lifecycle.py may hold one
+    in-process.
     """
     result = run_vncdo(server, "-v", "pause", "0")
     match = re.search(r"Native (PixelFormat\(.*?\))", result.stderr)
@@ -379,8 +379,7 @@ class _VNCServerTestMixin:
         """Record the format the server announced, the axis #90 and #275 turn on.
 
         No value is asserted: each server picks its own, and UltraVNC and
-        Screen Sharing serve whatever their runner's display is set to. What
-        matters is that the run reports it.
+        Screen Sharing serve whatever their runner's display is set to.
         """
         reported = native_pixel_format(self.server)
 

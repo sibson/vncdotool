@@ -101,12 +101,15 @@ what vncdotool implements, it is not.
 
 rfbproto is a living document with no releases or version numbers, so link
 a commit permalink rather than ``master`` when a comment depends on its
-wording. It is one grep-able reStructuredText file, so keep a clone beside
-this one and read it locally rather than fetching sections over the web::
+wording. It is one grep-able reStructuredText file, so clone it into
+``docs/rfbproto`` (git-ignored) and read it locally rather than fetching
+sections over the web::
 
-    git clone https://github.com/rfbproto/rfbproto.git ../rfbproto Neither document describes how any particular server actually
-behaves; where one is known to diverge, ``specs/server-compatibility-plan.md``
-records what we do about it.
+    git clone https://github.com/rfbproto/rfbproto.git docs/rfbproto
+
+Neither document describes how any particular server actually behaves; where
+one is known to diverge, ``specs/server-compatibility-plan.md`` records what
+we do about it.
 
 
 Preparing a Release
