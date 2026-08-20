@@ -212,6 +212,13 @@ case marking cannot reach: it needs an explicit `rfbDoCopyRect` /
 It costs one `cmake --build` target and one image stage: the fleet already
 compiles libvncserver from a pinned release in `libvncserver-build`.
 
+That server is not what got built first, though. An X-side scene app reaches
+tigervnc and x11vnc as well, is stepped by the client rather than a timer, and
+doubles as the input-reactive surface below, so it takes the job and the
+pnm-server stays deferred for the rectangle layouts only it can dictate.
+[decoder-goldens.md](decoder-goldens.md) designs the app, the capture path and
+the fixtures.
+
 ## What this removes
 
 - **pexpect**: replaced by `subprocess.run` + event-sink log assertions.

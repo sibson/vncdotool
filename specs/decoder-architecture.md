@@ -446,8 +446,10 @@ server itself rendering the same screen under an encoding we already trust — n
 our own decoder, and not our own reading of the spec.
 
 No fleet server can be scripted into a screen change today, and libvncserver
-detects none of its own: the server we have to write for this is designed in
+detects none of its own; see
 [testing-framework.md](testing-framework.md#the-screen-change-source-phase-2-prerequisite).
+The scene source, the capture path, the fixture format and the matrix this
+tooling produces are designed in [decoder-goldens.md](decoder-goldens.md).
 
 **Tier 1 — unit, offline.** Captured wire bytes into the decoder, compare the
 resulting buffer against the Raw ground truth. Fast, no fleet, no reactor.
