@@ -1,24 +1,16 @@
-# Docker Compose set of small, version-controlled Linux VNC servers used
-# as a compatibility test bed for vncdotool. See tests/servers/servers.mk for
-# the make targets that drive this file and tests/functional/test_servers.py
-# for the tests that exercise it.
+# See tests/servers/servers.mk for the make targets that drive this file and
+# tests/functional/test_servers.py for the tests that exercise it.
 #
-# Every service is a stage of the shared tests/servers/Dockerfile, so the
-# images differ only by the server they install. The two TigerVNC services
-# are the same image twice, distinguished purely by VNC_PASSWORD -- naming
-# the built image keeps that a single build rather than two. The build
-# context is tests/, not tests/servers/, so the Dockerfile can also pull in
-# the committed scene PNGs from tests/goldens/scenes/.
-#
-# Readiness is the HEALTHCHECK baked into the image, which makes
-# `up --wait` a reliable barrier. Every service publishes its RFB port to
-# localhost only.
+# The two TigerVNC services differ only by VNC_PASSWORD but share one image
+# name, so they build once rather than twice. The build context is tests/,
+# not tests/servers/, so the Dockerfile can also pull in the committed scene
+# PNGs from tests/goldens/scenes/.
 
 name: vncdo-test-servers
 
 services:
-  # A small framebuffer keeps a committed Raw update to tens of kilobytes
-  # rather than megabytes; see specs/decoder-goldens.md.
+  # Small geometry keeps a committed Raw update in the tens of KB rather
+  # than MB; see specs/decoder-goldens.md.
   tigervnc:
     build:
       context: ..
