@@ -191,12 +191,13 @@ different things and share one capture run:
 - **Source with tolerance.** Compare against the oracle allowing per-channel
   error bounded by the format's step. This bounds the server's rounding without
   modelling it, and still catches channel swaps, wrong shifts, endianness
-  errors and colour-map misindexing — the whole defect class R3, decoder output
+  errors and colour-map misindexing — the whole defect class R3, the framebuffer
   not depending on the negotiated format, is about.
 - **Cross-format self-consistency.** Decode the same scene at every format and
-  assert the canonical outputs agree within tolerance. This is R3 stated
-  directly, and needs no external truth, but a decoder wrong the same way at
-  every depth passes it.
+  assert the framebuffers agree within tolerance. This is R3 stated directly —
+  and it is where R3 is checked at all, since decoders emit the layout they were
+  sent (see [pixel-format.md](pixel-format.md)). It needs no external truth, but
+  a decoder wrong the same way at every depth passes it.
 
 Both are deferred until a second format exists. Today's tolerance is zero.
 
