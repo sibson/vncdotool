@@ -8,7 +8,7 @@ import gzip
 import json
 import unittest
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from unittest import mock
 
 from PIL import Image
@@ -54,7 +54,16 @@ class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
 
-    def replay(self, fixture: Path) -> None:
+
+class GoldenReplay:
+    """The body of a per-fixture case. Not a TestCase itself, so the loader
+    collects it only through the subclasses load_tests builds.
+    """
+
+    fixture: Path
+
+    def test_decodes_to_its_oracle(self) -> None:
+        fixture = self.fixture
         tolerance = json.loads((fixture / "conditions.json").read_text())["tolerance"]
         cli = make_client()
         cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
@@ -69,12 +78,17 @@ class TestGoldens(unittest.TestCase):
                 self.fail(f"{fixture.name} {step.name}: pixel ({x},{y}) decoded {got}, expected {want}")
 
 
-def _replays(fixture: Path) -> Callable[[TestGoldens], None]:
-    return lambda self: self.replay(fixture)
-
-
-for _fixture in fixtures():
-    setattr(TestGoldens, f"test_{_fixture.name.replace('-', '_')}", _replays(_fixture))
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
+    """unittest's own hook for building a suite: one case per fixture, named
+    after it, so a failure's test id says which fixture failed.
+    """
+    suite = unittest.TestSuite()
+    suite.addTests(loader.loadTestsFromTestCase(TestGoldens))
+    for fixture in fixtures():
+        name = f"TestGolden_{fixture.name.replace('-', '_')}"
+        case = type(name, (GoldenReplay, unittest.TestCase), {"fixture": fixture})
+        suite.addTest(case("test_decodes_to_its_oracle"))
+    return suite
 
 
 if __name__ == "__main__":

@@ -174,7 +174,7 @@ issue-thread evidence, not a repo fixture.
 
 ## The screen-change source
 
-Golden fixtures need a fleet server to change its screen on demand.
+Golden fixtures need a VNC server whose screen changes on demand.
 `tests/goldens/scene_player.py` does it, and
 [decoder-goldens.md](decoder-goldens.md) designs it along with the capture
 path and the fixtures.
