@@ -81,7 +81,9 @@ class VNCServer(NamedTuple):
 # One constant per service in tests/servers/docker-compose.yml, named so a
 # test that needs a specific one can import it directly instead of
 # searching DOCKER_SERVERS by name.
-TIGERVNC = VNCServer("tigervnc", 5931)
+# Small framebuffer: keeps a committed golden Raw update to tens of
+# kilobytes rather than megabytes; see specs/decoder-goldens.md.
+TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
 X11VNC = VNCServer("x11vnc", 5933)
 # 800x600 is the demo's hard-coded size; it takes no -geometry option.

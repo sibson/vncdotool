@@ -1,0 +1,44 @@
+{
+  "geometry": [
+    256,
+    192
+  ],
+  "meta": {
+    "auth": "stripped",
+    "capture_timestamp": "2026-08-20T12:08:38Z",
+    "encodings_seen": [
+      {
+        "encoding": -258,
+        "name": "pseudo-qemu-extended-key-event",
+        "rectangles": 1
+      },
+      {
+        "encoding": -224,
+        "name": "pseudo-last-rect",
+        "rectangles": 8
+      },
+      {
+        "encoding": 0,
+        "name": "raw",
+        "rectangles": 87
+      }
+    ],
+    "geometry": {
+      "height": 192,
+      "width": 256
+    },
+    "negotiated_version": [
+      3,
+      8
+    ],
+    "protocol_version": "RFB 003.008",
+    "security_type": 1,
+    "security_types": [
+      1
+    ],
+    "server": "127.0.0.1::5931",
+    "vncdotool_version": "2.0.0.dev0"
+  },
+  "server": "tigervnc",
+  "tolerance": 0
+}

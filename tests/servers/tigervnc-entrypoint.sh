@@ -33,12 +33,12 @@ fi
 Xvnc :0 \
     "$@" \
     -rfbport 5900 \
-    -geometry 1024x768 \
+    -geometry "${VNC_GEOMETRY:-1024x768}" \
     -depth 24 \
     -AlwaysShared \
     -localhost=0 &
 XVNC_PID=$!
 
-DISPLAY=:0 /draw-content.sh &
+DISPLAY=:0 python3 -m tests.goldens.scene_player &
 
 wait "$XVNC_PID"

@@ -1,0 +1,12 @@
+# Compose resolves this relative to the build context (tests/, see
+# docker-compose.yml), not to servers/Dockerfile's own directory.
+unit/
+functional/
+servers/screenshots/
+servers/screen-sharing/
+servers/ultravnc/
+goldens/capture.py
+goldens/distill.py
+goldens/scenes.py
+goldens/scene.vdo
+**/__pycache__/

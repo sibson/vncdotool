@@ -42,3 +42,11 @@ test-api:
 screenshots:
 	VNCDOTOOL_SCREENSHOT_DIR=$(SCREENSHOT_DIR) uv run python tests/functional/capture_screenshots.py $(SCREENSHOT_GROUP)
 	@echo "open $(SCREENSHOT_DIR)/index.html"
+
+.PHONY: goldens
+goldens:
+	uv run python -m tests.goldens.capture
+
+.PHONY: scenes
+scenes:
+	uv run python -m tests.goldens.scenes

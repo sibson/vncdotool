@@ -172,6 +172,24 @@ server's own handshake logic. The end product of any capture investigation
 is a distilled unit test with inline bytes; the capture itself is
 issue-thread evidence, not a repo fixture.
 
+## The screen-change source
+
+Golden fixtures need a VNC server whose screen changes on demand.
+`tests/goldens/scene_player.py` does it, and
+[decoder-goldens.md](decoder-goldens.md) designs it along with the capture
+path and the fixtures.
+
+What it cannot do is choose the rectangles: the server decides how a screen
+change becomes rects. Dictating them needs an application that marks its own,
+and only libvncserver can be made to — measured against 0.9.14, it has no
+framebuffer comparator at all, so `rfbMarkRectAsModified` decides granularity
+exactly, while x11vnc diffs a framebuffer it merely polls. So an example off
+`pnmshow` stays the route to the cases that need a chosen layout: many
+scattered rectangles, mid-session resize, and CopyRect, which marking cannot
+reach at all and needs an explicit `rfbDoCopyRect`. It costs one
+`cmake --build` target and one image stage, the fleet already building
+libvncserver from a pinned release.
+
 ## What this removes
 
 - **pexpect**: replaced by `subprocess.run` + event-sink log assertions.
@@ -217,7 +235,9 @@ revisit only if someone asks for it.
    tests in; retire pexpect and the native build. (Reworks #341's branch
    terrain.)
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
-   delete golden-PNG suite.
+   delete golden-PNG suite. Scaffolded at Raw and one pixel format; the
+   remaining matrix values arrive with the client features that can request
+   them, per `decoder-goldens.md`.
 3. `--capture-raw` flag + auth stripping + contributor paved-road doc.
 4. `vncdo-replay` as distillation aid.
 5. In-process API lifecycle suite against one container.
@@ -247,7 +267,10 @@ and can proceed while 3–5 follow.
   pixels changed." Needs a deterministic reactive surface in the container
   desktop (e.g. a full-screen `xterm` echoing keystrokes at a fixed
   position, plus a pointer-tracking app), which is image work with real
-  flakiness risk (font rendering, timing) and its own spike.
+  flakiness risk (font rendering, timing) and its own spike. The scene player
+  does not cover it: it paints the image its key names, whatever that key
+  was, so it cannot answer "which keysym arrived" — which is what the KEYMAP
+  issues need.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
   client, per-test subprocess timeouts can tighten, and the in-process API
   suite can grow adversarial cases (misbehaving-server lifecycle) using the

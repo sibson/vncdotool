@@ -5,10 +5,7 @@
 # apt in the base distro rather than by whatever a random upstream image
 # happens to bundle.
 #
-# docker-compose.yml selects a stage per service with `target:`. The base
-# stage holds everything the servers have in common -- an X client to draw
-# so captures aren't pure black, and the readiness probe -- so adding a
-# server means one stage, not another near-copy of this file.
+# docker-compose.yml selects a stage per service with `target:`.
 
 FROM debian:bookworm-slim AS base
 
@@ -18,10 +15,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xauth \
         procps \
         iproute2 \
+        python3 \
+        python3-xlib \
+        python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
-COPY draw-content.sh /draw-content.sh
-RUN chmod +x /draw-content.sh
+# The build context root, tests/, has no __init__.py of its own to COPY.
+RUN mkdir -p /tests && printf '"""Test suite package for vncdotool."""\n' > /tests/__init__.py
+COPY servers/__init__.py /tests/servers/__init__.py
+COPY goldens/__init__.py /tests/goldens/__init__.py
+COPY goldens/scene_player.py /tests/goldens/scene_player.py
+COPY goldens/scenes/ /tests/goldens/scenes/
 
 EXPOSE 5900
 
@@ -48,7 +52,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tigervnc-tools \
     && rm -rf /var/lib/apt/lists/*
 
-COPY tigervnc-entrypoint.sh /entrypoint.sh
+COPY servers/tigervnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
@@ -65,7 +69,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         procps \
     && rm -rf /var/lib/apt/lists/*
 
-COPY x11vnc-entrypoint.sh /entrypoint.sh
+COPY servers/x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # The event sink is the second thing this container promises, and the one
