@@ -101,7 +101,10 @@ what vncdotool implements, it is not.
 
 rfbproto is a living document with no releases or version numbers, so link
 a commit permalink rather than ``master`` when a comment depends on its
-wording. Neither document describes how any particular server actually
+wording. It is one grep-able reStructuredText file, so keep a clone beside
+this one and read it locally rather than fetching sections over the web::
+
+    git clone https://github.com/rfbproto/rfbproto.git ../rfbproto Neither document describes how any particular server actually
 behaves; where one is known to diverge, ``specs/server-compatibility-plan.md``
 records what we do about it.
 
