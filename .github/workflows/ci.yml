@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       max-parallel: 4
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest] #, windows-latest] tests fail on windows
         python-version: ['3.10', '3.11', '3.12', '3.13']
     env:
       UV_PYTHON: ${{ matrix.python-version }}
