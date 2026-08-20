@@ -878,6 +878,9 @@ def scene_script(directory: Path) -> Path:
     lines = []
     for index, key in enumerate(SCENE_ORDER, start=1):
         lines.append(f"key {key}")
+        # The app repaints on its own X event loop, so the capture request
+        # can otherwise overtake the scene it is meant to record.
+        lines.append("pause 0.3")
         lines.append(f"capture {directory}/driver-{index:02d}-{key}.png")
     path = directory / "scene.vdo"
     path.write_text("\n".join(lines) + "\n")
@@ -993,7 +996,7 @@ make servers-up
 make goldens
 ```
 
-Expected: `wrote .../tigervnc-raw-rgb888 (8 steps)`. If it exits with "step N carries no keysym patch", the server sent an update the scene app had not painted yet — add `pause 0.5` after each `key` line in `scene_script` and rerun. If a step count above 8 appears, that is a server sending more than one update per key and is fine; the labels stay correct.
+Expected: `wrote .../tigervnc-raw-rgb888 (8 steps)`. If it exits with "step N carries no keysym patch", the server sent an update the scene app had not painted yet — raise the `pause` in `scene_script` and rerun. Task 2 measured 0.3s as enough against tigervnc-golden. If a step count above 8 appears, that is a server sending more than one update per key and is fine; the labels stay correct.
 
 - [ ] **Step 4: Check the fixture's size before committing it**
 
