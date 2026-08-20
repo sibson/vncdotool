@@ -86,8 +86,10 @@ TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
 X11VNC = VNCServer("x11vnc", 5933)
 # 800x600 is the demo's hard-coded size; it takes no -geometry option.
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
+# Small framebuffer, for golden capture; see specs/decoder-goldens.md.
+TIGERVNC_GOLDEN = VNCServer("tigervnc-golden", 5936, size=(256, 192))
 
-DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE, TIGERVNC_GOLDEN]
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.

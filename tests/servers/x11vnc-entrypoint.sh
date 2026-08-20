@@ -4,13 +4,13 @@ set -e
 
 # Restarting a stopped container reuses its filesystem, and Xvfb refuses to
 # start on the lock the previous run left behind.
-rm -f /tmp/.X0-lock /tmp/.X11-unix/X0 /tmp/draw-content-ready
+rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
 Xvfb :0 -screen 0 1024x768x24 &
 XVFB_PID=$!
 trap 'kill -TERM "$XVFB_PID" 2>/dev/null; exit 0' TERM INT
 
-DISPLAY=:0 /draw-content.sh &
+DISPLAY=:0 python3 /tests/servers/scene_app.py &
 
 # X-side event sink: confirms an event arrived as a real X event, not just
 # that the client put it on the wire. Prefixed so it greps cleanly out of

@@ -51,6 +51,18 @@ services:
     ports:
       - "127.0.0.1:5934:5900"
 
+  # Golden-fixture capture: a small framebuffer keeps a committed Raw
+  # update to tens of kilobytes rather than megabytes.
+  tigervnc-golden:
+    build:
+      context: .
+      target: tigervnc
+    image: vncdotool-test-tigervnc
+    environment:
+      VNC_GEOMETRY: 256x192
+    ports:
+      - "127.0.0.1:5936:5900"
+
   # LibVNCServer's "example" demo, replacing the old libvncserver.mk build.
   libvncserver-example:
     build:

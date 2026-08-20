@@ -6,9 +6,10 @@
 # happens to bundle.
 #
 # docker-compose.yml selects a stage per service with `target:`. The base
-# stage holds everything the servers have in common -- an X client to draw
-# so captures aren't pure black, and the readiness probe -- so adding a
-# server means one stage, not another near-copy of this file.
+# stage holds everything the servers have in common -- the scene app that
+# draws the base screen at start-up and repaints on a keypress, so captures
+# aren't pure black, and the readiness probe -- so adding a server means one
+# stage, not another near-copy of this file.
 
 FROM debian:bookworm-slim AS base
 
@@ -18,10 +19,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xauth \
         procps \
         iproute2 \
+        python3 \
+        python3-xlib \
+        python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
-COPY draw-content.sh /draw-content.sh
-RUN chmod +x /draw-content.sh
+# /tests/__init__.py has no in-context source: the build context is
+# tests/servers/, so the package marker one level up is written directly.
+RUN mkdir -p /tests && printf '"""Test suite package for vncdotool."""\n' > /tests/__init__.py
+COPY __init__.py /tests/servers/__init__.py
+COPY scenes.py /tests/servers/scenes.py
+COPY scene_app.py /tests/servers/scene_app.py
 
 EXPOSE 5900
 
