@@ -1,0 +1,83 @@
+"""Slicing a recorded server stream into labelled golden steps."""
+from __future__ import annotations
+
+import gzip
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from struct import pack
+
+from PIL import Image
+
+from tests.goldens import distill
+from tests.servers import scenes
+from vncdotool import rfb
+from vncdotool.const import AuthTypes, Encoding, MsgS2C
+
+PIXEL_FORMAT = rfb.PixelFormat()
+SIZE = (16, 16)
+
+
+def handshake_bytes() -> bytes:
+    """RFB 3.3, no auth, ServerInit -- what vnclog records before any update."""
+    return b"RFB 003.003\n" + pack("!I", AuthTypes.NONE) + pack(
+        "!HH16sI", SIZE[0], SIZE[1], PIXEL_FORMAT.to_bytes(), len(b"golden")
+    ) + b"golden"
+
+
+def raw_update(image: Image.Image) -> bytes:
+    """One FramebufferUpdate carrying the whole screen as a Raw rectangle."""
+    header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
+    rectangle = pack("!HHHHi", 0, 0, SIZE[0], SIZE[1], Encoding.RAW)
+    return header + rectangle + image.convert("RGB").tobytes("raw", "RGBX")
+
+
+def screen(key: str) -> Image.Image:
+    image = Image.new("RGB", SIZE, (10, 20, 30))
+    scenes.stamp_patch(image, key)
+    return image
+
+
+class TestSplit(unittest.TestCase):
+    def test_init_stops_at_the_first_update(self) -> None:
+        init, _ = distill.split(handshake_bytes() + raw_update(screen("0")))
+        self.assertEqual(init, handshake_bytes())
+
+    def test_one_step_per_update(self) -> None:
+        stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
+        _, steps = distill.split(stream)
+        self.assertEqual([step.index for step in steps], [1, 2])
+
+    def test_steps_are_labelled_by_the_patch(self) -> None:
+        stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("d"))
+        _, steps = distill.split(stream)
+        self.assertEqual([step.key for step in steps], ["0", "d"])
+
+    def test_a_step_holds_exactly_its_own_update_bytes(self) -> None:
+        first, second = raw_update(screen("0")), raw_update(screen("s"))
+        _, steps = distill.split(handshake_bytes() + first + second)
+        self.assertEqual([step.data for step in steps], [first, second])
+
+    def test_an_unstamped_frame_has_no_key(self) -> None:
+        _, steps = distill.split(handshake_bytes() + raw_update(Image.new("RGB", SIZE, (1, 2, 3))))
+        self.assertIsNone(steps[0].key)
+
+
+class TestWriteFixture(unittest.TestCase):
+    def test_writes_one_pair_per_step_plus_conditions(self) -> None:
+        stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
+        init, steps = distill.split(stream)
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp) / "fixture"
+            distill.write_fixture(directory, init, steps, {"server": "tigervnc-golden"})
+            self.assertEqual(gzip.decompress((directory / "init.bin.gz").read_bytes()), init)
+            self.assertTrue((directory / "step-01-0.bin.gz").exists())
+            self.assertTrue((directory / "step-02-s.png").exists())
+            self.assertEqual(
+                json.loads((directory / "conditions.json").read_text())["server"], "tigervnc-golden"
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()
