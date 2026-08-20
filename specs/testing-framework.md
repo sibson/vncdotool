@@ -174,48 +174,21 @@ issue-thread evidence, not a repo fixture.
 
 ## The screen-change source
 
-Decoder goldens need fixtures captured from a real server, and a fixture is
-only as good as the screen change that produced it. The fleet now has one:
-`tests/servers/scene_app.py` blits a committed PNG per keypress inside the
-X-based containers, so a `vncdo` script chooses what the server has to send.
-[decoder-goldens.md](decoder-goldens.md) designs it, the capture path and the
-fixtures.
+Golden fixtures need a fleet server to change its screen on demand.
+`tests/goldens/scene_player.py` does it, and
+[decoder-goldens.md](decoder-goldens.md) designs it along with the capture
+path and the fixtures.
 
-The rest of this section records why the obvious alternative — a libvncserver
-example that dictates its own rectangles — was not what got built, and what it
-would still buy. Measured against LibVNCServer 0.9.14:
-
-| Example | Update behaviour |
-|---|---|
-| `pnmshow`, `pnmshow24` | one image loaded before `rfbInitServer`, never marked modified again |
-| `camera` | synthesizes frames, marks the whole screen for each one |
-| `zippy`, `rotatetemplate` | whole screen |
-| `example` | marks sub-rects, but only where a client drags or types |
-| `vncev` | `rfbDoCopyRect` on scroll; renders no desktop |
-
-There is no image-sequence example, and none that emits partial rectangles
-without a client driving it.
-
-**LibVNCServer does not detect changes.** It has no framebuffer comparator:
-`rfbMarkRectAsModified` ORs the rect into each client's `modifiedRegion`,
-and `rfbSendFramebufferUpdate` emits one rectangle per piece of that region.
-Rectangle granularity is exactly what the application asked for. An encoder
-may chop a rectangle further to respect its own size limits (ZLIB, Ultra,
-Tight), which is transport slicing and not change detection. Only x11vnc
-diffs, because it polls an X framebuffer it does not own.
-
-A server off `pnmshow` that marked named rectangles would therefore make the
-wire layout of a fixture an input rather than an observation, which is what
-the harder cases need: many scattered rectangles, resize via
-`rfbNewFramebuffer`, and CopyRect, which marking cannot reach at all —
-it needs an explicit `rfbDoCopyRect`, as `vncev.c` demonstrates. It costs one
-`cmake --build` target and one image stage, since the fleet already compiles
-libvncserver from a pinned release in `libvncserver-build`.
-
-The scene player took the job first because it reaches tigervnc and x11vnc rather
-than libvncserver alone, is stepped by the client rather than a timer, and
-doubles as the input-reactive surface below. What it gives up is dictating
-rectangle layout: the server still decides how a screen change becomes rects.
+What it cannot do is choose the rectangles: the server decides how a screen
+change becomes rects. Dictating them needs an application that marks its own,
+and only libvncserver can be made to — measured against 0.9.14, it has no
+framebuffer comparator at all, so `rfbMarkRectAsModified` decides granularity
+exactly, while x11vnc diffs a framebuffer it merely polls. So an example off
+`pnmshow` stays the route to the cases that need a chosen layout: many
+scattered rectangles, mid-session resize, and CopyRect, which marking cannot
+reach at all and needs an explicit `rfbDoCopyRect`. It costs one
+`cmake --build` target and one image stage, the fleet already building
+libvncserver from a pinned release.
 
 ## What this removes
 
@@ -294,12 +267,10 @@ and can proceed while 3–5 follow.
   pixels changed." Needs a deterministic reactive surface in the container
   desktop (e.g. a full-screen `xterm` echoing keystrokes at a fixed
   position, plus a pointer-tracking app), which is image work with real
-  flakiness risk (font rendering, timing) and its own spike. Distinct from
-  the screen-change source above, which changes the screen on a timer with
-  no client involved; this one has to change it *because of* an input event.
-  libvncserver's `example` is the nearest existing thing — it paints where a
-  client drags — but it renders no text, so it cannot answer "which keysym
-  arrived", which is what the KEYMAP issues need.
+  flakiness risk (font rendering, timing) and its own spike. The scene player
+  does not cover it: it paints the image its key names, whatever that key
+  was, so it cannot answer "which keysym arrived" — which is what the KEYMAP
+  issues need.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
   client, per-test subprocess timeouts can tighten, and the in-process API
   suite can grow adversarial cases (misbehaving-server lifecycle) using the
