@@ -360,11 +360,16 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
-- **Stop paying the image build tax on every run.** GitHub-hosted runners
-  start with an empty Docker cache, so layer caching only helps within a
-  run — each CI run rebuilds from scratch (~50s of the `servers` job).
-  The route is publishing the images to GHCR and having CI pull pinned
-  digests, which folds into the digest-pinning item below.
+- **Image build tax — done.** `.github/workflows/fleet-images.yml`
+  publishes the fleet to GHCR on every `main` push that touches
+  `tests/servers`, tagged with that directory's git tree hash, and the
+  `servers` job pulls that tag instead of rebuilding. A miss falls back to
+  building, so a PR that edits the fleet — and any fork PR — behaves as it
+  did before the registry existed. The packages have to be public for the
+  anonymous pull to work; a private package fails the pull and silently
+  costs a build every run. A tag also maps to one set of apt packages
+  forever, so Debian updates only arrive when that tree changes or the
+  workflow is dispatched by hand.
 
   Not `type=gha` layer caching: it was measured on this fleet and every
   configuration came out slower than the plain `docker compose --build`

@@ -19,7 +19,7 @@ services:
     build:
       context: .
       target: tigervnc
-    image: vncdotool-test-tigervnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-tigervnc:${FLEET_TAG:-dev}
     ports:
       - "127.0.0.1:5931:5900"
 
@@ -27,7 +27,7 @@ services:
     build:
       context: .
       target: tigervnc
-    image: vncdotool-test-tigervnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-tigervnc:${FLEET_TAG:-dev}
     environment:
       VNC_PASSWORD: vncdotool
     ports:
@@ -37,7 +37,7 @@ services:
     build:
       context: .
       target: x11vnc
-    image: vncdotool-test-x11vnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-x11vnc:${FLEET_TAG:-dev}
     ports:
       - "127.0.0.1:5933:5900"
 
@@ -47,7 +47,7 @@ services:
     build:
       context: .
       target: vncev
-    image: vncdotool-test-vncev
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-vncev:${FLEET_TAG:-dev}
     ports:
       - "127.0.0.1:5934:5900"
 
@@ -56,6 +56,6 @@ services:
     build:
       context: .
       target: libvncserver-example
-    image: vncdotool-test-libvncserver-example
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-libvncserver-example:${FLEET_TAG:-dev}
     ports:
       - "127.0.0.1:5935:5900"
