@@ -93,10 +93,21 @@ runs:
         # is already logged in; it needs a password we know, hence the reset.
         if id "$USERNAME" >/dev/null 2>&1; then
           echo "--- resetting the password of the existing user $USERNAME"
-          sudo sysadminctl -resetPasswordFor "$USERNAME" -newPassword "$PASSWORD"
+          # Not sysadminctl -resetPasswordFor: on a runner it answers
+          # "Operation is not permitted without secure token unlock", leaves
+          # the password alone, and exits 0 anyway. dscl as root changes the
+          # Open Directory password, which is the one ARD authenticates.
+          sudo dscl . -passwd "/Users/$USERNAME" "$PASSWORD"
         else
           echo "--- creating local user $USERNAME"
           sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
+        fi
+
+        # Whatever set the password, prove the account authenticates before
+        # spending three minutes of readiness retries finding out it doesn't.
+        if ! dscl . -authonly "$USERNAME" "$PASSWORD" >/dev/null 2>&1; then
+          echo "$USERNAME does not authenticate with the configured password" >&2
+          exit 1
         fi
 
         # -users/-privs grants that user full control; Screen Sharing itself is
