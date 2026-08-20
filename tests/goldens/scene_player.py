@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Fullscreen X client that blits a committed scene PNG per keypress.
 
-Run as `python3 -m tests.servers.scene_app [DIR]` inside the fleet
-containers. Each PNG under DIR already is the oracle a golden fixture is
+Each PNG under the scene directory already is the oracle a golden fixture is
 checked against -- this process composes nothing itself.
 """
 from __future__ import annotations
@@ -15,8 +14,7 @@ from PIL import Image
 from Xlib import X, display
 
 DEFAULT_SCENE_DIR = Path(__file__).resolve().parent / "scenes"
-# PutImage carries the whole request in one X message; splitting into bands
-# keeps every request well inside the server's maximum request length.
+# Keeps each PutImage request under the server's maximum request length.
 BAND_ROWS = 32
 
 
@@ -30,7 +28,7 @@ class ScenePlayer:
         self.scene_dir = scene_dir
         self.display = display.Display()
         if self.display.display.info.image_byte_order != 0:
-            raise SystemExit("scene_app: X server is not LSBFirst; ZPixmap byte order would be wrong")
+            raise SystemExit("scene_player: X server is not LSBFirst; ZPixmap byte order would be wrong")
         screen = self.display.screen()
         self.screen_image = Image.open(self.scene_dir / "0.png")
         width, height = self.screen_image.size
@@ -41,9 +39,8 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask,
         )
-        # Keys are watched on the root rather than on this window, so they
-        # keep propagating there for the container's `xev -root` sink. A
-        # key mask is per-client, so both of us receive every press.
+        # Without this, key events never reach the container's `xev -root`
+        # sink and tests/functional/test_events.py fails.
         screen.root.change_attributes(event_mask=X.KeyPressMask)
         self.gc = self.window.create_gc()
         self.window.map()

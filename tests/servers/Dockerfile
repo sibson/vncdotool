@@ -20,12 +20,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pil \
     && rm -rf /var/lib/apt/lists/*
 
-# /tests/__init__.py has no in-context source: the build context is
-# tests/, so the package marker one level up is written directly.
+# The build context root, tests/, has no __init__.py of its own to COPY.
 RUN mkdir -p /tests && printf '"""Test suite package for vncdotool."""\n' > /tests/__init__.py
 COPY servers/__init__.py /tests/servers/__init__.py
-COPY servers/scene_app.py /tests/servers/scene_app.py
-COPY goldens/scenes/ /tests/servers/scenes/
+COPY goldens/__init__.py /tests/goldens/__init__.py
+COPY goldens/scene_player.py /tests/goldens/scene_player.py
+COPY goldens/scenes/ /tests/goldens/scenes/
 
 EXPOSE 5900
 

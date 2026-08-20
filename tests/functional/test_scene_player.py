@@ -1,4 +1,4 @@
-"""The in-container scene app, exercised through a real server."""
+"""The in-container scene player, exercised through a real server."""
 from __future__ import annotations
 
 import tempfile
@@ -12,7 +12,7 @@ from tests.goldens import scenes
 from .vncservers import TIGERVNC, port_open, HOST, run_vncdo
 
 
-class TestSceneApp(TestCase):
+class TestScenePlayer(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC.port):
             self.fail(f"{TIGERVNC.name} is not listening on {TIGERVNC.port}; {TIGERVNC.how_to_start}")
@@ -20,7 +20,7 @@ class TestSceneApp(TestCase):
     def _capture(self, *args: str) -> Image.Image:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "screen.png"
-            # The scene app repaints asynchronously to the key event reaching
+            # The player repaints asynchronously to the key event reaching
             # the X server, so an immediate capture can still see the prior frame.
             result = run_vncdo(TIGERVNC, *args, "pause", "0.3", "capture", str(path))
             if result.returncode != 0:
