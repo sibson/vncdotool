@@ -114,7 +114,8 @@ class VNCDoCLIFactory(VNCDoToolFactory):
     ) -> None:
         if reactor.exit_status is not None:
             return
-        log.critical(reason.getErrorMessage())
+        print(reason.getErrorMessage(), file=sys.stderr)
+        log.debug(reason.getTraceback())
         self.done(self.status_for(reason, default))
 
     @staticmethod
@@ -372,7 +373,7 @@ def setup_logging(options: optparse.Values) -> None:
         logging.getLogger().addHandler(handler)
         sys.excepthook = log_exceptions
 
-    logging.basicConfig()
+    logging.basicConfig(format="%(levelname)s: %(message)s")
     if options.verbose > 1:
         logging.getLogger().setLevel(logging.DEBUG)
     elif options.verbose:

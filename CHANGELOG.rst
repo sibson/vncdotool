@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - ``vncdo`` failures now read as CLI errors: the message goes to stderr on its own, instead of being rendered as ``CRITICAL:root:<message>`` by the logging module. The failure's traceback moved to ``-vv``, and log records no longer carry the ``:root:`` logger name. Exit statuses are unchanged (@sibson)
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0): the client used to adopt that rectangle as the whole screen, offsetting every pixel by its position (@sibson)
   - Local development moves from a vendored Makefile.venv + pip to uv: ``make``
     targets run under ``uv run``, and a host's ``python3`` version no longer
