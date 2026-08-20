@@ -1,0 +1,231 @@
+name: Set up an OS-hosted VNC server
+description: >
+  Turn the runner into a live VNC server for tests/functional/test_os_servers.py:
+  UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
+
+# This lives in a composite action rather than in tests/servers/*/setup.sh so
+# that there is no file a developer can run. Both halves reconfigure the
+# machine they run on into an unattended remote-control target, reachable with
+# a password published in this repository, and neither effect is undone by
+# deleting a checkout: macOS keeps the account and the Remote Management
+# setting, Windows keeps the service. An `if` at the top of a script is a
+# reminder; steps that only the Actions runner can execute are a construction.
+#
+# What each server needs, and what it does and doesn't prove, is documented
+# next to the diagnostic scripts in tests/servers/ultravnc/README.md and
+# tests/servers/screen-sharing/README.md.
+
+inputs:
+  server:
+    description: Which OS-hosted server to set up -- ultravnc or screen-sharing.
+    required: true
+  username:
+    description: >
+      Account to authenticate as. On macOS this must be the user already
+      holding the console, or Screen Sharing fast-user-switches into a first
+      login for it and costs about a minute; Windows ignores it.
+    required: true
+  password:
+    description: Password the tests authenticate with.
+    required: true
+  port:
+    description: Port the server serves on.
+    required: false
+    default: '5900'
+  wait-seconds:
+    description: How long to wait for the port to open.
+    required: false
+    default: '60'
+  caffeinate-seconds:
+    description: How long to hold the macOS display awake for.
+    required: false
+    default: '1200'
+
+runs:
+  using: composite
+  steps:
+    # A composite action still runs on a self-hosted runner, which is
+    # somebody's real machine, so the host is asked to prove it is disposable.
+    # RUNNER_ENVIRONMENT is the one that separates the two; the rest catch a
+    # local `act` or a copied-out step.
+    #
+    # The escape hatch is for exercising this against a VM. It is a phrase
+    # rather than a 1 so that nothing sets it by accident, and no
+    # copy-pasteable command in the docs contains it.
+    - name: Check this runner is disposable
+      shell: bash
+      run: |
+        if [ "${VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST:-}" = "yes-destroy-this-machine" ]; then
+          echo "--- VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST is set, proceeding on a non-runner host"
+          exit 0
+        fi
+        if [ "${CI:-}" = "true" ] &&
+          [ "${GITHUB_ACTIONS:-}" = "true" ] &&
+          [ "${RUNNER_ENVIRONMENT:-}" = "github-hosted" ] &&
+          [ -n "${GITHUB_RUN_ID:-}" ]; then
+          exit 0
+        fi
+        echo "refusing to run: this is not a GitHub-hosted runner." >&2
+        echo "CI=${CI:-<unset>} GITHUB_ACTIONS=${GITHUB_ACTIONS:-<unset>}" >&2
+        echo "RUNNER_ENVIRONMENT=${RUNNER_ENVIRONMENT:-<unset>} GITHUB_RUN_ID=${GITHUB_RUN_ID:-<unset>}" >&2
+        echo "It would leave this machine reachable for unattended remote control" >&2
+        echo "with a password that is published in this repository." >&2
+        exit 1
+
+    - name: Enable Apple Screen Sharing
+      if: inputs.server == 'screen-sharing'
+      shell: bash
+      env:
+        USERNAME: ${{ inputs.username }}
+        PASSWORD: ${{ inputs.password }}
+        PORT: ${{ inputs.port }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
+      run: |
+        set -euo pipefail
+        KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+
+        # Connecting as anyone but the console owner costs a fast user switch:
+        # a full first login for that account, whose UserAccountUpdater and
+        # Setup Assistant phases ran for about a minute on a hosted runner and
+        # left the session at loginwindow -- which is also why the framebuffer
+        # came back black. Reusing the console owner attaches to a session that
+        # is already logged in; it needs a password we know, hence the reset.
+        if id "$USERNAME" >/dev/null 2>&1; then
+          echo "--- resetting the password of the existing user $USERNAME"
+          sudo sysadminctl -resetPasswordFor "$USERNAME" -newPassword "$PASSWORD"
+        else
+          echo "--- creating local user $USERNAME"
+          sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
+        fi
+
+        # -users/-privs grants that user full control; Screen Sharing itself is
+        # socket-activated on 5900 and needs no separate enabling.
+        echo "--- activating Remote Management for $USERNAME"
+        sudo "$KICKSTART" \
+          -activate -configure -access -on \
+          -users "$USERNAME" -privs -all \
+          -restart -agent
+
+        # Rules out display sleep / App Nap as a cause of an empty framebuffer.
+        echo "--- holding the display awake in the background"
+        nohup caffeinate -d -i -u -t "$CAFFEINATE_SECONDS" >/dev/null 2>&1 &
+        disown
+
+        # bash's own /dev/tcp rather than nc, matching how the Docker servers
+        # probe themselves -- one less tool the machine has to have.
+        echo "--- waiting up to ${WAIT_SECONDS}s for port $PORT"
+        deadline=$((SECONDS + WAIT_SECONDS))
+        while [ "$SECONDS" -lt "$deadline" ]; do
+          if (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null; then
+            echo "Screen Sharing is serving on 127.0.0.1:$PORT for user $USERNAME"
+            exit 0
+          fi
+          sleep 2
+        done
+        echo "Screen Sharing never started listening on port $PORT" >&2
+        exit 1
+
+    - name: Install and start UltraVNC
+      if: inputs.server == 'ultravnc'
+      shell: pwsh
+      env:
+        PASSWORD: ${{ inputs.password }}
+        PORT: ${{ inputs.port }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
+      run: |
+        Set-StrictMode -Version Latest
+        $ErrorActionPreference = 'Stop'
+        $Port = [int]$env:PORT
+        $WaitSeconds = [int]$env:WAIT_SECONDS
+
+        # Chocolatey always installs UltraVNC here. Do not go looking for
+        # winvnc.exe under C:\Program Files instead: a recursive scan of that
+        # tree takes over five minutes on the loaded runner image.
+        $InstallDir = 'C:\Program Files\uvnc bvba\UltraVNC'
+        $WinVnc = Join-Path $InstallDir 'winvnc.exe'
+        # Some UltraVNC builds read the ini from ProgramData rather than from
+        # the install directory, so it gets written to both.
+        $ProgramDataDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
+
+        Write-Host '--- installing UltraVNC'
+        # The community feed intermittently answers with something that isn't
+        # valid XML, which choco reports as "Unable to find package" and, worse,
+        # still exits 0 -- so retry, and judge success by the installed file.
+        $installed = $false
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            choco install ultravnc -y --no-progress
+            if (Test-Path $WinVnc) {
+                Write-Host "installed $WinVnc"
+                $installed = $true
+                break
+            }
+            Write-Host "::warning::UltraVNC install attempt $attempt did not produce $WinVnc"
+            Start-Sleep -Seconds (5 * $attempt)
+        }
+        if (-not $installed) {
+            throw "winvnc.exe not found at $WinVnc after 3 install attempts"
+        }
+
+        Write-Host '--- writing ultravnc.ini'
+        # The helper writes the hex to a file rather than to stdout, so the
+        # value never lands in the step log; read it back and drop the file.
+        $passwdFile = Join-Path ([System.IO.Path]::GetTempPath()) 'ultravnc-passwd.hex'
+        uv run python tests/servers/ultravnc/vnc_passwd_hex.py $env:PASSWORD $passwdFile
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path $passwdFile)) {
+            throw 'could not compute the ultravnc.ini password hex'
+        }
+        $passwdHex = (Get-Content $passwdFile -Raw).Trim()
+        Remove-Item $passwdFile -Force
+
+        $ini = @"
+        [admin]
+        UseRegistry=0
+
+        [ultravnc]
+        PortNumber=$Port
+        HTTPPortNumber=0
+        passwd=$passwdHex
+        AllowLoopback=1
+        AuthHosts=+127.0.0.1
+        NewMSLogon=0
+        RemoveWallpaper=1
+        NeverShutdown=1
+        DebugMode=1
+        DebugLevel=9
+        FileTransferEnabled=1
+        "@
+
+        $iniPath = Join-Path $InstallDir 'ultravnc.ini'
+        Set-Content -Path $iniPath -Value $ini -Encoding ASCII
+        New-Item -ItemType Directory -Force -Path $ProgramDataDir | Out-Null
+        Copy-Item $iniPath (Join-Path $ProgramDataDir 'ultravnc.ini') -Force
+        Write-Host "wrote $iniPath (port $Port, password set)"
+
+        Write-Host '--- installing and starting the UltraVNC service'
+        # Out-Host, or winvnc's own console output would end up in the
+        # pipeline alongside the service name.
+        & $WinVnc -install | Out-Host
+        Start-Sleep -Seconds 3
+
+        $service = Get-Service |
+            Where-Object { $_.Name -match 'uvnc|winvnc' -or $_.DisplayName -match 'UltraVNC' } |
+            Select-Object -First 1
+        if (-not $service) {
+            Get-Service | Format-Table Name, DisplayName, Status
+            throw 'no UltraVNC service exists after winvnc.exe -install'
+        }
+        Start-Service -Name $service.Name
+        Write-Host "started service $($service.Name) ($($service.DisplayName))"
+
+        Write-Host "--- waiting up to $WaitSeconds seconds for port $Port"
+        $deadline = (Get-Date).AddSeconds($WaitSeconds)
+        while ((Get-Date) -lt $deadline) {
+            $probe = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue
+            if ($probe.TcpTestSucceeded) {
+                Write-Host "UltraVNC is serving on 127.0.0.1:$Port"
+                exit 0
+            }
+            Start-Sleep -Seconds 2
+        }
+        throw "UltraVNC never started listening on port $Port"

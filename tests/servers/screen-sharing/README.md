@@ -1,30 +1,32 @@
 # Apple Screen Sharing on macOS
 
 An OS-hosted VNC server for vncdotool to test against on a macOS machine (a
-GitHub `macos-latest` runner in CI). `setup.sh` enables Remote Management
-and creates the user vncdotool authenticates as;
-`tests/functional/test_os_servers.py` then runs the same connect/type/capture
-round trip used for the Docker servers, and `collect-diagnostics.sh` gathers
-the evidence when something goes wrong.
+GitHub `macos-latest` runner in CI). `tests/functional/test_os_servers.py`
+runs the same connect/type/capture round trip used for the Docker servers,
+and `collect-diagnostics.sh` gathers the evidence when something goes wrong.
+
+## There is no setup script
+
+Enabling Remote Management turns the machine it runs on into an unattended
+remote-control target, reachable with a password published in this
+repository, and deleting the checkout afterwards leaves the account and the
+setting behind. So the setup lives in a composite action,
+`.github/actions/os-server`, whose steps only the Actions runner can
+execute. There is deliberately nothing here to run against a laptop.
+
+A composite action still runs on a *self-hosted* runner, which is someone's
+real machine, so the action's first step asks the host to prove it is
+disposable: `CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted` and
+`GITHUB_RUN_ID` together. To exercise the setup by hand, use a virtual
+machine you are willing to delete and set
+`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
+
+Against a server that is already up — a runner mid-job, or that VM — the
+tests are just:
 
 ```sh
-sudo bash tests/servers/screen-sharing/setup.sh
 uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 ```
-
-`setup.sh` refuses to run anywhere but a GitHub-hosted runner, so on a
-developer machine the first of those commands stops without doing anything.
-That is deliberate: it turns the machine it runs on into an unattended
-remote-control target reachable with a password published in this
-repository, and deleting the checkout afterwards leaves the account and the
-Remote Management setting behind.
-
-The check is four environment variables GitHub sets on a hosted runner
-(`CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted`,
-`GITHUB_RUN_ID`); `RUNNER_ENVIRONMENT` is what keeps it off a *self-hosted*
-runner, which is someone's real machine. To work on the script itself, use a
-virtual machine you are willing to delete and set
-`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
 
 ## What the setup has to get right
 

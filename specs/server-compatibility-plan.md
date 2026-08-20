@@ -392,10 +392,12 @@ Tier 1 follow-ups:
 `claude/spike-os-servers` (commit `2de3252`, workflow
 `spike-os-servers.yml`); final run
 [31730610001](https://github.com/sibson/vncdotool/actions/runs/31730610001)
-has both jobs green after four evidence-driven rounds. The recipe below
-now lives as checked-in setup/diagnostic scripts under
-`tests/servers/ultravnc/` and `tests/servers/screen-sharing/` (each with
-a README recording why it does what it does), driven by
+has both jobs green after four evidence-driven rounds. The setup half of
+the recipe below now lives in the composite action
+`.github/actions/os-server`, so that no runnable script can be pointed at
+a developer's machine; the diagnostics half stays as checked-in scripts
+under `tests/servers/ultravnc/` and `tests/servers/screen-sharing/` (each
+with a README recording why it does what it does), driven by
 `tests/functional/test_os_servers.py`, which reuses the same server
 description, round trip and screenshot gallery as Tier 1 via
 `tests/functional/vncservers.py`.

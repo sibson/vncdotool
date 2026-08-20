@@ -113,7 +113,7 @@ ULTRAVNC = VNCServer(
     # The Windows runner's own desktop resolution, not one we configure.
     size=None,
     timeout=OS_SERVER_TIMEOUT,
-    how_to_start="set the server up first with tests/servers/ultravnc/setup.ps1",
+    how_to_start="the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
 )
 
 SCREEN_SHARING = VNCServer(
@@ -130,7 +130,7 @@ SCREEN_SHARING = VNCServer(
     # auth and input round trip all succeeded.
     renders_desktop=False,
     timeout=OS_SERVER_TIMEOUT,
-    how_to_start="set the server up first with tests/servers/screen-sharing/setup.sh",
+    how_to_start="the OS server setup runs in CI only, see tests/servers/screen-sharing/README.md",
 )
 
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {

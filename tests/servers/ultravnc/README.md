@@ -1,28 +1,33 @@
 # UltraVNC on Windows
 
 An OS-hosted VNC server for vncdotool to test against on a Windows machine
-(a GitHub `windows-latest` runner in CI). `setup.ps1` installs, configures
-and starts it; `tests/functional/test_os_servers.py` then runs the same
-connect/type/capture round trip used for the Docker servers, and
-`collect-diagnostics.ps1` gathers the evidence when something goes wrong.
+(a GitHub `windows-latest` runner in CI). `tests/functional/test_os_servers.py`
+runs the same connect/type/capture round trip used for the Docker servers,
+and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
+
+## There is no setup script
+
+Installing UltraVNC as a service leaves the machine reachable for unattended
+remote control with a password published in this repository, and deleting
+the checkout does not uninstall it. So the setup lives in a composite
+action, `.github/actions/os-server`, whose steps only the Actions runner can
+execute. There is deliberately nothing here to run against a workstation.
+
+A composite action still runs on a *self-hosted* runner, which is someone's
+real machine, so the action's first step asks the host to prove it is
+disposable: `CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted` and
+`GITHUB_RUN_ID` together. To exercise the setup by hand, use a virtual
+machine you are willing to delete and set
+`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
+
+`vnc_passwd_hex.py` stays here as a plain script: it turns a password into
+the hex blob `ultravnc.ini` wants and touches nothing.
+
+Against a server that is already up, the tests are just:
 
 ```powershell
-pwsh tests/servers/ultravnc/setup.ps1
 uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 ```
-
-`setup.ps1` refuses to run anywhere but a GitHub-hosted runner, so on a
-developer machine the first of those commands stops without doing anything.
-That is deliberate: it installs UltraVNC as a service and leaves the machine
-reachable for unattended remote control with a password published in this
-repository, and deleting the checkout afterwards does not uninstall it.
-
-The check is four environment variables GitHub sets on a hosted runner
-(`CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted`,
-`GITHUB_RUN_ID`); `RUNNER_ENVIRONMENT` is what keeps it off a *self-hosted*
-runner, which is someone's real machine. To work on the script itself, use a
-virtual machine you are willing to delete and set
-`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
 
 ## What the setup has to get right
 

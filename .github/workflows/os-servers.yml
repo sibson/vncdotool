@@ -8,10 +8,11 @@ name: OS-hosted VNC servers
 # change-triggered (path-filtered, no schedule).
 #
 # What each server needs, and what it does and doesn't prove, is documented
-# next to the setup scripts in tests/servers/ultravnc/README.md and
-# tests/servers/screen-sharing/README.md. This file only wires those scripts
-# and tests/functional/test_os_servers.py together: the two OSes differ by
-# which script sets the server up and which shell runs it, so they are one
+# in tests/servers/ultravnc/README.md and tests/servers/screen-sharing/README.md.
+# This file wires .github/actions/os-server -- which is where the setup lives,
+# so that no runnable script can point it at a developer's machine -- to
+# tests/functional/test_os_servers.py. The two OSes differ by which server the
+# action sets up and which shell the remaining steps run in, so they are one
 # matrix job rather than two near-identical ones.
 
 on:
@@ -24,6 +25,7 @@ on:
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   pull_request:
     paths:
       - 'vncdotool/**'
@@ -31,6 +33,7 @@ on:
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   workflow_dispatch:
 
 permissions:
@@ -48,10 +51,6 @@ env:
   # tests/servers/screen-sharing/README.md. Windows ignores the username --
   # UltraVNC authenticates the password alone.
   VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'runner' }}
-  # Consent to setup.sh resetting that existing account's password, which it
-  # refuses to do unasked -- a developer running it locally would otherwise
-  # hand their own login a password published in this repository.
-  VNCDOTOOL_OS_SERVER_RESET_PASSWORD: '1'
   VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
@@ -69,13 +68,11 @@ jobs:
             runner: windows-latest
             shell: pwsh
             server: ultravnc
-            setup: ./tests/servers/ultravnc/setup.ps1
             diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
           - name: macOS - Screen Sharing
             runner: macos-latest
             shell: bash
             server: screen-sharing
-            setup: bash tests/servers/screen-sharing/setup.sh
             diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
     defaults:
       run:
@@ -93,7 +90,11 @@ jobs:
         run: uv sync
 
       - name: Set up the VNC server
-        run: ${{ matrix.setup }}
+        uses: ./.github/actions/os-server
+        with:
+          server: ${{ matrix.server }}
+          username: ${{ env.VNCDOTOOL_OS_SERVER_USERNAME }}
+          password: ${{ env.VNCDOTOOL_OS_SERVER_PASSWORD }}
 
       # An open port is not readiness: the first connection to macOS Screen
       # Sharing is what starts it, and that connection can stall for good
