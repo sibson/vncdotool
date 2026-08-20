@@ -24,16 +24,6 @@ PROXY_STARTUP_DEADLINE = 10.0
 CAPTURE_DEADLINE = 60.0
 
 
-def image_digest(service: str) -> str:
-    """Which image this fixture came from, so it can be rebuilt years later."""
-    result = subprocess.run(
-        ["docker", "compose", "-f", "tests/servers/docker-compose.yml", "images", "--format", "json", service],
-        capture_output=True, text=True, check=True,
-    )
-    images = json.loads(result.stdout)
-    return images[0]["ID"] if images else ""
-
-
 def _start_vnclog(archive: Path) -> subprocess.Popen:
     proxy = subprocess.Popen(
         [VNCLOG, "-s", f"{HOST}::{TIGERVNC.port}", "--listen", str(PROXY_PORT),
@@ -86,7 +76,6 @@ def main() -> int:
             shutil.rmtree(directory)
         conditions = {
             "server": TIGERVNC.name,
-            "image_digest": image_digest(TIGERVNC.name),
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance": 0,

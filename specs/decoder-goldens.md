@@ -31,19 +31,18 @@ the matrix bigger without making a decoder better exercised, it was cut.
 
 ## The scene player
 
-`tests/servers/scene_app.py`: a fullscreen X client using `python3-xlib`, no
-toolkit and no fonts. A keypress selects one of the committed PNGs in
-`tests/goldens/scenes/` and it goes to the X framebuffer whole, via
+`tests/goldens/scene_player.py`: a fullscreen X client using `python3-xlib`, no
+toolkit and no fonts. A keypress selects one of the committed PNGs in the
+adjacent `tests/goldens/scenes/` and it goes to the X framebuffer whole, via
 `XPutImage`, so what the server sees is a file in the repository rather than
 the outcome of a rendering stack. It replaces `draw-content.sh` in the
 `tigervnc` and `x11vnc` images; `libvncserver-example` has no X server and
 stays out of golden capture.
 
-The scenes themselves are generated offline by `tests/goldens/make_scenes.py`
-from the pure functions in `tests/goldens/scenes.py`, which the unit suite
-covers. Committing the images rather than drawing them in the container is
-what lets the same file be both what was displayed and what a golden is
-checked against.
+The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
+`main()`, from the same pure functions the unit suite covers. Committing the
+images rather than drawing them in the container is what lets the same file be
+both what was displayed and what a golden is checked against.
 
 Keys select behaviour. There is no step counter and no notion of "next", so a
 dropped or mistranslated keysym cannot silently shift every later fixture into
@@ -168,9 +167,9 @@ opening anything.
 ## conditions.json
 
 Written by the harness from what happened, never from what was intended: the
-compose service and the digest of the image it ran, the geometry, and vnclog's
-own `meta` — protocol version, security types, the encodings the server
-actually used, and the capture timestamp. Per-channel comparison tolerance
+compose service, the geometry, and vnclog's own `meta` — protocol version,
+security types, the encodings the server actually used, and the capture
+timestamp. Per-channel comparison tolerance
 lives here too: zero today, non-zero when reduced-depth formats land.
 
 The driving script is not copied in. `session.vdo` inside the capture archive
