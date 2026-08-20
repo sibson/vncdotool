@@ -77,6 +77,7 @@ jobs:
     timeout-minutes: 20
     env:
       VNCDOTOOL_SCREENSHOT_DIR: screenshots
+      FLEET_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/vncdotool-test
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -89,8 +90,14 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Build and start the VNC test servers
-        run: docker compose -f tests/servers/docker-compose.yml up -d --build --wait
+      - name: Resolve the fleet image tag
+        run: echo "FLEET_TAG=$(git rev-parse HEAD:tests/servers)" >> "$GITHUB_ENV"
+
+      - name: Fetch or build the VNC test servers
+        run: |
+          docker compose -f tests/servers/docker-compose.yml pull --quiet \
+            || docker compose -f tests/servers/docker-compose.yml build
+          docker compose -f tests/servers/docker-compose.yml up -d --wait
 
       - name: Wait for the test servers to serve their screens
         timeout-minutes: 5
@@ -137,7 +144,7 @@ jobs:
 
       - name: Stop the VNC test servers
         if: always()
-        run: docker compose -f tests/servers/docker-compose.yml down
+        run: docker compose -f tests/servers/docker-compose.yml down --timeout 2
 
   coverage:
     name: Coverage

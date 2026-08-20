@@ -360,12 +360,29 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
-- **Stop paying the image build tax on every run.** GitHub-hosted runners
-  start with an empty Docker cache, so layer caching only helps within a
-  run — each CI run rebuilds from scratch (~35s of the ~70s total).
-  Options: `docker/build-push-action` with `cache-from/to: type=gha`, or
-  publish the images to GHCR once and have CI pull pinned digests, which
-  folds into the digest-pinning item below.
+- **Image build tax — done.** `.github/workflows/fleet-images.yml`
+  publishes the fleet to GHCR on every `main` push that touches
+  `tests/servers`, tagged with that directory's git tree hash, and the
+  `servers` job pulls that tag instead of rebuilding. A miss falls back to
+  building, so a PR that edits the fleet — and any fork PR — behaves as it
+  did before the registry existed. The packages have to be public for the
+  anonymous pull to work; a private package fails the pull and silently
+  costs a build every run. A tag also maps to one set of apt packages
+  forever, so Debian updates only arrive when that tree changes or the
+  workflow is dispatched by hand.
+
+  Not `type=gha` layer caching: it was measured on this fleet and every
+  configuration came out slower than the plain `docker compose --build`
+  it replaced (68–106s against ~50s). Two costs sink it. `docker buildx`
+  needs the `docker-container` driver to export cache at all, and pulling
+  `moby/buildkit` to get one costs 6–11s a run that plain compose never
+  pays; and `--load` then has to copy five finished images back out of
+  that container into the daemon. Restore never made that back — with
+  correct per-target `scope=` the manifests import, but the expensive
+  layers still rebuild, so all five `apt-get install`s and the
+  libvncserver compile re-ran on every warm run. GHCR wins even against
+  a cache that worked perfectly: pulling skips the build *and* the
+  builder setup.
 - Pin base images by digest and fold this workflow into the main CI one.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 
