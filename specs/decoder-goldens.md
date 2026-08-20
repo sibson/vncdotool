@@ -3,18 +3,15 @@
 Status: scaffold built; Raw at 32bpp against tigervnc. Later matrix values are
 TDD entry points, see Phasing. Builds the fixture half of
 [testing-framework.md](testing-framework.md) Phase 2 and the capture half of
-[decoder-architecture.md](decoder-architecture.md) Phase 0. Read the
-screen-change section of the testing framework first: it establishes that no
-fleet server can be scripted into a screen change today, which is the gap this
-design fills.
+[decoder-architecture.md](decoder-architecture.md) Phase 0.
 
 ## Problem
 
 Decoder goldens need wire bytes from a real server, produced by screen changes
-we chose, verified against something that is not our own decoder. Today none of
-those three exist: `draw-content.sh` paints once at start-up, nothing can ask a
-fleet server for a particular update, and the only image we could compare
-against is one our decoder produced.
+we chose, verified against something that is not our own decoder. The fleet
+offered none of the three: `draw-content.sh` painted once at start-up, nothing
+could ask a server for a particular update, and the only image to compare
+against was one our own decoder had produced.
 
 ## What reproducible means here
 
@@ -32,14 +29,21 @@ The high-order bit is exercising the decoders with many values in a way that is
 reproducible and debuggable. Everything below serves that; where a choice made
 the matrix bigger without making a decoder better exercised, it was cut.
 
-## The scene-app
+## The scene player
 
 `tests/servers/scene_app.py`: a fullscreen X client using `python3-xlib`, no
-toolkit and no fonts. It composes each scene into an in-memory RGB buffer and
-pushes it with `XPutImage`, so what reaches the X framebuffer is a buffer we
-hold rather than the outcome of a rendering stack. It replaces
-`draw-content.sh` in the `tigervnc` and `x11vnc` images;
-`libvncserver-example` has no X server and stays out of golden capture.
+toolkit and no fonts. A keypress selects one of the committed PNGs in
+`tests/goldens/scenes/` and it goes to the X framebuffer whole, via
+`XPutImage`, so what the server sees is a file in the repository rather than
+the outcome of a rendering stack. It replaces `draw-content.sh` in the
+`tigervnc` and `x11vnc` images; `libvncserver-example` has no X server and
+stays out of golden capture.
+
+The scenes themselves are generated offline by `tests/goldens/make_scenes.py`
+from the pure functions in `tests/goldens/scenes.py`, which the unit suite
+covers. Committing the images rather than drawing them in the container is
+what lets the same file be both what was displayed and what a golden is
+checked against.
 
 Keys select behaviour. There is no step counter and no notion of "next", so a
 dropped or mistranslated keysym cannot silently shift every later fixture into
@@ -65,34 +69,40 @@ whatever was on screen, so `d` after `s` and `d` after `x` are different wire
 bytes, and CopyRect exists only because of prior content. `0` makes any case
 reachable in isolation.
 
-Each key also paints a small patch encoding the keysym actually received. It is
-fontless, it costs one harmless rect, and it turns a dropped key into a wrong
-patch rather than a mislabelled fixture. It is not merely a check: it is how
+Every scene image carries a small patch encoding its own key. It is fontless,
+it costs one harmless rect, and it turns a dropped key into a wrong patch
+rather than a mislabelled fixture. It is not merely a check: it is how
 distillation labels a step at all, since the frame carries it and the c2s
 stream cannot be aligned against s2c.
 
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
 
-Golden capture runs at **256x192**. Raw at 1024x768 is 3MB per full-screen
-update, which the repository should not carry; at 256x192 it is 192KB, about
-40KB gzipped. The fleet's normal geometry is unchanged — the golden entrypoint
-sets its own.
+The `tigervnc` service serves **256x192**. Raw at 1024x768 is 3MB per
+full-screen update, which the repository should not carry; at 256x192 it is
+192KB, about 40KB gzipped. Nothing else in the fleet needs a large desktop, so
+this is the one service's geometry rather than a second service beside it.
 
 ## Driving
 
-The scene is a `vncdo` script:
+The scene is `tests/goldens/scene.vdo`, a committed `vncdo` script:
 
     key 0
+    pause 0.3
+    capture driver-01-0.png
     key s
-    capture step-02-s.png
-    key d
-    capture step-03-d.png
+    pause 0.3
+    capture driver-02-s.png
 
 `capture` forces a FramebufferUpdateRequest and blocks until the update
 arrives, so each scene produces at least one update rather than being folded
 into a neighbour's. The PNGs it writes are debug artifacts, never oracles: they
 came out of our own decoder.
+
+The `pause` is not padding. The player repaints on its own X event loop, so a
+capture request issued immediately after the key can record the scene before
+it, and the fixture would then be labelled by a patch from the previous
+image.
 
 ## Capture
 
@@ -129,11 +139,15 @@ one key with two updates, since both frames carry the same patch.
 A fixture is a whole capture session, not a single update:
 
     tests/unit/fixtures/goldens/tigervnc-raw-rgb888/
-      init.bin.gz                            # ServerInit onward
-      step-01-0.bin.gz   step-01-0.png
-      step-02-s.bin.gz   step-02-s.png
+      init.bin.gz          # ServerInit onward
+      step-01-0.bin.gz     # the key names the scene, and so the oracle
+      step-02-s.bin.gz
       ...
       conditions.json
+
+A fixture holds no images. The step filename ends in the scene key, and the
+oracle is `tests/goldens/scenes/<key>.png` — the same file the server was
+shown, so there is nothing to keep in sync.
 
 Session-level is the only granularity that can test R7, the decoder
 architecture's strict-ordering requirement. ZRLE uses a single
@@ -153,21 +167,24 @@ opening anything.
 
 ## conditions.json
 
-Written by the harness from what happened, never from what was intended:
-compose service and image digest, the server version string from ServerInit,
-the negotiated PixelFormat fields, the encoding the server actually used,
-geometry, the driving `.vdo`, vncdotool version, scene-app source hash, capture
-date, and the source archive's filename. Per-channel comparison tolerance lives
-here too — zero today, non-zero when reduced-depth formats land.
+Written by the harness from what happened, never from what was intended: the
+compose service and the digest of the image it ran, the geometry, and vnclog's
+own `meta` — protocol version, security types, the encodings the server
+actually used, and the capture timestamp. Per-channel comparison tolerance
+lives here too: zero today, non-zero when reduced-depth formats land.
+
+The driving script is not copied in. `session.vdo` inside the capture archive
+already is it, and a second copy is a second thing to keep true.
 
 ## Oracles
 
-Ground truth is the buffer the scene-app pushed to X, saved as a PNG on a
-shared volume by the drawing side. It is independent of our decoder and of our
-reading of the specification.
+Ground truth is the committed PNG the scene player pushed to X. It is
+independent of our decoder and of our reading of the specification, and it
+needs no copying out of a container: the file the test compares against is the
+file the server was shown.
 
 At reduced depth the server quantizes, so a decoded frame will not equal that
-buffer, and modelling the rounding ourselves would put our reading of the spec
+image, and modelling the rounding ourselves would put our reading of the spec
 back into the oracle. Two checks are used together, because they fail on
 different things and share one capture run:
 
@@ -230,7 +247,7 @@ The scaffold lands at today's single pixel format and Raw alone. Every later
 axis value is then a TDD entry point: extend the matrix, watch capture fail for
 a missing feature, build the feature.
 
-1. scene-app, golden geometry, fleet wiring. Proven by one functional test:
+1. scene player, golden geometry, fleet wiring. Proven by one functional test:
    pressing `s` changes the screen.
 2. Distiller, fixture format, `make goldens`. Commit `tigervnc-raw-rgb888`.
 3. `test_goldens.py` green against it.
@@ -249,7 +266,7 @@ Recorded so they are not rediscovered as new ideas.
   resize).
 - **Cross-format equality** and the **tolerance oracle**, both of which need a
   second format to exist.
-- **CopyRect**, which appears only if Xvnc turns the scene-app's scroll into
+- **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
   one. We find out by reading a capture, not by asserting it in advance.
 
 ## Risks
@@ -257,7 +274,7 @@ Recorded so they are not rediscovered as new ideas.
 - x11vnc polls and coalesces, so one key may produce more than one update. The
   distiller records everything between key events rather than assuming one
   update, and the fixture keeps whatever arrived.
-- The scene-app is stepped through the keyboard path, so a server that
+- The scene player is stepped through the keyboard path, so a server that
   mishandles a plain letter stalls a capture. The keysym patch makes that
   visible in the bytes; if it ever becomes a real obstacle, the escape is a
   fifo poked by `docker exec`, at the cost of losing the c2s step boundaries.

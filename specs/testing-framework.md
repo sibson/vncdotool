@@ -212,7 +212,7 @@ it needs an explicit `rfbDoCopyRect`, as `vncev.c` demonstrates. It costs one
 `cmake --build` target and one image stage, since the fleet already compiles
 libvncserver from a pinned release in `libvncserver-build`.
 
-The scene app took the job first because it reaches tigervnc and x11vnc rather
+The scene player took the job first because it reaches tigervnc and x11vnc rather
 than libvncserver alone, is stepped by the client rather than a timer, and
 doubles as the input-reactive surface below. What it gives up is dictating
 rectangle layout: the server still decides how a screen change becomes rects.

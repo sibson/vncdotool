@@ -30,7 +30,8 @@ def image_digest(service: str) -> str:
         ["docker", "compose", "-f", "tests/servers/docker-compose.yml", "images", "--format", "json", service],
         capture_output=True, text=True, check=True,
     )
-    return result.stdout.strip()
+    images = json.loads(result.stdout)
+    return images[0]["ID"] if images else ""
 
 
 def _start_vnclog(archive: Path) -> subprocess.Popen:

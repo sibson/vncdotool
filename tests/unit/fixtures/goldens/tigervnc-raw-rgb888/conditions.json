@@ -3,10 +3,10 @@
     256,
     192
   ],
-  "image_digest": "[{\"ID\":\"sha256:4b320e83542a768934016938623b284beecf79995af960b73466fb5c567322a6\",\"ContainerName\":\"vncdo-test-servers-tigervnc-1\",\"Repository\":\"vncdotool-test-tigervnc\",\"Tag\":\"latest\",\"Platform\":\"linux/arm64\",\"Size\":445913508,\"Created\":\"2026-08-20T11:20:40.994218004Z\",\"LastTagTime\":\"2026-08-20T11:21:13.11092863Z\"}]",
+  "image_digest": "sha256:4b320e83542a768934016938623b284beecf79995af960b73466fb5c567322a6",
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-20T11:21:32Z",
+    "capture_timestamp": "2026-08-20T11:33:42Z",
     "encodings_seen": [
       {
         "encoding": -258,
