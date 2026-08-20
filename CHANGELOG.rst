@@ -1,11 +1,9 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
-  - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0): the client used to adopt that rectangle as the whole screen, offsetting every pixel by its position (@sibson)
-  - Local development moves from a vendored Makefile.venv + pip to uv: ``make``
-    targets run under ``uv run``, and a host's ``python3`` version no longer
-    matters (@sibson, #383)
-  - Fix ``make release`` tagging an empty version: it read the current and next version by running bare ``python``, which need not be on PATH (@sibson, #382)
+  - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
+  - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
+  - Fix ``make release`` tagging an empty version (@sibson, #382)
 
 1.4.1 (2026-08-19)
 ----------------------
