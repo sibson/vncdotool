@@ -384,7 +384,8 @@ class VNCDoToolClient(rfb.RFBClient):
         size = (width, height)
         update = Image.frombytes("RGB", size, data, "raw", self._image_mode)
         if not self.screen:
-            self.screen = update
+            self.screen = Image.new("RGB", (self.width, self.height), "black")
+            self.screen.paste(update, (x, y))
         # track upward screen resizes, often occurs during os boot of VMs
         # When the screen is sent in chunks (as observed on VMWare ESXi), the canvas
         # needs to be resized to fit all existing contents and the update.

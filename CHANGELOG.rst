@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0): the client used to adopt that rectangle as the whole screen, offsetting every pixel by its position (@sibson)
   - Local development moves from a vendored Makefile.venv + pip to uv: ``make``
     targets run under ``uv run``, and a host's ``python3`` version no longer
     matters (@sibson, #383)
