@@ -42,11 +42,14 @@ class SceneApp:
             X.InputOutput, X.CopyFromParent,
             background_pixel=screen.black_pixel,
             override_redirect=True,
-            event_mask=X.KeyPressMask | X.ExposureMask,
+            event_mask=X.ExposureMask,
         )
+        # Keys are watched on the root rather than on this window, so they
+        # keep propagating there for the container's `xev -root` sink. A
+        # key mask is per-client, so both of us receive every press.
+        screen.root.change_attributes(event_mask=X.KeyPressMask)
         self.gc = self.window.create_gc()
         self.window.map()
-        self.display.set_input_focus(self.window, X.RevertToParent, X.CurrentTime)
         self.screen_image = scenes.base()
         scenes.stamp_patch(self.screen_image, "0")
         self.applied = 0
