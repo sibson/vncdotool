@@ -66,7 +66,9 @@ reachable in isolation.
 
 Each key also paints a small patch encoding the keysym actually received. It is
 fontless, it costs one harmless rect, and it turns a dropped key into a wrong
-patch rather than a mislabelled fixture.
+patch rather than a mislabelled fixture. It is not merely a check: it is how
+distillation labels a step at all, since the frame carries it and the c2s
+stream cannot be aligned against s2c.
 
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
@@ -87,9 +89,9 @@ The scene is a `vncdo` script:
     capture step-03-d.png
 
 `capture` forces a FramebufferUpdateRequest and blocks until the update
-arrives, so the c2s stream carries self-evident boundaries between scenes. The
-PNGs it writes are debug artifacts, never oracles: they came out of our own
-decoder.
+arrives, so each scene produces at least one update rather than being folded
+into a neighbour's. The PNGs it writes are debug artifacts, never oracles: they
+came out of our own decoder.
 
 ## Capture
 
@@ -112,8 +114,14 @@ Auth stripping is irrelevant here: golden capture targets no-auth servers.
 
 `tests/goldens/distill.py` feeds `s2c.bin` into a `VNCDoToolClient` subclass on
 a `NullTransport`, recording each FramebufferUpdate's raw bytes and the
-encoding actually used, and cutting between scenes on the c2s key events. It
-adds no wire parser and starts no reactor.
+encoding actually used. It adds no wire parser and starts no reactor.
+
+Steps are cut on FramebufferUpdate framing and labelled by the keysym patch
+decoded from each frame. The c2s key events cannot do the cutting: the archive
+stores the two directions as separate members with no interleaving, so a c2s
+offset locates nothing in s2c. The patch travels *in* the frame, which is the
+property that makes it the label — and it also absorbs a server that answers
+one key with two updates, since both frames carry the same patch.
 
 ## Fixture layout
 
