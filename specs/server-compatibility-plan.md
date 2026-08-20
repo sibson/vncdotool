@@ -256,8 +256,8 @@ spin them up when something relevant changes:
   VM, and a quiet repository consumes nothing.
 - Accepted trade-off: drift in the runner images or the Chocolatey
   package surfaces on the next change-triggered run rather than the night
-  it happens, and now blocks the PR that triggered it like any other
-  CI failure.
+  it happens, and blocks the PR that triggered it like any other CI
+  failure.
 - Each successful run can upload a wire capture as an artifact for
   offline debugging.
 
@@ -422,16 +422,9 @@ service-mode setup steps and move passwords into repository secrets.
 
 **Graduated:** this spike's workflow now lives at
 `.github/workflows/os-servers.yml` (renamed from `spike-os-servers.yml`),
-change-triggered and path-filtered per the policy above. Credentials come
-from `VNC_OS_SERVER_USERNAME`/`VNC_OS_SERVER_PASSWORD` repository secrets,
-falling back to the spike values when unset.
-
-**Promoted to blocking (2026-08-19):** macOS was 32/32 green across the
-job's full history with no failures anywhere. Windows had a run of
-failures, but all of them traced to the mid-`uv`-migration branches that
-hadn't yet picked up `uv run` prefixing (fixed by #384); every run since
-that landed is green, and history before the migration was clean too. Both
-jobs meet the stability bar, so `continue-on-error: true` is dropped.
+change-triggered, path-filtered, and PR-blocking per the policy above.
+Credentials come from `VNC_OS_SERVER_USERNAME`/`VNC_OS_SERVER_PASSWORD`
+repository secrets, falling back to the spike values when unset.
 
 ## Sequencing and effort
 
