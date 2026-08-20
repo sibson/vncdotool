@@ -1,6 +1,7 @@
 # Decoder Golden Fixtures — Design
 
-Status: draft. Builds the fixture half of
+Status: scaffold built; Raw at 32bpp against tigervnc. Later matrix values are
+TDD entry points, see Phasing. Builds the fixture half of
 [testing-framework.md](testing-framework.md) Phase 2 and the capture half of
 [decoder-architecture.md](decoder-architecture.md) Phase 0. Read the
 screen-change section of the testing framework first: it establishes that no
