@@ -42,6 +42,38 @@ $ProgramDataDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
 $PasswdScript = Join-Path $PSScriptRoot 'vnc_passwd_hex.py'
 
 
+# Installing UltraVNC as a service leaves this machine reachable for
+# unattended remote control with a password published in this repository, and
+# uninstalling the checkout does not undo it. So the machine has to prove it
+# is disposable first, rather than the operator having to remember. GitHub
+# sets all four of these on a hosted runner, and RUNNER_ENVIRONMENT is what
+# separates one from a self-hosted runner, which is somebody's real machine.
+#
+# The escape hatch is for developing this script against a VM. It is a phrase
+# rather than a 1 so that nothing sets it by accident, and no copy-pasteable
+# command in the docs contains it.
+function Assert-DisposableHost {
+    if ($env:VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST -eq 'yes-destroy-this-machine') {
+        Write-Host '--- VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST is set, proceeding on a non-runner host'
+        return
+    }
+    if ($env:CI -eq 'true' -and $env:GITHUB_ACTIONS -eq 'true' -and
+        $env:RUNNER_ENVIRONMENT -eq 'github-hosted' -and $env:GITHUB_RUN_ID) {
+        return
+    }
+    Write-Host ("CI={0} GITHUB_ACTIONS={1} RUNNER_ENVIRONMENT={2} GITHUB_RUN_ID={3}" -f `
+        $env:CI, $env:GITHUB_ACTIONS, $env:RUNNER_ENVIRONMENT, $env:GITHUB_RUN_ID)
+    throw @'
+refusing to run: this is not a GitHub-hosted runner.
+It would install UltraVNC as a service and leave this machine reachable for
+unattended remote control with a password that is published in this
+repository.
+
+To exercise it, use a virtual machine you can delete afterwards and set
+VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST as documented in README.md.
+'@
+}
+
 function Install-UltraVNC {
     Write-Host '--- installing UltraVNC'
     # The community feed intermittently answers with something that isn't
@@ -132,6 +164,7 @@ function Wait-ForPort {
 }
 
 
+Assert-DisposableHost
 Install-UltraVNC
 Write-UltraVncIni
 Start-UltraVncService

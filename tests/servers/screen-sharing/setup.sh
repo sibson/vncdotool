@@ -7,7 +7,8 @@
 # does and doesn't work on a hosted runner.
 #
 # This turns the machine into an unattended remote-control target with a
-# throwaway password, so run it only on a throwaway machine.
+# password published in this repository, so it refuses to run anywhere but a
+# GitHub-hosted runner -- see require_disposable_host below.
 #
 # Usage: sudo bash tests/servers/screen-sharing/setup.sh
 set -euo pipefail
@@ -20,6 +21,40 @@ PORT="${VNCDOTOOL_OS_SERVER_PORT:-5900}"
 WAIT_SECONDS="${VNCDOTOOL_OS_SERVER_WAIT:-60}"
 
 KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
+
+# Everything below this point is destructive to the machine it runs on, and
+# the damage is not undone by deleting a checkout: an account exists, remote
+# control is enabled, and the password for both is public. So the machine has
+# to prove it is disposable before anything happens, rather than the operator
+# having to remember not to run this. GitHub sets all four of these on a
+# hosted runner and RUNNER_ENVIRONMENT distinguishes one from a self-hosted
+# runner, which is somebody's real machine.
+#
+# The escape hatch exists for developing this script against a VM. It is
+# deliberately a phrase rather than a 1: nothing should set it by accident,
+# and no copy-pasteable command line in the docs contains it.
+require_disposable_host() {
+    if [ "${VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST:-}" = "yes-destroy-this-machine" ]; then
+        echo "--- VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST is set, proceeding on a non-runner host"
+        return
+    fi
+    if [ "${CI:-}" = "true" ] &&
+        [ "${GITHUB_ACTIONS:-}" = "true" ] &&
+        [ "${RUNNER_ENVIRONMENT:-}" = "github-hosted" ] &&
+        [ -n "${GITHUB_RUN_ID:-}" ]; then
+        return
+    fi
+    echo "refusing to run: this is not a GitHub-hosted runner." >&2
+    echo "CI=${CI:-<unset>} GITHUB_ACTIONS=${GITHUB_ACTIONS:-<unset>}" >&2
+    echo "RUNNER_ENVIRONMENT=${RUNNER_ENVIRONMENT:-<unset>} GITHUB_RUN_ID=${GITHUB_RUN_ID:-<unset>}" >&2
+    echo "It would create or repassword a local account, switch on Remote" >&2
+    echo "Management, and leave this machine reachable with a password that is" >&2
+    echo "published in this repository." >&2
+    echo "" >&2
+    echo "To exercise it, use a virtual machine you can delete afterwards and" >&2
+    echo "set VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST as documented in README.md." >&2
+    return 1
+}
 
 # Connecting as a user who is not the one holding the console costs a fast
 # user switch: a full first login for that account, whose UserAccountUpdater
@@ -86,6 +121,7 @@ wait_for_port() {
     return 1
 }
 
+require_disposable_host
 setup_user
 enable_remote_management
 keep_display_awake

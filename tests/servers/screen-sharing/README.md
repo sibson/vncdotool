@@ -12,9 +12,19 @@ sudo bash tests/servers/screen-sharing/setup.sh
 uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
 ```
 
-This turns the machine into an unattended remote-control target with a
-password checked into version control, so only run it on a throwaway
-machine.
+`setup.sh` refuses to run anywhere but a GitHub-hosted runner, so on a
+developer machine the first of those commands stops without doing anything.
+That is deliberate: it turns the machine it runs on into an unattended
+remote-control target reachable with a password published in this
+repository, and deleting the checkout afterwards leaves the account and the
+Remote Management setting behind.
+
+The check is four environment variables GitHub sets on a hosted runner
+(`CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted`,
+`GITHUB_RUN_ID`); `RUNNER_ENVIRONMENT` is what keeps it off a *self-hosted*
+runner, which is someone's real machine. To work on the script itself, use a
+virtual machine you are willing to delete and set
+`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
 
 ## What the setup has to get right
 
