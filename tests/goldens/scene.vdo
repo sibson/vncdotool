@@ -1,24 +1,16 @@
 key 0
-pause 0.3
-capture driver-01-0.png
+expect scenes/0.png 0
 key s
-pause 0.3
-capture driver-02-s.png
+expect scenes/s.png 0
 key d
-pause 0.3
-capture driver-03-d.png
+expect scenes/d.png 0
 key x
-pause 0.3
-capture driver-04-x.png
+expect scenes/x.png 0
 key g
-pause 0.3
-capture driver-05-g.png
+expect scenes/g.png 0
 key p
-pause 0.3
-capture driver-06-p.png
+expect scenes/p.png 0
 key c
-pause 0.3
-capture driver-07-c.png
+expect scenes/c.png 0
 key f
-pause 0.3
-capture driver-08-f.png
+expect scenes/f.png 0

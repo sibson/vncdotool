@@ -47,6 +47,17 @@ class TestSplit(unittest.TestCase):
         _, steps = distill.split(stream)
         self.assertEqual([step.index for step in steps], [1, 2])
 
+    def test_a_scene_split_across_updates_is_one_step(self) -> None:
+        # A server may answer one key with several updates, and the driver
+        # polls for them, so the patch rather than the framing says where a
+        # scene ends.
+        first, second = raw_update(screen("0")), raw_update(screen("s"))
+        stream = handshake_bytes() + first + raw_update(screen("0")) + second
+        _, steps = distill.split(stream)
+        self.assertEqual([step.key for step in steps], ["0", "s"])
+        self.assertEqual(steps[0].data, first + raw_update(screen("0")))
+        self.assertEqual(steps[1].data, second)
+
     def test_steps_are_labelled_by_the_patch(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("d"))
         _, steps = distill.split(stream)

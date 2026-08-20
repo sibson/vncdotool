@@ -50,22 +50,36 @@ class _Recorder(client.VNCDoToolClient):
         self.update_ends.append(self.consumed)
 
     def split(self, s2c: bytes) -> Tuple[bytes, List[Step]]:
-        screens: List[Image.Image] = []
+        screens: List[Optional[Image.Image]] = []
         for offset in range(len(s2c)):
             self.consumed = offset + 1
             self.dataReceived(s2c[offset:offset + 1])
             if len(self.update_ends) > len(screens):
-                assert self.screen is not None
-                screens.append(self.screen.copy())
+                screens.append(self.screen.copy() if self.screen else None)
 
         if self.init_end is None:
             raise ValueError("stream carries no ServerInit; it is not a whole recorded session")
 
         steps: List[Step] = []
         start = self.init_end
-        for index, (end, screen) in enumerate(zip(self.update_ends, screens), start=1):
-            steps.append(Step(index=index, key=scenes.read_patch(screen), data=s2c[start:end]))
+        # A driver polling for a scene draws empty updates in reply, and a
+        # scene can arrive across several. The patch says where one ends;
+        # every byte between still belongs to a step, so the stream a
+        # fixture replays is the stream that was recorded.
+        pending = b""
+        for end, screen in zip(self.update_ends, screens):
+            pending += s2c[start:end]
             start = end
+            if screen is None:
+                continue
+            key = scenes.read_patch(screen)
+            if steps and key == steps[-1].key:
+                steps[-1].data += pending
+            else:
+                steps.append(Step(index=len(steps) + 1, key=key, data=pending))
+            pending = b""
+        if pending and steps:
+            steps[-1].data += pending
         return s2c[: self.init_end], steps
 
 

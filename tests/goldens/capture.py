@@ -22,6 +22,9 @@ SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
 PROXY_PORT = 5999
 PROXY_STARTUP_DEADLINE = 10.0
 CAPTURE_DEADLINE = 60.0
+# Budget for the whole scene script. A scene that never arrives fails here
+# naming the image it waited for, rather than recording the one before it.
+SCENE_DEADLINE = 30.0
 
 
 def _start_vnclog(archive: Path) -> subprocess.Popen:
@@ -51,14 +54,14 @@ def main() -> int:
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory() as tmp:
-        work = Path(tmp)
-        archive = work / "capture.zip"
+        archive = Path(tmp) / "capture.zip"
         proxy = _start_vnclog(archive)
 
-        # scene.vdo's `capture` lines use relative paths, so they land here.
+        # scene.vdo waits on `expect scenes/<key>.png`, named relative to
+        # itself, so the driver runs from the directory holding both.
         subprocess.run(
-            [VNCDO, "-s", f"{HOST}::{PROXY_PORT}", str(SCENE_VDO)],
-            check=True, timeout=CAPTURE_DEADLINE, cwd=work,
+            [VNCDO, "--timeout", str(SCENE_DEADLINE), "-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
+            check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
         )
         proxy.wait(timeout=CAPTURE_DEADLINE)
 

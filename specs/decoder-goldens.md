@@ -87,21 +87,19 @@ this is the one service's geometry rather than a second service beside it.
 The scene is `tests/goldens/scene.vdo`, a committed `vncdo` script:
 
     key 0
-    pause 0.3
-    capture driver-01-0.png
+    expect scenes/0.png 0
     key s
-    pause 0.3
-    capture driver-02-s.png
+    expect scenes/s.png 0
 
-`capture` forces a FramebufferUpdateRequest and blocks until the update
-arrives, so each scene produces at least one update rather than being folded
-into a neighbour's. The PNGs it writes are debug artifacts, never oracles: they
-came out of our own decoder.
+`expect` polls with incremental FramebufferUpdateRequests until the screen
+matches, so the driver waits on the scene arriving rather than on a duration.
+The player repaints on its own X event loop, and a fixed delay would be both a
+guess at how long that takes and, when wrong, a fixture labelled by the
+previous image's patch. A scene that never arrives now fails the capture
+naming the image it waited for.
 
-The `pause` is not padding. The player repaints on its own X event loop, so a
-capture request issued immediately after the key can record the scene before
-it, and the fixture would then be labelled by a patch from the previous
-image.
+It compares histograms rather than pixels, which is enough to sequence on; the
+pixel-exact comparison is the golden test's job, against the same file.
 
 ## Capture
 
@@ -126,12 +124,15 @@ Auth stripping is irrelevant here: golden capture targets no-auth servers.
 a `NullTransport`, recording each FramebufferUpdate's raw bytes and the
 encoding actually used. It adds no wire parser and starts no reactor.
 
-Steps are cut on FramebufferUpdate framing and labelled by the keysym patch
-decoded from each frame. The c2s key events cannot do the cutting: the archive
-stores the two directions as separate members with no interleaving, so a c2s
-offset locates nothing in s2c. The patch travels *in* the frame, which is the
-property that makes it the label — and it also absorbs a server that answers
-one key with two updates, since both frames carry the same patch.
+Steps are cut where the keysym patch changes, not on FramebufferUpdate
+framing: a driver polling for a scene draws empty updates in reply, and a
+server may spread one scene over several. Every byte between two patches still
+belongs to the step, so what a fixture replays is what was recorded.
+
+The c2s key events cannot do the cutting: the archive stores the two
+directions as separate members with no interleaving, so a c2s offset locates
+nothing in s2c. The patch travels *in* the frame, which is what makes it the
+label.
 
 ## Fixture layout
 
