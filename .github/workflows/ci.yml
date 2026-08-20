@@ -75,6 +75,12 @@ jobs:
     name: Test server functional tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # packages: write so the job that discovers a missing fleet image is also
+    # the one that publishes it. A separate publishing workflow raced this
+    # job on the very push that changed tests/servers.
+    permissions:
+      contents: read
+      packages: write
     env:
       VNCDOTOOL_SCREENSHOT_DIR: screenshots
       FLEET_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/vncdotool-test
@@ -95,8 +101,12 @@ jobs:
 
       - name: Fetch or build the VNC test servers
         run: |
-          docker compose -f tests/servers/docker-compose.yml pull --quiet \
-            || docker compose -f tests/servers/docker-compose.yml build
+          if docker compose -f tests/servers/docker-compose.yml pull --quiet; then
+            echo "FLEET_IMAGES_BUILT=false" >> "$GITHUB_ENV"
+          else
+            docker compose -f tests/servers/docker-compose.yml build
+            echo "FLEET_IMAGES_BUILT=true" >> "$GITHUB_ENV"
+          fi
           docker compose -f tests/servers/docker-compose.yml up -d --wait
 
       - name: Wait for the test servers to serve their screens
@@ -145,6 +155,29 @@ jobs:
       - name: Stop the VNC test servers
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml down --timeout 2
+
+      # Publishing runs last and without `if: always()`, so a fleet only
+      # reaches the registry once it has passed the suite it exists to serve.
+      # The tag is the tests/servers tree hash, so an image can only ever be
+      # pulled by a checkout whose fleet sources are byte-identical to the
+      # ones it was built from.
+      - name: Log in to GHCR
+        if: env.FLEET_IMAGES_BUILT == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the fleet images
+        if: env.FLEET_IMAGES_BUILT == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          docker compose -f tests/servers/docker-compose.yml push
+          {
+            echo "Published \`$FLEET_TAG\`:"
+            echo
+            docker compose -f tests/servers/docker-compose.yml config --images | sort -u | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     name: Coverage

@@ -360,16 +360,18 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
-- **Image build tax — done.** `.github/workflows/fleet-images.yml`
-  publishes the fleet to GHCR on every `main` push that touches
-  `tests/servers`, tagged with that directory's git tree hash, and the
-  `servers` job pulls that tag instead of rebuilding. A miss falls back to
-  building, so a PR that edits the fleet — and any fork PR — behaves as it
-  did before the registry existed. The packages have to be public for the
+- **Image build tax — done.** The `servers` job in `ci.yml` pulls the fleet
+  from GHCR, tagged with the `tests/servers` tree hash, instead of
+  rebuilding it. A miss falls back to building, so a PR that edits the
+  fleet — and any fork PR — behaves as it did before the registry existed,
+  and a `main` push that built publishes what it built once the suite is
+  green. Publishing lives in that same job because a separate workflow
+  raced it: on the one push where the tag was new, both started together
+  and CI pulled a tag its publisher had not yet written, so the change that
+  introduced an image always paid for a build. The packages have to be public for the
   anonymous pull to work; a private package fails the pull and silently
   costs a build every run. A tag also maps to one set of apt packages
-  forever, so Debian updates only arrive when that tree changes or the
-  workflow is dispatched by hand.
+  forever, so Debian updates only arrive when that tree changes.
 
   Not `type=gha` layer caching: it was measured on this fleet and every
   configuration came out slower than the plain `docker compose --build`
@@ -383,7 +385,7 @@ Tier 1 follow-ups:
   libvncserver compile re-ran on every warm run. GHCR wins even against
   a cache that worked perfectly: pulling skips the build *and* the
   builder setup.
-- Pin base images by digest and fold this workflow into the main CI one.
+- Pin base images by digest.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
