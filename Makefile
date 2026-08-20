@@ -16,6 +16,7 @@ help:
 	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
 	@echo "goldens:	capture decoder golden fixtures from the fleet"
+	@echo "scenes:		regenerate the committed scene PNGs from tests/goldens/scenes.py"
 	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"

@@ -46,3 +46,7 @@ screenshots:
 .PHONY: goldens
 goldens:
 	uv run python -m tests.goldens.capture
+
+.PHONY: scenes
+scenes:
+	uv run python -m tests.goldens.scenes

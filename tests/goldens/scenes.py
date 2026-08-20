@@ -1,15 +1,18 @@
 """Screen content for golden capture, as pure functions of the prior screen.
 
-Committed to PNGs by make_scenes.py, played back by scene_app.py and used
-directly by distillation and the unit suite -- it must import nothing
-X-specific.
+Committed to PNGs by this module's own main(), played back by
+scene_player.py and used directly by distillation and the unit suite -- it
+must import nothing X-specific.
 """
 from __future__ import annotations
 
 import random
+from pathlib import Path
 from typing import Callable, Dict, Optional
 
 from PIL import Image, ImageDraw
+
+OUT_DIR = Path(__file__).resolve().parent / "scenes"
 
 SIZE = (256, 192)
 
@@ -139,3 +142,16 @@ def apply(key: str, screen: Image.Image) -> Image.Image:
     image = SCENES[key](screen)
     stamp_patch(image, key)
     return image
+
+
+def main() -> None:
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    screen = base()
+    for key in SCENES:
+        screen = apply(key, screen)
+        screen.save(OUT_DIR / f"{key}.png")
+    print(f"wrote {len(SCENES)} scenes to {OUT_DIR}")
+
+
+if __name__ == "__main__":
+    main()
