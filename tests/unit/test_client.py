@@ -1,5 +1,6 @@
 from unittest import TestCase, mock
 import io
+import struct
 import warnings
 
 from vncdotool import client
@@ -176,13 +177,31 @@ class TestVNCDoToolClient(TestCase):
     def test_updateRectangeFullScreen(self, frombytes):
         cli = self.client
         cli.image = mock.Mock()
+        cli.width, cli.height = 100, 200
         data = mock.Mock()
+        frombytes.return_value = client.Image.new("RGB", (100, 200), (10, 20, 30))
 
         cli.updateRectangle(0, 0, 100, 200, data)
 
         client.Image.frombytes.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert cli.screen == client.Image.frombytes.return_value
+        assert cli.screen.size == (100, 200)
+        assert cli.screen.getpixel((0, 0)) == (10, 20, 30)
+
+    def test_updateRectangle_first_rect_not_at_origin(self) -> None:
+        cli = self.client
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(struct.pack("!HH", 300, 200) + self.MSG_INIT[4:])
+
+        color = (200, 150, 50)
+        data = (bytes(color) + b"\x00") * (10 * 10)
+        cli.updateRectangle(50, 30, 10, 10, data)
+
+        assert cli.screen is not None
+        assert cli.screen.size == (300, 200)
+        assert cli.screen.getpixel((50, 30)) == color
+        assert cli.screen.getpixel((0, 0)) == (0, 0, 0)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeRegion(self, frombytes):
@@ -355,6 +374,8 @@ class TestImageMode(TestCase):
     def test_updateRectangle_does_not_warn(self, frombytes):
         cli = self.client
         cli.image = mock.Mock()
+        cli.width, cli.height = 100, 200
+        frombytes.return_value = client.Image.new("RGB", (100, 200))
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
