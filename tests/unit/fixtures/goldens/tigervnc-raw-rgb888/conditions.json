@@ -1,0 +1,21 @@
+{
+  "geometry": [
+    256,
+    192
+  ],
+  "image_digest": "[{\"ID\":\"sha256:854013856c527ca07bcd7380363c89505dfd58307e8e717174cffdcd6b654c79\",\"ContainerName\":\"vncdo-test-servers-tigervnc-golden-1\",\"Repository\":\"vncdotool-test-tigervnc\",\"Tag\":\"latest\",\"Platform\":\"linux/arm64\",\"Size\":445761815,\"Created\":\"2026-08-20T04:07:14.117650467Z\",\"LastTagTime\":\"2026-08-20T04:31:34.686348296Z\"}]",
+  "meta": "{\n  \"auth\": \"stripped\",\n  \"capture_timestamp\": \"2026-08-20T04:32:01Z\",\n  \"encodings_seen\": [\n    {\n      \"encoding\": -258,\n      \"name\": \"pseudo-qemu-extended-key-event\",\n      \"rectangles\": 1\n    },\n    {\n      \"encoding\": -224,\n      \"name\": \"pseudo-last-rect\",\n      \"rectangles\": 8\n    },\n    {\n      \"encoding\": 0,\n      \"name\": \"raw\",\n      \"rectangles\": 62\n    }\n  ],\n  \"geometry\": {\n    \"height\": 192,\n    \"width\": 256\n  },\n  \"negotiated_version\": [\n    3,\n    8\n  ],\n  \"protocol_version\": \"RFB 003.008\",\n  \"security_type\": 1,\n  \"security_types\": [\n    1\n  ],\n  \"server\": \"127.0.0.1::5936\",\n  \"vncdotool_version\": \"2.0.0.dev0\"\n}\n",
+  "scene_order": [
+    "0",
+    "s",
+    "d",
+    "x",
+    "g",
+    "p",
+    "c",
+    "f"
+  ],
+  "scene_script": "key 0\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-01-0.png\nkey s\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-02-s.png\nkey d\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-03-d.png\nkey x\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-04-x.png\nkey g\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-05-g.png\nkey p\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-06-p.png\nkey c\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-07-c.png\nkey f\npause 0.3\ncapture /var/folders/lx/zywb05j13p18yl18gc3gc_lr0000gn/T/tmpohxxdoz_/driver-08-f.png\n",
+  "server": "tigervnc-golden",
+  "tolerance": 0
+}

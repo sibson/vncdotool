@@ -42,3 +42,9 @@ test-api:
 screenshots:
 	VNCDOTOOL_SCREENSHOT_DIR=$(SCREENSHOT_DIR) uv run python tests/functional/capture_screenshots.py $(SCREENSHOT_GROUP)
 	@echo "open $(SCREENSHOT_DIR)/index.html"
+
+# Capture golden decoder fixtures from the running fleet. Manual, never CI:
+# CI replays the fixtures this writes. See specs/decoder-goldens.md.
+.PHONY: goldens
+goldens:
+	uv run python tests/goldens/capture.py
