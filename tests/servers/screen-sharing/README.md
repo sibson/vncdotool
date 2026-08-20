@@ -32,7 +32,7 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_serve
 
 * **Authentication is ARD/Diffie-Hellman (security type 30), with a
   username.** vncdotool's existing ARD support handles the whole round trip;
-  the server is reached as a local user created by `setup.sh`.
+  the server is reached as a local user the setup action creates.
 
 * **The legacy VNC password is dead.** `kickstart -setvnclegacy -vnclegacy
   yes -setvncpw` is accepted silently on current macOS, but the server still
@@ -47,7 +47,7 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_serve
 * **Screen Sharing is socket-activated on 5900.** Nothing has to be started
   beyond `kickstart -activate`; waiting for the port is enough.
 
-## Connect as the console owner, not a fresh user
+## The first login costs a minute
 
 Authenticating as a user who is not the one holding `/dev/console` makes
 Screen Sharing fast-user-switch to that account, and on a runner where it
@@ -64,17 +64,25 @@ exit`), so the next `vncdo` starts the whole thing again, and in run
 that landed the delay inside the test step instead of the readiness step:
 60s of nothing between the two.
 
-So `setup.sh` grants Remote Management to whoever already owns the console
-(`runner` on a GitHub runner) and resets that account's password rather than
-creating a user. Connecting then attaches to a session that is already
-logged in.
+Authenticating as the console owner (`runner`) would sidestep all of that by
+attaching to a session that is already logged in — but ARD checks a real
+account password, and that account's cannot be set. Both tools refuse,
+because `runner` holds a secure token:
 
-Resetting an existing account's password needs
-`VNCDOTOOL_OS_SERVER_RESET_PASSWORD=1`; without it the script stops. The
-password it would install is the one in this file's directory and in CI —
-public. Run this against your own login only on a machine you are willing to
-throw away, or point `VNCDOTOOL_OS_SERVER_USERNAME` at a name that does not
-exist yet and take the slow first login.
+* `sysadminctl -resetPasswordFor runner -newPassword ...` prints `Operation
+  is not permitted without secure token unlock`, changes nothing, and
+  **exits 0** (run
+  [32409282119](https://github.com/sibson/vncdotool/actions/runs/32409282119),
+  where the lie surfaced as nine `Authentication or authorization failure`
+  readiness attempts three minutes later).
+* `sudo dscl . -passwd /Users/runner ...` answers `DS Error: -14090
+  (eDSAuthFailed)` and asks for the old password (run
+  [32409927196](https://github.com/sibson/vncdotool/actions/runs/32409927196)).
+
+So the dedicated user stays, and the first login is a cost this job pays.
+The setup does a `dscl . -authonly` after setting the password: whatever
+tool sets it, a password that does not authenticate should fail the setup
+step in a second rather than a readiness budget later.
 
 ## Readiness
 
@@ -85,7 +93,7 @@ handshake, while the very next one succeeds in seconds. A test that opened
 the first connection failed with a timeout after two minutes, and the
 screenshot step immediately afterwards captured fine.
 
-So `setup.sh` waits for the port, and CI then runs
+So the setup action waits for the port, and CI then runs
 `tests/functional/wait_for_servers.py os`, which retries whole connections
 until one completes an RFB round trip. Only then do the tests run, and a
 timeout inside a test means something real.
@@ -93,8 +101,9 @@ timeout inside a test means something real.
 ## What it proves, and what it doesn't
 
 Connect, RFB handshake, ARD authentication and key events all work. The
-framebuffer, however, comes back fully black: a hosted runner has no
-rendered desktop session behind it. So `vncservers.py` marks this server
-`renders_desktop=False` and the test asserts the protocol round trip
-without asserting pixels. Attaching a display to the runner, so pixel
-assertions can be enabled here too, is a follow-up.
+framebuffer, however, comes back fully black. The reason looks like the
+first login above rather than a runner with no display: what gets
+photographed is a session still sitting at `loginwindow`. So
+`vncservers.py` marks this server `renders_desktop=False` and the test
+asserts the protocol round trip without asserting pixels; whether a
+completed login renders anything is the open question behind that.

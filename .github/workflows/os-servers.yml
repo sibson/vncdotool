@@ -45,12 +45,12 @@ env:
   # fallback. A repo secret overrides them without touching this file or
   # tests/functional/vncservers.py, which just reads the environment.
   #
-  # `runner` is the user already holding the macOS runner's console. Any
-  # other name makes Screen Sharing fast-user-switch into a first login for
-  # that account, which cost about a minute per run; see
-  # tests/servers/screen-sharing/README.md. Windows ignores the username --
-  # UltraVNC authenticates the password alone.
-  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'runner' }}
+  # A dedicated user, not `runner`: authenticating as the console owner would
+  # avoid a fast user switch and the minute it costs, but that account holds a
+  # secure token and neither sysadminctl nor dscl will set its password
+  # without the old one. See tests/servers/screen-sharing/README.md. Windows
+  # ignores the username -- UltraVNC authenticates the password alone.
+  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
   VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
