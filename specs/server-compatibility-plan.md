@@ -256,11 +256,10 @@ spin them up when something relevant changes:
   VM, and a quiet repository consumes nothing.
 - Accepted trade-off: drift in the runner images or the Chocolatey
   package surfaces on the next change-triggered run rather than the night
-  it happens. Because these jobs are report-only (never PR-blocking), a
-  drift failure costs a tracked issue, not a broken merge queue.
+  it happens, and blocks the PR that triggered it like any other CI
+  failure.
 - Each successful run can upload a wire capture as an artifact for
-  offline debugging; jobs are promoted to blocking only once they prove
-  stable.
+  offline debugging.
 
 ### Tier 3 — Capture-only servers (community-sourced evidence)
 
@@ -423,10 +422,9 @@ service-mode setup steps and move passwords into repository secrets.
 
 **Graduated:** this spike's workflow now lives at
 `.github/workflows/os-servers.yml` (renamed from `spike-os-servers.yml`),
-change-triggered and path-filtered per the policy above, report-only via
-`continue-on-error: true`. Credentials come from `VNC_OS_SERVER_USERNAME`/
-`VNC_OS_SERVER_PASSWORD` repository secrets, falling back to the spike
-values when unset.
+change-triggered, path-filtered, and PR-blocking per the policy above.
+Credentials come from `VNC_OS_SERVER_USERNAME`/`VNC_OS_SERVER_PASSWORD`
+repository secrets, falling back to the spike values when unset.
 
 ## Sequencing and effort
 
