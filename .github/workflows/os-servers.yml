@@ -41,7 +41,13 @@ env:
   # Spike credentials for a throwaway runner, deliberately visible as the
   # fallback. A repo secret overrides them without touching this file or
   # tests/functional/vncservers.py, which just reads the environment.
-  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
+  #
+  # `runner` is the user already holding the macOS runner's console. Any
+  # other name makes Screen Sharing fast-user-switch into a first login for
+  # that account, which cost about a minute per run; see
+  # tests/servers/screen-sharing/README.md. Windows ignores the username --
+  # UltraVNC authenticates the password alone.
+  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'runner' }}
   VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:

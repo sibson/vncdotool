@@ -35,6 +35,28 @@ machine.
 * **Screen Sharing is socket-activated on 5900.** Nothing has to be started
   beyond `kickstart -activate`; waiting for the port is enough.
 
+## Connect as the console owner, not a fresh user
+
+Authenticating as a user who is not the one holding `/dev/console` makes
+Screen Sharing fast-user-switch to that account, and on a runner where it
+has never logged in before that is a full first login. Two runs measured
+the same shape: `UserAccountUpdater` alone ran 28s and 33s, Setup Assistant
+("MiniBuddy") launched after it, and `loginwindow` never reached
+`LoginComplete` — the session was still churning a minute later, which is
+also why the framebuffer came back black.
+
+The cost is not confined to the connection that triggers it. Screen Sharing
+exits a few seconds after its last viewer leaves (`No viewers so time to
+exit`), so the next `vncdo` starts the whole thing again, and in run
+[32386264568](https://github.com/sibson/vncdotool/actions/runs/32386264568)
+that landed the delay inside the test step instead of the readiness step:
+60s of nothing between the two.
+
+So `setup.sh` grants Remote Management to whoever already owns the console
+(`runner` on a GitHub runner) and resets that account's password rather than
+creating a user. Connecting then attaches to a session that is already
+logged in.
+
 ## Readiness
 
 An open RFB port is not readiness here, and neither is a per-request

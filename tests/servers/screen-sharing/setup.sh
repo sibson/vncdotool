@@ -1,6 +1,6 @@
 #!/bin/bash
 # Enable Apple Screen Sharing / Remote Management on this macOS machine and
-# create the local user vncdotool authenticates as.
+# set up the local user vncdotool authenticates as.
 #
 # Used to give vncdotool's functional tests (tests/functional/test_os_servers.py)
 # a live macOS server on 127.0.0.1; see README.md in this directory for what
@@ -21,12 +21,20 @@ WAIT_SECONDS="${VNCDOTOOL_OS_SERVER_WAIT:-60}"
 
 KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 
-create_user() {
-    echo "--- creating local user $USERNAME"
+# Connecting as a user who is not the one holding the console costs a fast
+# user switch: a full first login for that account, whose UserAccountUpdater
+# and Setup Assistant phases ran for around a minute on a hosted runner and
+# left the session sitting at loginwindow -- which is also why the
+# framebuffer came back black. Reusing the console owner attaches to the
+# session that is already logged in, so no login happens at all; it needs a
+# password we know, hence the reset.
+setup_user() {
     if id "$USERNAME" >/dev/null 2>&1; then
-        echo "user $USERNAME already exists"
+        echo "--- setting the password of the existing user $USERNAME"
+        sudo sysadminctl -resetPasswordFor "$USERNAME" -newPassword "$PASSWORD"
         return
     fi
+    echo "--- creating local user $USERNAME"
     sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
 }
 
@@ -64,7 +72,7 @@ wait_for_port() {
     return 1
 }
 
-create_user
+setup_user
 enable_remote_management
 keep_display_awake
 wait_for_port

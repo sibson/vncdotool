@@ -431,6 +431,13 @@ description, round trip and screenshot gallery as Tier 1 via
   desktop to serve. So macOS jobs validate protocol, auth, and input
   events, but not pixels — visual assertions need a follow-up spike into
   whether a display can be attached, or must be scoped out for macOS.
+  (Later finding, from the job's own `log show` artifacts: the black
+  screen was the *dedicated user* rather than the runner. Connecting as
+  someone other than the console owner fast-user-switches into that
+  account's first login, which sat at Setup Assistant for the rest of
+  the job. The console owner's session is rendered, so authenticating as
+  it may make pixel assertions possible here after all — see
+  tests/servers/screen-sharing/README.md.)
 
 *Graduation into Phase 0 proper:* both jobs graduate under the
 change-triggered policy above — Windows as a full type+capture check with
