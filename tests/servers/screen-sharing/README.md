@@ -57,6 +57,13 @@ So `setup.sh` grants Remote Management to whoever already owns the console
 creating a user. Connecting then attaches to a session that is already
 logged in.
 
+Resetting an existing account's password needs
+`VNCDOTOOL_OS_SERVER_RESET_PASSWORD=1`; without it the script stops. The
+password it would install is the one in this file's directory and in CI —
+public. Run this against your own login only on a machine you are willing to
+throw away, or point `VNCDOTOOL_OS_SERVER_USERNAME` at a name that does not
+exist yet and take the slow first login.
+
 ## Readiness
 
 An open RFB port is not readiness here, and neither is a per-request

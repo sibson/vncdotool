@@ -28,9 +28,23 @@ KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Re
 # framebuffer came back black. Reusing the console owner attaches to the
 # session that is already logged in, so no login happens at all; it needs a
 # password we know, hence the reset.
+#
+# Resetting an existing account's password is destructive and sets it to a
+# password published in this repository, so it happens only when asked for
+# by name: an unset VNCDOTOOL_OS_SERVER_RESET_PASSWORD stops the script
+# instead, which is what a developer running this against their own login
+# gets.
 setup_user() {
     if id "$USERNAME" >/dev/null 2>&1; then
-        echo "--- setting the password of the existing user $USERNAME"
+        if [ "${VNCDOTOOL_OS_SERVER_RESET_PASSWORD:-}" != "1" ]; then
+            echo "user $USERNAME already exists." >&2
+            echo "Set VNCDOTOOL_OS_SERVER_RESET_PASSWORD=1 to reset its password to" >&2
+            echo "\$VNCDOTOOL_OS_SERVER_PASSWORD, or point" >&2
+            echo "VNCDOTOOL_OS_SERVER_USERNAME at an account that does not exist yet." >&2
+            echo "Only do the former on a throwaway machine: the password is public." >&2
+            return 1
+        fi
+        echo "--- resetting the password of the existing user $USERNAME"
         sudo sysadminctl -resetPasswordFor "$USERNAME" -newPassword "$PASSWORD"
         return
     fi

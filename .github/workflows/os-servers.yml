@@ -48,6 +48,10 @@ env:
   # tests/servers/screen-sharing/README.md. Windows ignores the username --
   # UltraVNC authenticates the password alone.
   VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'runner' }}
+  # Consent to setup.sh resetting that existing account's password, which it
+  # refuses to do unasked -- a developer running it locally would otherwise
+  # hand their own login a password published in this repository.
+  VNCDOTOOL_OS_SERVER_RESET_PASSWORD: '1'
   VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
