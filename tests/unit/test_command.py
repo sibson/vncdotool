@@ -1,3 +1,5 @@
+import io
+import logging
 import os
 import socket
 import tempfile
@@ -336,6 +338,10 @@ class TestVNCDoCLIFactory(unittest.TestCase):
 
     def setUp(self) -> None:
         self.factory = command.VNCDoCLIFactory()
+        self.stderr = io.StringIO()
+        patcher = mock.patch('sys.stderr', self.stderr)
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_auth_failure(self, reactor) -> None:
         self.factory.clientConnectionFailed(
@@ -382,6 +388,18 @@ class TestVNCDoCLIFactory(unittest.TestCase):
         self.factory.clientConnectionLost(None, Failure(ConnectionDone()))
 
         assert reactor.exit_status == command.ExitStatus.SUCCESS
+
+    def test_failure_is_reported_as_a_cli_error(self, reactor) -> None:
+        self.factory.clientConnectionFailed(None, Failure(ConnectionRefusedError()))
+
+        self.assertEqual(self.stderr.getvalue().strip(), str(ConnectionRefusedError()))
+
+    def test_failure_traceback_is_a_verbose_diagnostic(self, reactor) -> None:
+        with self.assertLogs(command.log, logging.DEBUG) as logged:
+            self.factory.error(Failure(IOError('cannot write capture')))
+
+        self.assertIn('Traceback', '\n'.join(logged.output))
+        self.assertEqual([r.levelno for r in logged.records], [logging.DEBUG])
 
     def test_first_outcome_wins(self, reactor) -> None:
         self.factory.error(Failure(AuthenticationError('denied')))
