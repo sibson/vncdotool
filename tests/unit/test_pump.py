@@ -232,9 +232,6 @@ class TestRectBufferValidation(TestCase):
         cli.transport.loseConnection.assert_called_once()
 
     def test_a_zero_dimension_rectangle_is_not_an_error(self) -> None:
-        """It carries no payload, and the decoders this replaced passed it
-        through rather than failing the session.
-        """
         cli = make_pump_client()
         cli.vncProtocolError = mock.Mock()
 
