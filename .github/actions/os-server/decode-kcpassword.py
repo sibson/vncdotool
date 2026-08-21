@@ -49,7 +49,11 @@ def main() -> int:
     # Handing the decoded value to the caller is the entire job, and stdout is
     # the only channel a `sudo` child has back to it. It goes to a pipe, not a
     # log: the caller registers it as a mask before anything can echo it.
-    sys.stdout.write(secret)  # codeql[py/clear-text-logging-sensitive-data]
+    # CodeQL reports this as py/clear-text-logging-sensitive-data, correctly --
+    # a password does cross a process boundary here. Inline suppression
+    # comments do nothing for code scanning, so that alert is dismissed
+    # against this line rather than silenced from here.
+    sys.stdout.write(secret)
     return 0
 
 
