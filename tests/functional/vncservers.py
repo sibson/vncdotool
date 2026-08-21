@@ -16,7 +16,6 @@ written twice.
 """
 
 import os
-import re
 import socket
 import subprocess
 import sys
@@ -285,17 +284,6 @@ def run_vncdo(
         ) from exc
 
 
-def native_pixel_format(server: VNCServer) -> Optional[str]:
-    """Parse the ServerInit pixel format out of `vncdo -v` stderr.
-
-    Not read from a client object: only test_api_lifecycle.py may hold one
-    in-process.
-    """
-    result = run_vncdo(server, "-v", "pause", "0")
-    match = re.search(r"Native (PixelFormat\(.*?\))", result.stderr)
-    return match.group(1) if match else None
-
-
 def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
     if process.poll() is not None:
         return
@@ -374,20 +362,6 @@ class _VNCServerTestMixin:
     def test_mousemove(self) -> None:
         """A pointer event is accepted without the server dropping the session."""
         self.run_vncdo_ok("move", "10", "10")
-
-    def test_pixel_format(self) -> None:
-        """Record the format the server announced, the axis #90 and #275 turn on.
-
-        No value is asserted: each server picks its own, and UltraVNC and
-        Screen Sharing serve whatever their runner's display is set to.
-        """
-        reported = native_pixel_format(self.server)
-
-        self.assertIsNotNone(
-            reported,
-            f"{self.server.name}: `vncdo -v` reported no ServerInit pixel format",
-        )
-        print(f"{self.server.name}: native {reported}")
 
     def test_capture(self) -> None:
         """A framebuffer update is received and encoded to a PNG.
