@@ -400,8 +400,6 @@ class TestEncodings(unittest.TestCase):
         assert_pixels(self, self.cli.screen, expected)
 
     def test_hextile_uncoloured_subrects_use_the_tile_foreground(self) -> None:
-        # w and h are stored minus one on the wire -- a subrect at (1, 2)
-        # sized 3x2 packs as w-1=2, h-1=1.
         width = height = 8
         handshake(self.cli, width, height)
 
@@ -502,6 +500,54 @@ class TestEncodings(unittest.TestCase):
                 if x == 16 + 3 and y == 3:
                     expected[y * width + x] = fg
         self.assertIsNotNone(self.cli.screen)
+        assert_pixels(self, self.cli.screen, expected)
+
+    def test_hextile_walks_tiles_row_by_row(self) -> None:
+        """Three tiles across and two down: a two-by-two grid cannot tell a
+        row-major walk from a column-major one, since both visit the same
+        four positions in the same order.
+        """
+        width, height = 48, 32
+        handshake(self.cli, width, height)
+
+        colours = [(10, 0, 0), (0, 20, 0), (0, 0, 30), (40, 40, 0), (0, 50, 50), (60, 0, 60)]
+        tiles = [
+            hextile_tile(HextileEncoding.BACKGROUND_SPECIFIED, background=_pixel(*colour))
+            for colour in colours
+        ]
+        self.cli.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
+
+        expected = [
+            colours[(y // 16) * 3 + (x // 16)]
+            for y in range(height)
+            for x in range(width)
+        ]
+        assert_pixels(self, self.cli.screen, expected)
+
+    def test_hextile_colours_carry_across_a_raw_tile(self) -> None:
+        """A raw tile sets no colours, so the tile after it inherits from the
+        tile before it rather than from nothing.
+        """
+        width, height = 48, 16
+        handshake(self.cli, width, height)
+
+        background, foreground = (0, 0, 90), (200, 0, 0)
+        raw_pixels = b"".join(_pixel(1, 2, 3) for _ in range(16 * 16))
+        tiles = [
+            hextile_tile(
+                HextileEncoding.BACKGROUND_SPECIFIED | HextileEncoding.FOREGROUND_SPECIFIED,
+                background=_pixel(*background), foreground=_pixel(*foreground),
+            ),
+            hextile_tile(HextileEncoding.RAW) + raw_pixels,
+            hextile_tile(HextileEncoding.ANY_SUBRECTS, count=1) + hextile_subrect(0, 0, 16, 16),
+        ]
+        self.cli.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
+
+        expected = [
+            (1, 2, 3) if 16 <= x < 32 else (foreground if x >= 32 else background)
+            for y in range(height)
+            for x in range(width)
+        ]
         assert_pixels(self, self.cli.screen, expected)
 
     def test_hextile_rectangle_not_a_multiple_of_16_has_partial_edge_tiles(self) -> None:
