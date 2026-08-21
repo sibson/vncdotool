@@ -37,8 +37,8 @@ branch); no phase branch carries it, so no PR diff contains it.
 
 | Phase | Branch | PR | Code | CI green | Reviewed |
 |---|---|---|---|---|---|
-| 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | watching | panel running |
-| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | — | not started | — | — |
+| 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | green | reviewed, 4 findings fixed |
+| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | watching | panel running |
 | 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | — | not started | — | — |
 | 4 Hextile | claude/decoder-p4-hextile | — | not started | — | — |
 
@@ -65,3 +65,20 @@ sweep.
 
 - (setup) branch scaffolding written, check-ins armed.
 - Phase 1 built, PR #399 opened off main. Review panel spawned.
+- Phase 1 review found four real defects, all fixed: fixtures record no
+  SetPixelFormat so a non-native capture replayed at the wrong pixel width;
+  the tolerance was read off the native format; three ways the cross-format
+  check passed while asserting nothing; and an unreadable requested format
+  escaped setImageMode as an exception, hanging api.connect instead of
+  failing it.
+- The second golden capture is rgbx8888, not rgb565: a reduced format cannot
+  be captured at all until the scene key patch survives quantization, which
+  invalidates the committed fixture and needs the fleet to re-capture.
+- CI runs the Docker fleet (`tests/functional`) and both OS servers, so a
+  functional test is how this run proves anything against a real server --
+  tests/functional/test_pixel_format.py does it for R3.
+- Phase 2 built, PR #402 opened on top of #399. **N1 is not met**: Raw is
+  3.8ms on main against 4.7ms through the pump (`make bench`, median of 60).
+  Two hypotheses profiled and reverted; what remains is per-rectangle
+  generator and buffer cost. Measured and reported rather than papered over
+  or fixed by inventing API. The user's call in the morning.
