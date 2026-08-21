@@ -10,6 +10,7 @@ htmlcov/
 combined/
 .tox
 docs/_build
+docs/rfbproto/
 .venv/
 uv.lock
 .vncdo/

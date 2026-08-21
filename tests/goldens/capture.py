@@ -50,7 +50,7 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="tigervnc-raw-rgb888", help="fixture directory name")
+    parser.add_argument("--name", default="tigervnc-raw-bgrx8888", help="fixture directory name")
     args = parser.parse_args()
 
     with tempfile.TemporaryDirectory() as tmp:

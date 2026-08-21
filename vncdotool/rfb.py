@@ -986,6 +986,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # ------------------------------------------------------
 
     def setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        log.msg(f"Requesting {pixel_format}")
         pixformat = pixel_format.to_bytes()
         self.transport.write(pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixformat))
         self.pixel_format = pixel_format
