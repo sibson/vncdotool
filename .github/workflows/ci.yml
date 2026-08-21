@@ -74,6 +74,50 @@ jobs:
       - name: Run flake8
         run: uv run flake8 --count --statistics vncdotool tests
 
+  mypy:
+    name: Type check (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run mypy
+        run: |
+          set +e
+          uv run mypy vncdotool | tee mypy.log
+          echo "MYPY_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Summarize mypy results
+        if: always()
+        run: |
+          {
+            echo "## mypy (advisory, does not fail CI)"
+            echo
+            if [ "$MYPY_EXIT_CODE" = "0" ]; then
+              echo "No errors."
+            else
+              tail -n 1 mypy.log
+            fi
+            echo
+            echo "<details><summary>Full output</summary>"
+            echo
+            echo '```'
+            cat mypy.log
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   servers:
     name: Test server functional tests
     runs-on: ubuntu-latest
