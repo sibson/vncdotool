@@ -136,9 +136,7 @@ SCREEN_SHARING = VNCServer(
 QEMU_KVM = VNCServer(
     name="qemu-kvm",
     port=OS_SERVER_PORT,
-    # QEMU's -vnc has no authentication unless started with password=on.
-    # Firmware's default VGA mode, not a geometry we ask for -- see
-    # tests/servers/qemu-kvm/README.md.
+    # Firmware's default VGA mode, not a geometry we ask for.
     size=None,
     timeout=OS_SERVER_TIMEOUT,
     how_to_start="set the server up first with tests/servers/qemu-kvm/setup.sh",
@@ -149,18 +147,15 @@ OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "darwin": [SCREEN_SHARING],
 }
 
-# Windows and macOS are safe to key off sys.platform alone: the OS-server
-# workflow is the only CI job that ever runs on those runner OSes. Linux
-# isn't -- ubuntu-latest also hosts ci.yml's unrelated Tier 1 Docker-fleet
-# job, which never runs tests/servers/qemu-kvm/setup.sh, so registering
-# QEMU_KVM for every Linux process would fail that job instead of skipping
-# it. setup.sh sets this to opt in only where it actually started the server.
-QEMU_KVM_OPT_IN = "VNCDOTOOL_QEMU_KVM_OS_SERVER"
+# Unlike win32/darwin, ubuntu-latest also runs ci.yml's Docker-fleet job,
+# which never starts QEMU -- so Linux needs an explicit opt-in rather than
+# platform alone. Set by tests/servers/qemu-kvm/setup.sh.
+VNCDOTOOL_OS_SERVER_LINUX = "VNCDOTOOL_OS_SERVER_LINUX"
 
 
 def os_servers(platform: str = sys.platform) -> List[VNCServer]:
     servers = list(OS_SERVERS_BY_PLATFORM.get(platform, []))
-    if platform == "linux" and os.environ.get(QEMU_KVM_OPT_IN):
+    if platform == "linux" and os.environ.get(VNCDOTOOL_OS_SERVER_LINUX):
         servers.append(QEMU_KVM)
     return servers
 

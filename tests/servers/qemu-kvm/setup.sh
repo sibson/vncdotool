@@ -119,11 +119,11 @@ enable_test_registration() {
     # this is set -- ubuntu-latest also runs ci.yml's unrelated Tier 1
     # Docker-fleet job, which never runs this script, and platform alone
     # can't tell the two jobs apart.
-    export VNCDOTOOL_QEMU_KVM_OS_SERVER=1
+    export VNCDOTOOL_OS_SERVER_LINUX=1
     if [ -n "${GITHUB_ENV:-}" ]; then
-        echo "VNCDOTOOL_QEMU_KVM_OS_SERVER=1" >>"$GITHUB_ENV"
+        echo "VNCDOTOOL_OS_SERVER_LINUX=1" >>"$GITHUB_ENV"
     else
-        echo "--- export VNCDOTOOL_QEMU_KVM_OS_SERVER=1 in your shell before" >&2
+        echo "--- export VNCDOTOOL_OS_SERVER_LINUX=1 in your shell before" >&2
         echo "running the test suite outside of this script's own process." >&2
     fi
 }

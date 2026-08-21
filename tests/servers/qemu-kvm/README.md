@@ -52,7 +52,7 @@ hosted runner is the only place we get the accelerated path for free; see
   `ubuntu-latest` also runs ci.yml's unrelated Tier 1 Docker-fleet job,
   which never runs this script, so registering `QEMU_KVM` for every Linux
   process would fail that job instead of skipping it (#408 found this the
-  hard way). `setup.sh` sets `VNCDOTOOL_QEMU_KVM_OS_SERVER=1` -- via
+  hard way). `setup.sh` sets `VNCDOTOOL_OS_SERVER_LINUX=1` -- via
   `$GITHUB_ENV` in CI, or for the caller's own shell locally -- and
   `os_servers()` only adds `QEMU_KVM` on Linux when that's set.
 
