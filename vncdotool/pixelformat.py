@@ -8,6 +8,8 @@ https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst (ZRLE Encoding)
 """
 from __future__ import annotations
 
+import functools
+
 from . import rfb
 
 _32BPP_MODES = {"RGBX", "BGRX", "XRGB", "XBGR"}
@@ -45,6 +47,7 @@ def _byte_positions(
     return positions
 
 
+@functools.lru_cache(maxsize=None)
 def raw_mode(pixel_format: rfb.PixelFormat) -> str:
     """The Pillow raw mode that reads bytes in this layout, ignoring depth."""
     if not pixel_format.truecolor:

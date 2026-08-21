@@ -41,22 +41,22 @@ class TestRectBuffer(unittest.TestCase):
     def test_backing_is_reused(self):
         backing = bytearray(4)
         buf = RectBuffer(2, 2, 1, backing=backing)
-        buf.blit(0, 0, 2, 2, b"\x01\x02\x03\x04")
-        # written through the caller's array, not a copy of it
-        self.assertEqual(backing, b"\x01\x02\x03\x04")
+        # Partial, because a blit covering the whole rectangle is handed
+        # straight to the client and never reaches the array.
+        buf.blit(0, 0, 1, 2, b"\x01\x02")
+        self.assertEqual(backing, b"\x01\x00\x02\x00")
 
     def test_oversized_backing_leftover_bytes_excluded(self):
         backing = bytearray(16)
-        big = RectBuffer(4, 4, 1, backing=backing)
-        big.blit(0, 0, 4, 4, b"\xaa" * 16)
+        RectBuffer(4, 4, 1, backing=backing).fill(0, 0, 4, 4, b"\xaa")
 
         small = RectBuffer(2, 2, 1, backing=backing)
-        small.blit(0, 0, 2, 2, b"\x01\x02\x03\x04")
+        small.fill(0, 0, 2, 2, b"\x01")
 
-        self.assertEqual(small.tobytes(), b"\x01\x02\x03\x04")
+        self.assertEqual(small.tobytes(), b"\x01" * 4)
         # the previous rectangle's tail is still sitting in the backing array,
         # past what this smaller rectangle claims -- tobytes() must not leak it.
-        self.assertEqual(bytes(backing), b"\x01\x02\x03\x04" + b"\xaa" * 12)
+        self.assertEqual(bytes(backing), b"\x01" * 4 + b"\xaa" * 12)
 
     def test_backing_too_small_raises_value_error(self):
         with self.assertRaises(ValueError):
