@@ -39,8 +39,8 @@ branch); no phase branch carries it, so no PR diff contains it.
 |---|---|---|---|---|---|
 | 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | green | reviewed, 4 findings fixed |
 | 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | watching | reviewed, 6 findings fixed |
-| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | #405 | done | watching | tests reviewed, 3 nits open |
-| 4 Hextile | claude/decoder-p4-hextile | #406 | done | watching | panel running |
+| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | #405 | done | watching | reviewed, 4 findings fixed |
+| 4 Hextile | claude/decoder-p4-hextile | #406 | done | watching | reviewed, 3 findings fixed |
 
 ## Already landed before this run
 
@@ -97,6 +97,18 @@ sweep.
 - N2 is half measured: tests/functional/test_bandwidth.py measures Hextile's
   bytes against Raw's in CI through vnclog. The render-time half needs a
   captured Hextile fixture, so it needs the fleet.
+
+- Phase 3's review found copyRectangle pasting black for a source running off
+  the framebuffer (Pillow zero-fills a crop that leaves the image), clipping
+  instead of growing the canvas, and never calling drawCursor. All three were
+  unreachable while it was a stub.
+- Phase 4's review fuzzed the decoder against an independent encoder and found
+  two: colours carried across a raw tile, which rfbproto forbids -- and the
+  test committed with it asserted that as correct -- and a tile declaring zero
+  subrectangles was refused for having no foreground.
+- The first fleet run on #406 failed on my own bandwidth test: `key` and
+  `pause` never issue a FramebufferUpdateRequest, so the capture held only the
+  handshake and the comparison was between two constants.
 
 ## Open questions for the morning
 
