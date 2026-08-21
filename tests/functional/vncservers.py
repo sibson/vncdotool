@@ -5,9 +5,9 @@ Two families of server are described here and driven by the same code:
 * ``docker`` -- the Linux servers built and run by
   ``tests/servers/docker-compose.yml`` (see ``make servers-up``);
 * ``os`` -- an OS-hosted server on the machine running the tests, i.e.
-  UltraVNC on Windows or Apple Screen Sharing on macOS, set up by the
-  scripts under ``tests/servers/ultravnc`` and
-  ``tests/servers/screen-sharing``.
+  UltraVNC on Windows, Apple Screen Sharing on macOS, or a raw QEMU on
+  Linux, set up by the scripts under ``tests/servers/ultravnc``,
+  ``tests/servers/screen-sharing``, and ``tests/servers/qemu-kvm``.
 
 The two differ only in how the server is started and in what a capture is
 allowed to contain, so everything else -- connecting, capturing, the
@@ -133,9 +133,21 @@ SCREEN_SHARING = VNCServer(
     how_to_start="the OS server setup runs in CI only, see tests/servers/screen-sharing/README.md",
 )
 
+QEMU_KVM = VNCServer(
+    name="qemu-kvm",
+    port=OS_SERVER_PORT,
+    # QEMU's -vnc has no authentication unless started with password=on.
+    # Firmware's default VGA mode, not a geometry we ask for -- see
+    # tests/servers/qemu-kvm/README.md.
+    size=None,
+    timeout=OS_SERVER_TIMEOUT,
+    how_to_start="set the server up first with tests/servers/qemu-kvm/setup.sh",
+)
+
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "win32": [ULTRAVNC],
     "darwin": [SCREEN_SHARING],
+    "linux": [QEMU_KVM],
 }
 
 
