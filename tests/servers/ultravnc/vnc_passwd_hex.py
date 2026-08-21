@@ -2,7 +2,7 @@
 """Compute the ``passwd=`` value ultravnc.ini needs for a given password.
 
 Run as a script it writes that hex to the file named as its second
-argument, for setup.ps1 to read back into the ini.
+argument, for the os-server action to read back into the ini.
 
 UltraVNC refuses every incoming connection until a password is set, and it
 stores that password in ultravnc.ini using the classic VNC password-*file*

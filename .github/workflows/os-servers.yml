@@ -8,11 +8,7 @@ name: OS-hosted VNC servers
 # change-triggered (path-filtered, no schedule).
 #
 # What each server needs, and what it does and doesn't prove, is documented
-# next to the setup scripts in tests/servers/ultravnc/README.md and
-# tests/servers/screen-sharing/README.md. This file only wires those scripts
-# and tests/functional/test_os_servers.py together: the two OSes differ by
-# which script sets the server up and which shell runs it, so they are one
-# matrix job rather than two near-identical ones.
+# in tests/servers/ultravnc/README.md and tests/servers/screen-sharing/README.md.
 
 on:
   push:
@@ -24,6 +20,7 @@ on:
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   pull_request:
     paths:
       - 'vncdotool/**'
@@ -31,6 +28,7 @@ on:
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   workflow_dispatch:
 
 permissions:
@@ -38,11 +36,6 @@ permissions:
 
 env:
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
-  # Spike credentials for a throwaway runner, deliberately visible as the
-  # fallback. A repo secret overrides them without touching this file or
-  # tests/functional/vncservers.py, which just reads the environment.
-  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
-  VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
   os-server:
@@ -58,14 +51,14 @@ jobs:
           - name: Windows - UltraVNC
             runner: windows-latest
             shell: pwsh
+            os: windows
             server: ultravnc
-            setup: ./tests/servers/ultravnc/setup.ps1
             diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
           - name: macOS - Screen Sharing
             runner: macos-latest
             shell: bash
+            os: macos
             server: screen-sharing
-            setup: bash tests/servers/screen-sharing/setup.sh
             diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
     defaults:
       run:
@@ -82,8 +75,13 @@ jobs:
       - name: Install vncdotool
         run: uv sync
 
+      # A spike credential for a throwaway runner, deliberately visible as the
+      # fallback; a repo secret replaces it.
       - name: Set up the VNC server
-        run: ${{ matrix.setup }}
+        uses: ./.github/actions/os-server
+        with:
+          os: ${{ matrix.os }}
+          password: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
       # An open port is not readiness: the first connection to macOS Screen
       # Sharing is what starts it, and that connection can stall for good

@@ -1,0 +1,49 @@
+name: Set up an OS-hosted VNC server
+description: >
+  Turn the runner into a live VNC server for tests/functional/test_os_servers.py:
+  UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
+
+inputs:
+  os:
+    description: macos or windows.
+    required: true
+  port:
+    description: Port the server serves on.
+    required: false
+    default: '5900'
+  wait-seconds:
+    description: How long to wait for the port to open.
+    required: false
+    default: '60'
+  caffeinate-seconds:
+    description: How long to hold the macOS display awake for.
+    required: false
+    default: '1200'
+  password:
+    description: >
+      UltraVNC's server password, which is all Windows authenticates. macOS
+      takes no credentials: it authenticates as the console owner, with the
+      auto-login password already on the machine.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Enable Apple Screen Sharing
+      if: inputs.os == 'macos'
+      shell: bash
+      env:
+        PORT: ${{ inputs.port }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
+      run: bash "$GITHUB_ACTION_PATH/macos.sh"
+
+    - name: Install and start UltraVNC
+      if: inputs.os == 'windows'
+      shell: pwsh
+      env:
+        PASSWORD: ${{ inputs.password }}
+        PORT: ${{ inputs.port }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
+      run: pwsh -File "$env:GITHUB_ACTION_PATH/windows.ps1"

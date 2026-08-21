@@ -360,16 +360,18 @@ Tier 1 follow-ups:
   option if Pages is unwanted: push captures to an orphan branch and have
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
-- **Image build tax — done.** `.github/workflows/fleet-images.yml`
-  publishes the fleet to GHCR on every `main` push that touches
-  `tests/servers`, tagged with that directory's git tree hash, and the
-  `servers` job pulls that tag instead of rebuilding. A miss falls back to
-  building, so a PR that edits the fleet — and any fork PR — behaves as it
-  did before the registry existed. The packages have to be public for the
+- **Image build tax — done.** The `servers` job in `ci.yml` pulls the fleet
+  from GHCR, tagged with the `tests/servers` tree hash, instead of
+  rebuilding it. A miss falls back to building, so a PR that edits the
+  fleet — and any fork PR — behaves as it did before the registry existed,
+  and a `main` push that built publishes what it built once the suite is
+  green. Publishing lives in that same job because a separate workflow
+  raced it: on the one push where the tag was new, both started together
+  and CI pulled a tag its publisher had not yet written, so the change that
+  introduced an image always paid for a build. The packages have to be public for the
   anonymous pull to work; a private package fails the pull and silently
   costs a build every run. A tag also maps to one set of apt packages
-  forever, so Debian updates only arrive when that tree changes or the
-  workflow is dispatched by hand.
+  forever, so Debian updates only arrive when that tree changes.
 
   Not `type=gha` layer caching: it was measured on this fleet and every
   configuration came out slower than the plain `docker compose --build`
@@ -383,17 +385,19 @@ Tier 1 follow-ups:
   libvncserver compile re-ran on every warm run. GHCR wins even against
   a cache that worked perfectly: pulling skips the build *and* the
   builder setup.
-- Pin base images by digest and fold this workflow into the main CI one.
+- Pin base images by digest.
 - Deepen what the per-server scenario actually asserts (see Phase 0).
 
 **Tier 2 — VIABLE on both OSes**, proven on branch
 `claude/spike-os-servers` (commit `2de3252`, workflow
 `spike-os-servers.yml`); final run
 [31730610001](https://github.com/sibson/vncdotool/actions/runs/31730610001)
-has both jobs green after four evidence-driven rounds. The recipe below
-now lives as checked-in setup/diagnostic scripts under
-`tests/servers/ultravnc/` and `tests/servers/screen-sharing/` (each with
-a README recording why it does what it does), driven by
+has both jobs green after four evidence-driven rounds. The setup half of
+the recipe below now lives in `.github/actions/os-server`, where each
+script refuses to run outside a GitHub-hosted runner; the diagnostics half
+stays as checked-in
+scripts under `tests/servers/ultravnc/` and `tests/servers/screen-sharing/`
+(each with a README recording why it does what it does), driven by
 `tests/functional/test_os_servers.py`, which reuses the same server
 description, round trip and screenshot gallery as Tier 1 via
 `tests/functional/vncservers.py`.
@@ -429,6 +433,17 @@ description, round trip and screenshot gallery as Tier 1 via
   desktop to serve. So macOS jobs validate protocol, auth, and input
   events, but not pixels — visual assertions need a follow-up spike into
   whether a display can be attached, or must be scoped out for macOS.
+  (Later finding, from the job's own `log show` artifacts: the black
+  screen was the *dedicated user* rather than the runner. Connecting as
+  someone other than the console owner fast-user-switches into that
+  account's first login, which sat at Setup Assistant for the rest of
+  the job. The setup now authenticates as the console owner instead,
+  recovering its auto-login password from /etc/kcpassword — that account
+  holds a secure token, so the password cannot be set, only read — which
+  took the job from 2m37 to 33s. The black framebuffer survived that
+  change, so it really is a runner with no display: attaching to a live,
+  logged-in session still captures one colour. See
+  tests/servers/screen-sharing/README.md.)
 
 *Graduation into Phase 0 proper:* both jobs graduate under the
 change-triggered policy above — Windows as a full type+capture check with
