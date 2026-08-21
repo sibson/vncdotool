@@ -19,30 +19,76 @@ FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
 
-def fixtures() -> List[Path]:
-    return sorted(path for path in FIXTURE_ROOT.iterdir() if (path / "conditions.json").exists())
+class Fixture:
+    """One committed capture: the bytes, what they were captured at, and a
+    client that replays them the way they were recorded.
+    """
 
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.name = path.name
+        self.conditions = json.loads((path / "conditions.json").read_text())
 
-def conditions(fixture: Path) -> dict:
-    return json.loads((fixture / "conditions.json").read_text())
+    @property
+    def group(self) -> str:
+        """Fixtures of one server and encoding share this; the part after it
+        is the format the capture asked for.
+        """
+        return self.name.rsplit("-", 1)[0]
 
+    @property
+    def tolerance(self) -> int:
+        return self.conditions["tolerance"]
 
-def make_client(fixture: Optional[Path] = None) -> client.VNCDoToolClient:
-    cli = client.VNCDoToolClient()
-    cli.transport = mock.Mock()
-    cli.factory = mock.Mock()
-    cli.factory.shared = 0
-    cli.factory.password = None
-    cli.factory.nocursor = False
-    cli.factory.pseudocursor = False
-    cli.factory.pseudodesktop = False
-    cli.factory.last_rect = False
-    cli.factory.qemu_extended_key = False
-    if fixture is not None:
-        requested = conditions(fixture).get("pixel_format")
+    def steps(self) -> List[Path]:
+        return sorted(self.path.glob("step-*.bin.gz"))
+
+    def client(self) -> client.VNCDoToolClient:
+        cli = client.VNCDoToolClient()
+        cli.transport = mock.Mock()
+        cli.factory = mock.Mock()
+        cli.factory.shared = 0
+        cli.factory.password = None
+        cli.factory.nocursor = False
+        cli.factory.pseudocursor = False
+        cli.factory.pseudodesktop = False
+        cli.factory.last_rect = False
+        cli.factory.qemu_extended_key = False
+        requested = self.conditions.get("pixel_format")
         if requested is not None:
             cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[requested]
-    return cli
+        cli.dataReceived(gzip.decompress((self.path / "init.bin.gz").read_bytes()))
+        return cli
+
+    def replay(self) -> List[Tuple[str, Image.Image]]:
+        """Every step, as (scene key, framebuffer)."""
+        cli = self.client()
+        screens = []
+        for step in self.steps():
+            cli.dataReceived(gzip.decompress(step.read_bytes()))
+            assert cli.screen is not None, f"{step.name}: no framebuffer after the update"
+            screens.append((step.name.removesuffix(".bin.gz").split("-", 2)[2], cli.screen.copy()))
+        return screens
+
+    def quantization(self) -> int:
+        """Widest per-channel step the format this capture negotiated can hold.
+
+        The negotiated format, not the announced one: a capture taken at a
+        reduced format is quantized however wide the server's own pixels are.
+        """
+        fmt = self.client().pixel_format
+        maxima = (fmt.redmax, fmt.greenmax, fmt.bluemax)
+        if not all(maxima):
+            raise AssertionError(f"{self.name}: no per-channel maxima in {fmt}")
+        return max(255 // maximum for maximum in maxima)
+
+
+def fixtures() -> List[Fixture]:
+    return [
+        Fixture(path)
+        for path in sorted(FIXTURE_ROOT.iterdir())
+        if (path / "conditions.json").exists()
+    ]
 
 
 def first_difference(actual: Image.Image, expected: Image.Image, tolerance: int) -> Optional[Tuple[int, int, tuple, tuple]]:
@@ -58,45 +104,15 @@ def first_difference(actual: Image.Image, expected: Image.Image, tolerance: int)
     return None
 
 
-def replay(fixture: Path) -> List[Tuple[str, Image.Image]]:
-    """Every step of a fixture, as (scene key, framebuffer)."""
-    cli = make_client(fixture)
-    cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
-    screens = []
-    for step in sorted(fixture.glob("step-*.bin.gz")):
-        cli.dataReceived(gzip.decompress(step.read_bytes()))
-        assert cli.screen is not None, f"{step.name}: no framebuffer after the update"
-        screens.append((step.name.removesuffix(".bin.gz").split("-", 2)[2], cli.screen.copy()))
-    return screens
-
-
-def quantization(fixture: Path) -> int:
-    """Widest per-channel step the format this capture negotiated can hold.
-
-    The negotiated format, not the announced one: a capture taken at a
-    reduced format is quantized however wide the server's own pixels are.
-    """
-    cli = make_client(fixture)
-    cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
-    fmt = cli.pixel_format
-    maxima = (fmt.redmax, fmt.greenmax, fmt.bluemax)
-    if not all(maxima):
-        raise AssertionError(f"{fixture.name}: no per-channel maxima in {fmt}")
-    return max(255 // maximum for maximum in maxima)
-
-
 class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
 
 
-def fixture_groups() -> "dict[str, List[Path]]":
-    """Fixtures of one server and encoding, keyed by everything before the
-    last dash -- which is where the capture puts the format it asked for.
-    """
-    groups: "dict[str, List[Path]]" = {}
+def fixture_groups() -> "dict[str, List[Fixture]]":
+    groups: "dict[str, List[Fixture]]" = {}
     for fixture in fixtures():
-        groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
+        groups.setdefault(fixture.group, []).append(fixture)
     return groups
 
 
@@ -107,17 +123,17 @@ class CrossFormat:
     subclasses load_tests builds.
     """
 
-    reference: Path
-    other: Path
+    reference: Fixture
+    other: Fixture
 
     def test_decodes_the_same_as_its_pair(self) -> None:
-        expected = dict(replay(self.reference))
-        steps = replay(self.other)
+        expected = dict(self.reference.replay())
+        steps = self.other.replay()
         self.assertEqual(
             sorted(key for key, _ in steps), sorted(expected),
             f"{self.other.name} and {self.reference.name} cover different scenes",
         )
-        tolerance = max(quantization(self.reference), quantization(self.other))
+        tolerance = max(self.reference.quantization(), self.other.quantization())
         for key, screen in steps:
             difference = first_difference(screen, expected[key], tolerance)
             if difference is not None:
@@ -133,14 +149,13 @@ class GoldenReplay:
     collects it only through the subclasses load_tests builds.
     """
 
-    fixture: Path
+    fixture: Fixture
 
     def test_decodes_to_its_oracle(self) -> None:
         fixture = self.fixture
-        tolerance = json.loads((fixture / "conditions.json").read_text())["tolerance"]
-        cli = make_client(fixture)
-        cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
-        for step in sorted(fixture.glob("step-*.bin.gz")):
+        tolerance = fixture.tolerance
+        cli = fixture.client()
+        for step in fixture.steps():
             cli.dataReceived(gzip.decompress(step.read_bytes()))
             key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
             expected = Image.open(SCENES_DIR / f"{key}.png")

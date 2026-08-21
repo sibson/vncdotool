@@ -360,7 +360,7 @@ class TestImageMode(TestCase):
     def test_setImageMode_does_not_warn(self):
         self.client._version_server = (3, 8)
         self.client.pixel_format = RGB24
-        setPixelFormat = self.patch_setPixelFormat()
+        self.patch_setPixelFormat()
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
