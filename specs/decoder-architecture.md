@@ -252,8 +252,10 @@ vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
 vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 ```
 
-`SUPPORTED_ENCODINGS` derives from the registry and is filterable per connection,
-which is R4.
+`SUPPORTED_ENCODINGS` stops being the set literal at `rfb.py:161` and derives
+from the registry, filterable per connection, which is R4. It is also what makes
+R1's zero-line `rfb.py` diff possible: registering an encoding is a line in
+`decoders/__init__.py`, and nothing has to tell `rfb.py` the encoding exists.
 
 Third-party decoder plugins via entry points are out of scope. Nobody ships
 out-of-tree VNC encodings; the registry is a dict.
@@ -381,8 +383,11 @@ unreachable code.
 meets N2. Discharges R5.
 
 **Phase 6 — Tight.** A new encoding as new files plus tests.
-*Done when:* it is added with a zero-line diff to `rfb.py`. That diff is the test
-of R1 — if it is not zero, the architecture did not deliver what it exists for.
+*Done when:* it is added with a zero-line diff to `rfb.py`. The one line that
+registers it goes in `decoders/__init__.py`, and `Encoding.TIGHT` already exists
+(`const.py:32`), so `rfb.py` and `const.py` are both untouched. That is the test
+of R1: today the same change edits `SUPPORTED_ENCODINGS` at `rfb.py:161`, and if
+it still does, the architecture did not deliver what it exists for.
 `libvncserver-example` falls back to Raw when asked for Tight, so its oracle
 comes from `tigervnc` and `x11vnc`.
 
