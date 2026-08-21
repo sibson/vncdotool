@@ -1,8 +1,10 @@
 """Per-encoding decode tests: wire bytes in, framebuffer out.
 
-Bytes are hand-derived from RFC 6143 and rfbproto. That is enough to pin a
-decoder against a picture, and is not enough to call an encoding verified
-against a real server -- specs/decoder-goldens.md is where that happens.
+Bytes are hand-derived from RFC 6143 and rfbproto, apart from the bounds
+this implementation chose, which are noted where they are decided. That is
+enough to pin a decoder against a picture, and is not enough to call an
+encoding verified against a real server -- specs/decoder-goldens.md is
+where that happens.
 """
 from __future__ import annotations
 
