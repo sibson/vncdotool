@@ -385,8 +385,6 @@ class TestImageMode(TestCase):
             assert self.client.image_mode == "RGBX"
 
     def test_setImageMode_keeps_a_server_format_pillow_can_unpack(self):
-        # XBGR was absent from the table this replaced, so the client used to
-        # ask the server to change format for a layout it could already read.
         self.client._version_server = (3, 8)
         self.client.pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 24, 16, 8)
         self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
