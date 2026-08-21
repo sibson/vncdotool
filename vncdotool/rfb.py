@@ -140,7 +140,7 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
                 return
 
 
-class RFBClient(Protocol):  # type: ignore[misc]
+class RFBClient(Protocol):
     # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
     SUPPORTED_SERVER_VERSIONS = {
         (3, 3),
@@ -1115,7 +1115,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (aka clipboard)"""
 
 
-class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
+class RFBFactory(protocol.ClientFactory):
     """A factory for remote frame buffer connections."""
 
     # the class of the protocol to build
@@ -1181,7 +1181,7 @@ if __name__ == "__main__":
         ) -> None:
             print("%s " * 5 % (x, y, width, height, repr(data[:20])))
 
-    class RFBTestFactory(protocol.ClientFactory):  # type: ignore[misc]
+    class RFBTestFactory(protocol.ClientFactory):
         """test factory"""
 
         protocol = RFBTest
@@ -1201,7 +1201,7 @@ if __name__ == "__main__":
 
             reactor.stop()
 
-    class Options(usage.Options):  # type: ignore[misc]
+    class Options(usage.Options):
         """command line options"""
 
         optParameters = [
