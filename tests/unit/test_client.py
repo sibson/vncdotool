@@ -27,10 +27,10 @@ class TestVNCDoToolClient(TestCase):
         self.client.factory = mock.Mock()
 
         # mock out a bunch of base class functions
-        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
-        self.client.pointerEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.keyEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.setEncodings = mock.Mock()  # type: ignore[assignment]
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.pointerEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.keyEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.setEncodings = mock.Mock()  # type: ignore[method-assign]
 
     def test_vncConnectionMade(self):
         cli = self.client
@@ -470,7 +470,7 @@ class TestVMWareClient(TestCase):
         self.client = client.VMWareClient()
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
-        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
         self.client._handler = mock.Mock()
 
     def test_dataReceived_recognizes_single_pixel_update(self) -> None:
