@@ -33,16 +33,11 @@ nothing re-derives it. It goes stale when a runner image changes its display
 depth, and `vncdo -v` against any server reprints both the native format and the
 one we request.
 
-| Server | bpp | depth | endian | shifts r/g/b | Wire | In `PF2IM`? |
-|---|---|---|---|---|---|---|
-| tigervnc | 32 | 24 | LE | 16/8/0 | BGRX | yes |
-| x11vnc | 32 | 24 | LE | 16/8/0 | BGRX | yes |
-| ultravnc (windows-latest) | 32 | 24 | LE | 16/8/0 | BGRX | yes |
-| screen-sharing (macos-latest) | 32 | 24 | LE | 16/8/0 | BGRX | yes |
-| libvncserver-example | 32 | **32** | LE | 0/8/16 | RGBX | **no** |
-| vncev | 8 | 8 | — | **colour-mapped** | index | **no** |
-
-Maxima are 255 for every true-colour row.
+| Server | ServerInit format | Wire | In `PF2IM`? |
+|---|---|---|---|
+| tigervnc, x11vnc, ultravnc, screen-sharing | 32 bpp, depth 24, LE, max 255, shifts 16/8/0 | BGRX | yes |
+| libvncserver-example | 32 bpp, **depth 32**, LE, max 255, shifts 0/8/16 | RGBX | **no** |
+| vncev | 8 bpp, depth 8, **colour-mapped** | index | **no** |
 
 The two misses are libvncserver's example programs, in the fleet because they
 are scriptable, not because anyone runs them. **Every server anyone runs sends
