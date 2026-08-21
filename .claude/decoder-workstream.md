@@ -14,12 +14,24 @@ branch); no phase branch carries it, so no PR diff contains it.
 - Verify before opening: `make test`, `flake8 --count --statistics vncdotool tests`.
   Docker is unreachable in this container, so fleet/functional checks happen only
   in CI; watch each PR to green before starting the next phase.
+- Oracles, by fleet. On the Docker fleet the scene player can push the committed
+  PNGs to the server's X framebuffer, so validation is against
+  `tests/goldens/scenes/<key>.png` -- never against a Raw replay, which would
+  make the oracle a second capture (`specs/decoder-goldens.md`). On the OS fleet
+  (`os-servers.yml`: ultravnc, screen-sharing) nothing can put a known image on
+  the server's screen, so there is no oracle image and the comparison there is
+  the same scene decoded with Raw against the encoding under test.
 - Per PR, after CI is green: `/code-review` at high effort plus a CLAUDE.md
   comment-convention sweep, fixes applied as commits, findings summarized in one
   PR comment. No inline review comments.
 - Quiet overnight: message the user only when blocked on a decision only they
   can make.
-- Re-arm a `send_later` check-in ~1h out every turn until the stack is done.
+- An hourly Routine (`trig_01BoHfxfegLMGu2FmPg9Jscm`, fires at :20) restarts this
+  work after any interruption. Delete it once all four PRs are open, green and
+  reviewed. Its fired turns may arrive without `mcp__github__*` tools, and there
+  is no `gh` CLI here: when that happens, do the code work and push over git,
+  and leave PR-opening and CI-checking to a turn that has them rather than
+  reporting the phase blocked.
 
 ## Progress
 
