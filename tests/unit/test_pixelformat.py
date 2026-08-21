@@ -43,6 +43,21 @@ def every_layout() -> Iterator[rfb.PixelFormat]:
                 yield rfb.PixelFormat(bpp, depth, bigendian, True, *maxima, *shifts)
 
 
+def every_colour(maxima: tuple[int, int, int]) -> Iterator[tuple[int, int, int]]:
+    """Primaries, black, white, and a mid value per channel.
+
+    Mid values are what separate a correct shift from one that happens to
+    look right at full intensity, where every bit of the channel is set.
+    """
+    yield (0, 0, 0)
+    yield maxima
+    for channel, maximum in enumerate(maxima):
+        for value in (maximum, maximum // 2, 1):
+            intensities = [0, 0, 0]
+            intensities[channel] = value
+            yield tuple(intensities)  # type: ignore[misc]
+
+
 def pack(pixel_format: rfb.PixelFormat, red: int, green: int, blue: int) -> bytes:
     """Encode (red, green, blue) as PIXEL bytes for pixel_format's own layout."""
     value = (
@@ -99,12 +114,15 @@ class TestRawMode(TestCase):
                 except UnsupportedPixelFormat:
                     continue
                 resolved.add(mode)
-                for channel, expected in enumerate(((255, 0, 0), (0, 255, 0), (0, 0, 255))):
-                    intensity = [0, 0, 0]
-                    intensity[channel] = (pixel_format.redmax, pixel_format.greenmax, pixel_format.bluemax)[channel]
-                    data = pack(pixel_format, *intensity)
+                maxima = (pixel_format.redmax, pixel_format.greenmax, pixel_format.bluemax)
+                for intensities in every_colour(maxima):
+                    data = pack(pixel_format, *intensities)
                     decoded = Image.frombytes("RGB", (1, 1), data, "raw", mode).getpixel((0, 0))
-                    self.assertEqual(decoded, expected)
+                    for channel, (value, maximum) in enumerate(zip(intensities, maxima)):
+                        # Pillow scales an n-bit channel to 8 bits by its own
+                        # rounding, so this bounds the result rather than
+                        # restating the rounding and passing by construction.
+                        self.assertAlmostEqual(decoded[channel], value * 255 / maximum, delta=1)
 
         self.assertEqual(
             resolved,
@@ -167,21 +185,27 @@ class TestCPixel(TestCase):
         self.assertEqual(cpixel_offset(high), 0)
 
     def test_the_three_bytes_carry_every_colour_bit(self):
-        """Slicing at the reported offset must not take the pad byte."""
-        for pixel_format in (BGRX8888, XBGR8888, BGRX8888_BIGENDIAN):
+        """Whatever is outside the reported window is pad, over every layout."""
+        eligible = 0
+
+        for pixel_format in every_layout():
+            if cpixel_bytes(pixel_format) != 3:
+                continue
+            eligible += 1
             with self.subTest(pixel_format=pixel_format):
-                order = "big" if pixel_format.bigendian else "little"
-                value = (
-                    0xFF << pixel_format.redshift
-                    | 0x80 << pixel_format.greenshift
-                    | 0x40 << pixel_format.blueshift
+                pixel = pack(
+                    pixel_format,
+                    pixel_format.redmax,
+                    pixel_format.greenmax,
+                    pixel_format.bluemax,
                 )
-                pixel = value.to_bytes(pixel_format.bypp, order)
                 offset = cpixel_offset(pixel_format)
 
-                cpixel = pixel[offset:offset + cpixel_bytes(pixel_format)]
+                outside = pixel[:offset] + pixel[offset + 3:]
 
-                self.assertEqual(sorted(cpixel), [0x40, 0x80, 0xFF])
+                self.assertEqual(outside, bytes(len(outside)))
+
+        self.assertTrue(eligible)
 
     def test_16bpp_is_never_a_cpixel(self):
         self.assertEqual(cpixel_bytes(BGR565), BGR565.bypp)
