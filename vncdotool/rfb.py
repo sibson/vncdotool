@@ -475,8 +475,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
         else:
             self._doConnection()
 
-    # ---  the pump
-
     def _decodeRectangle(
         self, decoder: decoders.Decoder, x: int, y: int, width: int, height: int
     ) -> None:

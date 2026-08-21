@@ -1,7 +1,4 @@
-"""What every decoder is: an error, three shapes, and the rectangle they fill.
-
-specs/decoder-architecture.md is the design.
-"""
+"""specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator, Protocol, runtime_checkable

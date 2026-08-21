@@ -1,7 +1,4 @@
-"""Raw encoding: the rectangle's pixels, left to right, top to bottom.
-
-RFC 6143 section 7.7.1.
-"""
+"""Raw encoding. RFC 6143 section 7.7.1."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator

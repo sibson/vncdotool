@@ -1,4 +1,3 @@
-"""Rect-local pixel buffer shared by decoders."""
 from __future__ import annotations
 
 from .base import DecodeError

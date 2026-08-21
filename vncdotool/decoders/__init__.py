@@ -1,6 +1,4 @@
-"""The decoder registry.
-
-Adding an encoding is a module beside this one plus an entry in DECODERS;
+"""Adding an encoding is a module beside this one plus an entry in DECODERS;
 rfb.py is not told the encoding exists. specs/decoder-architecture.md.
 """
 from __future__ import annotations
