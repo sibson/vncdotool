@@ -22,8 +22,8 @@ class HextileDecoder(PixelDecoder):
         self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
         bypp = target.bypp
-        # Both carry over from the previous tile: a tile that specifies
-        # neither is painted in the colours of the one before it.
+        # Both carry over from the previous tile, but not across a raw tile,
+        # and the foreground not across a coloured-subrectangle one either.
         background = foreground = b""
 
         for ty in range(0, target.height, TILE):
@@ -34,6 +34,7 @@ class HextileDecoder(PixelDecoder):
                 subencoding = HextileEncoding((yield 1)[0])
                 if subencoding & HextileEncoding.RAW:
                     target.blit(tx, ty, tw, th, (yield tw * th * bypp))
+                    background = foreground = b""
                     continue
 
                 wanted = 0
@@ -61,7 +62,9 @@ class HextileDecoder(PixelDecoder):
 
                 count = block[pos]
                 coloured = bool(subencoding & HextileEncoding.SUBRECTS_COLORED)
-                if not coloured and not foreground:
+                # A tile may set AnySubrects and then declare none, which
+                # needs no foreground however many tiles came before it.
+                if count and not coloured and not foreground:
                     raise DecodeError(f"tile at ({tx},{ty}) has no foreground, and no tile before it set one")
 
                 size = bypp + 2 if coloured else 2
@@ -82,3 +85,6 @@ class HextileDecoder(PixelDecoder):
                             f"subrectangle ({sx},{sy},{sw},{sh}) overflows a {tw}x{th} tile"
                         )
                     target.fill(tx + sx, ty + sy, sw, sh, colour)
+
+                if coloured:
+                    foreground = b""
