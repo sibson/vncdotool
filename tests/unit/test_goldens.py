@@ -39,10 +39,9 @@ def make_client(fixture: Optional[Path] = None) -> client.VNCDoToolClient:
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False
     if fixture is not None:
-        # The capture holds only the server's half, so the SetPixelFormat the
-        # capturing client sent is not in it to replay: without this the
-        # replay reads the server's announced format and, for any capture
-        # taken at another one, every rectangle at the wrong width.
+        # A capture holds only the server's half, so the SetPixelFormat the
+        # capturing client sent is not in it to replay: without this, one
+        # taken at any other format is read at the wrong pixel width.
         requested = conditions(fixture).get("pixel_format")
         if requested is not None:
             cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[requested]

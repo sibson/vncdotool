@@ -323,9 +323,8 @@ class VNCDoToolClient(rfb.RFBClient):
                 else:
                     pixel_format = RGB32
 
-        # Resolved before the request goes out: a format we cannot read is
-        # worth failing over, and failing after asking for it would leave the
-        # server sending pixels in it.
+        # Resolved before the request goes out: failing afterwards would
+        # leave the server sending pixels in a format we cannot read.
         try:
             image_mode = pixelformat.raw_mode(pixel_format)
         except pixelformat.UnsupportedPixelFormat as exc:
