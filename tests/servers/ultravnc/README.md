@@ -5,20 +5,22 @@ An OS-hosted VNC server for vncdotool to test against on a Windows machine
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
 
-## There is no setup script
+## Where the setup lives
+
+In `.github/actions/os-server`: `action.yml` wires the inputs,
+`ultravnc.ps1` does the work, and `require-disposable-host.sh` decides
+whether the machine may be changed at all.
 
 Installing UltraVNC as a service leaves the machine reachable for unattended
 remote control with a password published in this repository, and deleting
-the checkout does not uninstall it. So the setup lives in a composite
-action, `.github/actions/os-server`, whose steps only the Actions runner can
-execute. There is deliberately nothing here to run against a workstation.
-
-A composite action still runs on a *self-hosted* runner, which is someone's
-real machine, so the action's first step asks the host to prove it is
-disposable: `CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted` and
-`GITHUB_RUN_ID` together. To exercise the setup by hand, use a virtual
-machine you are willing to delete and set
-`VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
+the checkout does not uninstall it. So `ultravnc.ps1` calls the host check
+before installing anything: `CI`, `GITHUB_ACTIONS`,
+`RUNNER_ENVIRONMENT=github-hosted` and `GITHUB_RUN_ID` together, which also
+keeps it off a *self-hosted* runner — someone's real machine. It shells out
+to the same bash script the macOS half uses, so the policy is written once.
+To exercise the setup by hand, use a virtual machine you are willing to
+delete and set `VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to
+`yes-destroy-this-machine`.
 
 `vnc_passwd_hex.py` stays here as a plain script: it turns a password into
 the hex blob `ultravnc.ini` wants and touches nothing.
@@ -41,7 +43,7 @@ down:
 
 * **The Chocolatey feed is flaky.** It intermittently returns a response
   that isn't valid XML, which choco reports as "Unable to find package"
-  while still exiting 0. `setup.ps1` retries, and decides success by
+  while still exiting 0. `ultravnc.ps1` retries, and decides success by
   whether `winvnc.exe` exists rather than by the exit code.
 
 * **A password is mandatory.** UltraVNC refuses every incoming connection

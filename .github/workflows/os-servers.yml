@@ -78,22 +78,19 @@ jobs:
       - name: Install vncdotool
         run: uv sync
 
-      # macOS needs no credentials here: it authenticates as the console owner
-      # with the auto-login password already on the box, and fails rather than
-      # inventing an account, so a runner image that stops enabling auto-login
-      # shows up as a red build instead of a silently slower one. The override
-      # pair is for driving this action against a VM by hand.
+      # macOS takes no credentials: it authenticates as the console owner with
+      # the auto-login password already on the machine, and fails rather than
+      # creating an account, so a runner image that stops enabling auto-login
+      # is a red build instead of a silently slower one.
       #
       # UltraVNC's password is a spike credential for a throwaway runner,
       # deliberately visible as the fallback; a repo secret replaces it.
-      # Whatever either half settles on reaches the tests through $GITHUB_ENV.
+      # Whatever either half used reaches the tests through $GITHUB_ENV.
       - name: Set up the VNC server
         uses: ./.github/actions/os-server
         with:
           server: ${{ matrix.server }}
           password: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
-          override-username: ${{ secrets.VNC_OS_SERVER_USERNAME }}
-          override-password: ${{ secrets.VNC_OS_SERVER_USERNAME != '' && secrets.VNC_OS_SERVER_PASSWORD || '' }}
 
       # An open port is not readiness: the first connection to macOS Screen
       # Sharing is what starts it, and that connection can stall for good

@@ -5,21 +5,24 @@ GitHub `macos-latest` runner in CI). `tests/functional/test_os_servers.py`
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.sh` gathers the evidence when something goes wrong.
 
-## There is no setup script
+## Where the setup lives
+
+In `.github/actions/os-server`: `action.yml` wires the inputs,
+`screen-sharing.sh` does the work, and `require-disposable-host.sh` decides
+whether the machine may be changed at all.
 
 Enabling Remote Management turns the machine it runs on into an unattended
-remote-control target, reachable with a password published in this
-repository, and deleting the checkout afterwards leaves the account and the
-setting behind. So the setup lives in a composite action,
-`.github/actions/os-server`, whose steps only the Actions runner can
-execute. There is deliberately nothing here to run against a laptop.
-
-A composite action still runs on a *self-hosted* runner, which is someone's
-real machine, so the action's first step asks the host to prove it is
-disposable: `CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted` and
-`GITHUB_RUN_ID` together. To exercise the setup by hand, use a virtual
-machine you are willing to delete and set
+remote-control target, and deleting the checkout does not switch it back
+off. So `screen-sharing.sh` calls the host check immediately before that
+step: `CI`, `GITHUB_ACTIONS`, `RUNNER_ENVIRONMENT=github-hosted` and
+`GITHUB_RUN_ID` together, which also keeps it off a *self-hosted* runner —
+someone's real machine. To exercise the setup by hand, use a virtual machine
+you are willing to delete, that auto-logs in, and set
 `VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to `yes-destroy-this-machine`.
+
+Everything before that check only reads, which is why it is not at the top of
+the file: knowing which account to authenticate as is useful to run anywhere,
+and on a machine without auto-login it is also where the script stops.
 
 Against a server that is already up — a runner mid-job, or that VM — the
 tests are just:
@@ -90,16 +93,19 @@ using it. That took the macOS job from 2m37 to 33s: no user switch, no
 login, readiness satisfied on the first attempt, the tests themselves in
 under four seconds.
 
-It does not fall back. Anything unexpected — no file, a format change (that
-has happened: [runner-images#5231][5231] shipped a kcpassword written as
-UTF-8 rather than raw bytes), a password that does not authenticate — fails
-the job. A fallback would quietly restore the slow path and hide the day
-the image changes, which is exactly the day we want to hear about it.
+It does not fall back, and there is no path that creates an account. Anything
+unexpected — no file, a format change (that has happened:
+[runner-images#5231][5231] shipped a kcpassword written as UTF-8 rather than
+raw bytes), a password that does not authenticate — fails the job. A fallback
+would quietly restore the slow path and hide the day the image changes, which
+is exactly the day we want to hear about it.
 
-For a host with no usable auto-login password — a VM you are driving this
-action against by hand — `override-username` and `override-password` name an
-account to create instead. That path pays the fast user switch and the first
-login, so it is for making the thing work somewhere, not for CI.
+It also makes the setup safe to run by accident. A machine that does not
+auto-login has no `/etc/kcpassword`, so there is nothing to authenticate as
+and the script stops before it touches anything — which is every developer
+machine, since auto-login is off by default. The host check below still
+guards what comes after, because switching Remote Management on is a change
+a checkout deletion does not undo.
 
 [autologin]: https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh
 [5231]: https://github.com/actions/runner-images/issues/5231
