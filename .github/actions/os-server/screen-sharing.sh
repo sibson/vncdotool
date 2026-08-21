@@ -21,6 +21,47 @@ PORT="${PORT:-5900}"
 WAIT_SECONDS="${WAIT_SECONDS:-60}"
 CAFFEINATE_SECONDS="${CAFFEINATE_SECONDS:-1200}"
 
+KCPASSWORD=/etc/kcpassword
+# Auto-login stores the password obfuscated rather than hashed, because
+# loginwindow has to replay it: XORed against this key, repeated, and
+# NUL-padded to a multiple of its length.
+KCPASSWORD_KEY=(125 137 82 35 210 188 221 234 163 185 31)
+
+# Reads the file's bytes as decimals on stdin and prints the password.
+#
+# Rejecting anything outside printable ASCII is what stops a file written in
+# some other format being read as a password: actions/runner-images#5231
+# shipped images whose kcpassword was UTF-8 encoded rather than raw bytes, and
+# the wrong key or a changed layout produces the same kind of noise. It also
+# means the value cannot contain a newline, which matters because it is
+# written to $GITHUB_ENV, where a newline would start a variable of its own.
+decode_kcpassword() {
+    local byte clear i=0 password=""
+
+    while read -r byte; do
+        if [ -z "$byte" ]; then
+            continue
+        fi
+        clear=$((byte ^ KCPASSWORD_KEY[i % ${#KCPASSWORD_KEY[@]}]))
+        i=$((i + 1))
+        # Padding is NUL bytes appended to the password, so the first one ends it.
+        if [ "$clear" -eq 0 ]; then
+            break
+        fi
+        if [ "$clear" -lt 32 ] || [ "$clear" -gt 126 ]; then
+            echo "$KCPASSWORD did not decode to a printable password" >&2
+            return 1
+        fi
+        password+=$(printf "\\$(printf '%03o' "$clear")")
+    done
+
+    if [ -z "$password" ]; then
+        echo "$KCPASSWORD decoded to nothing" >&2
+        return 1
+    fi
+    printf '%s' "$password"
+}
+
 # Authenticating as anyone but the console owner fast-user-switches into that
 # account's first login, which cost this job about a minute (see
 # tests/servers/screen-sharing/README.md). The console owner's own password
@@ -31,7 +72,7 @@ CAFFEINATE_SECONDS="${CAFFEINATE_SECONDS:-1200}"
 # against a published 11-byte key. The account logging itself in at boot is
 # proof the file matches.
 USERNAME=$(stat -f %Su /dev/console)
-if ! PASSWORD=$(sudo python3 "$HERE/decode-kcpassword.py"); then
+if ! PASSWORD=$(sudo od -An -v -tu1 "$KCPASSWORD" | tr -s ' ' '\n' | decode_kcpassword); then
     echo "could not read the console owner's auto-login password, so there is" >&2
     echo "no account to authenticate as. A machine that does not auto-login" >&2
     echo "cannot host this server without being given an account of its own," >&2
@@ -39,23 +80,14 @@ if ! PASSWORD=$(sudo python3 "$HERE/decode-kcpassword.py"); then
     exit 1
 fi
 if [ -z "$PASSWORD" ]; then
-    # The decoder exits non-zero on an empty password, so reaching here means
-    # something between it and this script succeeded while producing nothing.
-    # sysadminctl has already taught us what a tool that lies about failing
-    # costs to debug.
+    # decode_kcpassword fails on an empty password, so reaching here means
+    # something between it and this assignment succeeded while producing
+    # nothing. sysadminctl has already taught us what a tool that lies about
+    # failing costs to debug.
     echo "recovered an empty password without an error" >&2
     exit 1
 fi
 echo "::add-mask::$PASSWORD"
-# A newline would let the value written below add further variables of its own
-# to $GITHUB_ENV. Nothing about the file format should produce one, which is
-# the reason to check rather than assume.
-case "$PASSWORD" in
-    *$'\n'*)
-        echo "the decoded auto-login password contains a newline" >&2
-        exit 1
-        ;;
-esac
 echo "--- authenticating as the console owner $USERNAME, no user switch"
 
 # Everything above this line reads. Everything below it changes the machine,
