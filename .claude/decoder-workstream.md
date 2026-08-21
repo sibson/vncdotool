@@ -38,9 +38,9 @@ branch); no phase branch carries it, so no PR diff contains it.
 | Phase | Branch | PR | Code | CI green | Reviewed |
 |---|---|---|---|---|---|
 | 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | green | reviewed, 4 findings fixed |
-| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | watching | panel running |
-| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | — | not started | — | — |
-| 4 Hextile | claude/decoder-p4-hextile | — | not started | — | — |
+| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | watching | reviewed, 6 findings fixed |
+| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | #405 | done | watching | tests reviewed, 3 nits open |
+| 4 Hextile | claude/decoder-p4-hextile | #406 | done | watching | panel running |
 
 ## Already landed before this run
 
@@ -82,3 +82,27 @@ sweep.
   Two hypotheses profiled and reverted; what remains is per-rectangle
   generator and buffer cost. Measured and reported rather than papered over
   or fixed by inventing API. The user's call in the morning.
+- Phase 2's review found a severe one: a failed decode returned without
+  re-arming expect(), so _handleExpected re-entered the dead generator, read
+  its StopIteration as success, painted a phantom rectangle out of the
+  untouched backing and ran on to commitUpdate -- all after the session was
+  declared bad. Fixed with a real terminal state (abortConnection), plus five
+  others: zero-dimension rectangles wrongly refused (R5), MAX_DESKTOP_SIZE
+  bounding nothing so 65535x65535 asked for 17GB and parked forever,
+  unvalidated yielded counts, zlib.error/MemoryError uncaught, a reused
+  backing never cleared, and module-scope decoder instances shared between
+  connections (R7).
+- Phases 3 and 4 open as #405 and #406. Hextile is 84 lines against the 193
+  it deleted; rfb.py is down from 1249 to 1056.
+- N2 is half measured: tests/functional/test_bandwidth.py measures Hextile's
+  bytes against Raw's in CI through vnclog. The render-time half needs a
+  captured Hextile fixture, so it needs the fleet.
+
+## Open questions for the morning
+
+1. **N1.** Raw is ~20% slower through the pump (3.8ms -> 4.7ms). Accept it as
+   the cost of the architecture, or spend a fast path on it?
+2. **The rgb565 golden capture.** Needs a quantization-tolerant scene key,
+   which invalidates the committed fixture and needs a re-capture.
+3. **The encoding probe** for the UltraVNC and Screen Sharing columns of the
+   support table: not done, wants its own change now that --encodings exists.
