@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import gzip
 from pathlib import Path
-from struct import pack
+from struct import pack, unpack
 from unittest import TestCase, mock
 
 from vncdotool import client, decoders, rfb
@@ -30,9 +30,7 @@ def make_client() -> client.VNCDoToolClient:
 
 
 def make_pump_client() -> rfb.RFBClient:
-    """A client parked in the post-handshake byte-parking state, with no
-    in-flight framebuffer update -- the state `_decodeRectangle` runs in.
-    """
+    """A client in the state `_decodeRectangle` runs in."""
     cli = rfb.RFBClient()
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
@@ -50,9 +48,8 @@ def raw_update(x: int, y: int, width: int, height: int, pixels: bytes) -> bytes:
 
 
 class TestSegmentation(TestCase):
-    """The pump satisfies every yielded byte count in full, so a decoder
-    never sees a partial buffer -- whole or byte-at-a-time input decodes
-    identically.
+    """The pump satisfies every yielded count in full, so a decoder never
+    sees a partial buffer.
     """
 
     def test_byte_at_a_time_matches_a_single_call(self) -> None:
@@ -93,6 +90,71 @@ class TestDecodeErrorHandling(TestCase):
         cli.transport.loseConnection.assert_called_once()
 
 
+class TestControlDecoders(TestCase):
+    """The third shape: consumes no bytes, changes client state, and must
+    still hand the rectangle loop back.
+    """
+
+    def test_a_control_decoder_applies_and_the_loop_continues(self) -> None:
+        cli = make_pump_client()
+        cli._doConnection = mock.Mock()
+        applied = []
+
+        class Control:
+            def apply(self, client: object, rect: tuple) -> None:
+                applied.append(rect)
+
+        cli._decodeRectangle(Control(), 1, 2, 3, 4)
+
+        self.assertEqual(applied, [(1, 2, 3, 4)])
+        cli._doConnection.assert_called_once()
+
+
+class TestMultiYieldDecoders(TestCase):
+    """Raw and CopyRect each yield once, so nothing else exercises resuming
+    a generator that is still mid-decode.
+    """
+
+    def test_a_decoder_is_resumed_with_each_block_in_turn(self) -> None:
+        cli = make_pump_client()
+        cli.updateRectangle = mock.Mock()
+        seen = []
+
+        class TwoStep:
+            def decode(self, target, pixel_format):
+                seen.append((yield 2))
+                seen.append((yield 3))
+                target.blit(0, 0, target.width, target.height, b"\x01" * (target.width * target.height * target.bypp))
+
+            def output_format(self, pixel_format):
+                return pixel_format
+
+        cli._decodeRectangle(TwoStep(), 0, 0, 1, 1)
+        cli.dataReceived(b"ab")
+        cli.dataReceived(b"cde")
+
+        self.assertEqual(seen, [b"ab", b"cde"])
+        cli.updateRectangle.assert_called_once()
+
+    def test_malformed_input_that_raises_from_unpack_is_diagnosed(self) -> None:
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+
+        class Bogus:
+            def decode(self, target, pixel_format):
+                block = yield 2
+                unpack("!I", block)  # four bytes wanted, two yielded
+
+            def output_format(self, pixel_format):
+                return pixel_format
+
+        cli._decodeRectangle(Bogus(), 0, 0, 1, 1)
+        cli.dataReceived(b"ab")
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+
+
 class TestRectBufferValidation(TestCase):
     """A rectangle outside `MAX_DESKTOP_SIZE`, or with a zero dimension, is
     refused before any buffer is allocated.
@@ -117,6 +179,17 @@ class TestRectBufferValidation(TestCase):
         self.assertIsNone(result)
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
+
+    def test_the_largest_allowed_rectangle_is_accepted(self) -> None:
+        """The refusals above pass just as well against an off-by-one that
+        rejects everything.
+        """
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+
+        self.assertIsNotNone(cli._rectBuffer(cli.MAX_DESKTOP_SIZE, 1))
+
+        cli.vncProtocolError.assert_not_called()
 
     def test_zero_height_rectangle_is_refused(self) -> None:
         cli = make_pump_client()
@@ -168,16 +241,23 @@ class TestOnePastePerRectangle(TestCase):
             0, 0, width, height, pixels, cli.pixel_format
         )
 
+    def test_the_rectangle_lands_where_the_wire_said(self) -> None:
+        cli = make_pump_client()
+        cli.updateRectangle = mock.Mock()
+        decoder = decoders.DECODERS[Encoding.RAW]
+        pixels = bytes(range(2 * 2 * cli.bypp))
+
+        cli._decodeRectangle(decoder, 7, 9, 2, 2)
+        cli.dataReceived(pixels)
+
+        cli.updateRectangle.assert_called_once_with(7, 9, 2, 2, pixels, cli.pixel_format)
+
 
 class TestRectBufferReuse(TestCase):
-    """`_rectBuffer` reuses `_rect_backing` at its high-water mark; a smaller
-    rectangle after a larger one must read back only its own bytes, not
-    whatever the larger one left behind in the shared backing.
+    """A smaller rectangle after a larger one reads back only its own bytes.
 
-    Splits each rectangle's fill into two `blit` calls so the write goes
-    through the shared backing array rather than a decoder's single
-    whole-rectangle blit, which `RectBuffer` short-circuits without ever
-    touching the backing (see `decoders/buffer.py`).
+    Two blits per rectangle, because a single whole-rectangle blit never
+    reaches the shared backing (`decoders/buffer.py`).
     """
 
     def test_smaller_rectangle_after_larger_gets_only_its_own_bytes(self) -> None:
