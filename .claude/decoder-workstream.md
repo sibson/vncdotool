@@ -37,10 +37,10 @@ branch); no phase branch carries it, so no PR diff contains it.
 
 | Phase | Branch | PR | Code | CI green | Reviewed |
 |---|---|---|---|---|---|
-| 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | green | reviewed, 4 findings fixed |
-| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | watching | reviewed, 6 findings fixed |
-| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | #405 | done | watching | reviewed, 4 findings fixed |
-| 4 Hextile | claude/decoder-p4-hextile | #406 | done | watching | reviewed, 3 findings fixed |
+| 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | green (85554d2) | reviewed, 4 findings fixed |
+| 2 pump/Raw/CopyRect | claude/decoder-p2-pump | #402 | done | green (1491bf4) | reviewed, 6 findings fixed |
+| 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | #405 | done | green (fd9cf7c) | reviewed, 4 findings fixed |
+| 4 Hextile | claude/decoder-p4-hextile | #406 | done | green (13cd50c) | reviewed, 3 findings fixed |
 
 ## Already landed before this run
 
@@ -94,9 +94,14 @@ sweep.
   connections (R7).
 - Phases 3 and 4 open as #405 and #406. Hextile is 84 lines against the 193
   it deleted; rfb.py is down from 1249 to 1056.
-- N2 is half measured: tests/functional/test_bandwidth.py measures Hextile's
-  bytes against Raw's in CI through vnclog. The render-time half needs a
-  captured Hextile fixture, so it needs the fleet.
+- N2 is half measured, and that half now passes in CI: Hextile puts fewer
+  bytes on the wire than Raw for the same scene, measured through vnclog. The
+  render-time half needs a captured Hextile fixture, so it needs the fleet.
+- All four PRs green at their current heads and all reviewed. The hourly
+  Routine is deleted; nothing wakes this session on its own any more.
+- Measured, not assumed: tigervnc really emits RRE and Hextile when asked
+  (the fleet job asserts it), so the support table's yes for both is
+  confirmed against the current image.
 
 - Phase 3's review found copyRectangle pasting black for a source running off
   the framebuffer (Pillow zero-fills a crop that leaves the image), clipping
