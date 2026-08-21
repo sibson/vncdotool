@@ -323,8 +323,18 @@ class VNCDoToolClient(rfb.RFBClient):
                 else:
                     pixel_format = RGB32
 
+        # Resolved before the request goes out: a format we cannot read is
+        # worth failing over, and failing after asking for it would leave the
+        # server sending pixels in it.
+        try:
+            image_mode = pixelformat.raw_mode(pixel_format)
+        except pixelformat.UnsupportedPixelFormat as exc:
+            self.vncProtocolError(f"cannot decode the requested pixel format: {exc}")
+            self.transport.loseConnection()
+            return
+
         self.setPixelFormat(pixel_format)
-        self._image_mode = pixelformat.raw_mode(pixel_format)
+        self._image_mode = image_mode
 
     #
     # base customizations

@@ -422,6 +422,18 @@ class TestImageMode(TestCase):
         assert self.client.bypp == client.BGR16.bypp
         assert self.client._image_mode == pixelformat.raw_mode(client.BGR16)
 
+    def test_setImageMode_fails_the_connection_for_a_format_it_cannot_read(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = client.RGB32
+        self.client.requested_pixel_format = COLOUR_MAPPED
+        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+
+        self.client.setImageMode()
+
+        self.client.setPixelFormat.assert_not_called()
+        self.client.factory.clientConnectionFailed.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangle_does_not_warn(self, frombytes):
         cli = self.client
