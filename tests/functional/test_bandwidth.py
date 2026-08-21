@@ -58,7 +58,13 @@ class TestBandwidth(TestCase):
                 self.fail(f"vnclog never listened on {PROXY_PORT}")
 
             proxied = TIGERVNC._replace(port=PROXY_PORT)
-            result = run_vncdo(proxied, "--encodings", encodings, "key", SCENE, "pause", "0.5")
+            # A server sends pixels only when asked (RFC 6143 7.5.3), and of
+            # vncdo's commands only capture and expect ask. Without one the
+            # archive holds the handshake and nothing else, which is the same
+            # size whatever encoding was negotiated.
+            result = run_vncdo(
+                proxied, "--encodings", encodings, "capture", str(Path(tmp) / "screen.png")
+            )
             proxy.wait(timeout=CAPTURE_DEADLINE)
             if result.returncode != 0:
                 self.fail(f"vncdo --encodings {encodings} failed: {result.stderr}")
@@ -69,6 +75,10 @@ class TestBandwidth(TestCase):
     def test_hextile_sends_less_than_raw(self) -> None:
         raw = self._bytes_from_server("raw")
         hextile = self._bytes_from_server("hextile")
+        pixels = scenes.SIZE[0] * scenes.SIZE[1]
+        # A capture that never asked for pixels is a few hundred bytes of
+        # handshake, and two of those compare equal for the wrong reason.
+        self.assertGreater(raw, pixels, f"raw sent {raw} bytes for {pixels} pixels; nothing was captured")
         self.assertLess(
             hextile, raw,
             f"hextile sent {hextile} bytes against raw's {raw} for scene {SCENE!r} "
