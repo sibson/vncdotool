@@ -7,16 +7,29 @@ from .base import ClientDecoder, DecodeError, Decoder, PixelDecoder
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
 from .raw import RawDecoder
+from .rre import CoRREDecoder, RREDecoder
 
 # Classes, not instances: ZRLE and Tight own a zlib stream that lives for
 # one connection (RFC 6143 section 7.7.6), so decoders cannot be shared
-# between them even though today's two hold no state.
+# between them even though today's four hold no state.
 DECODERS: Dict[Encoding, Type[Decoder]] = {
     cls.ENCODING: cls
     for cls in (
         RawDecoder,
         CopyRectDecoder,
+        RREDecoder,
+        CoRREDecoder,
     )
+}
+
+# The names --encodings accepts. Only registered encodings: the ones still
+# on rfb.py's own path cannot be offered alone, since a server may then send
+# a rectangle in an encoding no decoder here claims.
+ENCODING_NAMES: Dict[str, Encoding] = {
+    "raw": Encoding.RAW,
+    "copyrect": Encoding.COPY_RECTANGLE,
+    "rre": Encoding.RRE,
+    "corre": Encoding.CORRE,
 }
 
 
@@ -29,6 +42,7 @@ __all__ = [
     "DECODERS",
     "DecodeError",
     "Decoder",
+    "ENCODING_NAMES",
     "PixelDecoder",
     "RectBuffer",
     "for_connection",

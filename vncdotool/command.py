@@ -27,7 +27,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from . import pixelformat
+from . import decoders, pixelformat
 from .capture import check_capture_target
 from .client import (
     AuthenticationError,
@@ -594,6 +594,12 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="pause time is accelerated by FACTOR [x%default]",
     )
     op.add_option(
+        "--encodings",
+        metavar="LIST",
+        help="comma-separated encodings to offer the server, in preference "
+        "order (%s) [raw]" % ", ".join(decoders.ENCODING_NAMES),
+    )
+    op.add_option(
         "--pixel-format",
         metavar="FORMAT",
         choices=sorted(pixelformat.PIXEL_FORMATS),
@@ -632,6 +638,15 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     if options.force_caps:
         factory.force_caps = True
+
+    if options.encodings:
+        try:
+            factory.encodings = [
+                decoders.ENCODING_NAMES[name.strip()]
+                for name in options.encodings.split(",")
+            ]
+        except KeyError as exc:
+            op.error(f"unknown encoding {exc.args[0]!r}; known: {', '.join(decoders.ENCODING_NAMES)}")
 
     if options.pixel_format:
         factory.pixel_format = pixelformat.PIXEL_FORMATS[options.pixel_format]
