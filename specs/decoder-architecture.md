@@ -134,7 +134,7 @@ three shapes, distinguished by what the decoder produces:
 |---|---|---|---|
 | `PixelDecoder` | bytes | fills a `RectBuffer` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
 | `ClientDecoder` | bytes | calls a client method | CopyRect, Cursor |
-| `Control` | nothing | changes client state | DesktopSize, LastRect, QEMU extended key |
+| `ControlDecoder` | nothing | changes client state | DesktopSize, LastRect, QEMU extended key |
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -151,7 +151,7 @@ padded to a whole number of bytes — `floor((width + 7) / 8)` — with the most
 significant bit of each byte representing the leftmost pixel and a 1-bit meaning
 the corresponding cursor pixel is valid.
 
-The genuine special cases are `Control`: `LastRect` mutates the rectangle loop
+The genuine special cases are `ControlDecoder`: `LastRect` mutates the rectangle loop
 counter, and the QEMU extended key encoding mutates `negotiated_encodings` and
 removes the entry it just appended to `rectanglePos`.
 
