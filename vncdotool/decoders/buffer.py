@@ -20,6 +20,10 @@ class RectBuffer:
         # update -- hands over a buffer we can pass straight to the client,
         # so hold the reference instead of copying it in and back out.
         self._whole: bytes | None = None
+        # The backing is reused across rectangles, so it arrives holding the
+        # previous one. A write covering the whole buffer replaces all of it;
+        # anything narrower has to clear it first.
+        self._covered = False
 
     def _check_rect(self, x: int, y: int, w: int, h: int) -> None:
         if x < 0 or y < 0 or w < 0 or h < 0:
@@ -38,8 +42,10 @@ class RectBuffer:
 
         if x == 0 and y == 0 and w == self.width and h == self.height:
             self._whole = bytes(pixels)
+            self._covered = True
             return
         self._materialize()
+        self._clear()
 
         stride = self.width * self.bypp
         row_bytes = w * self.bypp
@@ -62,6 +68,9 @@ class RectBuffer:
         if len(color) != self.bypp:
             raise DecodeError(f"fill color must be {self.bypp} bytes, got {len(color)}")
         self._materialize()
+        if not (x == 0 and y == 0 and w == self.width and h == self.height):
+            self._clear()
+        self._covered = True
 
         stride = self.width * self.bypp
         row_bytes = w * self.bypp
@@ -77,6 +86,12 @@ class RectBuffer:
         for r in range(h):
             dst = (y + r) * stride + x_off
             buf[dst:dst + row_bytes] = row
+
+    def _clear(self) -> None:
+        if self._covered:
+            return
+        self._backing[:self._nbytes] = bytes(self._nbytes)
+        self._covered = True
 
     def _materialize(self) -> None:
         """Write a held whole-rectangle blit into the backing, so a later
