@@ -1,7 +1,4 @@
-"""Hextile: 16x16 tiles, each raw or a background plus subrectangles.
-
-RFC 6143 section 7.7.4.
-"""
+"""Hextile. RFC 6143 section 7.7.4."""
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Iterator
