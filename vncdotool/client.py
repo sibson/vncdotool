@@ -21,7 +21,7 @@ from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
-from . import rfb
+from . import pixelformat, rfb
 from .keys import KEYMAP
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
@@ -62,25 +62,19 @@ class ProtocolError(VNCDoException):
     """VNC Server sent something we cannot handle"""
 
 
-RGB32 = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16)
+RGB32 = pixelformat.PIXEL_FORMATS["rgbx8888"]
 RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
-BGR16 = rfb.PixelFormat(16, 16, False, True, 31, 63, 31, 11, 5, 0)
-PF2IM = {
-    RGB24: "RGB",
-    RGB32: "RGBX",
-    BGR16: "BGR;16",
-    rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 16, 8, 0): "BGR",
-    rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0): "BGRX",
-}
+BGR16 = pixelformat.PIXEL_FORMATS["rgb565"]
 
 
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
+    requested_pixel_format: rfb.PixelFormat | None = None
     x = 0
     y = 0
     buttons = 0
     screen: Image.Image | None = None
-    _image_mode = PF2IM[rfb.PixelFormat()]
+    _image_mode = pixelformat.raw_mode(rfb.PixelFormat())
     deferred: Deferred | None = None
 
     cursor: Image.Image | None = None
@@ -317,16 +311,20 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def setImageMode(self) -> None:
         """Check support for PixelFormats announced by server or select client supported alternative."""
-        try:
-            self._image_mode = PF2IM[self.pixel_format]
-        except LookupError:
-            if self._version_server == (3, 889):  # Apple Remote Desktop
-                pixel_format = BGR16
-            else:
-                pixel_format = RGB32
+        pixel_format = self.requested_pixel_format
+        if pixel_format is None:
+            try:
+                self._image_mode = pixelformat.raw_mode(self.pixel_format)
+                return
+            except pixelformat.UnsupportedPixelFormat as exc:
+                log.debug("cannot unpack the server's format (%s), asking for another", exc)
+                if self._version_server == (3, 889):  # Apple Remote Desktop
+                    pixel_format = BGR16
+                else:
+                    pixel_format = RGB32
 
-            self.setPixelFormat(pixel_format)
-            self._image_mode = PF2IM[pixel_format]
+        self.setPixelFormat(pixel_format)
+        self._image_mode = pixelformat.raw_mode(pixel_format)
 
     #
     # base customizations
@@ -494,10 +492,16 @@ class VNCDoToolFactory(rfb.RFBFactory):
     qemu_extended_key = True
     last_rect = True
     force_caps = False
+    pixel_format: rfb.PixelFormat | None = None
 
     def __init__(self) -> None:
         self.deferred = Deferred()
         self._disconnect_callbacks: list[Callable[[Failure], None]] = []
+
+    def buildProtocol(self, addr: object) -> VNCDoToolClient:
+        protocol = super().buildProtocol(addr)
+        protocol.requested_pixel_format = self.pixel_format
+        return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
         for cb in self._disconnect_callbacks:

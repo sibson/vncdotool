@@ -50,9 +50,61 @@ def first_difference(actual: Image.Image, expected: Image.Image, tolerance: int)
     return None
 
 
+def replay(fixture: Path) -> List[Tuple[str, Image.Image]]:
+    """Every step of a fixture, as (scene key, framebuffer)."""
+    cli = make_client()
+    cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
+    screens = []
+    for step in sorted(fixture.glob("step-*.bin.gz")):
+        cli.dataReceived(gzip.decompress(step.read_bytes()))
+        assert cli.screen is not None, f"{step.name}: no framebuffer after the update"
+        screens.append((step.name.removesuffix(".bin.gz").split("-", 2)[2], cli.screen.copy()))
+    return screens
+
+
+def quantization(fixture: Path) -> int:
+    """Widest per-channel step the fixture's negotiated format can represent.
+
+    Read off the fixture's own ServerInit rather than its conditions, so a
+    fixture cannot disagree with the bytes it holds.
+    """
+    cli = make_client()
+    cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
+    fmt = cli.pixel_format
+    return max(255 // maximum for maximum in (fmt.redmax, fmt.greenmax, fmt.bluemax))
+
+
 class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
+
+    def test_a_scene_decodes_the_same_at_every_captured_format(self) -> None:
+        """R3: the framebuffer does not depend on the format the server negotiated.
+
+        Fixtures of one server and encoding differ only in the format their
+        capture asked for, which is the last dash-separated part of the name.
+        """
+        groups: dict[str, List[Path]] = {}
+        for fixture in fixtures():
+            groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
+
+        for group, members in sorted(groups.items()):
+            if len(members) < 2:
+                continue
+            reference, *others = members
+            expected = dict(replay(reference))
+            for other in others:
+                tolerance = max(quantization(reference), quantization(other))
+                for key, screen in replay(other):
+                    with self.subTest(group=group, fixture=other.name, scene=key):
+                        self.assertIn(key, expected, "scene missing from the reference capture")
+                        difference = first_difference(screen, expected[key], tolerance)
+                        if difference is not None:
+                            x, y, got, want = difference
+                            self.fail(
+                                f"{other.name} scene {key}: pixel ({x},{y}) decoded {got}, "
+                                f"{reference.name} decoded {want} (tolerance {tolerance})"
+                            )
 
 
 class GoldenReplay:

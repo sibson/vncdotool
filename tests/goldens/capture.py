@@ -16,6 +16,7 @@ from pathlib import Path
 
 from tests.functional.vncservers import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
+from vncdotool import pixelformat
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
@@ -50,8 +51,20 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="tigervnc-raw-bgrx8888", help="fixture directory name")
+    parser.add_argument(
+        "--pixel-format",
+        choices=sorted(pixelformat.PIXEL_FORMATS),
+        default="bgrx8888",
+        help="format the capturing client asks the server for [%(default)s]",
+    )
+    parser.add_argument(
+        "--name",
+        help="fixture directory name [tigervnc-raw-PIXEL_FORMAT]",
+    )
     args = parser.parse_args()
+    # The name carries the format because the cross-format check pairs
+    # fixtures by everything before the last dash.
+    name = args.name or f"tigervnc-raw-{args.pixel_format}"
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
@@ -60,7 +73,8 @@ def main() -> int:
         # scene.vdo waits on `expect scenes/<key>.png`, named relative to
         # itself, so the driver runs from the directory holding both.
         subprocess.run(
-            [VNCDO, "--timeout", str(SCENE_DEADLINE), "-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
+            [VNCDO, "--timeout", str(SCENE_DEADLINE), "--pixel-format", args.pixel_format,
+             "-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
             check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
         )
         proxy.wait(timeout=CAPTURE_DEADLINE)
@@ -74,7 +88,7 @@ def main() -> int:
             if step.key is None:
                 raise SystemExit(f"step {step.index} carries no keysym patch; capture is unusable")
 
-        directory = FIXTURE_ROOT / args.name
+        directory = FIXTURE_ROOT / name
         if directory.exists():
             shutil.rmtree(directory)
         conditions = {

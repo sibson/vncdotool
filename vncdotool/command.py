@@ -27,6 +27,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
+from . import pixelformat
 from .capture import check_capture_target
 from .client import (
     AuthenticationError,
@@ -593,6 +594,13 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="pause time is accelerated by FACTOR [x%default]",
     )
     op.add_option(
+        "--pixel-format",
+        metavar="FORMAT",
+        choices=sorted(pixelformat.PIXEL_FORMATS),
+        help="ask the server for FORMAT (%s) instead of accepting the one it "
+        "announces" % ", ".join(sorted(pixelformat.PIXEL_FORMATS)),
+    )
+    op.add_option(
         "-i",
         "--incremental-refreshes",
         action="store_true",
@@ -624,6 +632,9 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     if options.force_caps:
         factory.force_caps = True
+
+    if options.pixel_format:
+        factory.pixel_format = pixelformat.PIXEL_FORMATS[options.pixel_format]
 
     if options.timeout:
         message = "TIMEOUT Exceeded (%ss)" % options.timeout
