@@ -73,24 +73,24 @@ def raw_mode(pixel_format: rfb.PixelFormat) -> str:
     if pixel_format.bpp == 16:
         if pixel_format.bigendian:
             raise UnsupportedPixelFormat("big-endian 16bpp is not supported")
-        blue_high = pixel_format.blueshift > pixel_format.redshift
-        red_high = pixel_format.redshift > pixel_format.blueshift
-        if widths == (5, 6, 5):
-            if red_high:
-                return "BGR;16"
-            if blue_high:
-                return "RGB;16"
-        elif widths == (5, 5, 5):
-            if red_high:
-                return "BGR;15"
-            if blue_high:
-                return "RGB;15"
-        elif widths == (4, 4, 4):
-            # Pillow has no mirror of RGB;4B: a 444 format with red in the
-            # high nibble and blue in the low one has no raw mode at all.
-            if blue_high:
-                return "RGB;4B"
-        raise UnsupportedPixelFormat(f"16bpp layout widths={widths} has no Pillow mode")
+        shifts = (pixel_format.redshift, pixel_format.greenshift, pixel_format.blueshift)
+        # Matched as whole triples, not by asking which of red and blue sits
+        # higher: the channels have unequal widths, so an arrangement that
+        # passes that test can still overlap.
+        try:
+            # Pillow has no mirror of RGB;4B, so 444 with red in the high
+            # nibble is absent here and raises.
+            return {
+                ((5, 6, 5), (11, 5, 0)): "BGR;16",
+                ((5, 6, 5), (0, 5, 11)): "RGB;16",
+                ((5, 5, 5), (10, 5, 0)): "BGR;15",
+                ((5, 5, 5), (0, 5, 10)): "RGB;15",
+                ((4, 4, 4), (0, 4, 8)): "RGB;4B",
+            }[(widths, shifts)]
+        except KeyError:
+            raise UnsupportedPixelFormat(
+                f"16bpp layout widths={widths} shifts={shifts} has no Pillow mode"
+            ) from None
 
     raise UnsupportedPixelFormat(f"bpp={pixel_format.bpp} is not supported")
 

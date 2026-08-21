@@ -1,3 +1,5 @@
+import itertools
+from typing import Iterator
 from unittest import TestCase
 
 from PIL import Image
@@ -20,6 +22,25 @@ RGB565 = rfb.PixelFormat(16, 16, False, True, 31, 63, 31, 0, 5, 11)
 BGR555 = rfb.PixelFormat(16, 15, False, True, 31, 31, 31, 10, 5, 0)
 RGB555 = rfb.PixelFormat(16, 15, False, True, 31, 31, 31, 0, 5, 10)
 RGB444 = rfb.PixelFormat(16, 12, False, True, 15, 15, 15, 0, 4, 8)
+
+
+def every_layout() -> Iterator[rfb.PixelFormat]:
+    """Every channel arrangement of the widths a server may negotiate.
+
+    Both endiannesses throughout, including the arrangements that have no
+    Pillow mode: what they must do is raise, and a generated case cannot be
+    forgotten the way a listed one can.
+    """
+    for bpp, depth, maxima, slots in (
+        (32, 24, (255, 255, 255), (0, 8, 16, 24)),
+        (24, 24, (255, 255, 255), (0, 8, 16)),
+        (16, 16, (31, 63, 31), (0, 5, 11)),
+        (16, 15, (31, 31, 31), (0, 5, 10)),
+        (16, 12, (15, 15, 15), (0, 4, 8)),
+    ):
+        for shifts in itertools.permutations(slots, 3):
+            for bigendian in (False, True):
+                yield rfb.PixelFormat(bpp, depth, bigendian, True, *maxima, *shifts)
 
 
 def pack(pixel_format: rfb.PixelFormat, red: int, green: int, blue: int) -> bytes:
@@ -62,34 +83,33 @@ class TestRawMode(TestCase):
         self.assertNotEqual(raw_mode(BGRX8888), raw_mode(BGRX8888_BIGENDIAN))
         self.assertEqual(raw_mode(BGRX8888_BIGENDIAN), "XRGB")
 
-    def test_known_bytes_decode_to_known_pixels(self):
-        """Each resolved mode is a correct claim about Pillow's own decoding."""
-        formats = [
-            BGRX8888,
-            RGBX8888,
-            XRGB8888,
-            XBGR8888,
-            BGRX8888_BIGENDIAN,
-            RGB24,
-            BGR24,
-            BGR565,
-            RGB565,
-            BGR555,
-            RGB555,
-            RGB444,
-        ]
-        for pixel_format in formats:
-            mode = raw_mode(pixel_format)
-            with self.subTest(pixel_format=pixel_format, mode=mode):
-                red = pack(pixel_format, pixel_format.redmax, 0, 0)
-                green = pack(pixel_format, 0, pixel_format.greenmax, 0)
-                blue = pack(pixel_format, 0, 0, pixel_format.bluemax)
-                red_pixel = Image.frombytes("RGB", (1, 1), red, "raw", mode).getpixel((0, 0))
-                green_pixel = Image.frombytes("RGB", (1, 1), green, "raw", mode).getpixel((0, 0))
-                blue_pixel = Image.frombytes("RGB", (1, 1), blue, "raw", mode).getpixel((0, 0))
-                self.assertEqual(red_pixel, (255, 0, 0))
-                self.assertEqual(green_pixel, (0, 255, 0))
-                self.assertEqual(blue_pixel, (0, 0, 255))
+    def test_every_layout_either_decodes_correctly_or_is_refused(self):
+        """Over every channel arrangement, not the handful we thought to list.
+
+        A mode that resolves must decode the primaries it claims to; a layout
+        Pillow cannot read must raise. There is no third outcome, and in
+        particular no silently wrong mode.
+        """
+        resolved = set()
+
+        for pixel_format in every_layout():
+            with self.subTest(pixel_format=pixel_format):
+                try:
+                    mode = raw_mode(pixel_format)
+                except UnsupportedPixelFormat:
+                    continue
+                resolved.add(mode)
+                for channel, expected in enumerate(((255, 0, 0), (0, 255, 0), (0, 0, 255))):
+                    intensity = [0, 0, 0]
+                    intensity[channel] = (pixel_format.redmax, pixel_format.greenmax, pixel_format.bluemax)[channel]
+                    data = pack(pixel_format, *intensity)
+                    decoded = Image.frombytes("RGB", (1, 1), data, "raw", mode).getpixel((0, 0))
+                    self.assertEqual(decoded, expected)
+
+        self.assertEqual(
+            resolved,
+            {"RGBX", "BGRX", "XRGB", "XBGR", "RGB", "BGR", "BGR;16", "RGB;16", "BGR;15", "RGB;15", "RGB;4B"},
+        )
 
     def test_rgb565_is_red_in_the_high_bits(self):
         """0x00F8 little-endian through BGR;16 is pure red."""
