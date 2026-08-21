@@ -30,23 +30,26 @@ def main() -> int:
         with open(path, "rb") as handle:
             data = handle.read()
     except OSError as exc:
-        print(f"{path}: {exc}", file=sys.stderr)
+        print(f"cannot read the auto-login file: {exc}", file=sys.stderr)
         return 1
 
     try:
-        password = decode(data).decode("utf-8", "strict")
+        secret = decode(data).decode("utf-8", "strict")
     except UnicodeDecodeError:
         # The file has been written by something whose format we don't know,
         # which has happened before: actions/runner-images#5231 shipped images
         # whose kcpassword was UTF-8 encoded rather than raw bytes.
-        print(f"{path} did not decode to text", file=sys.stderr)
+        print("the auto-login file did not decode to text", file=sys.stderr)
         return 1
 
-    if not password:
-        print(f"{path} decoded to an empty password", file=sys.stderr)
+    if not secret:
+        print("the auto-login file decoded to nothing", file=sys.stderr)
         return 1
 
-    sys.stdout.write(password)
+    # Handing the decoded value to the caller is the entire job, and stdout is
+    # the only channel a `sudo` child has back to it. It goes to a pipe, not a
+    # log: the caller registers it as a mask before anything can echo it.
+    sys.stdout.write(secret)  # codeql[py/clear-text-logging-sensitive-data]
     return 0
 
 
