@@ -23,9 +23,8 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
     )
 }
 
-# The names --encodings accepts. Only registered encodings: the ones still
-# on rfb.py's own path cannot be offered alone, since a server may then send
-# a rectangle in an encoding no decoder here claims.
+# The names --encodings accepts. Registered encodings only: what is still on
+# rfb.py's own path decodes, but is not offered until its phase migrates it.
 ENCODING_NAMES: Dict[str, Encoding] = {
     "raw": Encoding.RAW,
     "copyrect": Encoding.COPY_RECTANGLE,
