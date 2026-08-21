@@ -41,7 +41,7 @@ TYPE_LEN = {
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
 
 
-class RFBServer(Protocol):  # type: ignore[misc]
+class RFBServer(Protocol):
     _handler: tuple[Callable[..., None], int] = (lambda data: None, 0)
 
     def connectionMade(self) -> None:
@@ -209,7 +209,7 @@ class VNCLoggingClient(VNCDoToolClient):
             self.capture_file = None
 
 
-class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
+class VNCLoggingClientProxy(portforward.ProxyClient):
     """Accept data from a server and forward to logger and downstream client.
 
     ::
@@ -259,11 +259,11 @@ class VNCLoggingClientProxy(portforward.ProxyClient):  # type: ignore[misc]
         super().dataReceived(data)
 
 
-class VNCLoggingClientFactory(portforward.ProxyClientFactory):  # type: ignore[misc]
+class VNCLoggingClientFactory(portforward.ProxyClientFactory):
     protocol = VNCLoggingClientProxy
 
 
-class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore[misc]
+class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     """Proxy in the middle, decodes and logs RFB messages before sending them upstream.
 
     ::
@@ -433,7 +433,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):  # type: ignore
         self.recorder(" ".join(cmds))
 
 
-class VNCLoggingServerFactory(portforward.ProxyFactory):  # type: ignore[misc]
+class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
 

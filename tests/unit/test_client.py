@@ -23,10 +23,10 @@ class TestVNCDoToolClient(TestCase):
         self.client.factory = mock.Mock()
 
         # mock out a bunch of base class functions
-        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
-        self.client.pointerEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.keyEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.setEncodings = mock.Mock()  # type: ignore[assignment]
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.pointerEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.keyEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.setEncodings = mock.Mock()  # type: ignore[method-assign]
 
     def test_vncConnectionMade(self):
         cli = self.client
@@ -348,7 +348,7 @@ class TestImageMode(TestCase):
     def test_setImageMode_does_not_warn(self):
         self.client._version_server = (3, 8)
         self.client.pixel_format = client.RGB24
-        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+        self.client.setPixelFormat = mock.Mock()
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
@@ -361,7 +361,7 @@ class TestImageMode(TestCase):
     def test_setImageMode_falls_back_for_apple_remote_desktop(self):
         self.client._version_server = (3, 889)
         self.client.pixel_format = mock.Mock()  # unrecognised by PF2IM
-        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+        self.client.setPixelFormat = mock.Mock()
 
         self.client.setImageMode()
 

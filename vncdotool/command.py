@@ -133,7 +133,7 @@ class VNCDoCLIFactory(VNCDoToolFactory):
         reactor.callLater(0.1, reactor.stop)
 
 
-class ExitingProcess(protocol.ProcessProtocol):  # type: ignore[misc]
+class ExitingProcess(protocol.ProcessProtocol):
     def processExited(self, reason: Failure) -> None:
         reactor.callLater(0.1, reactor.stop)
 
