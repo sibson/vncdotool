@@ -37,7 +37,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.utils import CryptographyDeprecationWarning
 from twisted.application import internet, service
 from twisted.internet import protocol
-from twisted.internet.interfaces import IConnector
+from twisted.internet.interfaces import IConnector, ITransport
 from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
@@ -175,6 +175,8 @@ class RFBClient(Protocol):
     _HEADER_TRANSLATE = bytes.maketrans(b"0123456789", b"0" * 10)
 
     _CHANGING_HOOKS = ("fillRectangle", "updateRectangle")
+
+    transport: ITransport
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
