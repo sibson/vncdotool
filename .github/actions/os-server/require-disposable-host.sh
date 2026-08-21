@@ -3,22 +3,12 @@
 #
 # The setup scripts next to this one leave the machine they run on reachable
 # for unattended remote control, and deleting a checkout undoes none of it:
-# macOS keeps the Remote Management setting and any account created for it,
-# Windows keeps the UltraVNC service. So the host has to prove what it is,
-# rather than the operator having to remember.
-#
-# They call this immediately before the first thing that changes the machine,
-# not at their own first line: working out which account to authenticate as
-# reads and changes nothing, and is worth being able to run anywhere.
+# macOS keeps the Remote Management setting, Windows keeps the UltraVNC
+# service.
 #
 # RUNNER_ENVIRONMENT is the load-bearing one -- it separates a hosted runner
 # from a self-hosted one, which is somebody's real machine. The rest catch a
 # local `act` or a step copied out of the workflow.
-#
-# Both the action and the scripts themselves call this, so running a script
-# directly is refused the same way the action would be.
-#
-# Usage: bash require-disposable-host.sh
 set -uo pipefail
 
 # For exercising the setup against a VM. Deliberately a phrase rather than a

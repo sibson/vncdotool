@@ -31,8 +31,7 @@ if ($LASTEXITCODE -ne 0) {
     throw 'refusing to run: this is not a disposable runner'
 }
 
-# The tests read this; the macOS half may pick a different account than the
-# workflow asked for, so both halves publish what they used.
+# tests/functional/vncservers.py reads this.
 "VNCDOTOOL_OS_SERVER_PASSWORD=$Password" |
     Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

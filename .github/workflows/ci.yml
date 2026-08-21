@@ -76,8 +76,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     # packages: write so the job that discovers a missing fleet image is also
-    # the one that publishes it. A separate publishing workflow raced this
-    # job on the very push that changed tests/servers.
+    # the one that publishes it.
     permissions:
       contents: read
       packages: write

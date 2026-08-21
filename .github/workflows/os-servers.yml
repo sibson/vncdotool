@@ -9,8 +9,7 @@ name: OS-hosted VNC servers
 #
 # What each server needs, and what it does and doesn't prove, is documented
 # in tests/servers/ultravnc/README.md and tests/servers/screen-sharing/README.md.
-# This file wires .github/actions/os-server -- which is where the setup lives,
-# so that no runnable script can point it at a developer's machine -- to
+# This file wires .github/actions/os-server, where the setup lives, to
 # tests/functional/test_os_servers.py. The two OSes differ by which server the
 # action sets up and which shell the remaining steps run in, so they are one
 # matrix job rather than two near-identical ones.
@@ -78,14 +77,10 @@ jobs:
       - name: Install vncdotool
         run: uv sync
 
-      # macOS takes no credentials: it authenticates as the console owner with
-      # the auto-login password already on the machine, and fails rather than
-      # creating an account, so a runner image that stops enabling auto-login
-      # is a red build instead of a silently slower one.
-      #
-      # UltraVNC's password is a spike credential for a throwaway runner,
-      # deliberately visible as the fallback; a repo secret replaces it.
-      # Whatever either half used reaches the tests through $GITHUB_ENV.
+      # A spike credential for a throwaway runner, deliberately visible as the
+      # fallback; a repo secret replaces it. Windows only -- macOS takes no
+      # credentials, and both halves publish what they used to $GITHUB_ENV,
+      # which is where the tests read it.
       - name: Set up the VNC server
         uses: ./.github/actions/os-server
         with:

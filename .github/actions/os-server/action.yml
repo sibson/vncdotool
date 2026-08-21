@@ -3,12 +3,9 @@ description: >
   Turn the runner into a live VNC server for tests/functional/test_os_servers.py:
   UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
 
-# The work is in the scripts beside this file, which are shell rather than
-# YAML because they are long enough to want syntax highlighting, shellcheck
-# and a diff that reads. They are runnable, so each one calls
-# require-disposable-host.sh itself, immediately before the first thing that
-# changes the machine -- switching Remote Management on, creating an account,
-# installing a service, none of which a checkout deletion undoes.
+# The work is in the scripts beside this file. Each calls
+# require-disposable-host.sh before the first thing that changes the machine,
+# so running one directly is refused the same way.
 #
 # What each server needs, and what it does and doesn't prove, is documented
 # next to the diagnostic scripts in tests/servers/ultravnc/README.md and
