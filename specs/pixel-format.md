@@ -59,11 +59,25 @@ Three consequences:
 
 ## Decoders emit what they were sent
 
-A decoder returns bytes in the layout it produced them, tagged with the Pillow
-raw mode that unpacks it. `client.py` materializes each rectangle with one
-`Image.frombytes(..., "raw", mode)`. Raw, RRE, CoRRE, Hextile and ZRLE tag the
-negotiated format; Tight's JPEG tags `RGB`; a colour-mapped decoder tags `P` and
-carries the palette.
+A decoder returns bytes in the layout it produced them, tagged with the
+`PixelFormat` describing that layout. `client.py` resolves the tag with
+`raw_mode()` and materializes each rectangle with one `Image.frombytes(...,
+"raw", mode)`. Raw, RRE, CoRRE, Hextile and ZRLE tag the negotiated format;
+Tight's JPEG and TPIXEL tag 24 bpp RGB; a colour-mapped decoder tags the
+colour-mapped format and the client resolves indices through the palette it
+already holds.
+
+The tag is a `PixelFormat` and not a Pillow mode string so that decoders speak
+only RFB — they implement a specification written in shifts and maxima, and
+naming `BGRX` there would put the rendering library inside code that has no
+other reason to know it exists. Pillow stays in `client.py` and in `raw_mode`,
+which is also the single place to change if the four unsupported layouts below
+ever need a converter. A decoder unit test asserts bytes and a `PixelFormat`,
+with no Pillow in it (R2).
+
+The one artefact: JPEG and TPIXEL tag a 24 bpp format, which the specification
+does not permit on the wire. Internally that is the honest description of three
+packed bytes, and the negotiation registry still refuses to ask a server for it.
 
 Converting inside each decoder to one canonical layout was designed first and
 dropped. It materializes every rectangle twice — bytes, image, bytes, image, for
@@ -100,8 +114,8 @@ placement is a function of the shifts. rfbproto adds a tie-break the RFC omits:
 at depth ≤ 16 both placements fit, and the low three bytes are sent.
 
 **TPIXEL** is narrower and fixed — depth exactly 24, all channels exactly 8
-bits, bytes red, green, blue — so a Tight rect tags `RGB` unconditionally. It
-arrives with Tight at decoder Phase 6.
+bits, bytes red, green, blue — so a Tight rect tags 24 bpp RGB whatever was
+negotiated. It arrives with Tight at decoder Phase 6.
 
 This pass writes the CPIXEL functions and their tests; ZRLE keeps its current
 bytes until Phase 5, per R5.

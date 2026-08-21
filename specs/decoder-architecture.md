@@ -173,10 +173,15 @@ subrect coordinates. That is decoding, not formatting.
 ### Decoders emit the bytes they were sent, and say what they are
 
 A decoder returns pixel bytes in whatever layout it produced them, tagged with
-the Pillow raw mode that unpacks it, and `client.py` materializes each rectangle
-with one `Image.frombytes(..., "raw", mode)`. Most decoders tag the negotiated
-format; Tight's JPEG tags `RGB`, a colour-mapped decoder tags `P` and carries
-the palette.
+the `PixelFormat` that describes it. `client.py` resolves that to a Pillow raw
+mode and materializes each rectangle with one `Image.frombytes(..., "raw",
+mode)`. Most decoders tag the negotiated format; Tight's JPEG and TPIXEL tag
+24 bpp RGB, a colour-mapped decoder tags the colour-mapped format.
+
+The tag is a `PixelFormat`, not a Pillow mode string: decoders implement a
+specification written in shifts and maxima, so Pillow stays in `client.py` and
+in `pixelformat.raw_mode`, and a decoder unit test needs no rendering library
+(R2).
 
 So a decoder never interprets a pixel. A background colour, a Hextile
 foreground, a ZRLE palette entry are opaque `bypp`-sized byte strings and a fill
