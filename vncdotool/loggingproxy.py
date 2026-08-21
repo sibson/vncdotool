@@ -220,6 +220,7 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
 
     vnclog: VNCLoggingClient | None = None
     ncaptures = 0
+    peer: VNCLoggingServerProxy
 
     def startLogging(self, peer: VNCLoggingServerProxy) -> None:
         self.vnclog = VNCLoggingClient()
@@ -273,6 +274,8 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     """
 
     clientProtocolFactory = VNCLoggingClientFactory
+    factory: VNCLoggingServerFactory
+    peer: VNCLoggingClientProxy
 
     server: str | None = None
     buttons = 0
