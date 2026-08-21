@@ -517,8 +517,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         The allocation is kept and reused at its high-water mark, so a session
         of same-sized updates allocates once.
         """
-        # A zero dimension carries no pixels and no payload, and the old
-        # decoders passed it through, so it is not an error.
+        # A zero dimension carries no pixels and no payload, so it is not
+        # an error.
         limit_w = self.width or self.MAX_DESKTOP_SIZE
         limit_h = self.height or self.MAX_DESKTOP_SIZE
         if not (0 <= width <= limit_w and 0 <= height <= limit_h):
@@ -549,10 +549,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doConnection()
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
-            # Not DecodeError alone: a decoder parsing malformed input raises
-            # struct.error out of unpack and zlib.error out of a corrupt
-            # stream, and an unhandled one is as undiagnosed a failure as the
-            # indefinite wait this exists to replace.
+            # Malformed input reaches a decoder as struct.error out of
+            # unpack or zlib.error out of a corrupt stream, not only as
+            # DecodeError.
             generator.close()
             self.abortConnection(f"cannot decode this rectangle: {exc}")
             return
