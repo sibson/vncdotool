@@ -18,6 +18,10 @@ class RectBuffer:
             raise ValueError(f"backing too small: need {needed} bytes, got {len(backing)}")
         self._backing = backing
         self._nbytes = needed
+        # A decoder that fills the whole rectangle in one blit -- Raw, every
+        # update -- hands over a buffer we can pass straight to the client,
+        # so hold the reference instead of copying it in and back out.
+        self._whole: bytes | None = None
 
     def _check_rect(self, x: int, y: int, w: int, h: int) -> None:
         if x < 0 or y < 0 or w < 0 or h < 0:
@@ -33,6 +37,11 @@ class RectBuffer:
         expected = w * h * self.bypp
         if len(pixels) != expected:
             raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
+
+        if x == 0 and y == 0 and w == self.width and h == self.height:
+            self._whole = bytes(pixels)
+            return
+        self._materialize()
 
         stride = self.width * self.bypp
         row_bytes = w * self.bypp
@@ -54,6 +63,7 @@ class RectBuffer:
         self._check_rect(x, y, w, h)
         if len(color) != self.bypp:
             raise DecodeError(f"fill color must be {self.bypp} bytes, got {len(color)}")
+        self._materialize()
 
         stride = self.width * self.bypp
         row_bytes = w * self.bypp
@@ -70,5 +80,15 @@ class RectBuffer:
             dst = (y + r) * stride + x_off
             buf[dst:dst + row_bytes] = row
 
+    def _materialize(self) -> None:
+        """Write a held whole-rectangle blit into the backing, so a later
+        partial write has something to write into."""
+        if self._whole is None:
+            return
+        self._backing[:self._nbytes] = self._whole
+        self._whole = None
+
     def tobytes(self) -> bytes:
+        if self._whole is not None:
+            return self._whole
         return bytes(self._backing[:self._nbytes])

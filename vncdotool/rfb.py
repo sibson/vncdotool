@@ -15,7 +15,6 @@ https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 from __future__ import annotations
 
 import getpass
-import functools
 import sys
 import warnings
 import zlib
@@ -494,9 +493,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             if target is None:
                 return
             self._pumpDecoder(
-                None,
-                decoder.decode(target, self.pixel_format),
-                functools.partial(self._finishRectangle, decoder, target, rect),
+                None, decoder.decode(target, self.pixel_format), (decoder, target, rect)
             )
         else:
             self._pumpDecoder(None, decoder.decode(self, rect, self.pixel_format), None)
@@ -534,13 +531,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self,
         block: bytes | None,
         generator: Iterator[int],
-        finish: Callable[[], None] | None,
+        finish: tuple[decoders.PixelDecoder, decoders.RectBuffer, Rect] | None,
     ) -> None:
         try:
             size = generator.send(block)
         except StopIteration:
             if finish is not None:
-                finish()
+                self._finishRectangle(*finish)
             self._doConnection()
             return
         except decoders.DecodeError as exc:
