@@ -6,9 +6,9 @@ entry point [decoder-goldens.md](decoder-goldens.md) names in its phasing.
 
 ## Problem
 
-`client.PF2IM` (`client.py:68`) is a five-entry dict keyed on the whole
+`client.PF2IM` is a five-entry dict keyed on the whole
 `PixelFormat` dataclass, valued with a Pillow raw mode. A format outside those
-five raises `LookupError`, and `setImageMode` (`client.py:318-329`) guesses —
+five raises `LookupError`, and `setImageMode` guesses —
 `BGR16` if the server announced 3.889, `RGB32` otherwise — sends
 `SetPixelFormat`, and assumes it was obeyed. A server that ignores it keeps
 sending its own format, decoded as the requested one: #90 and #275.
@@ -91,7 +91,7 @@ Hextile foreground, a ZRLE palette entry are opaque `bypp`-sized byte strings,
 and a fill is one repeated. No shifts, no masks, no endianness in any decoder,
 so that class of bug cannot be written — including the live one, ZRLE's
 `cpixel()` reading three bytes least-significant-first and appending `0xFF`
-(`rfb.py:820`).
+(`rfb.py`).
 
 R3 moves with it: stated over the framebuffer, not decoder output, and checked
 by the goldens' cross-format comparison.

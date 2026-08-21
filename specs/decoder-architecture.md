@@ -7,7 +7,7 @@ makes each one testable, and lays out the order to build it in.
 
 ## Only Raw works today
 
-`client.py:344` offers the server `[RAW]` plus the pseudo-encodings, there is no
+`VNCDoToolClient.vncConnectionMade` offers the server `[RAW]` plus the pseudo-encodings, there is no
 CLI flag to change that (#167, #168), and a server may only use an encoding the
 client asked for. So CopyRect, RRE, CoRRE, Hextile and ZRLE are unreachable in
 normal use. They are compiled, not run.
@@ -163,7 +163,7 @@ CPIXEL's three-byte rule and its two placements (RFC 6143 §7.7.5), TPIXEL's
 narrower and differently-ordered one (rfbproto §Tight), and colour-map
 indirection. [pixel-format.md](pixel-format.md) is the design.
 
-`rfb.py:800` gets both CPIXEL cases wrong in one line: `next(i), next(i),
+ZRLE's `cpixel()` in `rfb.py` gets both CPIXEL cases wrong in one line: `next(i), next(i),
 next(i)` implements the low placement, silently mis-decodes the high one, and
 appends a fabricated fourth byte.
 
@@ -186,7 +186,7 @@ in `pixelformat.raw_mode`, and a decoder unit test needs no rendering library
 So a decoder never interprets a pixel. A background colour, a Hextile
 foreground, a ZRLE palette entry are opaque `bypp`-sized byte strings and a fill
 is one repeated — no shifts, no masks, no endianness, so that class of bug
-cannot be written. `client.PF2IM` (`client.py:67`) goes with it: a computed raw
+cannot be written. `client.PF2IM` goes with it: a computed raw
 mode covers every layout Pillow can unpack, which is the bound this accepts.
 
 [pixel-format.md](pixel-format.md) has the module, the coverage, and what
@@ -252,7 +252,7 @@ vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
 vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 ```
 
-`SUPPORTED_ENCODINGS` stops being the set literal at `rfb.py:161` and derives
+`SUPPORTED_ENCODINGS` stops being the set literal in `RFBClient` and derives
 from the registry, filterable per connection, which is R4. It is also what makes
 R1's zero-line `rfb.py` diff possible: registering an encoding is a line in
 `decoders/__init__.py`, and nothing has to tell `rfb.py` the encoding exists.
@@ -391,9 +391,9 @@ meets N2. Discharges R5.
 **Phase 6 — Tight.** A new encoding as new files plus tests.
 *Done when:* it is added with a zero-line diff to `rfb.py`. The one line that
 registers it goes in `decoders/__init__.py`, and `Encoding.TIGHT` already exists
-(`const.py:32`), so `rfb.py` and `const.py` are both untouched. That is the test
-of R1: today the same change edits `SUPPORTED_ENCODINGS` at `rfb.py:161`, and if
-it still does, the architecture did not deliver what it exists for.
+in `const.py`, so `rfb.py` and `const.py` are both untouched. That is the test of
+R1: today the same change edits `RFBClient.SUPPORTED_ENCODINGS`, and if it still
+does, the architecture did not deliver what it exists for.
 `libvncserver-example` falls back to Raw when asked for Tight, so its oracle
 comes from `tigervnc` and `x11vnc`.
 
@@ -533,7 +533,7 @@ run-length.
 followed by a byte-padded, MSB-first scanline bitmask.
 
 **Checked against the implementation while validating:** RRE parses
-pixel-then-coordinates correctly (`rfb.py:492`) and the ZRLE run-length branch
+pixel-then-coordinates correctly (`_handleRRESubRectangles`) and the ZRLE run-length branch
 already permits palettes to 127 (`subencoding & 127`). Neither needs changing;
 the packed-palette cap of 16 is in the correct branch.
 
@@ -553,7 +553,7 @@ or test depending on its wording cites a commit permalink rather than `master`.
   `self.screen` and nothing erases the previous position, so stale pointers
   persist where the server does not resend. Pre-existing, and the shape boundary
   is drawn so fixing it later touches no decoder.
-- No fix for `client.py:406-407`, where a zero-width or zero-height cursor sets
+- No fix for `VNCDoToolClient.updateCursor`, where a zero-width or zero-height cursor sets
   `self.cursor = None` and then falls through to `Image.frombytes` with a zero
   dimension instead of returning. Worth a separate issue; it is a client bug, not
   a decoder one.

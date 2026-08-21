@@ -107,7 +107,7 @@ pixel-exact comparison is the golden test's job, against the same file.
 things make it the right recorder rather than a new one:
 
 - It already runs a full `VNCDoToolClient` as an observer on the s2c stream
-  (`loggingproxy.py:190`), parsing rectangles and tallying the encoding the
+  (`VNCLoggingClient`), parsing rectangles and tallying the encoding the
   server really used. Rect-level slicing is a hook on an object that already
   does the work.
 - The c2s stream is the conditions record. `SetPixelFormat`, `SetEncodings` and
