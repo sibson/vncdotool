@@ -388,3 +388,30 @@ class TestImageMode(TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
             cli.updateCursor(0, 0, 4, 4, b"\x00" * (4 * 4 * 4), b"\x00" * 4)
+
+
+class TestVMWareClient(TestCase):
+
+    def setUp(self) -> None:
+        self.client = client.VMWareClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
+        self.client._handler = mock.Mock()
+
+    def test_dataReceived_recognizes_single_pixel_update(self) -> None:
+        payload = struct.pack(
+            "!BxHHHHHixxxx",
+            client.rfb.MsgS2C.FRAMEBUFFER_UPDATE,
+            1,  # number-of-rectangles
+            0,  # x-position
+            0,  # y-position
+            1,  # width
+            1,  # height
+            client.rfb.Encoding.RAW,
+        )
+
+        self.client.dataReceived(payload)
+
+        self.client.framebufferUpdateRequest.assert_called_once_with()
+        self.client._handler.assert_called_once_with()

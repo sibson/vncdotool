@@ -453,7 +453,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
 
 class VMWareClient(VNCDoToolClient):
-    SINGLE_PIXLE_UPDATE = pack(
+    SINGLE_PIXEL_UPDATE = pack(
         "!BxHHHHHixxxx",
         rfb.MsgS2C.FRAMEBUFFER_UPDATE,  # message-type
         # padding
