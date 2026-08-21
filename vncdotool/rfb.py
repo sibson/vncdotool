@@ -41,7 +41,7 @@ from twisted.python import log, usage
 from twisted.python.failure import Failure
 
 from . import decoders
-from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
+from .const import Encoding, AuthTypes, MsgC2S, MsgS2C
 from .keys import Key
 from .pixelformat import PixelFormat
 
@@ -112,7 +112,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.DIFFIE_HELLMAN,
     }
     _UNMIGRATED_ENCODINGS = {
-        Encoding.HEXTILE,
         Encoding.ZRLE,
         Encoding.PSEUDO_CURSOR,
         Encoding.PSEUDO_DESKTOP_SIZE,
@@ -401,8 +400,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             if entry is not None:
                 decoder, pump = entry
                 pump(decoder, x, y, width, height)
-            elif encoding == Encoding.HEXTILE:
-                self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.ZRLE:
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == Encoding.PSEUDO_CURSOR:
@@ -504,249 +501,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.abortConnection(f"decoder asked for {size} bytes")
             return
         self.expect(self._pumpBlock, size, generator, finish)
-
-    # ---  Hexile Encoding
-
-    def _doNextHextileSubrect(
-        self,
-        bg: bytes | None,
-        color: bytes | None,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int | None,
-        ty: int | None,
-    ) -> None:
-        # ~ print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty),))
-        # coords of next tile
-        # its line after line of tiles
-        # finished when the last line is completly received
-
-        # dont inc the first time
-        if tx is not None:
-            assert ty is not None
-            # calc next subrect pos
-            tx += 16
-            if tx >= x + width:
-                tx = x
-                ty += 16
-        else:
-            tx = x
-            ty = y
-        # more tiles?
-        if ty >= y + height:
-            self._doConnection()
-        else:
-            self.expect(
-                self._handleDecodeHextile, 1, bg, color, x, y, width, height, tx, ty
-            )
-
-    def _handleDecodeHextile(
-        self,
-        block: bytes,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-    ) -> None:
-        subencoding = HextileEncoding(block[0])
-        # calc tile size
-        tw = th = 16
-        if x + width - tx < 16:
-            tw = x + width - tx
-        if y + height - ty < 16:
-            th = y + height - ty
-        # decode tile
-        if subencoding & HextileEncoding.RAW:
-            self.expect(
-                self._handleDecodeHextileRAW,
-                tw * th * self.bypp,
-                bg,
-                color,
-                x,
-                y,
-                width,
-                height,
-                tx,
-                ty,
-                tw,
-                th,
-            )
-        else:
-            numbytes = 0
-            if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
-                numbytes += self.bypp
-            if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
-                numbytes += self.bypp
-            if subencoding & HextileEncoding.ANY_SUBRECTS:
-                numbytes += 1
-            if numbytes:
-                self.expect(
-                    self._handleDecodeHextileSubrect,
-                    numbytes,
-                    subencoding,
-                    bg,
-                    color,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
-            else:
-                self.fillRectangle(tx, ty, tw, th, bg)
-                self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileSubrect(
-        self,
-        block: bytes,
-        subencoding: HextileEncoding,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        subrects = 0
-        pos = 0
-        if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
-            bg = block[: self.bypp]
-            pos += self.bypp
-        self.fillRectangle(tx, ty, tw, th, bg)
-        if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
-            color = block[pos : pos + self.bypp]
-            pos += self.bypp
-        if subencoding & HextileEncoding.ANY_SUBRECTS:
-            # ~ (subrects, ) = unpack("!B", block)
-            subrects = block[pos]
-        # ~ print(subrects)
-        if subrects:
-            if subencoding & HextileEncoding.SUBRECTS_COLORED:
-                self.expect(
-                    self._handleDecodeHextileSubrectsColoured,
-                    (self.bypp + 2) * subrects,
-                    bg,
-                    color,
-                    subrects,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
-            else:
-                self.expect(
-                    self._handleDecodeHextileSubrectsFG,
-                    2 * subrects,
-                    bg,
-                    color,
-                    subrects,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
-        else:
-            self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileRAW(
-        self,
-        block: bytes,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """the tile is in raw encoding"""
-        self.updateRectangle(tx, ty, tw, th, block, self.pixel_format)
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileSubrectsColoured(
-        self,
-        block: bytes,
-        bg: bytes | None,
-        color: bytes | None,
-        subrects: int,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """subrects with their own color"""
-        sz = self.bypp + 2
-        pos = 0
-        end = len(block)
-        while pos < end:
-            pos2 = pos + self.bypp
-            color = block[pos:pos2]
-            xy = block[pos2]
-            wh = block[pos2 + 1]
-            sx = xy >> 4
-            sy = xy & 0xF
-            sw = (wh >> 4) + 1
-            sh = (wh & 0xF) + 1
-            self.fillRectangle(tx + sx, ty + sy, sw, sh, color)
-            pos += sz
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileSubrectsFG(
-        self,
-        block: bytes,
-        bg: bytes,
-        color: bytes,
-        subrects: int,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """all subrect with same color"""
-        pos = 0
-        end = len(block)
-        while pos < end:
-            xy = block[pos]
-            wh = block[pos + 1]
-            sx = xy >> 4
-            sy = xy & 0xF
-            sw = (wh >> 4) + 1
-            sh = (wh & 0xF) + 1
-            self.fillRectangle(tx + sx, ty + sy, sw, sh, color)
-            pos += 2
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
 
     # ---  ZRLE Encoding
     def _handleDecodeZRLE(
