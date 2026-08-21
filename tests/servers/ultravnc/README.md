@@ -5,25 +5,12 @@ An OS-hosted VNC server for vncdotool to test against on a Windows machine
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
 
-## Where the setup lives
+The setup is `.github/actions/os-server`. `ultravnc.ps1` refuses unless
+`RUNNER_ENVIRONMENT=github-hosted`: the service it installs outlives both the
+job and the checkout, and a self-hosted runner is someone's real machine.
 
-In `.github/actions/os-server`: `action.yml` wires the inputs,
-`ultravnc.ps1` does the work, and `require-disposable-host.sh` decides
-whether the machine may be changed at all.
-
-Installing UltraVNC as a service leaves the machine reachable for unattended
-remote control with a password published in this repository, and deleting
-the checkout does not uninstall it. So `ultravnc.ps1` calls the host check
-before installing anything: `CI`, `GITHUB_ACTIONS`,
-`RUNNER_ENVIRONMENT=github-hosted` and `GITHUB_RUN_ID` together, which also
-keeps it off a *self-hosted* runner — someone's real machine. It shells out
-to the same bash script the macOS half uses, so the policy is written once.
-To exercise the setup by hand, use a virtual machine you are willing to
-delete and set `VNCDOTOOL_OS_SERVER_DISPOSABLE_HOST` to
-`yes-destroy-this-machine`.
-
-`vnc_passwd_hex.py` stays here as a plain script: it turns a password into
-the hex blob `ultravnc.ini` wants and touches nothing.
+`vnc_passwd_hex.py` stays here: it turns a password into the hex blob
+`ultravnc.ini` wants and touches nothing.
 
 Against a server that is already up, the tests are just:
 

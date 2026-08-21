@@ -1,18 +1,7 @@
 <#
 .SYNOPSIS
-    Install, configure and start UltraVNC as a Windows service.
-
-.DESCRIPTION
-    Gives tests/functional/test_os_servers.py a live Windows server on
-    127.0.0.1. Driven by .github/actions/os-server/action.yml; see
-    tests/servers/ultravnc/README.md for why the server is installed as a
-    service and why a password is mandatory.
-
-    Reads PASSWORD, PORT and WAIT_SECONDS from the environment and publishes
-    the password it used through $GITHUB_ENV.
-
-    Refuses to run anywhere but a disposable runner -- see
-    require-disposable-host.sh, which this calls before touching anything.
+    Install, configure and start UltraVNC as a Windows service, for
+    tests/functional/test_os_servers.py. See tests/servers/ultravnc/README.md.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -24,11 +13,10 @@ if (-not $Password) {
     throw 'PASSWORD is not set: UltraVNC authenticates a password and nothing else'
 }
 
-# bash rather than a PowerShell copy of the same checks: one host policy, in
-# one file, whichever OS is asking. Windows runners ship bash.
-& bash (Join-Path $PSScriptRoot 'require-disposable-host.sh')
-if ($LASTEXITCODE -ne 0) {
-    throw 'refusing to run: this is not a disposable runner'
+# The service stays installed after this job, and after the checkout is gone.
+if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
+    throw "refusing to run: RUNNER_ENVIRONMENT=$($env:RUNNER_ENVIRONMENT) is not a " +
+        'GitHub-hosted runner, and this leaves the machine remotely controllable.'
 }
 
 # tests/functional/vncservers.py reads this.

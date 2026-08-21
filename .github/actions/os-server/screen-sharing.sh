@@ -1,13 +1,9 @@
 #!/bin/bash
 # Turn this macOS machine into a live Screen Sharing server for
-# tests/functional/test_os_servers.py, and wait until it serves.
-#
-# Driven by .github/actions/os-server/action.yml; see
-# tests/servers/screen-sharing/README.md for what the server does and doesn't
-# prove.
+# tests/functional/test_os_servers.py. See
+# tests/servers/screen-sharing/README.md.
 set -euo pipefail
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 
 PORT="${PORT:-5900}"
@@ -19,6 +15,16 @@ KCPASSWORD=/etc/kcpassword
 # loginwindow has to replay it: XORed against this key, repeated, and
 # NUL-padded to a multiple of its length.
 KCPASSWORD_KEY=(125 137 82 35 210 188 221 234 163 185 31)
+
+# Remote Management stays on after this job, and after the checkout is gone.
+require_disposable_host() {
+    if [ "${GITHUB_ACTIONS:-}" = "true" ] && [ "${RUNNER_ENVIRONMENT:-}" = "github-hosted" ]; then
+        return
+    fi
+    echo "refusing to run: RUNNER_ENVIRONMENT=${RUNNER_ENVIRONMENT:-<unset>} is not" >&2
+    echo "a GitHub-hosted runner, and this leaves the machine remotely controllable." >&2
+    exit 1
+}
 
 # Reads the file's bytes as decimals on stdin and prints the password.
 #
@@ -52,9 +58,6 @@ decode_kcpassword() {
     printf '%s' "$password"
 }
 
-# The console owner's password is read rather than set because it cannot be
-# set: that account holds a secure token, so sysadminctl fails while exiting 0
-# and dscl returns eDSAuthFailed.
 USERNAME=$(stat -f %Su /dev/console)
 if ! PASSWORD=$(sudo od -An -v -tu1 "$KCPASSWORD" | tr -s ' ' '\n' | decode_kcpassword); then
     echo "could not read the console owner's auto-login password, so there is" >&2
@@ -72,10 +75,8 @@ fi
 echo "::add-mask::$PASSWORD"
 echo "--- authenticating as the console owner $USERNAME, no user switch"
 
-# Everything above this line reads. Everything below it changes the machine,
-# which is why the check sits here rather than at the top: Remote Management
-# gets switched on, and a checkout deletion does not switch it back off.
-bash "$HERE/require-disposable-host.sh"
+# Everything above this line only reads.
+require_disposable_host
 
 # tests/functional/vncservers.py reads these.
 if [ -n "${GITHUB_ENV:-}" ]; then

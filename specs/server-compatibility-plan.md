@@ -394,8 +394,8 @@ Tier 1 follow-ups:
 [31730610001](https://github.com/sibson/vncdotool/actions/runs/31730610001)
 has both jobs green after four evidence-driven rounds. The setup half of
 the recipe below now lives in `.github/actions/os-server`, where each
-script calls `require-disposable-host.sh` immediately before the first
-thing that changes the machine; the diagnostics half stays as checked-in
+script refuses to run outside a GitHub-hosted runner; the diagnostics half
+stays as checked-in
 scripts under `tests/servers/ultravnc/` and `tests/servers/screen-sharing/`
 (each with a README recording why it does what it does), driven by
 `tests/functional/test_os_servers.py`, which reuses the same server

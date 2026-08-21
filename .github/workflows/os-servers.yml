@@ -9,10 +9,6 @@ name: OS-hosted VNC servers
 #
 # What each server needs, and what it does and doesn't prove, is documented
 # in tests/servers/ultravnc/README.md and tests/servers/screen-sharing/README.md.
-# This file wires .github/actions/os-server, where the setup lives, to
-# tests/functional/test_os_servers.py. The two OSes differ by which server the
-# action sets up and which shell the remaining steps run in, so they are one
-# matrix job rather than two near-identical ones.
 
 on:
   push:
@@ -55,11 +51,13 @@ jobs:
           - name: Windows - UltraVNC
             runner: windows-latest
             shell: pwsh
+            os: windows
             server: ultravnc
             diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
           - name: macOS - Screen Sharing
             runner: macos-latest
             shell: bash
+            os: macos
             server: screen-sharing
             diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
     defaults:
@@ -78,13 +76,11 @@ jobs:
         run: uv sync
 
       # A spike credential for a throwaway runner, deliberately visible as the
-      # fallback; a repo secret replaces it. Windows only -- macOS takes no
-      # credentials, and both halves publish what they used to $GITHUB_ENV,
-      # which is where the tests read it.
+      # fallback; a repo secret replaces it.
       - name: Set up the VNC server
         uses: ./.github/actions/os-server
         with:
-          server: ${{ matrix.server }}
+          os: ${{ matrix.os }}
           password: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
       # An open port is not readiness: the first connection to macOS Screen

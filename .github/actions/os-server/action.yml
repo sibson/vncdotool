@@ -3,17 +3,9 @@ description: >
   Turn the runner into a live VNC server for tests/functional/test_os_servers.py:
   UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
 
-# The work is in the scripts beside this file. Each calls
-# require-disposable-host.sh before the first thing that changes the machine,
-# so running one directly is refused the same way.
-#
-# What each server needs, and what it does and doesn't prove, is documented
-# next to the diagnostic scripts in tests/servers/ultravnc/README.md and
-# tests/servers/screen-sharing/README.md.
-
 inputs:
-  server:
-    description: Which OS-hosted server to set up -- ultravnc or screen-sharing.
+  os:
+    description: macos or windows.
     required: true
   port:
     description: Port the server serves on.
@@ -39,7 +31,7 @@ runs:
   using: composite
   steps:
     - name: Enable Apple Screen Sharing
-      if: inputs.server == 'screen-sharing'
+      if: inputs.os == 'macos'
       shell: bash
       env:
         PORT: ${{ inputs.port }}
@@ -48,7 +40,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/screen-sharing.sh"
 
     - name: Install and start UltraVNC
-      if: inputs.server == 'ultravnc'
+      if: inputs.os == 'windows'
       shell: pwsh
       env:
         PASSWORD: ${{ inputs.password }}

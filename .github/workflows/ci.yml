@@ -75,8 +75,6 @@ jobs:
     name: Test server functional tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # packages: write so the job that discovers a missing fleet image is also
-    # the one that publishes it.
     permissions:
       contents: read
       packages: write
@@ -155,11 +153,8 @@ jobs:
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml down --timeout 2
 
-      # Publishing runs last and without `if: always()`, so a fleet only
-      # reaches the registry once it has passed the suite it exists to serve.
-      # The tag is the tests/servers tree hash, so an image can only ever be
-      # pulled by a checkout whose fleet sources are byte-identical to the
-      # ones it was built from.
+      # Last, and without `if: always()`: a fleet reaches the registry only
+      # after passing the suite it exists to serve.
       - name: Log in to GHCR
         if: env.FLEET_IMAGES_BUILT == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
