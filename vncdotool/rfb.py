@@ -111,7 +111,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.VNC_AUTHENTICATION,
         AuthTypes.DIFFIE_HELLMAN,
     }
-    # Registered decoders, plus what has yet to move to the registry.
     _UNMIGRATED_ENCODINGS = {
         Encoding.HEXTILE,
         Encoding.ZRLE,
