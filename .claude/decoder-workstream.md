@@ -120,6 +120,14 @@ sweep.
   `pause` never issue a FramebufferUpdateRequest, so the capture held only the
   handshake and the comparison was between two constants.
 
+- Comment sweep applied across all four PRs against CLAUDE.md: anything about
+  the change rather than the code is gone ("the old decoders passed it
+  through", "Not DecodeError alone", "the decoders this replaced"), and the
+  registry rationale that duplicated decoders/__init__.py's docstring is out of
+  rfb.py. Three comment blocks are longer than the two-line norm and were kept
+  deliberately: each states something a reader cannot get from the code, the
+  specs, or a name.
+
 ## Open questions for the morning
 
 1. **N1.** Raw is ~20% slower through the pump (3.8ms -> 4.7ms). Accept it as
