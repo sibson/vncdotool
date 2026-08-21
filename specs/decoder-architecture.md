@@ -366,6 +366,10 @@ This phase is an architecture proof, not a user win. RRE and CoRRE are rarely
 any server's preferred encoding and their bandwidth advantage is narrow. The
 user-visible payoff starts at Phase 4.
 
+The encoding probe lands here too, as a loop over the new flag, filling in the
+UltraVNC and Screen Sharing columns of the support table above and wired into
+`os-servers.yml` beside the pixel-format report.
+
 *Done when:* both render identically to Raw against every fleet server that
 supports them, and `--encodings` can select them. Discharges R4.
 
@@ -436,12 +440,13 @@ is safe; CoRRE survives on two of three servers, TigerVNC having dropped it;
 Hextile and ZRLE are universal; TRLE is emitted by nothing and is therefore out
 of scope entirely.
 
-The probe is not in the repository — the table above came from a throwaway that
-no longer exists, which is why two columns cannot be filled in now. It becomes
-Phase 0 tooling: a script setting `client.encoding` per connection, since
-`--encodings` does not arrive until Phase 3, run against both fleets and wired
-into `os-servers.yml` beside the pixel-format report. The matrix drifts as
-images update, and a phase needs to know what it can test before it starts.
+The probe is not in the repository — the table came from a throwaway that no
+longer exists, which is why two columns are blank. Building it waits for Phase 3
+rather than being Phase 0 tooling: `--encodings` lands there, so the probe is
+then a loop over a flag instead of a script reaching into `client.encoding`, and
+Phase 3 is also the first phase whose scope the missing columns could change.
+Until then the matrix is three servers nobody runs, and it drifts as their
+images update.
 
 ## Testing
 
