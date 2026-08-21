@@ -1,5 +1,7 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Add ``vncdo --pixel-format FORMAT``, asking the server for ``bgrx8888``, ``rgbx8888``, or ``rgb565`` instead of accepting the format it announces (@sibson)
+  - Any byte-aligned truecolor pixel format the server announces can now be captured, not just the five formats vncdotool used to recognize (@sibson)
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
   - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)

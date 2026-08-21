@@ -3,8 +3,12 @@ import io
 import struct
 import warnings
 
-from vncdotool import client
+from vncdotool import client, pixelformat, rfb
+from vncdotool.pixelformat import PIXEL_FORMATS
 from vncdotool.keys import Key
+
+COLOUR_MAPPED = rfb.PixelFormat(8, 8, False, False, 0, 0, 0, 0, 0, 0)
+RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
 
 
 class TestVNCDoToolClient(TestCase):
@@ -336,6 +340,14 @@ class TestImageMode(TestCase):
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
 
+    def patch_setPixelFormat(self) -> mock.Mock:
+        """patch.object rather than assignment: it restores the method
+        afterwards, and mypy does not read a bound method as assignable.
+        """
+        patcher = mock.patch.object(self.client, "setPixelFormat")
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
     def test_image_mode_warns_on_access(self):
         with self.assertWarns(FutureWarning):
             self.client.image_mode
@@ -347,8 +359,8 @@ class TestImageMode(TestCase):
 
     def test_setImageMode_does_not_warn(self):
         self.client._version_server = (3, 8)
-        self.client.pixel_format = client.RGB24
-        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+        self.client.pixel_format = RGB24
+        self.patch_setPixelFormat()
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
@@ -360,15 +372,77 @@ class TestImageMode(TestCase):
 
     def test_setImageMode_falls_back_for_apple_remote_desktop(self):
         self.client._version_server = (3, 889)
-        self.client.pixel_format = mock.Mock()  # unrecognised by PF2IM
-        self.client.setPixelFormat = mock.Mock()  # type: ignore[assignment]
+        self.client.pixel_format = COLOUR_MAPPED
+        setPixelFormat = self.patch_setPixelFormat()
 
         self.client.setImageMode()
 
-        self.client.setPixelFormat.assert_called_once_with(client.BGR16)
+        setPixelFormat.assert_called_once_with(PIXEL_FORMATS["rgb565"])
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             assert self.client.image_mode == "BGR;16"
+
+    def test_setImageMode_falls_back_when_the_server_format_cannot_be_unpacked(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = COLOUR_MAPPED
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_called_once_with(PIXEL_FORMATS["rgbx8888"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "RGBX"
+
+    def test_setImageMode_keeps_a_server_format_pillow_can_unpack(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 24, 16, 8)
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_not_called()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "XBGR"
+
+    def test_setImageMode_asks_for_the_format_the_caller_requested(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = PIXEL_FORMATS["rgb565"]
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_called_once_with(PIXEL_FORMATS["rgb565"])
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            assert self.client.image_mode == "BGR;16"
+
+    def test_setImageMode_keeps_bypp_in_step_with_the_negotiated_format(self):
+        # setPixelFormat is real here, not mocked like the tests above: bypp
+        # is a read-through of the pixel_format it assigns, so a mock hides
+        # any drift between it and the raw mode _image_mode negotiates.
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = PIXEL_FORMATS["rgb565"]
+
+        self.client.setImageMode()
+
+        assert self.client.bypp == PIXEL_FORMATS["rgb565"].bypp
+        assert self.client._image_mode == pixelformat.raw_mode(PIXEL_FORMATS["rgb565"])
+
+    def test_setImageMode_fails_the_connection_for_a_format_it_cannot_read(self):
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = COLOUR_MAPPED
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_not_called()
+        self.client.factory.clientConnectionFailed.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangle_does_not_warn(self, frombytes):
@@ -415,3 +489,15 @@ class TestVMWareClient(TestCase):
 
         self.client.framebufferUpdateRequest.assert_called_once_with()
         self.client._handler.assert_called_once_with()
+
+
+class TestRequestedPixelFormat(TestCase):
+
+    def test_factory_hands_its_format_to_each_client(self):
+        factory = client.VNCDoToolFactory()
+        factory.pixel_format = PIXEL_FORMATS["rgb565"]
+
+        assert factory.buildProtocol(None).requested_pixel_format == PIXEL_FORMATS["rgb565"]
+
+    def test_clients_ask_for_nothing_by_default(self):
+        assert client.VNCDoToolFactory().buildProtocol(None).requested_pixel_format is None

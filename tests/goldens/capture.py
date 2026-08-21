@@ -13,9 +13,11 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
+from typing import Optional
 
 from tests.functional.vncservers import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
+from vncdotool import pixelformat
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
@@ -48,10 +50,36 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
     return proxy
 
 
+def _refuse_duplicate_format(name: str, pixel_format: Optional[str]) -> None:
+    """Two fixtures of one server and encoding captured at the same format
+    would compare equal whatever a client does with a format, leaving the
+    cross-format check asserting nothing.
+    """
+    group = name.rsplit("-", 1)[0]
+    for sibling in sorted(FIXTURE_ROOT.glob(f"{group}-*")):
+        if sibling.name == name or not (sibling / "conditions.json").exists():
+            continue
+        recorded = json.loads((sibling / "conditions.json").read_text()).get("pixel_format")
+        if recorded == pixel_format:
+            raise SystemExit(
+                f"{sibling.name} was already captured at {pixel_format or 'the server\'s own format'}"
+            )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--name", default="tigervnc-raw-bgrx8888", help="fixture directory name")
+    parser.add_argument(
+        "--pixel-format",
+        choices=sorted(pixelformat.PIXEL_FORMATS),
+        help="format the capturing client asks the server for [the server's own]",
+    )
+    parser.add_argument(
+        "--name",
+        help="fixture directory name [tigervnc-raw-PIXEL_FORMAT, or -native]",
+    )
     args = parser.parse_args()
+    name = args.name or f"tigervnc-raw-{args.pixel_format or 'native'}"
+    _refuse_duplicate_format(name, args.pixel_format)
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
@@ -60,7 +88,9 @@ def main() -> int:
         # scene.vdo waits on `expect scenes/<key>.png`, named relative to
         # itself, so the driver runs from the directory holding both.
         subprocess.run(
-            [VNCDO, "--timeout", str(SCENE_DEADLINE), "-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
+            [VNCDO, "--timeout", str(SCENE_DEADLINE)]
+            + (["--pixel-format", args.pixel_format] if args.pixel_format else [])
+            + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
             check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
         )
         proxy.wait(timeout=CAPTURE_DEADLINE)
@@ -70,15 +100,18 @@ def main() -> int:
             meta = zipped.read("meta.json").decode()
 
         init, steps = distill.split(s2c)
+        if not steps:
+            raise SystemExit("capture holds no framebuffer updates; the stream desynced")
         for step in steps:
             if step.key is None:
                 raise SystemExit(f"step {step.index} carries no keysym patch; capture is unusable")
 
-        directory = FIXTURE_ROOT / args.name
+        directory = FIXTURE_ROOT / name
         if directory.exists():
             shutil.rmtree(directory)
         conditions = {
             "server": TIGERVNC.name,
+            "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance": 0,

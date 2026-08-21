@@ -9,7 +9,7 @@ from unittest import mock, skipUnless
 from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLookupError
 from twisted.python.failure import Failure
 
-from vncdotool import command
+from vncdotool import command, pixelformat
 from vncdotool.client import AuthenticationError, ProtocolError
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
@@ -472,6 +472,18 @@ class TestVncdoArgvParameter(unittest.TestCase):
             command.vncdo([])
 
         assert raised.exception.code == command.ExitStatus.USAGE
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=mock.MagicMock)
+class TestVncdoPixelFormatOption(unittest.TestCase):
+
+    def test_pixel_format_option_sets_factory_pixel_format(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--pixel-format', 'rgb565', 'key', 'a'])
+
+        factory = connect.call_args.args[0]
+        assert factory.pixel_format == pixelformat.PIXEL_FORMATS['rgb565']
 
 
 class TestReplayClient(unittest.TestCase):
