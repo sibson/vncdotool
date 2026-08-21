@@ -147,15 +147,16 @@ OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "darwin": [SCREEN_SHARING],
 }
 
-# Unlike win32/darwin, ubuntu-latest also runs ci.yml's Docker-fleet job,
-# which never starts QEMU -- so Linux needs an explicit opt-in rather than
-# platform alone. Set by tests/servers/qemu-kvm/setup.sh.
+# Unlike ULTRAVNC/SCREEN_SHARING, QEMU isn't tied to an OS -- it's tested
+# here because tests/servers/qemu-kvm/setup.sh actually started it, not
+# because of what platform we're running on. So this checks the env var it
+# sets, not sys.platform.
 VNCDOTOOL_OS_SERVER_LINUX = "VNCDOTOOL_OS_SERVER_LINUX"
 
 
 def os_servers(platform: str = sys.platform) -> List[VNCServer]:
     servers = list(OS_SERVERS_BY_PLATFORM.get(platform, []))
-    if platform == "linux" and os.environ.get(VNCDOTOOL_OS_SERVER_LINUX):
+    if os.environ.get(VNCDOTOOL_OS_SERVER_LINUX):
         servers.append(QEMU_KVM)
     return servers
 
