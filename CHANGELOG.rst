@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Add ``make typecheck``, running mypy over ``vncdotool`` and ``tests`` (@sibson, #401)
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
   - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
