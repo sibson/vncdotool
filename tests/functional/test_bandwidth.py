@@ -58,10 +58,8 @@ class TestBandwidth(TestCase):
                 self.fail(f"vnclog never listened on {PROXY_PORT}")
 
             proxied = TIGERVNC._replace(port=PROXY_PORT)
-            # A server sends pixels only when asked (RFC 6143 7.5.3), and of
-            # vncdo's commands only capture and expect ask. Without one the
-            # archive holds the handshake and nothing else, which is the same
-            # size whatever encoding was negotiated.
+            # A server sends pixels only when asked (RFC 6143 7.5.3), and
+            # of vncdo's commands only capture and expect ask.
             result = run_vncdo(
                 proxied, "--encodings", encodings, "capture", str(Path(tmp) / "screen.png")
             )
