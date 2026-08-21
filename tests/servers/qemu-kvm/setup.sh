@@ -114,9 +114,24 @@ wait_for_port() {
     return 1
 }
 
+enable_test_registration() {
+    # tests/functional/vncservers.py only registers QEMU_KVM on Linux when
+    # this is set -- ubuntu-latest also runs ci.yml's unrelated Tier 1
+    # Docker-fleet job, which never runs this script, and platform alone
+    # can't tell the two jobs apart.
+    export VNCDOTOOL_QEMU_KVM_OS_SERVER=1
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        echo "VNCDOTOOL_QEMU_KVM_OS_SERVER=1" >>"$GITHUB_ENV"
+    else
+        echo "--- export VNCDOTOOL_QEMU_KVM_OS_SERVER=1 in your shell before" >&2
+        echo "running the test suite outside of this script's own process." >&2
+    fi
+}
+
 install_qemu
 grant_kvm_access
 start_qemu
 wait_for_port
+enable_test_registration
 
 echo "QEMU is serving on 127.0.0.1:$PORT (pidfile $PIDFILE, log $LOGFILE)"

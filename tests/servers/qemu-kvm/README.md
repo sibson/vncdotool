@@ -46,6 +46,16 @@ hosted runner is the only place we get the accelerated path for free; see
   a VM without nested virtualisation). What that proves is script mechanics
   and the RFB round trip, not the accelerated path CI exercises.
 
+* **Registration needs an explicit opt-in on Linux.** Windows and macOS are
+  safe to key off `sys.platform` alone in `vncservers.py`: the OS-server
+  workflow is the only CI job that ever runs on those runner OSes.
+  `ubuntu-latest` also runs ci.yml's unrelated Tier 1 Docker-fleet job,
+  which never runs this script, so registering `QEMU_KVM` for every Linux
+  process would fail that job instead of skipping it (#408 found this the
+  hard way). `setup.sh` sets `VNCDOTOOL_QEMU_KVM_OS_SERVER=1` -- via
+  `$GITHUB_ENV` in CI, or for the caller's own shell locally -- and
+  `os_servers()` only adds `QEMU_KVM` on Linux when that's set.
+
 ## Readiness
 
 An open RFB port is closer to readiness here than on the other two Tier 2

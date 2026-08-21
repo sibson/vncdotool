@@ -147,12 +147,22 @@ QEMU_KVM = VNCServer(
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "win32": [ULTRAVNC],
     "darwin": [SCREEN_SHARING],
-    "linux": [QEMU_KVM],
 }
+
+# Windows and macOS are safe to key off sys.platform alone: the OS-server
+# workflow is the only CI job that ever runs on those runner OSes. Linux
+# isn't -- ubuntu-latest also hosts ci.yml's unrelated Tier 1 Docker-fleet
+# job, which never runs tests/servers/qemu-kvm/setup.sh, so registering
+# QEMU_KVM for every Linux process would fail that job instead of skipping
+# it. setup.sh sets this to opt in only where it actually started the server.
+QEMU_KVM_OPT_IN = "VNCDOTOOL_QEMU_KVM_OS_SERVER"
 
 
 def os_servers(platform: str = sys.platform) -> List[VNCServer]:
-    return OS_SERVERS_BY_PLATFORM.get(platform, [])
+    servers = list(OS_SERVERS_BY_PLATFORM.get(platform, []))
+    if platform == "linux" and os.environ.get(QEMU_KVM_OPT_IN):
+        servers.append(QEMU_KVM)
+    return servers
 
 
 def select_servers(group: str) -> List[VNCServer]:
