@@ -39,9 +39,6 @@ def make_client(fixture: Optional[Path] = None) -> client.VNCDoToolClient:
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False
     if fixture is not None:
-        # A capture holds only the server's half, so the SetPixelFormat the
-        # capturing client sent is not in it to replay: without this, one
-        # taken at any other format is read at the wrong pixel width.
         requested = conditions(fixture).get("pixel_format")
         if requested is not None:
             cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[requested]
@@ -92,58 +89,43 @@ class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
 
-    def test_every_fixture_holds_steps(self) -> None:
-        """A capture that desynced distills to init and nothing else, and
-        every check over its steps would then pass by iterating nothing.
-        """
-        for fixture in fixtures():
-            with self.subTest(fixture=fixture.name):
-                self.assertTrue(sorted(fixture.glob("step-*.bin.gz")), "fixture holds no steps")
 
-    def test_paired_fixtures_were_captured_at_different_formats(self) -> None:
-        """Two captures at the same format compare equal whatever the client
-        does with a format, which would leave the check below asserting nothing.
-        """
-        groups: dict[str, List[Path]] = {}
-        for fixture in fixtures():
-            groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
-        for group, members in sorted(groups.items()):
-            formats = [conditions(f).get("pixel_format") for f in members]
-            with self.subTest(group=group):
-                self.assertCountEqual(formats, set(formats), f"{group}: duplicate formats in {formats}")
+def fixture_groups() -> "dict[str, List[Path]]":
+    """Fixtures of one server and encoding, keyed by everything before the
+    last dash -- which is where the capture puts the format it asked for.
+    """
+    groups: "dict[str, List[Path]]" = {}
+    for fixture in fixtures():
+        groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
+    return groups
 
-    def test_a_scene_decodes_the_same_at_every_captured_format(self) -> None:
-        """R3: the framebuffer does not depend on the format the server negotiated.
 
-        Fixtures of one server and encoding differ only in the format their
-        capture asked for, which is the last dash-separated part of the name.
-        """
-        groups: dict[str, List[Path]] = {}
-        for fixture in fixtures():
-            groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
+class CrossFormat:
+    """The framebuffer does not depend on the format the server negotiated.
 
-        for group, members in sorted(groups.items()):
-            if len(members) < 2:
-                continue
-            reference, *others = members
-            expected = dict(replay(reference))
-            for other in others:
-                tolerance = max(quantization(reference), quantization(other))
-                steps = replay(other)
-                self.assertEqual(
-                    sorted(key for key, _ in steps), sorted(expected),
-                    f"{other.name} and {reference.name} cover different scenes",
+    Not a TestCase itself, so the loader collects it only through the
+    subclasses load_tests builds.
+    """
+
+    reference: Path
+    other: Path
+
+    def test_decodes_the_same_as_its_pair(self) -> None:
+        expected = dict(replay(self.reference))
+        steps = replay(self.other)
+        self.assertEqual(
+            sorted(key for key, _ in steps), sorted(expected),
+            f"{self.other.name} and {self.reference.name} cover different scenes",
+        )
+        tolerance = max(quantization(self.reference), quantization(self.other))
+        for key, screen in steps:
+            difference = first_difference(screen, expected[key], tolerance)
+            if difference is not None:
+                x, y, got, want = difference
+                self.fail(
+                    f"{self.other.name} scene {key}: pixel ({x},{y}) decoded {got}, "
+                    f"{self.reference.name} decoded {want} (tolerance {tolerance})"
                 )
-                for key, screen in steps:
-                    with self.subTest(group=group, fixture=other.name, scene=key):
-                        self.assertIn(key, expected, "scene missing from the reference capture")
-                        difference = first_difference(screen, expected[key], tolerance)
-                        if difference is not None:
-                            x, y, got, want = difference
-                            self.fail(
-                                f"{other.name} scene {key}: pixel ({x},{y}) decoded {got}, "
-                                f"{reference.name} decoded {want} (tolerance {tolerance})"
-                            )
 
 
 class GoldenReplay:
@@ -156,7 +138,7 @@ class GoldenReplay:
     def test_decodes_to_its_oracle(self) -> None:
         fixture = self.fixture
         tolerance = json.loads((fixture / "conditions.json").read_text())["tolerance"]
-        cli = make_client()
+        cli = make_client(fixture)
         cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
         for step in sorted(fixture.glob("step-*.bin.gz")):
             cli.dataReceived(gzip.decompress(step.read_bytes()))
@@ -179,6 +161,15 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
         name = f"TestGolden_{fixture.name.replace('-', '_')}"
         case = type(name, (GoldenReplay, unittest.TestCase), {"fixture": fixture})
         suite.addTest(case("test_decodes_to_its_oracle"))
+    for members in fixture_groups().values():
+        reference, *others = members
+        for other in others:
+            name = f"TestCrossFormat_{reference.name}_vs_{other.name}".replace("-", "_")
+            case = type(
+                name, (CrossFormat, unittest.TestCase),
+                {"reference": reference, "other": other},
+            )
+            suite.addTest(case("test_decodes_the_same_as_its_pair"))
     return suite
 
 

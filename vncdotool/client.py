@@ -62,11 +62,6 @@ class ProtocolError(VNCDoException):
     """VNC Server sent something we cannot handle"""
 
 
-RGB32 = pixelformat.PIXEL_FORMATS["rgbx8888"]
-RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
-BGR16 = pixelformat.PIXEL_FORMATS["rgb565"]
-
-
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
     requested_pixel_format: rfb.PixelFormat | None = None
@@ -319,9 +314,9 @@ class VNCDoToolClient(rfb.RFBClient):
             except pixelformat.UnsupportedPixelFormat as exc:
                 log.debug("cannot unpack the server's format (%s), asking for another", exc)
                 if self._version_server == (3, 889):  # Apple Remote Desktop
-                    pixel_format = BGR16
+                    pixel_format = pixelformat.PIXEL_FORMATS["rgb565"]
                 else:
-                    pixel_format = RGB32
+                    pixel_format = pixelformat.PIXEL_FORMATS["rgbx8888"]
 
         # Resolved before the request goes out: failing afterwards would
         # leave the server sending pixels in a format we cannot read.
