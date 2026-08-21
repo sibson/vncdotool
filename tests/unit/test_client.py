@@ -185,7 +185,7 @@ class TestVNCDoToolClient(TestCase):
         data = mock.Mock()
         frombytes.return_value = client.Image.new("RGB", (100, 200), (10, 20, 30))
 
-        cli.updateRectangle(0, 0, 100, 200, data)
+        cli.updateRectangle(0, 0, 100, 200, data, cli.pixel_format)
 
         client.Image.frombytes.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
@@ -200,7 +200,7 @@ class TestVNCDoToolClient(TestCase):
 
         color = (200, 150, 50)
         data = (bytes(color) + b"\x00") * (10 * 10)
-        cli.updateRectangle(50, 30, 10, 10, data)
+        cli.updateRectangle(50, 30, 10, 10, data, cli.pixel_format)
 
         assert cli.screen is not None
         assert cli.screen.size == (300, 200)
@@ -215,7 +215,7 @@ class TestVNCDoToolClient(TestCase):
         cli.screen.size = (100, 100)
         data = mock.Mock()
 
-        cli.updateRectangle(20, 10, 50, 40, data)
+        cli.updateRectangle(20, 10, 50, 40, data, cli.pixel_format)
 
         client.Image.frombytes.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
@@ -453,7 +453,7 @@ class TestImageMode(TestCase):
 
         with warnings.catch_warnings():
             warnings.simplefilter("error", FutureWarning)
-            cli.updateRectangle(0, 0, 100, 200, mock.Mock())
+            cli.updateRectangle(0, 0, 100, 200, mock.Mock(), cli.pixel_format)
 
     def test_updateCursor_does_not_warn(self):
         cli = self.client
