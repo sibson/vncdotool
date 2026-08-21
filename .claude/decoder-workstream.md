@@ -37,7 +37,7 @@ branch); no phase branch carries it, so no PR diff contains it.
 
 | Phase | Branch | PR | Code | CI green | Reviewed |
 |---|---|---|---|---|---|
-| 1 pixel format | claude/decoder-p1-pixelformat | — | not started | — | — |
+| 1 pixel format | claude/decoder-p1-pixelformat | #399 | done | watching | panel running |
 | 2 pump/Raw/CopyRect | claude/decoder-p2-pump | — | not started | — | — |
 | 3 --encodings, RRE/CoRRE | claude/decoder-p3-encodings | — | not started | — | — |
 | 4 Hextile | claude/decoder-p4-hextile | — | not started | — | — |
@@ -48,6 +48,20 @@ Phase -1 (#385, released 1.4.1), Phase 0 (goldens #392, capture tooling),
 `vncdotool/pixelformat.py` (#397). Phase 1 remainder: wire `raw_mode` into
 `client.py`, delete `PF2IM`, add `--pixel-format`, cross-format golden check.
 
+## Delegation
+
+The user asked for Sonnet subagents on the mechanical chunks of a phase (per-decoder
+unit tests from captured fixtures, docs, CHANGELOG) with the architecture-bearing
+parts kept inline, plus a parallel review panel per PR. Reviewers read the branch by
+commit (`git diff origin/main...origin/<branch>`), never the working tree, so a
+concurrent checkout cannot confuse them, and they are told not to edit: fixes are
+applied here.
+
+Review panel, three lenses: protocol correctness against RFC 6143/rfbproto; test
+adequacy (would a regression actually fail?); CLAUDE.md conventions and the comment
+sweep.
+
 ## Log
 
 - (setup) branch scaffolding written, check-ins armed.
+- Phase 1 built, PR #399 opened off main. Review panel spawned.
