@@ -19,15 +19,13 @@ inputs:
   server:
     description: Which OS-hosted server to set up -- ultravnc or screen-sharing.
     required: true
-  username:
-    description: >
-      Account to authenticate as. On macOS this must be the user already
-      holding the console, or Screen Sharing fast-user-switches into a first
-      login for it and costs about a minute; Windows ignores it.
-    required: true
   password:
-    description: Password the tests authenticate with.
-    required: true
+    description: >
+      UltraVNC's server password, which is all Windows authenticates. macOS
+      ignores it: there the account comes from the console owner, or from the
+      override pair below.
+    required: false
+    default: ''
   port:
     description: Port the server serves on.
     required: false
@@ -40,14 +38,19 @@ inputs:
     description: How long to hold the macOS display awake for.
     required: false
     default: '1200'
-  prefer-console-owner:
+  override-username:
     description: >
-      macOS only: authenticate as whoever owns the console, using the
-      auto-login password recovered from /etc/kcpassword, instead of creating
-      `username`. Falls back to creating the account when the password cannot
-      be recovered. Pass false to pin the account to `username`.
+      macOS only: create and authenticate as this account instead of the
+      console owner. Only for a host with no usable auto-login password --
+      a VM you are exercising this against by hand. It costs a fast user
+      switch into that account's first login, about a minute, and both
+      overrides have to be given together.
     required: false
-    default: 'true'
+    default: ''
+  override-password:
+    description: Password for `override-username`. See that input.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -84,77 +87,75 @@ runs:
       if: inputs.server == 'screen-sharing'
       shell: bash
       env:
-        USERNAME: ${{ inputs.username }}
-        PASSWORD: ${{ inputs.password }}
+        OVERRIDE_USERNAME: ${{ inputs.override-username }}
+        OVERRIDE_PASSWORD: ${{ inputs.override-password }}
         PORT: ${{ inputs.port }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
         CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
-        PREFER_CONSOLE_OWNER: ${{ inputs.prefer-console-owner }}
       run: |
         set -euo pipefail
         KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 
-        # Authenticating as anyone but the console owner fast-user-switches
-        # into that account's first login, which costs this job about a minute
-        # (see tests/servers/screen-sharing/README.md). The console owner's own
-        # password cannot be changed -- it holds a secure token -- but it does
-        # not need to be: these images enable auto-login
-        # (runner-images images/macos/scripts/build/configure-autologin.sh),
-        # which means loginwindow can read the password back out of
-        # /etc/kcpassword, and so can we. The obfuscation is a repeating XOR
-        # against a published 11-byte key, and the account's own auto-login at
-        # boot is proof the file matches the live password.
-        #
-        # Anything unexpected -- no file, a format change, a password that
-        # does not authenticate -- falls back to the dedicated account, which
-        # is slower and always works.
-        if [ "$PREFER_CONSOLE_OWNER" = "true" ]; then
-          console_user=$(stat -f %Su /dev/console)
-          recovered=$(sudo python3 "$GITHUB_ACTION_PATH/decode-kcpassword.py") || recovered=""
-          # A newline would let the value below write further variables of its
-          # own into $GITHUB_ENV. Nothing about the file format should produce
-          # one, which is the reason to check rather than to assume.
-          case "$recovered" in
-            *$'\n'*) recovered="" ;;
-          esac
-          if [ -n "$recovered" ]; then
-            echo "::add-mask::$recovered"
+        if [ -n "$OVERRIDE_USERNAME" ] || [ -n "$OVERRIDE_PASSWORD" ]; then
+          if [ -z "$OVERRIDE_USERNAME" ] || [ -z "$OVERRIDE_PASSWORD" ]; then
+            echo "override-username and override-password go together" >&2
+            exit 1
           fi
-          if [ -n "$recovered" ] && dscl . -authonly "$console_user" "$recovered" >/dev/null 2>&1; then
-            echo "--- authenticating as the console owner $console_user, no user switch"
-            USERNAME="$console_user"
-            PASSWORD="$recovered"
-            # Its password is already the one we are going to use, and trying
-            # to set it is what fails: the account holds a secure token.
-            account_is_ready=true
-          else
-            echo "--- could not use the console owner's auto-login password, falling back to $USERNAME"
-          fi
-        fi
-
-        # The tests read these, and which account we ended up with is decided
-        # above rather than by the workflow.
-        {
-          echo "VNCDOTOOL_OS_SERVER_USERNAME=$USERNAME"
-          echo "VNCDOTOOL_OS_SERVER_PASSWORD=$PASSWORD"
-        } >> "$GITHUB_ENV"
-
-        if [ "${account_is_ready:-false}" != "true" ]; then
+          # A user switch into this account's first login, about a minute of
+          # it, which is the reason this is not the normal path.
+          USERNAME="$OVERRIDE_USERNAME"
+          PASSWORD="$OVERRIDE_PASSWORD"
           if id "$USERNAME" >/dev/null 2>&1; then
-            echo "--- resetting the password of the existing user $USERNAME"
-            # Not sysadminctl -resetPasswordFor: on a runner it answers
-            # "Operation is not permitted without secure token unlock", leaves
-            # the password alone, and exits 0 anyway. dscl as root changes the
-            # Open Directory password, which is the one ARD authenticates --
-            # and refuses too if the account holds a secure token.
+            echo "--- setting the password of the existing user $USERNAME"
+            # Not sysadminctl -resetPasswordFor: it answers "Operation is not
+            # permitted without secure token unlock", leaves the password
+            # alone, and exits 0 anyway. dscl changes the Open Directory
+            # password, which is the one ARD authenticates -- and refuses too
+            # if the account holds a secure token, as the console owner does.
             sudo dscl . -passwd "/Users/$USERNAME" "$PASSWORD"
           else
             echo "--- creating local user $USERNAME"
             sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
           fi
+        else
+          # Authenticating as anyone but the console owner fast-user-switches
+          # into that account's first login, which cost this job about a
+          # minute (see tests/servers/screen-sharing/README.md). The console
+          # owner's own password cannot be set -- it holds a secure token --
+          # but it does not need to be: these images enable auto-login
+          # (runner-images images/macos/scripts/build/configure-autologin.sh),
+          # so loginwindow has to be able to replay the password, and macOS
+          # keeps it in /etc/kcpassword XORed against a published 11-byte key.
+          # The account logging itself in at boot is proof the file matches.
+          USERNAME=$(stat -f %Su /dev/console)
+          if ! PASSWORD=$(sudo python3 "$GITHUB_ACTION_PATH/decode-kcpassword.py"); then
+            echo "could not read the console owner's auto-login password." >&2
+            echo "If this image has stopped enabling auto-login, name an account" >&2
+            echo "to create with override-username and override-password -- and" >&2
+            echo "expect the job to take about a minute longer." >&2
+            exit 1
+          fi
+          echo "::add-mask::$PASSWORD"
+          # A newline would let the value written below add further variables
+          # of its own to $GITHUB_ENV. Nothing about the file format should
+          # produce one, which is the reason to check rather than assume.
+          case "$PASSWORD" in
+            *$'\n'*)
+              echo "the decoded auto-login password contains a newline" >&2
+              exit 1
+              ;;
+          esac
+          echo "--- authenticating as the console owner $USERNAME, no user switch"
         fi
 
-        # Whatever set the password, prove the account authenticates before
+        # The tests read these, and which account we ended up with is decided
+        # here rather than by the workflow.
+        {
+          echo "VNCDOTOOL_OS_SERVER_USERNAME=$USERNAME"
+          echo "VNCDOTOOL_OS_SERVER_PASSWORD=$PASSWORD"
+        } >> "$GITHUB_ENV"
+
+        # Whichever path set it, prove the account authenticates before
         # spending three minutes of readiness retries finding out it doesn't.
         if ! dscl . -authonly "$USERNAME" "$PASSWORD" >/dev/null 2>&1; then
           echo "$USERNAME does not authenticate with the configured password" >&2

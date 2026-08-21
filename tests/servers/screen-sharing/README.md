@@ -85,13 +85,21 @@ auto-login ([configure-autologin.sh][autologin]), and auto-login means
 `runner` logging itself in at boot, which `who` shows in every diagnostics
 artifact, is the proof that file matches the live password.
 
-So the setup decodes it, masks it, and checks it with `dscl . -authonly`
-before using it. Anything unexpected — no file, a format change (that has
-happened: [runner-images#5231][5231] shipped a kcpassword written as UTF-8
-instead of raw bytes), a password that does not authenticate — falls back to
-creating the dedicated account, which is slower and always works. The
-`-authonly` check is the gate for both paths: a password that does not
-authenticate fails setup in a second rather than a readiness budget later.
+So the setup decodes it, masks it, and gates it on `dscl . -authonly` before
+using it. That took the macOS job from 2m37 to 33s: no user switch, no
+login, readiness satisfied on the first attempt, the tests themselves in
+under four seconds.
+
+It does not fall back. Anything unexpected — no file, a format change (that
+has happened: [runner-images#5231][5231] shipped a kcpassword written as
+UTF-8 rather than raw bytes), a password that does not authenticate — fails
+the job. A fallback would quietly restore the slow path and hide the day
+the image changes, which is exactly the day we want to hear about it.
+
+For a host with no usable auto-login password — a VM you are driving this
+action against by hand — `override-username` and `override-password` name an
+account to create instead. That path pays the fast user switch and the first
+login, so it is for making the thing work somewhere, not for CI.
 
 [autologin]: https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh
 [5231]: https://github.com/actions/runner-images/issues/5231
@@ -113,9 +121,10 @@ timeout inside a test means something real.
 ## What it proves, and what it doesn't
 
 Connect, RFB handshake, ARD authentication and key events all work. The
-framebuffer, however, comes back fully black. The reason looks like the
-first login above rather than a runner with no display: what gets
-photographed is a session still sitting at `loginwindow`. So
-`vncservers.py` marks this server `renders_desktop=False` and the test
-asserts the protocol round trip without asserting pixels; whether a
-completed login renders anything is the open question behind that.
+framebuffer, however, comes back fully black, and that is the runner having
+no display rather than anything about which account we use. Attaching to
+the console owner's live, logged-in session — no `loginwindow`, no Setup
+Assistant — still captures `1 colours`, which rules out the theory that we
+were photographing a session stuck mid-login. So `vncservers.py` marks this
+server `renders_desktop=False` and the test asserts the protocol round trip
+without asserting pixels.

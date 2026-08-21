@@ -439,8 +439,10 @@ description, round trip and screenshot gallery as Tier 1 via
   account's first login, which sat at Setup Assistant for the rest of
   the job. The setup now authenticates as the console owner instead,
   recovering its auto-login password from /etc/kcpassword — that account
-  holds a secure token, so the password cannot be set, only read — and
-  falls back to the dedicated user when it cannot. See
+  holds a secure token, so the password cannot be set, only read — which
+  took the job from 2m37 to 33s. The black framebuffer survived that
+  change, so it really is a runner with no display: attaching to a live,
+  logged-in session still captures one colour. See
   tests/servers/screen-sharing/README.md.)
 
 *Graduation into Phase 0 proper:* both jobs graduate under the
