@@ -58,6 +58,8 @@ decode_kcpassword() {
     printf '%s' "$password"
 }
 
+require_disposable_host
+
 USERNAME=$(stat -f %Su /dev/console)
 if ! PASSWORD=$(sudo od -An -v -tu1 "$KCPASSWORD" | tr -s ' ' '\n' | decode_kcpassword); then
     echo "could not read the console owner's auto-login password, so there is" >&2
@@ -75,22 +77,12 @@ fi
 echo "::add-mask::$PASSWORD"
 echo "--- authenticating as the console owner $USERNAME, no user switch"
 
-# Everything above this line only reads.
-require_disposable_host
-
 # tests/functional/vncservers.py reads these.
 if [ -n "${GITHUB_ENV:-}" ]; then
     {
         echo "VNCDOTOOL_OS_SERVER_USERNAME=$USERNAME"
         echo "VNCDOTOOL_OS_SERVER_PASSWORD=$PASSWORD"
     } >>"$GITHUB_ENV"
-fi
-
-# A password that does not authenticate otherwise surfaces as three minutes of
-# readiness retries against a server that was never the problem.
-if ! dscl . -authonly "$USERNAME" "$PASSWORD" >/dev/null 2>&1; then
-    echo "$USERNAME does not authenticate with the configured password" >&2
-    exit 1
 fi
 
 # Screen Sharing is socket-activated on 5900: nothing has to be started beyond

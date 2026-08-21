@@ -33,9 +33,8 @@ $WinVnc = Join-Path $InstallDir 'winvnc.exe'
 $ProgramDataDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
 
 Write-Host '--- installing UltraVNC'
-# The community feed intermittently answers with something that isn't valid
-# XML, which choco reports as "Unable to find package" and, worse, still exits
-# 0 -- so retry, and judge success by the installed file.
+# choco exits 0 when the community feed answers with something that isn't
+# valid XML, so success is judged by the installed file.
 $installed = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
     choco install ultravnc -y --no-progress
@@ -52,8 +51,6 @@ if (-not $installed) {
 }
 
 Write-Host '--- writing ultravnc.ini'
-# The helper writes the hex to a file rather than to stdout, so the value
-# never lands in the step log; read it back and drop the file.
 $passwdFile = Join-Path ([System.IO.Path]::GetTempPath()) 'ultravnc-passwd.hex'
 uv run python tests/servers/ultravnc/vnc_passwd_hex.py $Password $passwdFile
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path $passwdFile)) {
@@ -87,9 +84,7 @@ Copy-Item $iniPath (Join-Path $ProgramDataDir 'ultravnc.ini') -Force
 Write-Host "wrote $iniPath (port $Port, password set)"
 
 Write-Host '--- installing and starting the UltraVNC service'
-# Out-Host, or winvnc's own console output would end up in the pipeline
-# alongside the service name.
-& $WinVnc -install | Out-Host
+& $WinVnc -install
 Start-Sleep -Seconds 3
 
 $service = Get-Service |
