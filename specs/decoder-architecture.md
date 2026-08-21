@@ -46,8 +46,12 @@ Stated independently of how. Each design decision should trace to one.
   is unchanged. This is the motivating requirement.
 - **R2** Every decoder is unit-testable with no reactor, no transport, no
   server, and no `RFBClient`.
-- **R3** Decoder output does not depend on the pixel format the server
-  negotiated. Servers that ignore `SetPixelFormat` cause #90 and #275.
+- **R3** The framebuffer a client sees does not depend on the pixel format the
+  server negotiated. Stated over the framebuffer rather than over decoder
+  output, because decoders emit the layout they were sent and name it; the
+  format-independence is the client's paste, and the goldens' cross-format
+  comparison is what checks it. Servers that ignore `SetPixelFormat` cause #90
+  and #275.
 - **R4** The user can choose which encodings are offered (#167, #168). Without
   this, every encoding except Raw is dead code and none of it can be tested
   end-to-end.
@@ -97,7 +101,7 @@ A decoder yields the number of bytes it wants and receives them back:
 class RawDecoder:
     def decode(self, target: RectBuffer, pf: PixelFormat) -> Iterator[int]:
         data = yield target.width * target.height * pf.bypp
-        target.blit(0, 0, target.width, target.height, pf.to_canonical(data))
+        target.blit(0, 0, target.width, target.height, data)
 ```
 
 `RFBClient` keeps one adapter — the pump — that drives the generator against
@@ -130,7 +134,7 @@ three shapes, distinguished by what the decoder produces:
 |---|---|---|---|
 | `PixelDecoder` | bytes | fills a `RectBuffer` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
 | `ClientDecoder` | bytes | calls a client method | CopyRect, Cursor |
-| `Control` | nothing | changes client state | DesktopSize, LastRect, QEMU extended key |
+| `ControlDecoder` | nothing | changes client state | DesktopSize, LastRect, QEMU extended key |
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -147,59 +151,47 @@ padded to a whole number of bytes — `floor((width + 7) / 8)` — with the most
 significant bit of each byte representing the leftmost pixel and a 1-bit meaning
 the corresponding cursor pixel is valid.
 
-The genuine special cases are `Control`: `LastRect` mutates the rectangle loop
+The genuine special cases are `ControlDecoder`: `LastRect` mutates the rectangle loop
 counter, and the QEMU extended key encoding mutates `negotiated_encodings` and
 removes the entry it just appended to `rectanglePos`.
 
 ## Pixel format is shared, not per-decoder
 
-Almost nothing about pixel format varies between decoders. Three layers, written
-once in `vncdotool/pixelformat.py`:
+Almost nothing about pixel format varies between decoders, so it lives once in
+`vncdotool/pixelformat.py`: the negotiated PIXEL width and its Pillow raw mode,
+CPIXEL's three-byte rule and its two placements (RFC 6143 §7.7.5), TPIXEL's
+narrower and differently-ordered one (rfbproto §Tight), and colour-map
+indirection. [pixel-format.md](pixel-format.md) is the design.
 
-**PIXEL** (RFC 6143 §7.4) is negotiated once by `SetPixelFormat`. Raw, RRE,
-CoRRE, Hextile and Cursor read plain PIXEL values with identical code.
-
-**CPIXEL** is used by ZRLE and TRLE. RFC 6143 §7.7.5 defines it as the same as a
-PIXEL for the agreed format, except that it uses a more compact form when
-`true-colour-flag` is non-zero, `bits-per-pixel` is 32, `depth` is 24 or less,
-and all of the bits making up the red, green and blue intensities fit in *either
-the least significant 3 bytes or the most significant 3 bytes*. When all hold, a
-CPIXEL is 3 bytes and contains the least significant or the most significant 3
-bytes as appropriate. Otherwise a CPIXEL is a PIXEL.
-
-Note the two cases. The condition concerns where the colour bits sit within the
-32-bit pixel, not the magnitude of the colour maxima, and a conforming decoder
-must handle both placements. That is a second defect in `rfb.py:800` beyond its
-fabricated alpha byte: `next(i), next(i), next(i)` implements one placement and
-silently mis-decodes the other.
-
-Tight's TPIXEL is believed to follow the same rule and Tight is believed to use
-four independent zlib streams, but neither has been checked — see Protocol
-validation.
-
-**Colour map** indirection applies when `true_colour` is false: the pixel value
-is an index resolved through `set_color_map`. Uniform across decoders.
+`rfb.py:800` gets both CPIXEL cases wrong in one line: `next(i), next(i),
+next(i)` implements the low placement, silently mis-decodes the high one, and
+appends a fabricated fourth byte.
 
 What varies per decoder is pixel *layout in the stream* — palettes, RLE runs,
 subrect coordinates. That is decoding, not formatting.
 
-### Decoders emit a canonical format
+### Decoders emit the bytes they were sent, and say what they are
 
-The current premise is that decoders emit bytes in the negotiated server format.
-That premise is already false: ZRLE's `cpixel()` (`rfb.py:800`) emits four-byte
-pixels regardless of what was negotiated. Tight's JPEG sub-encoding will break it
-a second way, since the JPEG decoder yields RGB and cannot produce an arbitrary
-server format at all.
+A decoder returns pixel bytes in whatever layout it produced them, tagged with
+the `PixelFormat` that describes it. `client.py` resolves that to a Pillow raw
+mode and materializes each rectangle with one `Image.frombytes(..., "raw",
+mode)`. Most decoders tag the negotiated format; Tight's JPEG and TPIXEL tag
+24 bpp RGB, a colour-mapped decoder tags the colour-mapped format.
 
-So decoders convert to one canonical format — RGBX, 32bpp — using the shared
-readers. `client.PF2IM` (`client.py:67`) then goes: it is a five-entry lookup
-that raises `LookupError` and falls back to a hardcoded Apple Remote Desktop
-guess (`client.py:310-314`) for anything else. Test expectations also become
-format-independent, which is what lets one captured fixture verify a decoder
-regardless of what the capturing server negotiated.
+The tag is a `PixelFormat`, not a Pillow mode string: decoders implement a
+specification written in shifts and maxima, so Pillow stays in `client.py` and
+in `pixelformat.raw_mode`, and a decoder unit test needs no rendering library
+(R2).
 
-This is why pixel format comes early in the build order. Every decoder's output
-contract depends on it, so deferring it means writing the decoders twice.
+So a decoder never interprets a pixel. A background colour, a Hextile
+foreground, a ZRLE palette entry are opaque `bypp`-sized byte strings and a fill
+is one repeated — no shifts, no masks, no endianness, so that class of bug
+cannot be written. `client.PF2IM` (`client.py:67`) goes with it: a computed raw
+mode covers every layout Pillow can unpack, which is the bound this accepts.
+
+[pixel-format.md](pixel-format.md) has the module, the coverage, and what
+happens for a layout Pillow cannot unpack. Pixel format still comes early in the
+build order: every decoder's output contract depends on it.
 
 Cursor keeps its `(image, mask)` shape rather than folding the mask into alpha.
 Folding would move bit-unpacking and interleaving into the decoder to save
@@ -232,7 +224,8 @@ Tests improve correspondingly: one expected byte array replaces an ordered log o
 callbacks with absolute coordinates, which is a test that breaks when tile
 iteration order changes even though the rendered result is identical.
 
-The buffer is `w*h*4` — 8.3MB for full-screen 1080p — and is sized from
+The buffer is `w*h*bypp` — 8.3MB for full-screen 1080p at the 32 bpp every
+measured server sends — and is sized from
 server-declared dimensions, so the pump validates those against
 `MAX_DESKTOP_SIZE` before allocating. That is R6, not a separate concern: an
 unhandled `MemoryError` is as undiagnosed a failure as an indefinite wait. The
@@ -251,7 +244,7 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ## Module layout
 
 ```
-vncdotool/pixelformat.py         PixelFormat, cpixel(), PIXEL reader, canonical converter
+vncdotool/pixelformat.py         PixelFormat -> Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, the three shape protocols
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
@@ -259,8 +252,10 @@ vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
 vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 ```
 
-`SUPPORTED_ENCODINGS` derives from the registry and is filterable per connection,
-which is R4.
+`SUPPORTED_ENCODINGS` stops being the set literal at `rfb.py:161` and derives
+from the registry, filterable per connection, which is R4. It is also what makes
+R1's zero-line `rfb.py` diff possible: registering an encoding is a line in
+`decoders/__init__.py`, and nothing has to tell `rfb.py` the encoding exists.
 
 Third-party decoder plugins via entry points are out of scope. Nobody ships
 out-of-tree VNC encodings; the registry is a dict.
@@ -274,8 +269,11 @@ we cannot observe is speculative, and so is breaking it silently.
 
 Two hooks change:
 
-- `updateRectangle` receives canonical-format bytes instead of server-format
-  ones, and one call per rectangle instead of one per tile.
+- `updateRectangle` gains the raw mode its bytes are in, and is called once per
+  rectangle instead of once per tile. The bytes stay in the server's format for
+  every encoding in use today, so a subclass that reads them with the session's
+  format still reads them correctly; what changes is that the format now
+  travels with the data rather than being assumed.
 - `fillRectangle` stops being called, because decoders fill a rect buffer
   instead. Its docstring actively invites overriding it "for better
   performance", so a subclass that did so silently stops being invoked.
@@ -318,8 +316,9 @@ which is the failure mode being detected.
 
 `self.image_mode` is the one break `__init_subclass__` cannot see, since reading
 an attribute overrides nothing. It becomes a property that warns on access and
-returns the canonical mode, which is truthful under the new design; `setImageMode`
-becomes a warning no-op.
+returns the mode the negotiated format resolves to, which stays truthful under
+the new design for as long as one session has one format; `setImageMode` becomes
+a warning no-op.
 
 **This machinery is temporary.** Once the contracts have actually changed the
 warnings are false, and they are removed. If the survey turns up nobody, they are
@@ -338,12 +337,15 @@ code, and the only one that gates on information we do not have.
 with no reactor, and the capture tooling described under Testing. Discharges R2,
 C1.
 
-**Phase 1 — pixel format.** `pixelformat.py` complete: arbitrary
-bits-per-pixel, endianness, shifts, both CPIXEL placements, colour-map
-indirection. `PF2IM` removed.
-*Done when:* a test asserts identical canonical output across at least three
-negotiated formats including a non-32bpp one and a colour-mapped one. Discharges
-R3. This comes before any decoder migrates so no decoder is written twice.
+**Phase 1 — pixel format.** `pixelformat.py`: a negotiated format resolved to a
+Pillow raw mode, both CPIXEL placements, TPIXEL's narrower rule, and the
+`--pixel-format` flag that makes a second format reachable. `PF2IM` removed.
+Designed in [pixel-format.md](pixel-format.md).
+*Done when:* the same scene, captured at two negotiated formats, decodes to the
+same framebuffer within the reduced format's quantization. Discharges R3 for
+those two; colour map and the formats Pillow cannot unpack follow with the
+servers that need them. This comes before any decoder migrates so no decoder is
+written twice.
 
 **Phase 2 — pump, Raw, CopyRect.** The pump lands with `DecodeError` handling and
 `MAX_DESKTOP_SIZE` validation. Raw and CopyRect move; everything else stays on
@@ -364,6 +366,12 @@ This phase is an architecture proof, not a user win. RRE and CoRRE are rarely
 any server's preferred encoding and their bandwidth advantage is narrow. The
 user-visible payoff starts at Phase 4.
 
+The encoding probe lands here too, as a loop over the new flag, filling in the
+UltraVNC and Screen Sharing columns of the support table above. Whether it stays
+in CI or runs once and leaves its results in that table is the same question the
+pixel-format probe answered by leaving: a measurement that only moves when a
+runner image does is a record, not a test.
+
 *Done when:* both render identically to Raw against every fleet server that
 supports them, and `--encodings` can select them. Discharges R4.
 
@@ -381,8 +389,11 @@ unreachable code.
 meets N2. Discharges R5.
 
 **Phase 6 — Tight.** A new encoding as new files plus tests.
-*Done when:* it is added with a zero-line diff to `rfb.py`. That diff is the test
-of R1 — if it is not zero, the architecture did not deliver what it exists for.
+*Done when:* it is added with a zero-line diff to `rfb.py`. The one line that
+registers it goes in `decoders/__init__.py`, and `Encoding.TIGHT` already exists
+(`const.py:32`), so `rfb.py` and `const.py` are both untouched. That is the test
+of R1: today the same change edits `SUPPORTED_ENCODINGS` at `rfb.py:161`, and if
+it still does, the architecture did not deliver what it exists for.
 `libvncserver-example` falls back to Raw when asked for Tight, so its oracle
 comes from `tigervnc` and `x11vnc`.
 
@@ -403,16 +414,22 @@ Because fixtures must come from a real server, an encoding no fleet server emits
 cannot be tested, and therefore cannot be built. Measured by offering each server
 exactly one encoding and reading back the encoding it actually used:
 
-| Encoding | tigervnc | x11vnc | libvncserver-example |
-|---|---|---|---|
-| RRE | yes | yes | yes |
-| CoRRE | no | yes | yes |
-| Hextile | yes | yes | yes |
-| ZRLE | yes | yes | yes |
-| Tight | yes | no | — see below |
-| TRLE | no | no | no |
+| Encoding | tigervnc | x11vnc | libvncserver-example | ultravnc | screen-sharing |
+|---|---|---|---|---|---|
+| RRE | yes | yes | yes | ? | ? |
+| CoRRE | no | yes | yes | ? | ? |
+| Hextile | yes | yes | yes | ? | ? |
+| ZRLE | yes | yes | yes | ? | ? |
+| Tight | yes | no | — see below | ? | ? |
+| TRLE | no | no | no | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
+
+**The two Tier 2 columns are unmeasured**, and they are the servers users run.
+That matters most for Tight, the encoding this whole document exists for (#264):
+UltraVNC is the likeliest server in the fleet to speak it, and nothing here
+knows whether it does. Both already authenticate in CI (`os-servers.yml`), so
+the probe is what is missing, not access.
 
 Read these asymmetrically. A "yes" is proof: the server really emitted that
 encoding. A "no" is strong evidence but not certainty, because servers choose
@@ -425,9 +442,13 @@ is safe; CoRRE survives on two of three servers, TigerVNC having dropped it;
 Hextile and ZRLE are universal; TRLE is emitted by nothing and is therefore out
 of scope entirely.
 
-The probe belongs in the repository as Phase 0 tooling rather than as a
-throwaway. The matrix will drift as the fleet's images update, and a phase needs
-to know what it can actually test before it starts.
+The probe is not in the repository — the table came from a throwaway that no
+longer exists, which is why two columns are blank. Building it waits for Phase 3
+rather than being Phase 0 tooling: `--encodings` lands there, so the probe is
+then a loop over a flag instead of a script reaching into `client.encoding`, and
+Phase 3 is also the first phase whose scope the missing columns could change.
+Until then the matrix is three servers nobody runs, and it drifts as their
+images update.
 
 ## Testing
 
@@ -437,47 +458,42 @@ misunderstanding produces a fixture and a decoder that agree with each other and
 with nothing else — the test then pins the misunderstanding. This is the same
 trap as reading goldens off the implementation.
 
-**Capture tooling (Phase 0).** `loggingproxy.py` already sits between client and
-server at the byte level, which is the right place to record. The tooling drives
-a fleet server through a scripted set of screen changes and records, for each
-encoding: the wire bytes of each framebuffer update, and the ground-truth image
-obtained by replaying the same script with Raw negotiated. The oracle is the
-server itself rendering the same screen under an encoding we already trust — not
-our own decoder, and not our own reading of the spec.
+**Capture tooling (Phase 0), built.** `loggingproxy.py` sits between client and
+server at the byte level, which is the right place to record, and `vnclog
+--capture-raw` is the recorder. A scene player pushes committed PNGs to a fleet
+server's X framebuffer on keypress; the capture is distilled into per-step
+fixtures under `tests/unit/fixtures/goldens/`.
 
-No fleet server can be scripted into a screen change today, and libvncserver
-detects none of its own; see
-[testing-framework.md](testing-framework.md#the-screen-change-source-phase-2-prerequisite).
-The scene source, the capture path, the fixture format and the matrix this
-tooling produces are designed in [decoder-goldens.md](decoder-goldens.md).
+**The oracle is the committed PNG the server was shown**, not a Raw replay. An
+earlier revision proposed replaying each script with Raw negotiated and treating
+that render as ground truth, which makes the oracle a second capture — subject
+to the same server, the same session, and its own decode. Comparing against the
+file that was displayed removes the server from the oracle entirely, and there
+is nothing to keep in sync because the fixture names the scene and the scene is
+the file. [decoder-goldens.md](decoder-goldens.md) has the scene source, the
+capture path, the fixture format and the matrix.
 
 **Tier 1 — unit, offline.** Captured wire bytes into the decoder, compare the
-resulting buffer against the Raw ground truth. Fast, no fleet, no reactor.
-Canonical output is what makes this comparison possible across captures from
-servers that negotiated different formats.
+resulting framebuffer against the scene PNG. Fast, no fleet, no reactor. The
+comparison is on the framebuffer after the client's paste, which is what makes
+it hold across captures from servers that negotiated different formats.
 
 **Tier 2 — live, against the fleet.** Force `--encodings` to one encoding, drive
-the same script, compare the rendered screen to the Raw run. Catches everything
-the capture missed: negotiation, ordering, zlib stream continuity across
-rectangles.
+the same scene script, compare the captured screen to the same PNGs. Catches
+everything the capture missed: negotiation, ordering, zlib stream continuity
+across rectangles.
 
 **Tier 3 — screen-change stress.** Fixtures are only as good as the screen
-changes that produced them. The scripted changes must provoke the cases that
-otherwise never appear:
+changes that produced them, and a decoder that passes Tier 1 and Tier 2 on a
+blank-ish screen has been barely tested. The scene catalogue in
+[decoder-goldens.md](decoder-goldens.md) is this tier: solid fills for RRE and
+ZRLE's single-colour palette, dense detail for raw-tile fallback, scattered
+rects for ordering and R7's stream continuity, a scrolled region for CopyRect —
+the one encoding whose correctness depends on prior framebuffer contents.
 
-- **Scrolling and window drags**, which are what make a server emit CopyRect at
-  all. CopyRect is the one encoding whose correctness depends on prior
-  framebuffer contents, so a test that starts from a blank screen cannot fail.
-- **Large solid regions**, which drive RRE and ZRLE into their fill and
-  single-colour-palette paths.
-- **Dense detail**, which drives them into raw-tile fallback.
-- **Small scattered changes**, which produce many-rectangle updates and exercise
-  ordering and the ZRLE stream continuity requirement of R7.
-- **Desktop resize mid-session**, which exercises the pseudo-encodings against a
-  changing framebuffer.
-
-A decoder that passes Tier 1 and Tier 2 on a blank-ish screen has been barely
-tested. Tier 3 is where the coverage actually comes from.
+Mid-session desktop resize is the case the catalogue cannot reach, since the
+scene player cannot make a server change geometry; it is deferred there with the
+libvncserver example that could.
 
 **Segmentation.** One test at the pump feeding a capture one byte at a time and
 asserting identical output. Because the pump satisfies every yielded byte count
@@ -521,9 +537,10 @@ pixel-then-coordinates correctly (`rfb.py:492`) and the ZRLE run-length branch
 already permits palettes to 127 (`subencoding & 127`). Neither needs changing;
 the packed-palette cap of 16 is in the correct branch.
 
-**Not verified, and must be before implementation:** Tight's TPIXEL rule and its
-zlib stream count. Both fetches of rfbproto truncated before that section. Blocks
-nothing before Phase 6.
+**Verified against rfbproto, since:** Tight's TPIXEL rule — narrower than
+CPIXEL, fixed in red-green-blue order — and its four zlib streams; CPIXEL's
+tie-break at depth ≤ 16, absent from RFC 6143; and that *bits-per-pixel* must be
+8, 16 or 32. Detail in [pixel-format.md](pixel-format.md).
 
 Per `DEVELOP.rst`, rfbproto is a living document with no releases, so any comment
 or test depending on its wording cites a commit permalink rather than `master`.
