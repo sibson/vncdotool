@@ -3,7 +3,7 @@
 The offline half is tests/unit/test_decoders.py, whose bytes come from the
 specification. This half catches what a hand-built fixture cannot:
 negotiation, rectangle ordering, and whether a real server's idea of the
-encoding matches ours. specs/decoder-goldens.md.
+encoding matches ours. See specs/decoder-goldens.md.
 """
 from __future__ import annotations
 

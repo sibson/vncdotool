@@ -112,8 +112,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.DIFFIE_HELLMAN,
     }
     # Registered decoders, plus what has yet to move to the registry.
-    # Registering an encoding is a line in decoders/__init__.py, and nothing
-    # here has to be told the encoding exists.
     _UNMIGRATED_ENCODINGS = {
         Encoding.HEXTILE,
         Encoding.ZRLE,
