@@ -5,8 +5,6 @@ from .base import DecodeError
 
 
 class RectBuffer:
-    """A rect-sized, rect-local pixel buffer that decoders fill."""
-
     def __init__(self, width: int, height: int, bypp: int, backing: bytearray | None = None) -> None:
         self.width = width
         self.height = height

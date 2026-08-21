@@ -19,7 +19,7 @@ import sys
 import warnings
 import zlib
 from dataclasses import astuple, dataclass
-from struct import Struct, pack, unpack, unpack_from
+from struct import Struct, error as StructError, pack, unpack, unpack_from
 from typing import (
     Any,
     Callable,
@@ -540,7 +540,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._finishRectangle(*finish)
             self._doConnection()
             return
-        except decoders.DecodeError as exc:
+        except (decoders.DecodeError, StructError) as exc:
+            # StructError too: a decoder parsing malformed input raises it
+            # from unpack, and an unhandled one is as undiagnosed a failure
+            # as the indefinite wait this exists to replace.
             self.vncProtocolError(f"cannot decode this rectangle: {exc}")
             self.transport.loseConnection()
             return
