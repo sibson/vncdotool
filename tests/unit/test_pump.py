@@ -228,6 +228,7 @@ class TestCopyRectPump(TestCase):
 
     def test_copyRectangle_called_with_wire_source_and_no_paint(self) -> None:
         cli = self.cli
+        cli.width, cli.height = 64, 48
         cli.copyRectangle = mock.Mock()
         cli.updateRectangle = mock.Mock()
         decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
@@ -237,6 +238,20 @@ class TestCopyRectPump(TestCase):
 
         cli.copyRectangle.assert_called_once_with(1, 2, 5, 6, 10, 20)
         cli.updateRectangle.assert_not_called()
+
+    def test_a_copy_from_outside_the_framebuffer_is_refused(self) -> None:
+        cli = self.cli
+        cli.width, cli.height = 64, 48
+        cli.copyRectangle = mock.Mock()
+        cli.vncProtocolError = mock.Mock()
+
+        decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
+        pump(cli, decoder, 0, 0, 10, 10)
+        cli.dataReceived(pack("!HH", 60, 0))
+
+        cli.copyRectangle.assert_not_called()
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
 
 
 class TestOnePastePerRectangle(TestCase):
