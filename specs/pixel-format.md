@@ -27,7 +27,11 @@ needs them.
 
 ServerInit read off each running server, not from documentation. Tier 1 locally,
 Tier 2 from run
-[32386264566](https://github.com/sibson/vncdotool/actions/runs/32386264566):
+[32386264566](https://github.com/sibson/vncdotool/actions/runs/32386264566),
+which ran a probe test that has since been removed: this table is the record, and
+nothing re-derives it. It goes stale when a runner image changes its display
+depth, and `vncdo -v` against any server reprints both the native format and the
+one we request.
 
 | Server | ServerInit format | Wire | In `PF2IM`? |
 |---|---|---|---|

@@ -367,8 +367,10 @@ any server's preferred encoding and their bandwidth advantage is narrow. The
 user-visible payoff starts at Phase 4.
 
 The encoding probe lands here too, as a loop over the new flag, filling in the
-UltraVNC and Screen Sharing columns of the support table above and wired into
-`os-servers.yml` beside the pixel-format report.
+UltraVNC and Screen Sharing columns of the support table above. Whether it stays
+in CI or runs once and leaves its results in that table is the same question the
+pixel-format probe answered by leaving: a measurement that only moves when a
+runner image does is a record, not a test.
 
 *Done when:* both render identically to Raw against every fleet server that
 supports them, and `--encodings` can select them. Discharges R4.
