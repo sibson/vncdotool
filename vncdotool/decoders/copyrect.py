@@ -1,8 +1,4 @@
-"""CopyRect: a framebuffer-to-framebuffer blit.
-
-RFC 6143 section 7.7.2. It reads no pixel data, and its source is the
-framebuffer rather than the stream, so it is a ClientDecoder.
-"""
+"""CopyRect. RFC 6143 section 7.7.2."""
 from __future__ import annotations
 
 from struct import unpack

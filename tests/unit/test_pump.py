@@ -1,8 +1,5 @@
-"""The pump: `_decodeRectangle`, `_rectBuffer`, `_pumpDecoder`, `_finishRectangle`.
-
-No reactor, no transport, no server -- protocol classes driven directly with
-a mocked Twisted transport. specs/decoder-architecture.md sections "Decoders
-are generators", "One paste per rectangle", "Errors, not hangs", and R6.
+"""specs/decoder-architecture.md sections "Decoders are generators", "One
+paste per rectangle", "Errors, not hangs", and R6.
 """
 from __future__ import annotations
 
