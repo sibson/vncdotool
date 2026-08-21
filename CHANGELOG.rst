@@ -1,5 +1,8 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Add ``vncdo --encodings LIST``, choosing which encodings to offer the server. Raw was the only one offered before, whatever the server supported (@sibson, #167, #168)
+  - Fix CoRRE decoding, which raised on its own format string and stopped after the first subrectangle. Reachable for the first time now that an encoding can be chosen (@sibson)
+  - Fix CopyRect leaving the screen unchanged: the client never implemented the copy (@sibson)
   - Malformed or oversized pixel data now ends the session with a reported error instead of waiting for bytes that never arrive (@sibson)
   - [BREAKING] ``RFBClient.updateRectangle`` takes the ``PixelFormat`` its bytes are in, and is called once per rectangle; ``fillRectangle`` is no longer called for Raw or CopyRect. Subclasses overriding either have been warned since 1.4.1, see #385 (@sibson)
   - Add ``vncdo --pixel-format FORMAT``, asking the server for ``bgrx8888``, ``rgbx8888``, or ``rgb565`` instead of accepting the format it announces (@sibson)
