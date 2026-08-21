@@ -97,8 +97,13 @@ sweep.
 - N2 is half measured, and that half now passes in CI: Hextile puts fewer
   bytes on the wire than Raw for the same scene, measured through vnclog. The
   render-time half needs a captured Hextile fixture, so it needs the fleet.
-- All four PRs green at their current heads and all reviewed. The hourly
-  Routine is deleted; nothing wakes this session on its own any more.
+- All four PRs reviewed, and green before the stack was rebased.
+- Main moved overnight (#396, #400) and #400 conflicted in
+  tests/unit/test_client.py -- both sides had appended a test class. The whole
+  stack is rebased onto main and merges cleanly; CI is re-running.
+- Phase 4 had drifted off Phase 3: the copyRectangle fixes landed on p3 after
+  p4 branched, so #406 did not contain them until the cascade. Check for that
+  after any fix pushed to a branch lower in the stack.
 - Measured, not assumed: tigervnc really emits RRE and Hextile when asked
   (the fleet job asserts it), so the support table's yes for both is
   confirmed against the current image.
