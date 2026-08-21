@@ -134,7 +134,6 @@ def cpixel_offset(pixel_format: rfb.PixelFormat) -> int:
     return 0 if low != pixel_format.bigendian else pixel_format.bypp - 3
 
 
-# Names the ``--pixel-format`` CLI flag will accept.
 PIXEL_FORMATS: dict[str, rfb.PixelFormat] = {
     "bgrx8888": rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0),
     "rgbx8888": rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16),

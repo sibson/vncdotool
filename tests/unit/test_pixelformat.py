@@ -5,8 +5,6 @@ from PIL import Image
 from vncdotool import rfb
 from vncdotool.pixelformat import UnsupportedPixelFormat, cpixel_bytes, cpixel_offset, raw_mode
 
-# 32bpp, 8-bit channels, one PixelFormat per Pillow raw mode, plus a
-# depth-only variant and a bigendian variant of bgrx8888.
 BGRX8888 = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0)
 BGRX8888_DEPTH32 = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 16, 8, 0)
 BGRX8888_BIGENDIAN = rfb.PixelFormat(32, 24, True, True, 255, 255, 255, 16, 8, 0)
@@ -56,7 +54,7 @@ class TestRawMode(TestCase):
                 self.assertEqual(raw_mode(pixel_format), expected)
 
     def test_depth_does_not_affect_the_resolved_mode(self):
-        """A libvncserver-example-style depth-32 declaration is still RGBX."""
+        """The depth-32 declaration libvncserver-example sends resolves the same."""
         self.assertEqual(raw_mode(BGRX8888), raw_mode(BGRX8888_DEPTH32))
 
     def test_endianness_changes_the_resolved_mode(self):
@@ -110,7 +108,8 @@ class TestRawMode(TestCase):
             raw_mode(pixel_format)
 
     def test_channel_widths_outside_the_covered_set_are_unsupported(self):
-        pixel_format = rfb.PixelFormat(16, 16, False, True, 63, 63, 63, 12, 6, 0)
+        """10-bit channels: a real deep-colour layout Pillow has no mode for."""
+        pixel_format = rfb.PixelFormat(32, 30, False, True, 1023, 1023, 1023, 20, 10, 0)
         with self.assertRaises(UnsupportedPixelFormat):
             raw_mode(pixel_format)
 
