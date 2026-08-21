@@ -155,30 +155,93 @@ class TestMultiYieldDecoders(TestCase):
         cli.transport.loseConnection.assert_called_once()
 
 
+class TestAbort(TestCase):
+    """A failed decode has to stop the parser, not just the transport.
+
+    Driven through `dataReceived` rather than by calling the pump: the
+    parked handler is only re-entered by `_handleExpected`'s loop, so a
+    direct call cannot see a failure that forgot to disarm it.
+    """
+
+    def _failing_client(self) -> rfb.RFBClient:
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+        cli.commitUpdate = mock.Mock()
+
+        class Failing:
+            def decode(self, target, pixel_format):
+                yield 2
+                raise decoders.DecodeError("boom")
+
+            def output_format(self, pixel_format):
+                return pixel_format
+
+        cli._decodeRectangle(Failing(), 0, 0, 2, 1)
+        return cli
+
+    def test_nothing_is_painted_after_a_failed_decode(self) -> None:
+        cli = self._failing_client()
+
+        cli.dataReceived(b"ab" + b"CDEFGHIJKLMNOP")
+
+        cli.vncProtocolError.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+        cli.commitUpdate.assert_not_called()
+
+    def test_bytes_arriving_after_a_failed_decode_are_discarded(self) -> None:
+        cli = self._failing_client()
+        cli.dataReceived(b"ab")
+
+        cli.dataReceived(b"more bytes the server had already sent")
+
+        cli.updateRectangle.assert_not_called()
+        self.assertEqual(cli.vncProtocolError.call_count, 1)
+
+    def test_a_decoder_asking_for_a_negative_count_is_refused(self) -> None:
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+
+        class Backwards:
+            def decode(self, target, pixel_format):
+                yield -8
+
+            def output_format(self, pixel_format):
+                return pixel_format
+
+        cli._decodeRectangle(Backwards(), 0, 0, 1, 1)
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+
+
 class TestRectBufferValidation(TestCase):
     """A rectangle outside `MAX_DESKTOP_SIZE`, or with a zero dimension, is
     refused before any buffer is allocated.
     """
 
-    def test_oversized_rectangle_is_refused(self) -> None:
+    def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
         cli = make_pump_client()
+        cli.width, cli.height = 64, 48
         cli.vncProtocolError = mock.Mock()
 
-        result = cli._rectBuffer(cli.MAX_DESKTOP_SIZE + 1, 10)
+        result = cli._rectBuffer(65, 10)
 
         self.assertIsNone(result)
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
 
-    def test_zero_width_rectangle_is_refused(self) -> None:
+    def test_a_zero_dimension_rectangle_is_not_an_error(self) -> None:
+        """It carries no payload, and the decoders this replaced passed it
+        through rather than failing the session.
+        """
         cli = make_pump_client()
         cli.vncProtocolError = mock.Mock()
 
-        result = cli._rectBuffer(0, 10)
+        self.assertIsNotNone(cli._rectBuffer(0, 10))
+        self.assertIsNotNone(cli._rectBuffer(10, 0))
 
-        self.assertIsNone(result)
-        cli.vncProtocolError.assert_called_once()
-        cli.transport.loseConnection.assert_called_once()
+        cli.vncProtocolError.assert_not_called()
 
     def test_the_largest_allowed_rectangle_is_accepted(self) -> None:
         """The refusals above pass just as well against an off-by-one that
@@ -191,16 +254,6 @@ class TestRectBufferValidation(TestCase):
 
         cli.vncProtocolError.assert_not_called()
 
-    def test_zero_height_rectangle_is_refused(self) -> None:
-        cli = make_pump_client()
-        cli.vncProtocolError = mock.Mock()
-
-        result = cli._rectBuffer(10, 0)
-
-        self.assertIsNone(result)
-        cli.vncProtocolError.assert_called_once()
-        cli.transport.loseConnection.assert_called_once()
-
 
 class TestCopyRectPump(TestCase):
     """CopyRect is a `ClientDecoder`: it reads its source off the wire and
@@ -211,7 +264,7 @@ class TestCopyRectPump(TestCase):
         cli = make_pump_client()
         cli.copyRectangle = mock.Mock()
         cli.updateRectangle = mock.Mock()
-        decoder = decoders.DECODERS[Encoding.COPY_RECTANGLE]
+        decoder = cli._decoders[Encoding.COPY_RECTANGLE]
 
         cli._decodeRectangle(decoder, 5, 6, 10, 20)
         cli.dataReceived(pack("!HH", 1, 2))  # srcx, srcy
@@ -228,7 +281,7 @@ class TestOnePastePerRectangle(TestCase):
     def test_single_call_with_negotiated_pixel_format(self) -> None:
         cli = make_pump_client()
         cli.updateRectangle = mock.Mock()
-        decoder = decoders.DECODERS[Encoding.RAW]
+        decoder = cli._decoders[Encoding.RAW]
         width, height = 4, 3
         pixels = bytes(range(width * height * cli.bypp))
 
@@ -244,7 +297,7 @@ class TestOnePastePerRectangle(TestCase):
     def test_the_rectangle_lands_where_the_wire_said(self) -> None:
         cli = make_pump_client()
         cli.updateRectangle = mock.Mock()
-        decoder = decoders.DECODERS[Encoding.RAW]
+        decoder = cli._decoders[Encoding.RAW]
         pixels = bytes(range(2 * 2 * cli.bypp))
 
         cli._decodeRectangle(decoder, 7, 9, 2, 2)

@@ -58,6 +58,18 @@ class TestRectBuffer(unittest.TestCase):
         # past what this smaller rectangle claims -- tobytes() must not leak it.
         self.assertEqual(bytes(backing), b"\x01" * 4 + b"\xaa" * 12)
 
+    def test_a_partial_write_does_not_read_back_the_last_rectangle(self):
+        backing = bytearray(16)
+        RectBuffer(4, 4, 1, backing=backing).fill(0, 0, 4, 4, b"\xaa")
+
+        reused = RectBuffer(4, 4, 1, backing=backing)
+        reused.fill(1, 1, 2, 2, b"\x01")
+
+        self.assertEqual(
+            reused.tobytes(),
+            b"\x00" * 5 + b"\x01\x01" + b"\x00" * 2 + b"\x01\x01" + b"\x00" * 5,
+        )
+
     def test_backing_too_small_raises_value_error(self):
         with self.assertRaises(ValueError):
             RectBuffer(2, 2, 1, backing=bytearray(3))

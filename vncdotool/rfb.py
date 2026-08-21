@@ -200,6 +200,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._expected_args: tuple[Any, ...] = ()
         self._expected_kwargs: dict[str, Any] = {}
         self._already_expecting = False
+        self._aborted = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
         self._zlib_stream = zlib.decompressobj(0)
@@ -207,7 +208,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
             Encoding.RAW,
         }
         self.pixel_format = PixelFormat()
+        self.width = 0
+        self.height = 0
         self._rect_backing = bytearray()
+        self._decoders = decoders.build()
 
     @property
     def bypp(self) -> int:
@@ -442,8 +446,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append((x, y, width, height))
-            if encoding in decoders.DECODERS:
-                self._decodeRectangle(decoders.DECODERS[encoding], x, y, width, height)
+            if encoding in self._decoders:
+                self._decodeRectangle(self._decoders[encoding], x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.CORRE:
@@ -513,9 +517,14 @@ class RFBClient(Protocol):  # type: ignore[misc]
         The allocation is kept and reused at its high-water mark, so a session
         of same-sized updates allocates once.
         """
-        if not (0 < width <= self.MAX_DESKTOP_SIZE and 0 < height <= self.MAX_DESKTOP_SIZE):
-            self.vncProtocolError(f"rectangle {width}x{height} is out of range")
-            self.transport.loseConnection()
+        # A zero dimension carries no pixels and no payload, and the old
+        # decoders passed it through, so it is not an error.
+        limit_w = self.width or self.MAX_DESKTOP_SIZE
+        limit_h = self.height or self.MAX_DESKTOP_SIZE
+        if not (0 <= width <= limit_w and 0 <= height <= limit_h):
+            self.abortConnection(
+                f"rectangle {width}x{height} does not fit a {limit_w}x{limit_h} framebuffer"
+            )
             return None
         needed = width * height * self.bypp
         try:
@@ -523,8 +532,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._rect_backing = bytearray(needed)
             return decoders.RectBuffer(width, height, self.bypp, self._rect_backing)
         except MemoryError:
-            self.vncProtocolError(f"no memory for a {width}x{height} rectangle")
-            self.transport.loseConnection()
+            self.abortConnection(f"no memory for a {width}x{height} rectangle")
             return None
 
     def _pumpDecoder(
@@ -540,12 +548,18 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._finishRectangle(*finish)
             self._doConnection()
             return
-        except (decoders.DecodeError, StructError) as exc:
-            # StructError too: a decoder parsing malformed input raises it
-            # from unpack, and an unhandled one is as undiagnosed a failure
-            # as the indefinite wait this exists to replace.
-            self.vncProtocolError(f"cannot decode this rectangle: {exc}")
-            self.transport.loseConnection()
+        except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
+            # Not DecodeError alone: a decoder parsing malformed input raises
+            # struct.error out of unpack and zlib.error out of a corrupt
+            # stream, and an unhandled one is as undiagnosed a failure as the
+            # indefinite wait this exists to replace.
+            generator.close()
+            self.abortConnection(f"cannot decode this rectangle: {exc}")
+            return
+
+        if size < 0:
+            generator.close()
+            self.abortConnection(f"decoder asked for {size} bytes")
             return
         self.expect(self._pumpDecoder, size, generator, finish)
 
@@ -1018,12 +1032,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def dataReceived(self, data: bytes) -> None:
         # ~ sys.stdout.write(repr(data) + '\n')
         # ~ print(f"{len(data), {len(self._packet)}")
+        if self._aborted:
+            return
         self._packet.extend(data)
         self._handler()
 
     def _handleExpected(self) -> None:
         if len(self._packet) >= self._expected_len:
-            while len(self._packet) >= self._expected_len:
+            # `expect` is the only thing that re-arms the parked handler, so
+            # a handler that gives up without calling it would be re-entered
+            # by this loop with the next block.
+            while len(self._packet) >= self._expected_len and not self._aborted:
                 self._already_expecting = True
                 block = bytes(self._packet[: self._expected_len])
                 del self._packet[: self._expected_len]
@@ -1032,6 +1051,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
                     block, *self._expected_args, **self._expected_kwargs
                 )
             self._already_expecting = False
+
+    def abortConnection(self, reason: str) -> None:
+        """Report a protocol failure and stop parsing for good.
+
+        loseConnection is asynchronous and bytes already buffered are still
+        delivered, so the parser has to be stopped here as well.
+        """
+        self._aborted = True
+        self._packet.clear()
+        self.vncProtocolError(reason)
+        self.transport.loseConnection()
 
     def expect(
         self, handler: Callable[..., None], size: int, *args: Any, **kwargs: Any
