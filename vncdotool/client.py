@@ -377,14 +377,22 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def updateRectangle(
-        self, x: int, y: int, width: int, height: int, data: bytes
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        data: bytes,
+        pixel_format: rfb.PixelFormat,
     ) -> None:
         # ignore empty updates
         if not data:
             return
 
         size = (width, height)
-        update = Image.frombytes("RGB", size, data, "raw", self._image_mode)
+        update = Image.frombytes(
+            "RGB", size, data, "raw", pixelformat.raw_mode(pixel_format)
+        )
         if not self.screen:
             self.screen = Image.new("RGB", (self.width, self.height), "black")
             self.screen.paste(update, (x, y))
