@@ -408,16 +408,22 @@ Because fixtures must come from a real server, an encoding no fleet server emits
 cannot be tested, and therefore cannot be built. Measured by offering each server
 exactly one encoding and reading back the encoding it actually used:
 
-| Encoding | tigervnc | x11vnc | libvncserver-example |
-|---|---|---|---|
-| RRE | yes | yes | yes |
-| CoRRE | no | yes | yes |
-| Hextile | yes | yes | yes |
-| ZRLE | yes | yes | yes |
-| Tight | yes | no | — see below |
-| TRLE | no | no | no |
+| Encoding | tigervnc | x11vnc | libvncserver-example | ultravnc | screen-sharing |
+|---|---|---|---|---|---|
+| RRE | yes | yes | yes | ? | ? |
+| CoRRE | no | yes | yes | ? | ? |
+| Hextile | yes | yes | yes | ? | ? |
+| ZRLE | yes | yes | yes | ? | ? |
+| Tight | yes | no | — see below | ? | ? |
+| TRLE | no | no | no | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
+
+**The two Tier 2 columns are unmeasured**, and they are the servers users run.
+That matters most for Tight, the encoding this whole document exists for (#264):
+UltraVNC is the likeliest server in the fleet to speak it, and nothing here
+knows whether it does. Both already authenticate in CI (`os-servers.yml`), so
+the probe is what is missing, not access.
 
 Read these asymmetrically. A "yes" is proof: the server really emitted that
 encoding. A "no" is strong evidence but not certainty, because servers choose
@@ -430,9 +436,12 @@ is safe; CoRRE survives on two of three servers, TigerVNC having dropped it;
 Hextile and ZRLE are universal; TRLE is emitted by nothing and is therefore out
 of scope entirely.
 
-The probe belongs in the repository as Phase 0 tooling rather than as a
-throwaway. The matrix will drift as the fleet's images update, and a phase needs
-to know what it can actually test before it starts.
+The probe is not in the repository — the table above came from a throwaway that
+no longer exists, which is why two columns cannot be filled in now. It becomes
+Phase 0 tooling: a script setting `client.encoding` per connection, since
+`--encodings` does not arrive until Phase 3, run against both fleets and wired
+into `os-servers.yml` beside the pixel-format report. The matrix drifts as
+images update, and a phase needs to know what it can test before it starts.
 
 ## Testing
 
@@ -442,47 +451,42 @@ misunderstanding produces a fixture and a decoder that agree with each other and
 with nothing else — the test then pins the misunderstanding. This is the same
 trap as reading goldens off the implementation.
 
-**Capture tooling (Phase 0).** `loggingproxy.py` already sits between client and
-server at the byte level, which is the right place to record. The tooling drives
-a fleet server through a scripted set of screen changes and records, for each
-encoding: the wire bytes of each framebuffer update, and the ground-truth image
-obtained by replaying the same script with Raw negotiated. The oracle is the
-server itself rendering the same screen under an encoding we already trust — not
-our own decoder, and not our own reading of the spec.
+**Capture tooling (Phase 0), built.** `loggingproxy.py` sits between client and
+server at the byte level, which is the right place to record, and `vnclog
+--capture-raw` is the recorder. A scene player pushes committed PNGs to a fleet
+server's X framebuffer on keypress; the capture is distilled into per-step
+fixtures under `tests/unit/fixtures/goldens/`.
 
-No fleet server can be scripted into a screen change today, and libvncserver
-detects none of its own; see
-[testing-framework.md](testing-framework.md#the-screen-change-source-phase-2-prerequisite).
-The scene source, the capture path, the fixture format and the matrix this
-tooling produces are designed in [decoder-goldens.md](decoder-goldens.md).
+**The oracle is the committed PNG the server was shown**, not a Raw replay. An
+earlier revision proposed replaying each script with Raw negotiated and treating
+that render as ground truth, which makes the oracle a second capture — subject
+to the same server, the same session, and its own decode. Comparing against the
+file that was displayed removes the server from the oracle entirely, and there
+is nothing to keep in sync because the fixture names the scene and the scene is
+the file. [decoder-goldens.md](decoder-goldens.md) has the scene source, the
+capture path, the fixture format and the matrix.
 
 **Tier 1 — unit, offline.** Captured wire bytes into the decoder, compare the
-resulting buffer against the Raw ground truth. Fast, no fleet, no reactor. The
+resulting framebuffer against the scene PNG. Fast, no fleet, no reactor. The
 comparison is on the framebuffer after the client's paste, which is what makes
 it hold across captures from servers that negotiated different formats.
 
 **Tier 2 — live, against the fleet.** Force `--encodings` to one encoding, drive
-the same script, compare the rendered screen to the Raw run. Catches everything
-the capture missed: negotiation, ordering, zlib stream continuity across
-rectangles.
+the same scene script, compare the captured screen to the same PNGs. Catches
+everything the capture missed: negotiation, ordering, zlib stream continuity
+across rectangles.
 
 **Tier 3 — screen-change stress.** Fixtures are only as good as the screen
-changes that produced them. The scripted changes must provoke the cases that
-otherwise never appear:
+changes that produced them, and a decoder that passes Tier 1 and Tier 2 on a
+blank-ish screen has been barely tested. The scene catalogue in
+[decoder-goldens.md](decoder-goldens.md) is this tier: solid fills for RRE and
+ZRLE's single-colour palette, dense detail for raw-tile fallback, scattered
+rects for ordering and R7's stream continuity, a scrolled region for CopyRect —
+the one encoding whose correctness depends on prior framebuffer contents.
 
-- **Scrolling and window drags**, which are what make a server emit CopyRect at
-  all. CopyRect is the one encoding whose correctness depends on prior
-  framebuffer contents, so a test that starts from a blank screen cannot fail.
-- **Large solid regions**, which drive RRE and ZRLE into their fill and
-  single-colour-palette paths.
-- **Dense detail**, which drives them into raw-tile fallback.
-- **Small scattered changes**, which produce many-rectangle updates and exercise
-  ordering and the ZRLE stream continuity requirement of R7.
-- **Desktop resize mid-session**, which exercises the pseudo-encodings against a
-  changing framebuffer.
-
-A decoder that passes Tier 1 and Tier 2 on a blank-ish screen has been barely
-tested. Tier 3 is where the coverage actually comes from.
+Mid-session desktop resize is the case the catalogue cannot reach, since the
+scene player cannot make a server change geometry; it is deferred there with the
+libvncserver example that could.
 
 **Segmentation.** One test at the pump feeding a capture one byte at a time and
 asserting identical output. Because the pump satisfies every yielded byte count
