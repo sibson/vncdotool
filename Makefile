@@ -9,6 +9,7 @@ endif
 help:
 	@echo "test:		run unit tests"
 	@echo "test-func:	run functional tests"
+	@echo "typecheck:	run mypy over vncdotool and tests"
 	@echo "servers-up:	start the docker VNC test servers"
 	@echo "servers-down:	stop the docker VNC test servers"
 	@echo "test-servers:	run functional tests against the VNC test servers"
@@ -54,6 +55,10 @@ test-unit:
 .PHONY: test-func
 test-func:
 	uv run python -m unittest discover -s tests/functional -t .
+
+.PHONY: typecheck
+typecheck:
+	uv run mypy vncdotool tests
 
 include tests/servers/servers.mk
 
