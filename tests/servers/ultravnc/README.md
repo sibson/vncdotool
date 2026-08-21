@@ -5,7 +5,7 @@ An OS-hosted VNC server for vncdotool to test against on a Windows machine
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
 
-The setup is `.github/actions/os-server`. `ultravnc.ps1` refuses unless
+The setup is `.github/actions/os-server`. `windows.ps1` refuses unless
 `RUNNER_ENVIRONMENT=github-hosted`: the service it installs outlives both the
 job and the checkout, and a self-hosted runner is someone's real machine.
 
@@ -30,7 +30,7 @@ down:
 
 * **The Chocolatey feed is flaky.** It intermittently returns a response
   that isn't valid XML, which choco reports as "Unable to find package"
-  while still exiting 0. `ultravnc.ps1` retries, and decides success by
+  while still exiting 0. `windows.ps1` retries, and decides success by
   whether `winvnc.exe` exists rather than by the exit code.
 
 * **A password is mandatory.** UltraVNC refuses every incoming connection

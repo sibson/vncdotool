@@ -37,7 +37,7 @@ runs:
         PORT: ${{ inputs.port }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
         CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
-      run: bash "$GITHUB_ACTION_PATH/screen-sharing.sh"
+      run: bash "$GITHUB_ACTION_PATH/macos.sh"
 
     - name: Install and start UltraVNC
       if: inputs.os == 'windows'
@@ -46,4 +46,4 @@ runs:
         PASSWORD: ${{ inputs.password }}
         PORT: ${{ inputs.port }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
-      run: pwsh -File "$env:GITHUB_ACTION_PATH/ultravnc.ps1"
+      run: pwsh -File "$env:GITHUB_ACTION_PATH/windows.ps1"

@@ -50,7 +50,7 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_serve
 
 ## Running it anywhere but a hosted runner
 
-`screen-sharing.sh` refuses unless `RUNNER_ENVIRONMENT=github-hosted`:
+`macos.sh` refuses unless `RUNNER_ENVIRONMENT=github-hosted`:
 switching Remote Management on outlives both the job and the checkout, and a
 self-hosted runner is someone's real machine. Nothing before that check
 changes anything, and a machine that does not auto-login has no
