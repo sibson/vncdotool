@@ -41,7 +41,7 @@ def make_client() -> client.VNCDoToolClient:
     cli.factory.pseudodesktop = False
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False
-    cli.setEncodings = mock.Mock()  # not under test here
+    cli.setEncodings = mock.Mock()
     return cli
 
 
@@ -97,7 +97,7 @@ class TestEncodings(unittest.TestCase):
 
         raw_body = b"".join(_pixel(*p) for p in self.GRID_4X4)
         raw_rect = rect(0, 0, width, height, Encoding.RAW, raw_body)
-        copy_body = pack("!HH", 0, 0)  # copy from (0, 0)
+        copy_body = pack("!HH", 0, 0)
         copy_rect = rect(2, 2, 2, 2, Encoding.COPY_RECTANGLE, copy_body)
         self.cli.dataReceived(framebuffer_update([raw_rect, copy_rect]))
 

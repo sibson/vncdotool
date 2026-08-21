@@ -22,8 +22,8 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
     Encoding.CORRE: CoRREDecoder,
 }
 
-# The names --encodings accepts. Registered encodings only: what is still on
-# rfb.py's own path decodes, but is not offered until its phase migrates it.
+# The names --encodings accepts. Registered encodings only: an encoding still
+# on rfb.py's own path decodes, but is not offered.
 ENCODING_NAMES: Dict[str, Encoding] = {
     "raw": Encoding.RAW,
     "copyrect": Encoding.COPY_RECTANGLE,

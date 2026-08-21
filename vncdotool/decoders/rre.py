@@ -1,6 +1,4 @@
-"""RRE and CoRRE: a background fill, then a list of coloured subrectangles.
-
-RFC 6143 section 7.7.3 for RRE. CoRRE is not in RFC 6143; rfbproto has it,
+"""RRE is RFC 6143 section 7.7.3. CoRRE is not in RFC 6143; rfbproto has it,
 and it is RRE with U8 subrectangle coordinates, which is why it inherits.
 """
 from __future__ import annotations
