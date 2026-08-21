@@ -3,7 +3,7 @@ import io
 import struct
 import warnings
 
-from vncdotool import client, rfb
+from vncdotool import client, pixelformat, rfb
 from vncdotool.keys import Key
 
 COLOUR_MAPPED = rfb.PixelFormat(8, 8, False, False, 0, 0, 0, 0, 0, 0)
@@ -408,6 +408,19 @@ class TestImageMode(TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", FutureWarning)
             assert self.client.image_mode == "BGR;16"
+
+    def test_setImageMode_keeps_bypp_in_step_with_the_negotiated_format(self):
+        # setPixelFormat is real here, not mocked like the tests above: bypp
+        # is a read-through of the pixel_format it assigns, so a mock hides
+        # any drift between it and the raw mode _image_mode negotiates.
+        self.client._version_server = (3, 8)
+        self.client.pixel_format = client.RGB32
+        self.client.requested_pixel_format = client.BGR16
+
+        self.client.setImageMode()
+
+        assert self.client.bypp == client.BGR16.bypp
+        assert self.client._image_mode == pixelformat.raw_mode(client.BGR16)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangle_does_not_warn(self, frombytes):

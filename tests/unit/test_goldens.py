@@ -13,7 +13,7 @@ from unittest import mock
 
 from PIL import Image
 
-from vncdotool import client
+from vncdotool import client, pixelformat
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
@@ -23,7 +23,11 @@ def fixtures() -> List[Path]:
     return sorted(path for path in FIXTURE_ROOT.iterdir() if (path / "conditions.json").exists())
 
 
-def make_client() -> client.VNCDoToolClient:
+def conditions(fixture: Path) -> dict:
+    return json.loads((fixture / "conditions.json").read_text())
+
+
+def make_client(fixture: Optional[Path] = None) -> client.VNCDoToolClient:
     cli = client.VNCDoToolClient()
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
@@ -34,6 +38,14 @@ def make_client() -> client.VNCDoToolClient:
     cli.factory.pseudodesktop = False
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False
+    if fixture is not None:
+        # The capture holds only the server's half, so the SetPixelFormat the
+        # capturing client sent is not in it to replay: without this the
+        # replay reads the server's announced format and, for any capture
+        # taken at another one, every rectangle at the wrong width.
+        requested = conditions(fixture).get("pixel_format")
+        if requested is not None:
+            cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[requested]
     return cli
 
 
@@ -52,7 +64,7 @@ def first_difference(actual: Image.Image, expected: Image.Image, tolerance: int)
 
 def replay(fixture: Path) -> List[Tuple[str, Image.Image]]:
     """Every step of a fixture, as (scene key, framebuffer)."""
-    cli = make_client()
+    cli = make_client(fixture)
     cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
     screens = []
     for step in sorted(fixture.glob("step-*.bin.gz")):
@@ -63,20 +75,43 @@ def replay(fixture: Path) -> List[Tuple[str, Image.Image]]:
 
 
 def quantization(fixture: Path) -> int:
-    """Widest per-channel step the fixture's negotiated format can represent.
+    """Widest per-channel step the format this capture negotiated can hold.
 
-    Read off the fixture's own ServerInit rather than its conditions, so a
-    fixture cannot disagree with the bytes it holds.
+    The negotiated format, not the announced one: a capture taken at a
+    reduced format is quantized however wide the server's own pixels are.
     """
-    cli = make_client()
+    cli = make_client(fixture)
     cli.dataReceived(gzip.decompress((fixture / "init.bin.gz").read_bytes()))
     fmt = cli.pixel_format
-    return max(255 // maximum for maximum in (fmt.redmax, fmt.greenmax, fmt.bluemax))
+    maxima = (fmt.redmax, fmt.greenmax, fmt.bluemax)
+    if not all(maxima):
+        raise AssertionError(f"{fixture.name}: no per-channel maxima in {fmt}")
+    return max(255 // maximum for maximum in maxima)
 
 
 class TestGoldens(unittest.TestCase):
     def test_at_least_one_fixture_is_committed(self) -> None:
         self.assertTrue(fixtures(), f"no golden fixtures under {FIXTURE_ROOT}; capture one with `make goldens`")
+
+    def test_every_fixture_holds_steps(self) -> None:
+        """A capture that desynced distills to init and nothing else, and
+        every check over its steps would then pass by iterating nothing.
+        """
+        for fixture in fixtures():
+            with self.subTest(fixture=fixture.name):
+                self.assertTrue(sorted(fixture.glob("step-*.bin.gz")), "fixture holds no steps")
+
+    def test_paired_fixtures_were_captured_at_different_formats(self) -> None:
+        """Two captures at the same format compare equal whatever the client
+        does with a format, which would leave the check below asserting nothing.
+        """
+        groups: dict[str, List[Path]] = {}
+        for fixture in fixtures():
+            groups.setdefault(fixture.name.rsplit("-", 1)[0], []).append(fixture)
+        for group, members in sorted(groups.items()):
+            formats = [conditions(f).get("pixel_format") for f in members]
+            with self.subTest(group=group):
+                self.assertCountEqual(formats, set(formats), f"{group}: duplicate formats in {formats}")
 
     def test_a_scene_decodes_the_same_at_every_captured_format(self) -> None:
         """R3: the framebuffer does not depend on the format the server negotiated.
@@ -95,7 +130,12 @@ class TestGoldens(unittest.TestCase):
             expected = dict(replay(reference))
             for other in others:
                 tolerance = max(quantization(reference), quantization(other))
-                for key, screen in replay(other):
+                steps = replay(other)
+                self.assertEqual(
+                    sorted(key for key, _ in steps), sorted(expected),
+                    f"{other.name} and {reference.name} cover different scenes",
+                )
+                for key, screen in steps:
                     with self.subTest(group=group, fixture=other.name, scene=key):
                         self.assertIn(key, expected, "scene missing from the reference capture")
                         difference = first_difference(screen, expected[key], tolerance)

@@ -93,6 +93,7 @@ def main() -> int:
             shutil.rmtree(directory)
         conditions = {
             "server": TIGERVNC.name,
+            "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance": 0,

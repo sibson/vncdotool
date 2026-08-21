@@ -46,7 +46,7 @@ screenshots:
 .PHONY: goldens
 goldens:
 	uv run python -m tests.goldens.capture --pixel-format bgrx8888
-	uv run python -m tests.goldens.capture --pixel-format rgb565
+	uv run python -m tests.goldens.capture --pixel-format rgbx8888
 
 .PHONY: scenes
 scenes:
