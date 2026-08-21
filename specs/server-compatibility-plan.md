@@ -437,10 +437,11 @@ description, round trip and screenshot gallery as Tier 1 via
   screen was the *dedicated user* rather than the runner. Connecting as
   someone other than the console owner fast-user-switches into that
   account's first login, which sat at Setup Assistant for the rest of
-  the job. Authenticating as the console owner instead would fix both
-  that and the minute it costs, but its password cannot be set — it
-  holds a secure token, and sysadminctl and dscl both refuse without the
-  old one. See tests/servers/screen-sharing/README.md.)
+  the job. The setup now authenticates as the console owner instead,
+  recovering its auto-login password from /etc/kcpassword — that account
+  holds a secure token, so the password cannot be set, only read — and
+  falls back to the dedicated user when it cannot. See
+  tests/servers/screen-sharing/README.md.)
 
 *Graduation into Phase 0 proper:* both jobs graduate under the
 change-triggered policy above — Windows as a full type+capture check with

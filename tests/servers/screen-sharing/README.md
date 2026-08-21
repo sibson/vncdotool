@@ -64,10 +64,9 @@ exit`), so the next `vncdo` starts the whole thing again, and in run
 that landed the delay inside the test step instead of the readiness step:
 60s of nothing between the two.
 
-Authenticating as the console owner (`runner`) would sidestep all of that by
-attaching to a session that is already logged in — but ARD checks a real
-account password, and that account's cannot be set. Both tools refuse,
-because `runner` holds a secure token:
+Authenticating as the console owner (`runner`) sidesteps all of that by
+attaching to a session that is already logged in. Its password cannot be
+*set* — the account holds a secure token, and both tools refuse:
 
 * `sysadminctl -resetPasswordFor runner -newPassword ...` prints `Operation
   is not permitted without secure token unlock`, changes nothing, and
@@ -79,10 +78,23 @@ because `runner` holds a secure token:
   (eDSAuthFailed)` and asks for the old password (run
   [32409927196](https://github.com/sibson/vncdotool/actions/runs/32409927196)).
 
-So the dedicated user stays, and the first login is a cost this job pays.
-The setup does a `dscl . -authonly` after setting the password: whatever
-tool sets it, a password that does not authenticate should fail the setup
-step in a second rather than a readiness budget later.
+It does not need to be set, though: it can be read. These images enable GUI
+auto-login ([configure-autologin.sh][autologin]), and auto-login means
+`loginwindow` has to be able to replay the password, so macOS keeps it in
+`/etc/kcpassword` XORed against a fixed 11-byte key rather than hashed.
+`runner` logging itself in at boot, which `who` shows in every diagnostics
+artifact, is the proof that file matches the live password.
+
+So the setup decodes it, masks it, and checks it with `dscl . -authonly`
+before using it. Anything unexpected — no file, a format change (that has
+happened: [runner-images#5231][5231] shipped a kcpassword written as UTF-8
+instead of raw bytes), a password that does not authenticate — falls back to
+creating the dedicated account, which is slower and always works. The
+`-authonly` check is the gate for both paths: a password that does not
+authenticate fails setup in a second rather than a readiness budget later.
+
+[autologin]: https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh
+[5231]: https://github.com/actions/runner-images/issues/5231
 
 ## Readiness
 

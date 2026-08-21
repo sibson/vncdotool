@@ -40,6 +40,14 @@ inputs:
     description: How long to hold the macOS display awake for.
     required: false
     default: '1200'
+  prefer-console-owner:
+    description: >
+      macOS only: authenticate as whoever owns the console, using the
+      auto-login password recovered from /etc/kcpassword, instead of creating
+      `username`. Falls back to creating the account when the password cannot
+      be recovered. Pass false to pin the account to `username`.
+    required: false
+    default: 'true'
 
 runs:
   using: composite
@@ -81,26 +89,69 @@ runs:
         PORT: ${{ inputs.port }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
         CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
+        PREFER_CONSOLE_OWNER: ${{ inputs.prefer-console-owner }}
       run: |
         set -euo pipefail
         KICKSTART=/System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart
 
-        # Connecting as anyone but the console owner costs a fast user switch:
-        # a full first login for that account, whose UserAccountUpdater and
-        # Setup Assistant phases ran for about a minute on a hosted runner and
-        # left the session at loginwindow -- which is also why the framebuffer
-        # came back black. Reusing the console owner attaches to a session that
-        # is already logged in; it needs a password we know, hence the reset.
-        if id "$USERNAME" >/dev/null 2>&1; then
-          echo "--- resetting the password of the existing user $USERNAME"
-          # Not sysadminctl -resetPasswordFor: on a runner it answers
-          # "Operation is not permitted without secure token unlock", leaves
-          # the password alone, and exits 0 anyway. dscl as root changes the
-          # Open Directory password, which is the one ARD authenticates.
-          sudo dscl . -passwd "/Users/$USERNAME" "$PASSWORD"
-        else
-          echo "--- creating local user $USERNAME"
-          sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
+        # Authenticating as anyone but the console owner fast-user-switches
+        # into that account's first login, which costs this job about a minute
+        # (see tests/servers/screen-sharing/README.md). The console owner's own
+        # password cannot be changed -- it holds a secure token -- but it does
+        # not need to be: these images enable auto-login
+        # (runner-images images/macos/scripts/build/configure-autologin.sh),
+        # which means loginwindow can read the password back out of
+        # /etc/kcpassword, and so can we. The obfuscation is a repeating XOR
+        # against a published 11-byte key, and the account's own auto-login at
+        # boot is proof the file matches the live password.
+        #
+        # Anything unexpected -- no file, a format change, a password that
+        # does not authenticate -- falls back to the dedicated account, which
+        # is slower and always works.
+        if [ "$PREFER_CONSOLE_OWNER" = "true" ]; then
+          console_user=$(stat -f %Su /dev/console)
+          recovered=$(sudo python3 "$GITHUB_ACTION_PATH/decode-kcpassword.py") || recovered=""
+          # A newline would let the value below write further variables of its
+          # own into $GITHUB_ENV. Nothing about the file format should produce
+          # one, which is the reason to check rather than to assume.
+          case "$recovered" in
+            *$'\n'*) recovered="" ;;
+          esac
+          if [ -n "$recovered" ]; then
+            echo "::add-mask::$recovered"
+          fi
+          if [ -n "$recovered" ] && dscl . -authonly "$console_user" "$recovered" >/dev/null 2>&1; then
+            echo "--- authenticating as the console owner $console_user, no user switch"
+            USERNAME="$console_user"
+            PASSWORD="$recovered"
+            # Its password is already the one we are going to use, and trying
+            # to set it is what fails: the account holds a secure token.
+            account_is_ready=true
+          else
+            echo "--- could not use the console owner's auto-login password, falling back to $USERNAME"
+          fi
+        fi
+
+        # The tests read these, and which account we ended up with is decided
+        # above rather than by the workflow.
+        {
+          echo "VNCDOTOOL_OS_SERVER_USERNAME=$USERNAME"
+          echo "VNCDOTOOL_OS_SERVER_PASSWORD=$PASSWORD"
+        } >> "$GITHUB_ENV"
+
+        if [ "${account_is_ready:-false}" != "true" ]; then
+          if id "$USERNAME" >/dev/null 2>&1; then
+            echo "--- resetting the password of the existing user $USERNAME"
+            # Not sysadminctl -resetPasswordFor: on a runner it answers
+            # "Operation is not permitted without secure token unlock", leaves
+            # the password alone, and exits 0 anyway. dscl as root changes the
+            # Open Directory password, which is the one ARD authenticates --
+            # and refuses too if the account holds a secure token.
+            sudo dscl . -passwd "/Users/$USERNAME" "$PASSWORD"
+          else
+            echo "--- creating local user $USERNAME"
+            sudo sysadminctl -addUser "$USERNAME" -fullName "vncdotool test user" -password "$PASSWORD"
+          fi
         fi
 
         # Whatever set the password, prove the account authenticates before
@@ -149,6 +200,11 @@ runs:
         $ErrorActionPreference = 'Stop'
         $Port = [int]$env:PORT
         $WaitSeconds = [int]$env:WAIT_SECONDS
+
+        # The tests read this; the macOS half may pick a different account
+        # than the workflow asked for, so both halves publish what they used.
+        "VNCDOTOOL_OS_SERVER_PASSWORD=$env:PASSWORD" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
         # Chocolatey always installs UltraVNC here. Do not go looking for
         # winvnc.exe under C:\Program Files instead: a recursive scan of that

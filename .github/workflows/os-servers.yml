@@ -41,17 +41,6 @@ permissions:
 
 env:
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
-  # Spike credentials for a throwaway runner, deliberately visible as the
-  # fallback. A repo secret overrides them without touching this file or
-  # tests/functional/vncservers.py, which just reads the environment.
-  #
-  # A dedicated user, not `runner`: authenticating as the console owner would
-  # avoid a fast user switch and the minute it costs, but that account holds a
-  # secure token and neither sysadminctl nor dscl will set its password
-  # without the old one. See tests/servers/screen-sharing/README.md. Windows
-  # ignores the username -- UltraVNC authenticates the password alone.
-  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
-  VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
   os-server:
@@ -89,12 +78,19 @@ jobs:
       - name: Install vncdotool
         run: uv sync
 
+      # Spike credentials for a throwaway runner, deliberately visible as the
+      # fallback; a repo secret overrides them. They are what the account is
+      # created with -- on macOS the action prefers the console owner and its
+      # own auto-login password instead, unless a username is pinned by
+      # secret. The account it settles on reaches the tests through
+      # $GITHUB_ENV, not from here.
       - name: Set up the VNC server
         uses: ./.github/actions/os-server
         with:
           server: ${{ matrix.server }}
-          username: ${{ env.VNCDOTOOL_OS_SERVER_USERNAME }}
-          password: ${{ env.VNCDOTOOL_OS_SERVER_PASSWORD }}
+          username: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
+          password: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
+          prefer-console-owner: ${{ secrets.VNC_OS_SERVER_USERNAME == '' }}
 
       # An open port is not readiness: the first connection to macOS Screen
       # Sharing is what starts it, and that connection can stall for good
