@@ -73,7 +73,7 @@ The tag is a `PixelFormat` and not a Pillow mode string so that decoders speak
 only RFB — they implement a specification written in shifts and maxima, and
 naming `BGRX` there would put the rendering library inside code that has no
 other reason to know it exists. Pillow stays in `client.py` and in `raw_mode`,
-which is also the single place to change if the four unsupported layouts below
+which is also the single place to change if the unsupported layouts below
 ever need a converter. A decoder unit test asserts bytes and a `PixelFormat`,
 with no Pillow in it (R2).
 
@@ -115,6 +115,10 @@ and every colour bit sits in either the low or the high three bytes; which
 placement is a function of the shifts. rfbproto adds a tie-break the RFC omits:
 at depth ≤ 16 both placements fit, and the low three bytes are sent.
 
+Placement is in value space and `cpixel_offset` is in byte space, so big-endian
+reverses which end of the pixel they sit at. Slicing at the wrong end takes the
+pad byte and drops a channel.
+
 **TPIXEL** is narrower and fixed — depth exactly 24, all channels exactly 8
 bits, bytes red, green, blue — so a Tight rect tags 24 bpp RGB whatever was
 negotiated. It arrives with Tight at decoder Phase 6.
@@ -130,16 +134,18 @@ Probed by feeding known words through each mode:
 |---|---|
 | 32 bpp, 8-bit channels, any order or endianness | `RGBX` `BGRX` `XRGB` `XBGR` |
 | 24 bpp packed, either order | `RGB` `BGR` |
-| 16 bpp 565, 555, 444, either order, **little-endian** | `BGR;16` `RGB;16` `BGR;15` `RGB;15` `RGB;4B` |
+| 16 bpp 565 and 555, either order, **little-endian** | `BGR;16` `RGB;16` `BGR;15` `RGB;15` |
+| 16 bpp 444, **blue-high only**, little-endian | `RGB;4B` |
 
 `rgb565` is `BGR;16`: `0x00F8` little-endian yields `(255, 0, 0)`, so it is
 red-in-the-high-bits 565, matching `PixelFormat(16, 16, False, True, 31, 63, 31,
 11, 5, 0)` — the constant `client.py` calls `BGR16`.
 
-Four layouts fall outside: **big-endian 16 bpp** (big-endian 32 bpp is another
+Five layouts fall outside: **big-endian 16 bpp** (big-endian 32 bpp is another
 byte permutation, covered); **channel widths outside 8/8/8, 5/6/5, 5/5/5,
-4/4/4**; **non-byte-aligned shifts at 32 bpp**; and **colour-mapped**, which is
-`P` plus `putpalette` rather than a raw mode.
+4/4/4**; **non-byte-aligned shifts at 32 bpp**; **444 with red in the high
+nibble**, since Pillow has `RGB;4B` and no mirror of it; and **colour-mapped**,
+which is `P` plus `putpalette` rather than a raw mode.
 
 None needs a converter, because none is reachable while a server honours
 `SetPixelFormat` — an unreadable native means we ask for `bgrx8888`. A converter
@@ -199,8 +205,8 @@ gets no flag: the client negotiates, the proxy records what it saw.
 ## Testing
 
 **Unit.** `raw_mode` over a table of formats, including pairs differing only by
-`depth` and only by endianness, plus `UnsupportedPixelFormat` for the four
-uncovered layouts. Then, per mode, known bytes through `Image.frombytes` to
+`depth` and only by endianness, plus `UnsupportedPixelFormat` for each uncovered
+layout. Then, per mode, known bytes through `Image.frombytes` to
 known RGB pixels — the mode string is a claim about Pillow, and that is the
 claim that can be wrong. CPIXEL gets both placements, the depth ≤ 16 tie-break,
 and the negative cases falling back to PIXEL width.
