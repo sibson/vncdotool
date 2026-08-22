@@ -466,7 +466,10 @@ returned CoRRE, so it can see a CoRRE rectangle when one arrives, and offering
 RRE alone to tigervnc returned RRE, so tigervnc is not answering everything
 with Raw. Upstream agrees: `EncodeManager::supported()` in TigerVNC 1.12.0
 (`common/rfb/EncodeManager.cxx`) accepts Raw, RRE, Hextile, ZRLE and Tight and
-nothing else (#417). Every other cell predates this pass and remains uncited.
+nothing else. Every other cell predates this pass and remains uncited. The
+probe itself was committed and then removed within #417, so `git show` against
+that PR's history recovers the script without it living in the tree ahead of
+the Phase 3 tooling below.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):
