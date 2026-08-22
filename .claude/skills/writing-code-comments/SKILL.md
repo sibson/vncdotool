@@ -8,8 +8,9 @@ description: Use when about to write or edit a comment, docstring, module header
 ## Overview
 
 A comment carries one fact the reader cannot get anywhere else: from the
-language, the library's docs, the specs, the identifier names, or the code
-itself. Everything else is noise the reader must still read.
+language, the library's docs, the specs, the identifier names, the code
+itself, or from running it. Everything else is noise the reader must still
+read.
 
 **The repo's own policy wins.** Before writing or auditing, read the comments
 section of the repo's conventions file (`CLAUDE.md`, `AGENTS.md`,
@@ -63,6 +64,10 @@ not citations — the reader cannot check one without opening something else and
 searching it. Name the constraint in the comment; if the document is worth
 pointing at, point at it by title. An issue or PR number is not a citation to
 fix but a comment to delete — that fact belongs in the commit message.
+
+Point elsewhere only when what is there is surprising and too long to state
+here. A pointer to something unsurprising is a second thing to read on the way
+to learning nothing.
 
 No source? You are inferring a story from a shape in the code. Write nothing.
 
@@ -225,6 +230,7 @@ language be surprised later? Restore it only then.
 | Paraphrases the code, class, or module it describes — even accurately | delete |
 | Docstring opening that renames the function in prose | delete that sentence, keep the rest |
 | Anything in the language reference, library docs, or spec | delete |
+| Names who calls this, or where it is used from | delete — that is what a search finds, and it goes stale |
 | Describes the change: "now watches", "no longer needs", "was previously" | delete — commit-message material |
 | Names the task, issue, PR, or an alternative you rejected | delete — commit-message and `docs/` material |
 | Cites a requirement by bare identifier: `R3`, `N2` | rewrite — name the constraint, or the document by title |
