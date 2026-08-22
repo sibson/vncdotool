@@ -22,7 +22,7 @@ SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 # tigervnc answers a request for CoRRE with Raw (see the fleet encoding
 # support table in specs/decoder-architecture.md), so offering it proves the
 # fallback renders, not that CoRRE does.
-EMITTED_BY_TIGERVNC = {"raw", "rre"}
+EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile"}
 
 
 class TestEncodings(TestCase):

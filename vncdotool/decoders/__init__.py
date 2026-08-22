@@ -9,6 +9,7 @@ from ..const import Encoding
 from .base import ClientDecoder, ControlDecoder, DecodeError, Decoder, PixelDecoder
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
+from .hextile import HextileDecoder
 from .raw import RawDecoder
 from .rre import CoRREDecoder, RREDecoder
 
@@ -20,6 +21,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
     Encoding.COPY_RECTANGLE: CopyRectDecoder,
     Encoding.RRE: RREDecoder,
     Encoding.CORRE: CoRREDecoder,
+    Encoding.HEXTILE: HextileDecoder,
 }
 
 # The names --encodings accepts. Registered encodings only: an encoding still
@@ -29,6 +31,7 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "copyrect": Encoding.COPY_RECTANGLE,
     "rre": Encoding.RRE,
     "corre": Encoding.CORRE,
+    "hextile": Encoding.HEXTILE,
 }
 
 

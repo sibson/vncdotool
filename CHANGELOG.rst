@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - ``--encodings hextile`` offers Hextile, which sends less than Raw on ordinary screen content (@sibson)
   - Add ``vncdo --encodings LIST``, choosing which encodings to offer the server (@sibson, #167, #168)
   - Fix CoRRE decoding (@sibson)
   - Fix CopyRect leaving the screen unchanged (@sibson)
