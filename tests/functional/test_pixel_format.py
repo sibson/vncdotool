@@ -16,6 +16,7 @@ from PIL import Image
 
 from vncdotool import pixelformat
 
+from .imagediff import assert_images_match
 from .utils import HOST, TIGERVNC, port_open, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
@@ -61,10 +62,9 @@ class RendersTheScene:
             with self.subTest(scene=key):
                 screen, _ = capture(self, self.pixel_format, key)
                 oracle = Image.open(SCENES_DIR / f"{key}.png").convert("RGB")
-                self.assertEqual(screen.size, oracle.size)
-                self.assertEqual(
-                    screen.tobytes(), oracle.tobytes(),
-                    f"{self.pixel_format} does not render the image the server was shown",
+                assert_images_match(
+                    self, screen, oracle, f"{self.pixel_format}-scene-{key}",
+                    message=f"{self.pixel_format} does not render the image the server was shown",
                 )
 
 
@@ -83,14 +83,9 @@ class TestNegotiation(FleetTestCase):
                 tolerance = max(255 // maximum for maximum in (fmt.redmax, fmt.greenmax, fmt.bluemax))
                 screen, log = capture(self, name, "s")
                 self.assertIn(f"Requesting {fmt}", log)
-                self.assertEqual(screen.size, oracle.size)
-                worst = max(
-                    abs(a - b) for a, b in zip(screen.tobytes(), oracle.tobytes())
-                )
-                self.assertLessEqual(
-                    worst, tolerance,
-                    f"{name}: worst channel differs by {worst}, more than the "
-                    f"{tolerance} its own quantization allows",
+                assert_images_match(
+                    self, screen, oracle, f"{name}-scene-s", tolerance=tolerance,
+                    message=f"{name} differs by more than its own quantization allows",
                 )
 
 

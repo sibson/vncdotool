@@ -81,6 +81,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      pull-requests: write
     env:
       VNCDOTOOL_SCREENSHOT_DIR: screenshots
       FLEET_IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/vncdotool-test
@@ -125,6 +126,52 @@ jobs:
       - name: Run functional tests
         run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 
+      # Nothing but a failed image comparison creates this directory, so its
+      # existence -- not `failure()`, which any other broken test also
+      # satisfies -- is what decides whether there is an image to show.
+      - name: Look for image comparison failures
+        if: always()
+        id: diffs
+        run: test -d screenshots/failures && echo "found=true" >> "$GITHUB_OUTPUT" || true
+
+      - name: Upload the failed image comparisons
+        if: always() && steps.diffs.outputs.found == 'true'
+        id: image-diffs
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-diffs
+          path: screenshots/failures/
+
+      # Forks get a read-only token, so the comment would fail rather than
+      # be refused.
+      - name: Comment on the pull request
+        if: >
+          always() && steps.diffs.outputs.found == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          ARTIFACT_URL: ${{ steps.image-diffs.outputs.artifact-url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            echo "### Image comparisons failed"
+            echo
+            echo "| comparison | difference |"
+            echo "| --- | --- |"
+            for report in screenshots/failures/*/; do
+              echo "| \`$(basename "$report")\` | $(cat "$report/summary.txt") |"
+            done
+            echo
+            echo "The captured image, the oracle it was compared against and their amplified"
+            echo "difference are in [the \`image-diffs\` artifact]($ARTIFACT_URL); open"
+            echo "\`index.html\` from it to see all three side by side."
+            echo
+            echo "From \`$HEAD_SHA\`, [run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          } > image-diffs.md
+          gh pr comment "$PR" --body-file image-diffs.md --edit-last --create-if-none
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -149,7 +196,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
-          path: screenshots/
+          path: |
+            screenshots/
+            !screenshots/failures/
           if-no-files-found: ignore
 
       - name: Stop the VNC test servers

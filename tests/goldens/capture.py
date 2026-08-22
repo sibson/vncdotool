@@ -17,7 +17,7 @@ from typing import Optional
 
 from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
-from vncdotool import pixelformat
+from vncdotool import decoders, pixelformat
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
@@ -74,11 +74,17 @@ def main() -> int:
         help="format the capturing client asks the server for [the server's own]",
     )
     parser.add_argument(
+        "--encoding",
+        choices=sorted(decoders.ENCODING_NAMES),
+        default="raw",
+        help="encoding to offer the server, forcing it off Raw [raw]",
+    )
+    parser.add_argument(
         "--name",
-        help="fixture directory name [tigervnc-raw-PIXEL_FORMAT, or -native]",
+        help="fixture directory name [tigervnc-ENCODING-PIXEL_FORMAT, or -native]",
     )
     args = parser.parse_args()
-    name = args.name or f"tigervnc-raw-{args.pixel_format or 'native'}"
+    name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format or 'native'}"
     _refuse_duplicate_format(name, args.pixel_format)
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -88,7 +94,7 @@ def main() -> int:
         # scene.vdo waits on `expect scenes/<key>.png`, named relative to
         # itself, so the driver runs from the directory holding both.
         subprocess.run(
-            [VNCDO, "--timeout", str(SCENE_DEADLINE)]
+            [VNCDO, "--timeout", str(SCENE_DEADLINE), "--encodings", args.encoding]
             + (["--pixel-format", args.pixel_format] if args.pixel_format else [])
             + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
             check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
@@ -111,6 +117,7 @@ def main() -> int:
             shutil.rmtree(directory)
         conditions = {
             "server": TIGERVNC.name,
+            "encoding": args.encoding,
             "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
