@@ -13,7 +13,7 @@ A worktree builds its own `.venv`: every `make` target runs through `uv run`,
 which syncs an editable install of that checkout into a `.venv` in the
 worktree root. Never symlink another checkout's `.venv` in -- the editable
 install still points at the checkout that created it, and
-`tests/functional/vncservers.py` names the console scripts (`vncdo`,
+`tests/functional/utils.py` names the console scripts (`vncdo`,
 `vnclog`) from `Path(sys.executable).parent`, so a subprocess exercises the
 other checkout's code while in-process imports resolve to this one, and the
 two halves of a functional test disagree about what they're testing.
@@ -27,7 +27,7 @@ shells out to the real `vncdo` CLI via `subprocess.run` against the fleet
 (`tests/servers/docker-compose.yml`) rather than calling `api.connect()`,
 so a hang is contained by the kernel reaping the subprocess rather than by
 anything in-process. See `specs/testing-framework.md` and
-`tests/functional/vncservers.py`.
+`tests/functional/utils.py`.
 
 A comment carries what the reader cannot get anywhere else: something
 surprising, particular to this code, and absent from the language, the

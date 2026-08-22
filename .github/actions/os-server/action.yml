@@ -1,6 +1,6 @@
 name: Set up an OS-hosted VNC server
 description: >
-  Turn the runner into a live VNC server for tests/functional/test_os_servers.py:
+  Turn the runner into a live VNC server for tests/functional/test_server_compat_native.py:
   UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
 
 inputs:

@@ -9,7 +9,7 @@ from PIL import Image
 
 from tests.goldens import scenes
 
-from .vncservers import TIGERVNC, port_open, HOST, run_vncdo
+from .utils import TIGERVNC, port_open, HOST, run_vncdo
 
 
 class TestScenePlayer(TestCase):

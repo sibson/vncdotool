@@ -4,7 +4,7 @@
 Which servers those are is chosen by the group named on the command line:
 ``docker`` (the default, the Docker Compose servers) or ``os`` (the
 OS-hosted server on this machine, i.e. UltraVNC or Apple Screen Sharing).
-See vncservers.py.
+See utils.py.
 
 Screenshots land in the screenshots directory (``tests/servers/screenshots``
 by default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) alongside a
@@ -27,11 +27,11 @@ from pathlib import Path
 from typing import List, NamedTuple, Optional
 
 _HERE = Path(__file__).resolve().parent
-# This module's own directory, for vncservers, plus the repo root, so the
+# This module's own directory, for utils, plus the repo root, so the
 # script works from a checkout without vncdotool having been pip installed.
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
-from vncservers import (  # noqa: E402
+from utils import (  # noqa: E402
     HOST,
     VNCServer,
     capture_screenshot,

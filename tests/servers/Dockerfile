@@ -108,7 +108,7 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release . \
     && cmake --build . --target examples_vncev examples_example -- -j"$(nproc)"
 
 
-# Event sink: prints events and renders no desktop, so vncservers.py marks
+# Event sink: prints events and renders no desktop, so utils.py marks
 # it renders_desktop=False and readiness stops at the handshake.
 FROM base AS vncev
 

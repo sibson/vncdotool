@@ -15,7 +15,7 @@ from PIL import Image
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 from vncdotool.rfb import PixelFormat
 
-from .vncservers import VNCDO, VNCDO_REPLAY, start_replay_server
+from .utils import VNCDO, VNCDO_REPLAY, start_replay_server
 
 PIXEL_FORMAT = PixelFormat()
 WIDTH, HEIGHT = 2, 2

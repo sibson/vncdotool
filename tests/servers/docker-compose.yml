@@ -1,5 +1,5 @@
 # See tests/servers/servers.mk for the make targets that drive this file and
-# tests/functional/test_servers.py for the tests that exercise it.
+# tests/functional/test_server_compat_docker.py for the tests that exercise it.
 #
 # The two TigerVNC services differ only by VNC_PASSWORD but share one image
 # name, so they build once rather than twice. The build context is tests/,

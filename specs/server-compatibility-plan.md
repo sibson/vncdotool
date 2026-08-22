@@ -319,7 +319,7 @@ reviewable PR diffs.
 (`tigervnc` no-auth, `tigervnc-auth` VNC-password, `x11vnc` over Xvfb)
 defined in `tests/servers/docker-compose.yml` with `nc`-based
 healthchecks, `make servers-up`/`servers-down`/`test-servers` wrappers, and
-a parameterized `tests/functional/test_servers.py` that connects, types,
+a parameterized `tests/functional/test_server_compat_docker.py` that connects, types,
 and captures against each server. GitHub Actions run
 [31729730724](https://github.com/sibson/vncdotool/actions/runs/31729730724)
 is green end-to-end: image builds + healthcheck-gated `up --wait` in
@@ -398,9 +398,9 @@ script refuses to run outside a GitHub-hosted runner; the diagnostics half
 stays as checked-in
 scripts under `tests/servers/ultravnc/` and `tests/servers/screen-sharing/`
 (each with a README recording why it does what it does), driven by
-`tests/functional/test_os_servers.py`, which reuses the same server
+`tests/functional/test_server_compat_native.py`, which reuses the same server
 description, round trip and screenshot gallery as Tier 1 via
-`tests/functional/vncservers.py`.
+`tests/functional/utils.py`.
 
 *Windows / UltraVNC — works, full recipe:*
 - `choco install ultravnc`; `winvnc.exe` lands at the fixed path

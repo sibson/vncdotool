@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List
 from unittest import TestCase
 
-from .vncservers import HOST, VNCEV, X11VNC, port_open, run_vncdo
+from .utils import HOST, VNCEV, X11VNC, port_open, run_vncdo
 
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = ROOT / "tests" / "servers" / "docker-compose.yml"

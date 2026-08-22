@@ -90,7 +90,7 @@ jobs:
         run: uv run python tests/functional/wait_for_servers.py os
 
       - name: Run OS server functional tests
-        run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+        run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 
       # Everything below is diagnostics and artifact collection, so it runs
       # with if: always() -- a failing test is exactly when the screenshot

@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
     Install, configure and start UltraVNC as a Windows service, for
-    tests/functional/test_os_servers.py. See tests/servers/ultravnc/README.md.
+    tests/functional/test_server_compat_native.py. See tests/servers/ultravnc/README.md.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -19,7 +19,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
         'GitHub-hosted runner, and this leaves the machine remotely controllable.'
 }
 
-# tests/functional/vncservers.py reads this.
+# tests/functional/utils.py reads this.
 "VNCDOTOOL_OS_SERVER_PASSWORD=$Password" |
     Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

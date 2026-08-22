@@ -1,13 +1,13 @@
 """CLI-surface checks against the Docker Compose test fleet.
 
-The smoke grid in vncservers.py covers the happy path per server; these
+The smoke grid in utils.py covers the happy path per server; these
 are the checks about vncdo's own behaviour, kept in one place rather than
 duplicated per server.
 """
 
 from unittest import TestCase
 
-from .vncservers import (
+from .utils import (
     PNG_MAGIC,
     HOST,
     TIGERVNC_AUTH,
