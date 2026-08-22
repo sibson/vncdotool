@@ -6,17 +6,19 @@ from __future__ import annotations
 from struct import Struct, unpack
 from typing import TYPE_CHECKING, ClassVar, Iterator
 
-from .base import DecodeError
+from .base import DecodeError, PixelDecoder
 
 if TYPE_CHECKING:  # pragma: no cover - imported for typing only
     from ..rfb import PixelFormat
     from .buffer import RectBuffer
 
 
-class RREDecoder:
+class RREDecoder(PixelDecoder):
     COORDS: ClassVar[Struct] = Struct("!HHHH")
 
-    def decode(self, target: "RectBuffer", pixel_format: "PixelFormat") -> Iterator[int]:
+    def decodePixels(
+        self, target: "RectBuffer", pixel_format: "PixelFormat"
+    ) -> Iterator[int]:
         bypp = target.bypp
         header = yield 4 + bypp
         (count,) = unpack("!I", header[:4])
@@ -38,9 +40,6 @@ class RREDecoder:
         for pos in range(0, len(data), size):
             x, y, width, height = self.COORDS.unpack_from(data, pos + bypp)
             target.fill(x, y, width, height, data[pos:pos + bypp])
-
-    def output_format(self, pixel_format: "PixelFormat") -> "PixelFormat":
-        return pixel_format
 
 
 class CoRREDecoder(RREDecoder):
