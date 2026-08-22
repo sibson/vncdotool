@@ -12,8 +12,7 @@ class TestRectBuffer(unittest.TestCase):
         self.assertEqual(buf.tobytes(), pixels)
 
     def test_sub_rect_blit_lands_at_stride_offset(self):
-        # bypp=2 makes a stride mistake (e.g. using w instead of width*bypp)
-        # produce a visibly wrong offset rather than a coincidentally right one.
+        # bypp=2 because at one byte per pixel a stride bug lands right by luck.
         buf = RectBuffer(3, 3, 2)
         buf.blit(1, 1, 1, 1, b"\xaa\xbb")
         expected = b"\x00" * 8 + b"\xaa\xbb" + b"\x00" * 8

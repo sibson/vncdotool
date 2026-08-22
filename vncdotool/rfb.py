@@ -213,7 +213,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._rect_backing = bytearray()
         self._decoders = {
             encoding: (decoder, self._pumpFor(decoder))
-            for encoding, decoder in decoders.build().items()
+            for encoding, decoder in decoders.for_connection().items()
         }
 
     @property

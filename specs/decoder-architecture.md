@@ -148,7 +148,7 @@ hand-written mapping, so a key cannot drift from the class it points at.
 
 ### The shape is resolved once per connection
 
-`build()` runs at connect time, so that is where each decoder is paired with the
+`for_connection()` runs at connect time, so that is where each decoder is paired with the
 pump path its shape implies. A rectangle then costs one dict lookup and a call
 through a bound method — no `isinstance`, no probing for methods, and no shape
 tag to keep in step with the class hierarchy.
@@ -277,9 +277,10 @@ vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 
 `SUPPORTED_ENCODINGS` stops being the set literal in `RFBClient` and derives
 from the registry, filterable per connection, which is R4. It is also what makes
-R1's zero-line `rfb.py` diff possible: registering an encoding is a module beside
-the others and its class in the list `decoders/__init__.py` builds `DECODERS`
-from, and nothing has to tell `rfb.py` the encoding exists.
+R1's zero-line `rfb.py` diff possible. Registering an encoding means adding a
+module beside the other decoders and naming its class in the list that
+`decoders/__init__.py` builds `DECODERS` from; nothing tells `rfb.py` the
+encoding exists.
 
 Third-party decoder plugins via entry points are out of scope. Nobody ships
 out-of-tree VNC encodings; the registry is a dict.

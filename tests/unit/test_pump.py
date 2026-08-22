@@ -1,5 +1,5 @@
-"""specs/decoder-architecture.md sections "Decoders are generators", "One
-paste per rectangle", "Errors, not hangs", and R6.
+"""The pump is designed in specs/decoder-architecture.md, under "Decoders are
+generators", "One paste per rectangle" and "Errors, not hangs".
 """
 from __future__ import annotations
 
@@ -71,8 +71,11 @@ class TestSegmentation(TestCase):
 
 
 class TestDecodeErrorHandling(TestCase):
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_decode_error_reports_and_disconnects(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
         def failing() -> object:
@@ -87,8 +90,11 @@ class TestDecodeErrorHandling(TestCase):
 
 
 class TestControlDecoders(TestCase):
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_a_control_decoder_applies_and_the_loop_continues(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli._doConnection = mock.Mock()
         applied = []
 
@@ -103,8 +109,11 @@ class TestControlDecoders(TestCase):
 
 
 class TestMultiYieldDecoders(TestCase):
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_a_decoder_is_resumed_with_each_block_in_turn(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.updateRectangle = mock.Mock()
         seen = []
 
@@ -122,7 +131,7 @@ class TestMultiYieldDecoders(TestCase):
         cli.updateRectangle.assert_called_once()
 
     def test_malformed_input_that_raises_from_unpack_is_diagnosed(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
         class Bogus(decoders.PixelDecoder):
@@ -143,8 +152,11 @@ class TestAbort(TestCase):
     direct call cannot see a failure that forgot to disarm it.
     """
 
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def _failing_client(self) -> rfb.RFBClient:
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
         cli.updateRectangle = mock.Mock()
         cli.commitUpdate = mock.Mock()
@@ -176,7 +188,7 @@ class TestAbort(TestCase):
         self.assertEqual(cli.vncProtocolError.call_count, 1)
 
     def test_a_decoder_asking_for_a_negative_count_is_refused(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
         class Backwards(decoders.PixelDecoder):
@@ -190,8 +202,11 @@ class TestAbort(TestCase):
 
 
 class TestRectBufferValidation(TestCase):
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.width, cli.height = 64, 48
         cli.vncProtocolError = mock.Mock()
 
@@ -202,7 +217,7 @@ class TestRectBufferValidation(TestCase):
         cli.transport.loseConnection.assert_called_once()
 
     def test_a_zero_dimension_rectangle_is_not_an_error(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
         self.assertIsNotNone(cli._rectBuffer(0, 10))
@@ -214,7 +229,7 @@ class TestRectBufferValidation(TestCase):
         """The refusals above pass just as well against an off-by-one that
         rejects everything.
         """
-        cli = make_pump_client()
+        cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
         self.assertIsNotNone(cli._rectBuffer(cli.MAX_DESKTOP_SIZE, 1))
@@ -227,8 +242,11 @@ class TestCopyRectPump(TestCase):
     blits framebuffer-to-framebuffer, never through `updateRectangle`.
     """
 
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_copyRectangle_called_with_wire_source_and_no_paint(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.copyRectangle = mock.Mock()
         cli.updateRectangle = mock.Mock()
         decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
@@ -245,8 +263,11 @@ class TestOnePastePerRectangle(TestCase):
     `PixelFormat` -- not called until the whole rectangle has arrived.
     """
 
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_single_call_with_negotiated_pixel_format(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.updateRectangle = mock.Mock()
         decoder, _ = cli._decoders[Encoding.RAW]
         width, height = 4, 3
@@ -262,7 +283,7 @@ class TestOnePastePerRectangle(TestCase):
         )
 
     def test_the_rectangle_lands_where_the_wire_said(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
         cli.updateRectangle = mock.Mock()
         decoder, _ = cli._decoders[Encoding.RAW]
         pixels = bytes(range(2 * 2 * cli.bypp))
@@ -280,8 +301,11 @@ class TestRectBufferReuse(TestCase):
     reaches the shared backing (`decoders/buffer.py`).
     """
 
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
     def test_smaller_rectangle_after_larger_gets_only_its_own_bytes(self) -> None:
-        cli = make_pump_client()
+        cli = self.cli
 
         big = cli._rectBuffer(4, 4)
         half = bytes([0xFF]) * (4 * 2 * cli.bypp)

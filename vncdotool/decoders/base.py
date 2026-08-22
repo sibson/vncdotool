@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, ClassVar, Iterator
 
 from ..const import Encoding
 
-if TYPE_CHECKING:  # pragma: no cover - imported for typing only
+# rfb.py imports this package, so importing from it at runtime is a cycle.
+if TYPE_CHECKING:  # pragma: no cover
     from ..rfb import PixelFormat
     from .buffer import RectBuffer
 

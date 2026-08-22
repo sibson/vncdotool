@@ -1,6 +1,3 @@
-"""Adding an encoding is a module beside this one plus an entry in DECODERS;
-rfb.py is not told the encoding exists. specs/decoder-architecture.md.
-"""
 from __future__ import annotations
 
 from typing import Dict, Type
@@ -23,8 +20,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
 }
 
 
-def build() -> Dict[Encoding, Decoder]:
-    """One set of decoders, for one connection."""
+def for_connection() -> Dict[Encoding, Decoder]:
     return {encoding: cls() for encoding, cls in DECODERS.items()}
 
 
@@ -32,9 +28,9 @@ __all__ = [
     "ClientDecoder",
     "ControlDecoder",
     "DECODERS",
-    "build",
     "DecodeError",
     "Decoder",
     "PixelDecoder",
     "RectBuffer",
+    "for_connection",
 ]
