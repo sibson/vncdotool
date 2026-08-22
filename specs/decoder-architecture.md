@@ -118,6 +118,30 @@ yielded count in full before resuming, so a decoder never observes a partial
 buffer and cannot get segmentation wrong. That is a property of the pump, tested
 once at the pump, not a per-decoder obligation.
 
+### A decoder that is only pixels does not need the machinery
+
+The apparatus above — a buffer, a generator, two `send` calls, a blit, a
+`tobytes` — exists to let a decoder write a rectangle in pieces, out of order,
+over several reads. Raw writes it in one piece, in order, in one read, and pays
+for all of it anyway: measured, about 1.1us of the 1.3us a Raw rectangle costs.
+Since Raw is the only encoding in live use (N1), that is the common case paying
+for the general one.
+
+So a `PixelDecoder` may answer `wholeRectangle(width, height, pixel_format)`
+with a byte count, meaning: my entire output is that many bytes of pixels, laid
+out left-to-right and top-to-bottom in `output_format`. The pump then reads them
+and calls `updateRectangle` with them, and no buffer is built.
+
+It is one optional method with a `None` default, not a second architecture. A
+decoder that says nothing gets the generator path unchanged, which is what every
+encoding after Raw is expected to want — none of RRE, Hextile, ZRLE or Tight can
+answer it, because none of them knows its byte count before decoding. The pump
+keeps one branch for it and the buffered path stays the general case.
+
+What it does cost is that `_rectBuffer` no longer sees every rectangle, so R6's
+dimension check cannot live there; `_rectFits` is that check, called by both
+paths.
+
 Two alternatives rejected. Keeping continuation-passing and merely moving methods
 into decoder classes is a file split dressed as an architecture: the tangle
 survives and decoders still reach into `client.bypp`, `client._zlib_stream` and
@@ -530,6 +554,24 @@ Two distinct measurements, because only Raw has a past to regress against.
 **Raw, before and after (N1).** Decode a captured Raw frame N times with no
 Twisted in the loop, recorded before Phase 2 and after. This is the only
 regression test the migration can have.
+
+Measured on `tigervnc-raw-bgrx8888`, 8 updates of 87 rectangles, 300 replays,
+best and median in microseconds:
+
+| | best | median |
+|---|---|---|
+| before Phase 2 (`8b737e3`) | 808 | 863 |
+| the pump, as first written | 910 | 975 |
+| the pump, as it stands | 577 | 639 |
+
+The middle row is the one N1 exists to catch, and it cost about 1.1us per
+rectangle in roughly twenty extra Python calls. Two thirds of it came back from
+the whole-rectangle path below; the rest is not in the pump at all, and is the
+per-rectangle log line the pump inherited, which cost more than the pump did.
+
+Holding the log line equal on both sides, so that only the architecture is
+being compared, what remains of the pump is +17us best and +23us median over
+the pre-Phase-2 client — 3% rather than the 13% it started at.
 
 **Each new encoding (N2).** Two numbers against Raw on identical screen content:
 bytes over the wire, which should drop substantially, and render time, which must
