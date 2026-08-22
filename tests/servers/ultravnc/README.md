@@ -1,7 +1,7 @@
 # UltraVNC on Windows
 
 An OS-hosted VNC server for vncdotool to test against on a Windows machine
-(a GitHub `windows-latest` runner in CI). `tests/functional/test_os_servers.py`
+(a GitHub `windows-latest` runner in CI). `tests/functional/test_server_compat_native.py`
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
 
@@ -15,7 +15,7 @@ job and the checkout, and a self-hosted runner is someone's real machine.
 Against a server that is already up, the tests are just:
 
 ```powershell
-uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 ```
 
 ## What the setup has to get right
@@ -57,5 +57,5 @@ as a wait rather than as a timeout inside a test.
 ## What it proves
 
 The Windows runner has a real rendered desktop, so captures come back with
-genuine, non-black content: `test_os_servers.py` asserts screen content
+genuine, non-black content: `test_server_compat_native.py` asserts screen content
 here, unlike on macOS (see `../screen-sharing`).

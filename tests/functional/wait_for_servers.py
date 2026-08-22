@@ -10,11 +10,11 @@ from pathlib import Path
 from typing import List
 
 _HERE = Path(__file__).resolve().parent
-# This module's own directory, for vncservers, plus the repo root, so the
+# This module's own directory, for utils, plus the repo root, so the
 # script works from a checkout without vncdotool having been pip installed.
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
-from vncservers import select_servers, wait_until_ready  # noqa: E402
+from utils import select_servers, wait_until_ready  # noqa: E402
 
 from vncdotool import api  # noqa: E402
 

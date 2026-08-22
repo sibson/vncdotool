@@ -1,7 +1,7 @@
 # Apple Screen Sharing on macOS
 
 An OS-hosted VNC server for vncdotool to test against on a macOS machine (a
-GitHub `macos-latest` runner in CI). `tests/functional/test_os_servers.py`
+GitHub `macos-latest` runner in CI). `tests/functional/test_server_compat_native.py`
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.sh` gathers the evidence when something goes wrong.
 
@@ -9,7 +9,7 @@ The setup is `.github/actions/os-server`. Against a server already up, the
 tests are:
 
 ```sh
-uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 ```
 
 ## What the setup has to get right
@@ -39,7 +39,7 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_os_serve
 
 * **It answers input slowly.** A key event took over five seconds to be
   acknowledged on a hosted runner, where a container answers in
-  milliseconds. `vncservers.py` therefore gives OS-hosted servers a much
+  milliseconds. `utils.py` therefore gives OS-hosted servers a much
   longer per-request timeout (`VNCDOTOOL_OS_SERVER_TIMEOUT`, 60s).
 
 * **Screen Sharing is socket-activated on 5900.** Nothing has to be started
@@ -75,5 +75,5 @@ timeout inside a test means something real.
 Connect, RFB handshake, ARD authentication and key events all work. The
 framebuffer comes back fully black: the runner has no display, and
 attaching to the console owner's live session captures `1 colours` too. So
-`vncservers.py` marks this server `renders_desktop=False` and the test
+`utils.py` marks this server `renders_desktop=False` and the test
 asserts the protocol round trip without asserting pixels.

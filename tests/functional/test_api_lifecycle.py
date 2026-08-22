@@ -1,6 +1,6 @@
 """In-process coverage of ``vncdotool.api``'s *lifecycle* -- context-manager
 use, reconnection, error propagation, timeouts, ``shutdown()`` cleanliness.
-Server compatibility belongs to the subprocess grid in test_servers.py.
+Server compatibility belongs to the subprocess grid in test_server_compat_docker.py.
 
 ``api.connect()`` starts the Twisted reactor in a daemon thread, and a
 reactor cannot be restarted once stopped, so one process gets one reactor
@@ -27,7 +27,7 @@ from twisted.python import threadable
 
 from vncdotool import api
 
-from .vncservers import HOST, LIBVNCSERVER_EXAMPLE as LIBVNC, SUBPROCESS_TIMEOUT_HEADROOM, connect, port_open
+from .utils import HOST, LIBVNCSERVER_EXAMPLE as LIBVNC, SUBPROCESS_TIMEOUT_HEADROOM, connect, port_open
 
 # Same headroom the subprocess grid adds: the bare 5s server budget was
 # observed to flake under load.

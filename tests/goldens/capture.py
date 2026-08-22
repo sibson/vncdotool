@@ -15,7 +15,7 @@ import zipfile
 from pathlib import Path
 from typing import Optional
 
-from tests.functional.vncservers import HOST, TIGERVNC, VNCDO, VNCLOG
+from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
 from vncdotool import pixelformat
 

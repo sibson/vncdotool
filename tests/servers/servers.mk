@@ -2,7 +2,7 @@ SERVERS_COMPOSE?=tests/servers/docker-compose.yml
 DOCKER_COMPOSE?=docker compose
 SCREENSHOT_DIR?=tests/servers/screenshots
 # Which servers `screenshots` captures: docker, os, or all. See
-# tests/functional/vncservers.py.
+# tests/functional/utils.py.
 SCREENSHOT_GROUP?=docker
 
 # `up --wait` only gets as far as the containers' HEALTHCHECK, which is
@@ -20,14 +20,14 @@ servers-down:
 
 .PHONY: test-servers
 test-servers:
-	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_servers.py'
+	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_server_compat_docker.py'
 
 # The VNC server hosted by this OS (UltraVNC on Windows, Screen Sharing on
 # macOS), set up beforehand by the scripts in tests/servers/ultravnc and
 # tests/servers/screen-sharing.
 .PHONY: test-os-server
 test-os-server:
-	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_os_servers.py'
+	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_server_compat_native.py'
 
 # The in-process vncdotool.api lifecycle suite, against libvncserver-example
 # alone. Runs on its own because one process gets one Twisted reactor -- see

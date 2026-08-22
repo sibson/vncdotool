@@ -1,6 +1,6 @@
 #!/bin/bash
 # Turn this macOS machine into a live Screen Sharing server for
-# tests/functional/test_os_servers.py. See
+# tests/functional/test_server_compat_native.py. See
 # tests/servers/screen-sharing/README.md.
 set -euo pipefail
 
@@ -77,7 +77,7 @@ fi
 echo "::add-mask::$PASSWORD"
 echo "--- authenticating as the console owner $USERNAME, no user switch"
 
-# tests/functional/vncservers.py reads these.
+# tests/functional/utils.py reads these.
 if [ -n "${GITHUB_ENV:-}" ]; then
     {
         echo "VNCDOTOOL_OS_SERVER_USERNAME=$USERNAME"

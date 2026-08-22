@@ -16,7 +16,7 @@ from PIL import Image
 
 from vncdotool import pixelformat
 
-from .vncservers import HOST, TIGERVNC, port_open, run_vncdo
+from .utils import HOST, TIGERVNC, port_open, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
