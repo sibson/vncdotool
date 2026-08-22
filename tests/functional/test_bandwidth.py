@@ -1,9 +1,9 @@
-"""N2: an encoding sends less than Raw on the content it is designed for.
+"""An encoding sends less than Raw on the content it is designed for.
 
-Bytes on the wire, measured through vnclog rather than estimated. Render
-time is the other half of N2 and is not measured here: a shared CI runner
-cannot time a decode against a 256x192 scene to any useful precision. Use
-`make bench` against a captured fixture for that.
+Bytes on the wire, measured through vnclog rather than estimated. Render time
+is the other half and is not measured here: a shared CI runner cannot time a
+decode against a 256x192 scene to any useful precision. `make bench` against a
+captured fixture does that.
 """
 from __future__ import annotations
 
