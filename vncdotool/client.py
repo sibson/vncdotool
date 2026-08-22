@@ -431,16 +431,6 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.screen is None:
             return
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
-        # Pillow pastes what fits and drops the rest, so a copy landing
-        # beyond the announced size needs the canvas updateRectangle grows.
-        if self.screen.size[0] < x + width or self.screen.size[1] < y + height:
-            grown = Image.new(
-                "RGB",
-                (max(x + width, self.screen.size[0]), max(y + height, self.screen.size[1])),
-                "black",
-            )
-            grown.paste(self.screen, (0, 0))
-            self.screen = grown
         self.screen.paste(region, (x, y))
         self.drawCursor()
 
