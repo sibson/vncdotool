@@ -140,9 +140,6 @@ def _run(*args: str) -> Optional[str]:
         out = subprocess.run(args, capture_output=True, text=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
-    # Not .strip(): git status --porcelain's status column is a leading
-    # space for an unstaged change, and a blanket strip eats it only off
-    # the first line, misaligning _dirty's column slice on that line alone.
     return out.stdout.rstrip("\n")
 
 
