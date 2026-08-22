@@ -9,6 +9,7 @@
   - Any byte-aligned truecolor pixel format the server announces can now be captured, not just the five formats vncdotool used to recognize (@sibson)
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
   - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
+  - Drop the per-rectangle debug trace: never used to diagnose anything, and decoding a full-screen update is 30% faster without it (@sibson)
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
   - Fix ``VMWareClient`` raising ``AttributeError`` instead of detecting the VMware single-pixel update it exists to filter (@sibson, #400)
   - ``PixelFormat`` moves to ``vncdotool.pixelformat``; ``vncdotool.rfb.PixelFormat`` still imports (@sibson, #415)

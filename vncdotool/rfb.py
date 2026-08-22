@@ -391,7 +391,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
-        log.msg(f"x={x} y={y} w={width} h={height} {Encoding.lookup(encoding)!r}")
         if encoding == Encoding.PSEUDO_LAST_RECT:
             self.rectangles = 0
 
