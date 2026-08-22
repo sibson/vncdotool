@@ -4,12 +4,14 @@ from __future__ import annotations
 from struct import unpack
 from typing import TYPE_CHECKING, Iterator
 
+from .base import ClientDecoder
+
 if TYPE_CHECKING:  # pragma: no cover - imported for typing only
     from ..rfb import PixelFormat, Rect
 
 
-class CopyRectDecoder:
-    def decode(
+class CopyRectDecoder(ClientDecoder):
+    def decodeForClient(
         self, client: object, rect: "Rect", pixel_format: "PixelFormat"
     ) -> Iterator[int]:
         block = yield 4

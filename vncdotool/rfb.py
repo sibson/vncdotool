@@ -479,27 +479,26 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _decodeRectangle(
         self, decoder: decoders.Decoder, x: int, y: int, width: int, height: int
     ) -> None:
-        """Drive one decoder against `expect` until it stops.
-
-        Shapes are told apart by the methods they carry: `isinstance` against
-        a runtime-checkable Protocol also only checks method names, and every
-        PixelDecoder would satisfy ClientDecoder that way.
-        """
+        """Drive one decoder against `expect` until it stops."""
         rect = (x, y, width, height)
-        if hasattr(decoder, "apply"):
-            decoder.apply(self, rect)
+        if isinstance(decoder, decoders.ControlDecoder):
+            decoder.applyToClient(self, rect)
             self._doConnection()
             return
 
-        if hasattr(decoder, "output_format"):
+        if isinstance(decoder, decoders.PixelDecoder):
             target = self._rectBuffer(width, height)
             if target is None:
                 return
             self._pumpDecoder(
-                None, decoder.decode(target, self.pixel_format), (decoder, target, rect)
+                None,
+                decoder.decodePixels(target, self.pixel_format),
+                (decoder, target, rect),
             )
         else:
-            self._pumpDecoder(None, decoder.decode(self, rect, self.pixel_format), None)
+            self._pumpDecoder(
+                None, decoder.decodeForClient(self, rect, self.pixel_format), None
+            )
 
     def _finishRectangle(
         self, decoder: decoders.PixelDecoder, target: decoders.RectBuffer, rect: Rect

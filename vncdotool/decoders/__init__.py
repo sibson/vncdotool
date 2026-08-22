@@ -3,15 +3,13 @@ rfb.py is not told the encoding exists. specs/decoder-architecture.md.
 """
 from __future__ import annotations
 
-from typing import Dict, Type, Union
+from typing import Dict, Type
 
 from ..const import Encoding
-from .base import ClientDecoder, ControlDecoder, DecodeError, PixelDecoder
+from .base import ClientDecoder, ControlDecoder, DecodeError, Decoder, PixelDecoder
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
 from .raw import RawDecoder
-
-Decoder = Union[PixelDecoder, ClientDecoder, ControlDecoder]
 
 # Classes, not instances: ZRLE and Tight own a zlib stream that lives for
 # one connection (RFC 6143 section 7.7.6), so decoders cannot be shared
