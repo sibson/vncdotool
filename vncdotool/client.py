@@ -70,6 +70,8 @@ class VNCDoToolClient(rfb.RFBClient):
     buttons = 0
     screen: Image.Image | None = None
     _image_mode = pixelformat.raw_mode(rfb.PixelFormat())
+    _raw_mode_format: rfb.PixelFormat | None = None
+    _raw_mode = ""
     deferred: Deferred | None = None
 
     cursor: Image.Image | None = None
@@ -304,6 +306,15 @@ class VNCDoToolClient(rfb.RFBClient):
         )
         return self._image_mode
 
+    def _rawModeFor(self, pixel_format: rfb.PixelFormat) -> str:
+        # Called once per rectangle. A PixelFormat is a frozen dataclass, so
+        # hashing one for a cache lookup costs more than the identity check
+        # a decoder handing back the same instance every time satisfies.
+        if pixel_format is not self._raw_mode_format:
+            self._raw_mode_format = pixel_format
+            self._raw_mode = pixelformat.raw_mode(pixel_format)
+        return self._raw_mode
+
     def setImageMode(self) -> None:
         """Check support for PixelFormats announced by server or select client supported alternative."""
         pixel_format = self.requested_pixel_format
@@ -377,14 +388,22 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def updateRectangle(
-        self, x: int, y: int, width: int, height: int, data: bytes
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        data: bytes,
+        pixel_format: rfb.PixelFormat,
     ) -> None:
         # ignore empty updates
         if not data:
             return
 
         size = (width, height)
-        update = Image.frombytes("RGB", size, data, "raw", self._image_mode)
+        update = Image.frombytes(
+            "RGB", size, data, "raw", self._rawModeFor(pixel_format)
+        )
         if not self.screen:
             self.screen = Image.new("RGB", (self.width, self.height), "black")
             self.screen.paste(update, (x, y))

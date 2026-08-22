@@ -1,5 +1,7 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Malformed or oversized pixel data now ends the session with a reported error instead of waiting for bytes that never arrive (@sibson)
+  - [BREAKING] ``RFBClient.updateRectangle`` takes the ``PixelFormat`` its bytes are in, and is called once per rectangle; ``fillRectangle`` is no longer called for Raw or CopyRect. Subclasses overriding either have been warned since 1.4.1, see #385 (@sibson)
   - Add ``vncdo --pixel-format FORMAT``, asking the server for ``bgrx8888``, ``rgbx8888``, or ``rgb565`` instead of accepting the format it announces (@sibson)
   - Any byte-aligned truecolor pixel format the server announces can now be captured, not just the five formats vncdotool used to recognize (@sibson)
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
