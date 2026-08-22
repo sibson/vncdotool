@@ -159,11 +159,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.VNC_AUTHENTICATION,
         AuthTypes.DIFFIE_HELLMAN,
     }
-    SUPPORTED_ENCODINGS = {
-        Encoding.RAW,
-        Encoding.COPY_RECTANGLE,
-        Encoding.RRE,
-        Encoding.CORRE,
+    _UNMIGRATED_ENCODINGS = {
         Encoding.HEXTILE,
         Encoding.ZRLE,
         Encoding.PSEUDO_CURSOR,
@@ -171,6 +167,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_LAST_RECT,
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
+    SUPPORTED_ENCODINGS = set(decoders.DECODERS) | _UNMIGRATED_ENCODINGS
 
     # Greater than any u16 dimension, so it refuses nothing until a subclass
     # narrows it.
@@ -455,10 +452,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 pump(decoder, x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
-            elif encoding == Encoding.CORRE:
-                self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == Encoding.RRE:
-                self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
             elif encoding == Encoding.ZRLE:
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == Encoding.PSEUDO_CURSOR:
@@ -555,57 +548,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.abortConnection(f"decoder asked for {size} bytes")
             return
         self.expect(self._pumpBlock, size, generator, finish)
-
-    # ---  RRE Encoding
-
-    def _handleDecodeRRE(
-        self, block: bytes, x: int, y: int, width: int, height: int
-    ) -> None:
-        (subrects,) = unpack("!I", block[:4])
-        color = block[4:]
-        self.fillRectangle(x, y, width, height, color)
-        if subrects:
-            self.expect(self._handleRRESubRectangles, (8 + self.bypp) * subrects, x, y)
-        else:
-            self._doConnection()
-
-    def _handleRRESubRectangles(self, block: bytes, topx: int, topy: int) -> None:
-        # ~ print("_handleRRESubRectangle")
-        pos = 0
-        end = len(block)
-        sz = self.bypp + 8
-        format = f"!{self.bypp}sHHHH"
-        while pos < end:
-            (color, x, y, width, height) = unpack(format, block[pos : pos + sz])
-            self.fillRectangle(topx + x, topy + y, width, height, color)
-            pos += sz
-        self._doConnection()
-
-    # ---  CoRRE Encoding
-
-    def _handleDecodeCORRE(
-        self, block: bytes, x: int, y: int, width: int, height: int
-    ) -> None:
-        (subrects,) = unpack("!I", block[:4])
-        color = block[4:]
-        self.fillRectangle(x, y, width, height, color)
-        if subrects:
-            self.expect(
-                self._handleDecodeCORRERectangles, (4 + self.bypp) * subrects, x, y
-            )
-        else:
-            self._doConnection()
-
-    def _handleDecodeCORRERectangles(self, block: bytes, topx: int, topy: int) -> None:
-        # ~ print("_handleDecodeCORRERectangle")
-        pos = 0
-        sz = self.bypp + 4
-        format = "!{self.bypp}sBBBB"
-        while pos < sz:
-            (color, x, y, width, height) = unpack(format, block[pos : pos + sz])
-            self.fillRectangle(topx + x, topy + y, width, height, color)
-            pos += sz
-        self._doConnection()
 
     # ---  Hexile Encoding
 

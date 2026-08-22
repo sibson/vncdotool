@@ -64,6 +64,7 @@ class ProtocolError(VNCDoException):
 
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
+    requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     x = 0
     y = 0
@@ -365,7 +366,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncConnectionMade(self) -> None:
         self.setImageMode()
-        encodings = [self.encoding]
+        encodings = list(self.requested_encodings or [self.encoding])
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.Encoding.PSEUDO_CURSOR)
         if self.factory.pseudodesktop:
@@ -422,6 +423,25 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
+        self.drawCursor()
+
+    def copyRectangle(
+        self, srcx: int, srcy: int, x: int, y: int, width: int, height: int
+    ) -> None:
+        if self.screen is None:
+            return
+        region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
+        # Pillow pastes what fits and drops the rest, so a copy landing
+        # beyond the announced size needs the canvas updateRectangle grows.
+        if self.screen.size[0] < x + width or self.screen.size[1] < y + height:
+            grown = Image.new(
+                "RGB",
+                (max(x + width, self.screen.size[0]), max(y + height, self.screen.size[1])),
+                "black",
+            )
+            grown.paste(self.screen, (0, 0))
+            self.screen = grown
+        self.screen.paste(region, (x, y))
         self.drawCursor()
 
     def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
@@ -516,6 +536,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     last_rect = True
     force_caps = False
     pixel_format: rfb.PixelFormat | None = None
+    encodings: list[rfb.Encoding] | None = None
 
     def __init__(self) -> None:
         self.deferred = Deferred()
@@ -524,6 +545,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     def buildProtocol(self, addr: object) -> VNCDoToolClient:
         protocol = super().buildProtocol(addr)
         protocol.requested_pixel_format = self.pixel_format
+        protocol.requested_encodings = self.encodings
         return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:
