@@ -45,10 +45,6 @@ def raw_update(x: int, y: int, width: int, height: int, pixels: bytes) -> bytes:
 
 
 class TestSegmentation(TestCase):
-    """The pump satisfies every yielded count in full, so a decoder never
-    sees a partial buffer.
-    """
-
     def test_byte_at_a_time_matches_a_single_call(self) -> None:
         init = gzip.decompress((FIXTURE / "init.bin.gz").read_bytes())
         step = gzip.decompress(next(iter(sorted(FIXTURE.glob("step-*.bin.gz")))).read_bytes())
@@ -68,10 +64,6 @@ class TestSegmentation(TestCase):
 
 
 class TestDecodeErrorHandling(TestCase):
-    """R6: a decoder that cannot make sense of its input is a diagnosed
-    disconnect, not a hang.
-    """
-
     def test_decode_error_reports_and_disconnects(self) -> None:
         cli = make_pump_client()
         cli.vncProtocolError = mock.Mock()
@@ -88,10 +80,6 @@ class TestDecodeErrorHandling(TestCase):
 
 
 class TestControlDecoders(TestCase):
-    """The third shape: consumes no bytes, changes client state, and must
-    still hand the rectangle loop back.
-    """
-
     def test_a_control_decoder_applies_and_the_loop_continues(self) -> None:
         cli = make_pump_client()
         cli._doConnection = mock.Mock()
@@ -108,10 +96,6 @@ class TestControlDecoders(TestCase):
 
 
 class TestMultiYieldDecoders(TestCase):
-    """Raw and CopyRect each yield once, so nothing else exercises resuming
-    a generator that is still mid-decode.
-    """
-
     def test_a_decoder_is_resumed_with_each_block_in_turn(self) -> None:
         cli = make_pump_client()
         cli.updateRectangle = mock.Mock()
@@ -153,9 +137,7 @@ class TestMultiYieldDecoders(TestCase):
 
 
 class TestAbort(TestCase):
-    """A failed decode has to stop the parser, not just the transport.
-
-    Driven through `dataReceived` rather than by calling the pump: the
+    """Driven through `dataReceived` rather than by calling the pump: the
     parked handler is only re-entered by `_handleExpected`'s loop, so a
     direct call cannot see a failure that forgot to disarm it.
     """
@@ -213,10 +195,6 @@ class TestAbort(TestCase):
 
 
 class TestRectBufferValidation(TestCase):
-    """A rectangle outside `MAX_DESKTOP_SIZE`, or with a zero dimension, is
-    refused before any buffer is allocated.
-    """
-
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
         cli = make_pump_client()
         cli.width, cli.height = 64, 48
