@@ -11,17 +11,17 @@ from struct import pack
 from PIL import Image
 
 from tests.goldens import distill, scenes
-from vncdotool import rfb
+from vncdotool import pixelformat, rfb
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 
 PIXEL_FORMAT = rfb.PixelFormat()
 SIZE = (16, 16)
 
 
-def handshake_bytes() -> bytes:
+def handshake_bytes(pixel_format: rfb.PixelFormat = PIXEL_FORMAT) -> bytes:
     """RFB 3.3, no auth, ServerInit -- what vnclog records before any update."""
     return b"RFB 003.003\n" + pack("!I", AuthTypes.NONE) + pack(
-        "!HH16sI", SIZE[0], SIZE[1], PIXEL_FORMAT.to_bytes(), len(b"golden")
+        "!HH16sI", SIZE[0], SIZE[1], pixel_format.to_bytes(), len(b"golden")
     ) + b"golden"
 
 
@@ -39,12 +39,12 @@ def screen(key: str) -> Image.Image:
 
 class TestSplit(unittest.TestCase):
     def test_init_stops_at_the_first_update(self) -> None:
-        init, _ = distill.split(handshake_bytes() + raw_update(screen("0")))
+        init, _ = distill.split(handshake_bytes() + raw_update(screen("0")), None)
         self.assertEqual(init, handshake_bytes())
 
     def test_one_step_per_update(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
-        _, steps = distill.split(stream)
+        _, steps = distill.split(stream, None)
         self.assertEqual([step.index for step in steps], [1, 2])
 
     def test_a_scene_split_across_updates_is_one_step(self) -> None:
@@ -53,30 +53,38 @@ class TestSplit(unittest.TestCase):
         # scene ends.
         first, second = raw_update(screen("0")), raw_update(screen("s"))
         stream = handshake_bytes() + first + raw_update(screen("0")) + second
-        _, steps = distill.split(stream)
+        _, steps = distill.split(stream, None)
         self.assertEqual([step.key for step in steps], ["0", "s"])
         self.assertEqual(steps[0].data, first + raw_update(screen("0")))
         self.assertEqual(steps[1].data, second)
 
     def test_steps_are_labelled_by_the_patch(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("d"))
-        _, steps = distill.split(stream)
+        _, steps = distill.split(stream, None)
         self.assertEqual([step.key for step in steps], ["0", "d"])
 
     def test_a_step_holds_exactly_its_own_update_bytes(self) -> None:
         first, second = raw_update(screen("0")), raw_update(screen("s"))
-        _, steps = distill.split(handshake_bytes() + first + second)
+        _, steps = distill.split(handshake_bytes() + first + second, None)
         self.assertEqual([step.data for step in steps], [first, second])
 
     def test_an_unstamped_frame_has_no_key(self) -> None:
-        _, steps = distill.split(handshake_bytes() + raw_update(Image.new("RGB", SIZE, (1, 2, 3))))
+        _, steps = distill.split(handshake_bytes() + raw_update(Image.new("RGB", SIZE, (1, 2, 3))), None)
         self.assertIsNone(steps[0].key)
+
+    def test_the_requested_format_reads_the_bytes_the_server_sent(self) -> None:
+        # A capture whose client asked for something other than the announced
+        # format: the SetPixelFormat that made the server switch is c2s, so
+        # nothing in the replayed stream says the layout changed.
+        stream = handshake_bytes(pixelformat.PIXEL_FORMATS["bgrx8888"]) + raw_update(screen("s"))
+        _, steps = distill.split(stream, "rgbx8888")
+        self.assertEqual([step.key for step in steps], ["s"])
 
 
 class TestWriteFixture(unittest.TestCase):
     def test_writes_one_pair_per_step_plus_conditions(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
-        init, steps = distill.split(stream)
+        init, steps = distill.split(stream, None)
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / "fixture"
             distill.write_fixture(directory, init, steps, {"server": "tigervnc"})
