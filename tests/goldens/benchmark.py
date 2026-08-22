@@ -98,23 +98,6 @@ def _cpu_model() -> str:
     return platform.processor() or "unknown"
 
 
-def _cpu_mhz() -> Optional[float]:
-    if platform.system() == "Linux":
-        khz = _read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
-        if khz:
-            return round(int(khz.strip()) / 1000, 1)
-        for line in (_read("/proc/cpuinfo") or "").splitlines():
-            if line.split(":")[0].strip() == "cpu MHz":
-                return round(float(line.split(":", 1)[1]), 1)
-    elif platform.system() == "Darwin":
-        # hw.cpufrequency is absent on Apple Silicon (observed on an M4 Pro),
-        # so those runs record no clock rather than a nominal one.
-        hz = _run("sysctl", "-n", "hw.cpufrequency")
-        if hz:
-            return round(int(hz) / 1e6, 1)
-    return None
-
-
 def _read(path: str) -> Optional[str]:
     try:
         return Path(path).read_text()
@@ -139,9 +122,6 @@ def _machine() -> Dict[str, object]:
     }
     digest = json.dumps(fields, sort_keys=True).encode()
     fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
-    # After the digest: the clock moves run to run, and one inside it would
-    # give every run its own machine and group nothing with anything.
-    fields["cpu_mhz"] = _cpu_mhz()
     return fields
 
 
