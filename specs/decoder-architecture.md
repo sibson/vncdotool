@@ -450,13 +450,23 @@ exactly one encoding and reading back the encoding it actually used:
 | Encoding | tigervnc | x11vnc | libvncserver-example | ultravnc | screen-sharing |
 |---|---|---|---|---|---|
 | RRE | yes | yes | yes | ? | ? |
-| CoRRE | no | yes | yes | ? | ? |
+| CoRRE | no [1] | yes [1] | yes | ? | ? |
 | Hextile | yes | yes | yes | ? | ? |
 | ZRLE | yes | yes | yes | ? | ? |
 | Tight | yes | no | — see below | ? | ? |
 | TRLE | no | no | no | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
+
+[1] Measured 2026-08-22 against `tigervnc-standalone-server 1.12.0+dfsg-8`
+(Debian bookworm, the fleet image) with a socket-level RFB 3.8 probe that
+offered CoRRE and nothing else, then asked for the full screen and three
+sub-regions: every rectangle came back Raw. The same probe against x11vnc
+returned CoRRE, so it can see a CoRRE rectangle when one arrives, and offering
+RRE alone to tigervnc returned RRE, so tigervnc is not answering everything
+with Raw. Upstream agrees: `EncodeManager::supported()` in TigerVNC 1.12.0
+(`common/rfb/EncodeManager.cxx`) accepts Raw, RRE, Hextile, ZRLE and Tight and
+nothing else. Every other cell predates this pass and remains uncited.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):
@@ -469,6 +479,8 @@ encoding. A "no" is strong evidence but not certainty, because servers choose
 per-rectangle and the probe reads only the first rectangle of a full-screen
 update — a server could in principle pick Raw for that one rectangle while
 supporting the encoding elsewhere. Do not delete an encoding on a "no" alone.
+The tigervnc CoRRE "no" is the exception: [1] read four separate updates and
+found upstream source saying the same thing.
 
 Consequences already folded into the build order: RRE is universal, so Phase 3
 is safe; CoRRE survives on two of three servers, TigerVNC having dropped it;
