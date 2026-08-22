@@ -15,7 +15,6 @@ https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 from __future__ import annotations
 
 import getpass
-import logging
 import sys
 import warnings
 import zlib
@@ -47,11 +46,6 @@ from .keys import Key
 from .pixelformat import PixelFormat
 
 Ver = Tuple[int, int]
-
-# The per-rectangle trace, which a full-screen update emits over a thousand
-# times. `log.msg` builds and publishes an event whether or not an observer
-# wants one; a stdlib logger asked first costs a level check.
-_trace = logging.getLogger(__name__)
 
 # ~ from twisted.internet import reactor
 
@@ -397,10 +391,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
-        if _trace.isEnabledFor(logging.DEBUG):
-            _trace.debug(
-                "x=%d y=%d w=%d h=%d %r", x, y, width, height, Encoding.lookup(encoding)
-            )
         if encoding == Encoding.PSEUDO_LAST_RECT:
             self.rectangles = 0
 
