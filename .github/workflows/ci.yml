@@ -51,6 +51,9 @@ jobs:
           path: .coverage.*
           include-hidden-files: true
           if-no-files-found: ignore
+          # A handoff to the coverage job minutes later, not a record: it is
+          # read within the run and never again.
+          retention-days: 7
 
   lint:
     name: Lint
@@ -110,12 +113,11 @@ jobs:
         timeout-minutes: 5
         run: uv run python tests/functional/wait_for_servers.py docker
 
-      # The steps below are diagnostics and teardown, so they carry
-      # `if: always()`: when a test fails, the container status, the
-      # screenshot of what the server was actually showing, and the server
-      # logs are exactly what's needed to debug it -- skipping them on
-      # failure would throw away the evidence. `down` likewise has to run
-      # whatever happened.
+      # Diagnostics and teardown. The container status and the server logs
+      # are step output on the run page, so they cost nothing to keep and
+      # run whatever happened, as `down` must. The screenshot gallery
+      # becomes a stored artifact instead, so it is captured only when a
+      # failure gives someone a reason to look at it.
       - name: Show test server status
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml ps
@@ -131,9 +133,10 @@ jobs:
           path: .coverage.*
           include-hidden-files: true
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Capture screenshots and build the gallery
-        if: always()
+        if: failure()
         timeout-minutes: 3
         run: uv run python tests/functional/capture_screenshots.py
 
@@ -142,7 +145,7 @@ jobs:
         run: docker compose -f tests/servers/docker-compose.yml logs
 
       - name: Upload screenshots
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: screenshots
