@@ -36,9 +36,9 @@ class RREDecoder(PixelDecoder):
                 f"{count} subrectangles in a {target.width}x{target.height} rectangle"
             )
 
-        size = bypp + self.COORDS.size
-        data = yield size * count
-        for pos in range(0, len(data), size):
+        nbytes = bypp + self.COORDS.size
+        data = yield nbytes * count
+        for pos in range(0, len(data), nbytes):
             x, y, width, height = self.COORDS.unpack_from(data, pos + bypp)
             target.fill(x, y, width, height, data[pos:pos + bypp])
 
