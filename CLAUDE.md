@@ -70,6 +70,18 @@ fix the underlying bug, move the test into the topical file, drop its
 `@unittest.expectedFailure` marker, and rename it for the behaviour it checks
 rather than the issue number.
 
+A test that runs the same body over a set -- every encoding, every pixel
+format, every golden fixture -- generates one case per member through
+`load_tests`, rather than looping inside a single test method. A failure then
+names the member in its test id (`TestRenders_corre.test_renders_every_scene`)
+instead of hiding it in a `subTest` under a green-looking method, and CI
+reports it without anyone reading the output. `tests/unit/test_goldens.py` and
+`tests/functional/test_pixel_format.py` are the pattern: a plain mixin holding
+the test body, and `load_tests` building one `TestCase` subclass per member.
+Where a test crosses two sets -- every encoding against every scene --
+generate the cross product, one case per pair, rather than generating one and
+looping the other.
+
 A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
 changed, what a reviewer would not guess from the diff, and what was tested.
