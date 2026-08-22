@@ -7,7 +7,10 @@ and on the change.
 from __future__ import annotations
 
 import argparse
+import cProfile
+import gc
 import gzip
+import pstats
 import time
 from pathlib import Path
 from typing import List
@@ -38,7 +41,8 @@ def _replay(init: bytes, steps: List[bytes]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixture", default="tigervnc-raw-bgrx8888")
-    parser.add_argument("--repeat", type=int, default=20)
+    parser.add_argument("--repeat", type=int, default=300)
+    parser.add_argument("--profile", type=int, metavar="RUNS", default=0)
     args = parser.parse_args()
 
     fixture = FIXTURE_ROOT / args.fixture
@@ -47,6 +51,18 @@ def main() -> int:
 
     _replay(init, steps)  # warm PIL's plugin registry and the import graph
 
+    if args.profile:
+        profiler = cProfile.Profile()
+        profiler.enable()
+        for _ in range(args.profile):
+            _replay(init, steps)
+        profiler.disable()
+        stats = pstats.Stats(profiler)
+        print(f"{args.fixture}: {len(steps)} updates x {args.profile} profiled runs")
+        stats.sort_stats("tottime").print_stats(25)
+        return 0
+
+    gc.collect()
     timings = []
     for _ in range(args.repeat):
         start = time.perf_counter()
@@ -54,9 +70,17 @@ def main() -> int:
         timings.append(time.perf_counter() - start)
 
     timings.sort()
+
+    def us(fraction: float) -> float:
+        return timings[int(fraction * (len(timings) - 1))] * 1e6
+
     print(f"{args.fixture}: {len(steps)} updates x {args.repeat} runs")
-    print(f"  best   {timings[0] * 1000:.1f} ms")
-    print(f"  median {timings[len(timings) // 2] * 1000:.1f} ms")
+    # Microseconds, and p10 as well as the median: the replay is under a
+    # millisecond, so a tenth of a millisecond is a tenth of the measurement,
+    # and the median alone moves with whatever else the machine is doing.
+    print(f"  best   {us(0.0):8.1f} us")
+    print(f"  p10    {us(0.10):8.1f} us")
+    print(f"  median {us(0.50):8.1f} us")
     return 0
 
 
