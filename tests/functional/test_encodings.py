@@ -47,24 +47,23 @@ class FleetTestCase(TestCase):
 
 
 class RendersTheScene:
-    """One encoding against the images the server was shown.
+    """One encoding against one image the server was shown.
 
     Not a TestCase itself, so the loader collects it only through the
     subclasses load_tests builds.
     """
 
     encoding: str
+    scene: str
 
-    def test_renders_every_scene(self) -> None:
-        for key in SCENES:
-            with self.subTest(scene=key):
-                screen, _ = capture(self, self.encoding, key)
-                oracle = Image.open(SCENES_DIR / f"{key}.png").convert("RGB")
-                self.assertEqual(screen.size, oracle.size)
-                self.assertEqual(
-                    screen.tobytes(), oracle.tobytes(),
-                    f"{self.encoding} does not render the image the server was shown",
-                )
+    def test_renders_the_scene(self) -> None:
+        screen, _ = capture(self, self.encoding, self.scene)
+        oracle = Image.open(SCENES_DIR / f"{self.scene}.png").convert("RGB")
+        self.assertEqual(screen.size, oracle.size)
+        self.assertEqual(
+            screen.tobytes(), oracle.tobytes(),
+            f"{self.encoding} does not render scene {self.scene} as the server was shown it",
+        )
 
 
 class TestNegotiation(FleetTestCase):
@@ -83,11 +82,15 @@ class TestNegotiation(FleetTestCase):
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """One case per encoding, so a failure's test id says which one failed."""
+    """One case per encoding and scene, so a failure's test id names both."""
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(TestNegotiation))
     for encoding in sorted(decoders.ENCODING_NAMES):
-        name = f"TestRenders_{encoding}"
-        case = type(name, (RendersTheScene, FleetTestCase), {"encoding": encoding})
-        suite.addTest(case("test_renders_every_scene"))
+        for scene in SCENES:
+            name = f"TestRenders_{encoding}_scene_{scene}"
+            case = type(
+                name, (RendersTheScene, FleetTestCase),
+                {"encoding": encoding, "scene": scene},
+            )
+            suite.addTest(case("test_renders_the_scene"))
     return suite

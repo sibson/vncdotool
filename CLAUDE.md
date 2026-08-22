@@ -78,8 +78,9 @@ instead of hiding it in a `subTest` under a green-looking method, and CI
 reports it without anyone reading the output. `tests/unit/test_goldens.py` and
 `tests/functional/test_pixel_format.py` are the pattern: a plain mixin holding
 the test body, and `load_tests` building one `TestCase` subclass per member.
-Keep `subTest` for the dimension inside a case -- the scenes each encoding is
-shown, not the encodings themselves.
+Where a test crosses two sets -- every encoding against every scene --
+generate the cross product, one case per pair, rather than generating one and
+looping the other.
 
 A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
