@@ -71,6 +71,65 @@ jobs:
       - name: Run flake8
         run: uv run flake8 --count --statistics vncdotool tests
 
+  counts:
+    name: Decode call counts
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # The base commit has to be present to check its vncdotool/ out.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Count this branch
+        run: uv run python -m tests.goldens.benchmark --counts > head.json
+
+      # Only vncdotool/ is swapped, so both counts come from this branch's
+      # harness and fixture -- the base's numbers do not depend on it having
+      # a --counts flag, and a change to the harness cannot read as a change
+      # to the decode path.
+      - name: Count the base with the same harness
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git checkout "$BASE_SHA" -- vncdotool/
+          uv run python -m tests.goldens.benchmark --counts > base.json
+          git checkout HEAD -- vncdotool/
+
+      # Nothing here reads or writes bench.jsonl: the baseline is the base
+      # branch itself, so a landed change stops being reported once it is
+      # the base, instead of nagging until someone records a new row.
+      - name: Compare
+        run: uv run python -m tests.goldens.report --compare base.json head.json | tee counts.md
+
+      - name: Say whether anything moved
+        id: moved
+        run: test -s counts.md && echo "moved=true" >> "$GITHUB_OUTPUT" || true
+
+      # Forks get a read-only token, so the comment would fail rather than
+      # be refused.
+      - name: Comment on the pull request
+        if: >
+          steps.moved.outputs.moved == 'true' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --body-file counts.md --edit-last --create-if-none
+
   servers:
     name: Test server functional tests
     runs-on: ubuntu-latest

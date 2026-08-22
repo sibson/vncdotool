@@ -93,6 +93,31 @@ def _diff(rows: List[Row], refs: Sequence[str]) -> None:
           f"  {sum(counts_after.values()) - sum(counts_before.values()):+}")
 
 
+def _compare(before_path: Path, after_path: Path) -> None:
+    """Print a markdown report of two counts files, or nothing if they match.
+
+    Silence is the contract: the caller posts whatever reaches stdout, so
+    a run that found no change has to produce no output at all.
+    """
+    before: Dict[str, int] = json.loads(before_path.read_text())
+    after: Dict[str, int] = json.loads(after_path.read_text())
+    if before == after:
+        return
+
+    print("### Decode call counts changed\n")
+    print("| function | base | this branch | delta |")
+    print("| --- | ---: | ---: | ---: |")
+    for key in sorted(set(before) | set(after)):
+        was, now = before.get(key, 0), after.get(key, 0)
+        if was != now:
+            print(f"| `{key}` | {was} | {now} | {now - was:+} |")
+    was_total, now_total = sum(before.values()), sum(after.values())
+    print(f"| **total** | {was_total} | {now_total} | {now_total - was_total:+} |")
+    print("\nCounts are exact and machine-independent, so this is a real change in the"
+          " work the decode path does -- but it says nothing about speed. Time it with"
+          " `make bench`, and `make bench-record` to add a row to `bench.jsonl`.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--path", type=Path, default=RECORD_PATH)
@@ -100,7 +125,15 @@ def main() -> int:
         "--diff", nargs="*", metavar="COMMIT",
         help="per-function call counts between two records, or the last two",
     )
+    parser.add_argument(
+        "--compare", nargs=2, metavar=("BASE", "HEAD"),
+        help="two files of `benchmark --counts` output; prints only if they differ",
+    )
     args = parser.parse_args()
+
+    if args.compare:
+        _compare(Path(args.compare[0]), Path(args.compare[1]))
+        return 0
 
     rows = _load(args.path)
     if not rows:
