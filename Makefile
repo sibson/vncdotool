@@ -17,6 +17,7 @@ help:
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
 	@echo "goldens:	capture decoder golden fixtures from the fleet"
 	@echo "scenes:		regenerate the committed scene PNGs from tests/goldens/scenes.py"
+	@echo "bench:		time a decoder against a committed golden fixture"
 	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
@@ -48,6 +49,10 @@ test: test-unit
 testall: test-unit test-func
 test-unit:
 	uv run python -m unittest discover tests/unit
+
+.PHONY: bench
+bench:
+	uv run python -m tests.goldens.benchmark
 
 # Needs `make servers-up`: an unreachable server fails its tests rather
 # than skipping them, so a down fleet cannot pass as green.
