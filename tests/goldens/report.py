@@ -52,8 +52,6 @@ def _table(rows: List[Row]) -> None:
         previous: Optional[Row] = None
         for row in group:
             commit = str(row.get("commit") or "-")[:7]
-            if row.get("dirty"):
-                commit += "*"
             print(f"  {commit:9} {str(row['timestamp'])[:10]:11} "
                   f"{str(row.get('python') or '-'):8} {str(row.get('pillow') or '-'):8} "
                   f"{row['best_us']:9.1f} {_delta(row, previous):>7} "
