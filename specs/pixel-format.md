@@ -99,10 +99,16 @@ by the goldens' cross-format comparison.
 ## Surface
 
 ```python
-def raw_mode(pixel_format: rfb.PixelFormat) -> str: ...      # raises UnsupportedPixelFormat
-def cpixel_bytes(pixel_format: rfb.PixelFormat) -> int: ...  # 3 or bypp
-def cpixel_offset(pixel_format: rfb.PixelFormat) -> int: ... # 0 or bypp - 3
+class PixelFormat: ...                                   # RFC 6143 §7.4
+
+def raw_mode(pixel_format: PixelFormat) -> str: ...      # raises UnsupportedPixelFormat
+def cpixel_bytes(pixel_format: PixelFormat) -> int: ...  # 3 or bypp
+def cpixel_offset(pixel_format: PixelFormat) -> int: ... # 0 or bypp - 3
 ```
+
+`pixelformat.py` defines `PixelFormat` and imports nothing else from the
+package, so both `rfb.py` and the decoders can reach it. `rfb.PixelFormat`
+remains a name because it is public API.
 
 `raw_mode` ignores `depth` — it does not affect where the channels sit.
 `cpixel_bytes` must obey it, since the encoder used the same declaration.

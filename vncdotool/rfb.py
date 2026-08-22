@@ -18,12 +18,10 @@ import getpass
 import sys
 import warnings
 import zlib
-from dataclasses import astuple, dataclass
-from struct import Struct, error as StructError, pack, unpack, unpack_from
+from struct import error as StructError, pack, unpack, unpack_from
 from typing import (
     Any,
     Callable,
-    ClassVar,
     Collection,
     Iterator,
     List,
@@ -44,58 +42,13 @@ from twisted.python.failure import Failure
 
 from . import decoders
 from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
+from .decoders import Rect
 from .keys import Key
+from .pixelformat import PixelFormat
 
-Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
 
 # ~ from twisted.internet import reactor
-
-
-@dataclass(frozen=True)
-class PixelFormat:
-    """:rfc:`6143` §7.4. Pixel Format Data Structure."""
-
-    bpp: int = 32  # u8: bits-per-pixel
-    depth: int = 24  # u8
-    bigendian: bool = False  # u8
-    truecolor: bool = True  # u8
-    redmax: int = 255  # u16
-    greenmax: int = 255  # u16
-    bluemax: int = 255  # u16
-    redshift: int = 0  # u8
-    greenshift: int = 8  # u8
-    blueshift: int = 16  # u8
-
-    STRUCT: ClassVar = Struct("!BB??HHHBBBxxx")
-    VALIDATE: ClassVar = False
-
-    def __post_init__(self) -> None:
-        if not self.VALIDATE:
-            return
-        assert self.bpp in {8, 16, 24, 32}, f"bpp={self.bpp}"
-        assert 1 <= self.depth <= self.bpp, f"depth={self.depth} <= bpp={self.bpp}"
-        if self.truecolor:
-            for max, shift in zip(
-                (self.redmax, self.greenmax, self.bluemax),
-                (self.redshift, self.greenshift, self.blueshift),
-            ):
-                assert 1 <= max <= 0xFFFF, f"1 <= max={max} <= 0xffff"
-                assert max & (max + 1) == 0, f"max={max} not a 2**n-1"
-                assert (
-                    0 <= shift <= self.bpp - max.bit_length()
-                ), f"shift={shift} not in bpp={self.bpp}"
-
-    @property
-    def bypp(self) -> int:  # bytes-per-pixel
-        return (7 + self.bpp) // 8
-
-    @classmethod
-    def from_bytes(cls, block: bytes) -> PixelFormat:
-        return cls(*cls.STRUCT.unpack(block))
-
-    def to_bytes(self) -> bytes:
-        return cast(bytes, self.STRUCT.pack(*astuple(self)))
 
 
 # ZRLE helpers

@@ -165,6 +165,12 @@ Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
 `_pumpPixels` and `_pumpForClient` — live with the pump rather than on the
 decoder.
 
+That holds at import time too. The two types the pump and a decoder both name
+sit below both: `PixelFormat` in `pixelformat.py`, and `Rect` — the rectangle
+the pump hands to `decodeForClient` — beside the interface that receives it.
+`rfb.py` imports them and re-exports both, since `rfb.PixelFormat` and
+`rfb.Rect` are public API.
+
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
 codebase already uses.
@@ -273,9 +279,9 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ## Module layout
 
 ```
-vncdotool/pixelformat.py         PixelFormat -> Pillow raw mode, CPIXEL/TPIXEL widths
+vncdotool/pixelformat.py         PixelFormat, its Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, built from the decoder classes
-vncdotool/decoders/base.py       Decoder, PixelDecoder, ClientDecoder
+vncdotool/decoders/base.py       Decoder, PixelDecoder, ClientDecoder, Rect
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
 vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key

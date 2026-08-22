@@ -1,14 +1,17 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Iterator
+from typing import TYPE_CHECKING, ClassVar, Iterator, Tuple
 
 from ..const import Encoding
+from ..pixelformat import PixelFormat
 
-# rfb.py imports this package, so importing from it at runtime is a cycle.
+# buffer.py raises DecodeError, so it imports this module and cannot be
+# imported back from it at runtime.
 if TYPE_CHECKING:  # pragma: no cover
-    from ..rfb import PixelFormat
     from .buffer import RectBuffer
+
+Rect = Tuple[int, int, int, int]
 
 
 class DecodeError(Exception):
@@ -24,12 +27,12 @@ class Decoder:
     ENCODING: ClassVar[Encoding]
 
     def decodePixels(
-        self, target: "RectBuffer", pixel_format: "PixelFormat"
+        self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
         raise NotImplementedError
 
     def decodeForClient(
-        self, client: object, rect: tuple[int, int, int, int], pixel_format: "PixelFormat"
+        self, client: object, rect: Rect, pixel_format: PixelFormat
     ) -> Iterator[int]:
         raise NotImplementedError
 
@@ -37,7 +40,7 @@ class Decoder:
 class PixelDecoder(Decoder):
     """Consumes bytes, fills a rect buffer."""
 
-    def output_format(self, pixel_format: "PixelFormat") -> "PixelFormat":
+    def output_format(self, pixel_format: PixelFormat) -> PixelFormat:
         """The layout the bytes this decoder wrote are in, which is not
         always the negotiated one.
         """
