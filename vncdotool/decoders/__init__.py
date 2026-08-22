@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from ..const import Encoding
-from .base import ClientDecoder, DecodeError, Decoder, PixelDecoder
+from .base import ClientDecoder, DecodeError, Decoder, PixelDecoder, Rect
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
 from .raw import RawDecoder
@@ -30,6 +30,7 @@ __all__ = [
     "DecodeError",
     "Decoder",
     "PixelDecoder",
+    "Rect",
     "RectBuffer",
     "for_connection",
 ]
