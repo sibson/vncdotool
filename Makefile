@@ -52,7 +52,7 @@ test-unit:
 
 .PHONY: bench
 bench:
-	uv run python -m tests.goldens.benchmark
+	uv run python -m tests.goldens.benchmark --record
 
 # Needs `make servers-up`: an unreachable server fails its tests rather
 # than skipping them, so a down fleet cannot pass as green.
