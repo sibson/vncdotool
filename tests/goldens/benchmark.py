@@ -1,9 +1,5 @@
 """Time a decoder against a committed golden fixture. No Twisted in the loop.
 
-Raw is the only encoding in live use, so it is the only one with a
-before-and-after to regress against. Run this on the commit before a change
-and on the change.
-
 ``--record`` appends a line to bench.jsonl per run: the timings, which are
 only comparable against other lines carrying the same ``machine`` digest,
 and the call counts, which are comparable against every line.
