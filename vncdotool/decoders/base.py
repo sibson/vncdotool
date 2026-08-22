@@ -20,20 +20,14 @@ class PixelDecoder(Protocol):
         ...
 
     def output_format(self, pixel_format: "PixelFormat") -> "PixelFormat":
-        """The layout the bytes this decoder wrote are in.
-
-        The negotiated format for every encoding in use today; Tight's JPEG
-        and TPIXEL will differ.
+        """The layout the bytes this decoder wrote are in, which is not
+        always the negotiated one.
         """
 
 
 @runtime_checkable
 class ClientDecoder(Protocol):
-    """Consumes bytes, calls a client method.
-
-    CopyRect needs the screen rather than a rect buffer, and Cursor produces
-    an image and a mask rather than a rectangle.
-    """
+    """Consumes bytes, calls a client method."""
 
     def decode(
         self, client: object, rect: tuple[int, int, int, int], pixel_format: "PixelFormat"

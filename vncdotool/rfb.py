@@ -510,11 +510,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         )
 
     def _rectBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
-        """A buffer for one rectangle, or None having failed the connection.
-
-        The allocation is kept and reused at its high-water mark, so a session
-        of same-sized updates allocates once.
-        """
+        """A buffer for one rectangle, or None having failed the connection."""
         # A zero dimension carries no pixels and no payload, so it is not
         # an error.
         limit_w = self.width or self.MAX_DESKTOP_SIZE
