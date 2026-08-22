@@ -1,11 +1,12 @@
 name: Set up an OS-hosted VNC server
 description: >
   Turn the runner into a live VNC server for tests/functional/test_server_compat_native.py:
-  UltraVNC as a Windows service, or Apple Screen Sharing on macOS.
+  UltraVNC as a Windows service, Apple Screen Sharing on macOS, or a raw
+  QEMU on Linux.
 
 inputs:
   os:
-    description: macos or windows.
+    description: macos, windows, or linux.
     required: true
   port:
     description: Port the server serves on.
@@ -47,3 +48,11 @@ runs:
         PORT: ${{ inputs.port }}
         WAIT_SECONDS: ${{ inputs.wait-seconds }}
       run: pwsh -File "$env:GITHUB_ACTION_PATH/windows.ps1"
+
+    - name: Start raw QEMU
+      if: inputs.os == 'linux'
+      shell: bash
+      env:
+        VNCDOTOOL_OS_SERVER_PORT: ${{ inputs.port }}
+        VNCDOTOOL_OS_SERVER_WAIT: ${{ inputs.wait-seconds }}
+      run: bash tests/servers/qemu-kvm/setup.sh

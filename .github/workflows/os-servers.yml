@@ -1,14 +1,15 @@
 name: OS-hosted VNC servers
 
 # Live, OS-bound VNC servers (UltraVNC on Windows, Apple Screen Sharing on
-# macOS) that only exist on GitHub-hosted windows-latest / macos-latest VMs --
-# see specs/server-compatibility-plan.md, Tier 2. These are the only place
-# UltraVNC and Screen Sharing compatibility can be exercised live, so this
-# job runs on real changes rather than never, but it is deliberately
-# change-triggered (path-filtered, no schedule).
+# macOS, raw QEMU/KVM on Linux) -- see specs/server-compatibility-plan.md,
+# Tier 2. These are the only place UltraVNC and Screen Sharing compatibility,
+# and QEMU's KVM-accelerated path, can be exercised live, so this job runs
+# on real changes rather than never, but it is deliberately change-triggered
+# (path-filtered, no schedule).
 #
 # What each server needs, and what it does and doesn't prove, is documented
-# in tests/servers/ultravnc/README.md and tests/servers/screen-sharing/README.md.
+# in tests/servers/ultravnc/README.md, tests/servers/screen-sharing/README.md,
+# and tests/servers/qemu-kvm/README.md.
 
 on:
   push:
@@ -19,6 +20,7 @@ on:
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
+      - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
       - '.github/actions/os-server/**'
   pull_request:
@@ -27,6 +29,7 @@ on:
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
+      - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
       - '.github/actions/os-server/**'
   workflow_dispatch:
@@ -60,6 +63,12 @@ jobs:
             os: macos
             server: screen-sharing
             diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
+          - name: Linux - QEMU/KVM
+            runner: ubuntu-latest
+            shell: bash
+            os: linux
+            server: qemu-kvm
+            diagnostics: bash tests/servers/qemu-kvm/collect-diagnostics.sh
     defaults:
       run:
         shell: ${{ matrix.shell }}

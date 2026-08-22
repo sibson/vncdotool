@@ -2,9 +2,10 @@
 
 Unlike the Docker servers in test_server_compat_docker.py, these run raw on
 the host rather than in a container: UltraVNC installed as a Windows
-service, or Apple Screen Sharing / Remote Management on macOS. The setup
-scripts live next to each server's notes in tests/servers/ultravnc and
-tests/servers/screen-sharing, and are what CI runs before this module.
+service, Apple Screen Sharing / Remote Management on macOS, or a raw QEMU
+started directly on Linux. The setup scripts live next to each server's
+notes in tests/servers/ultravnc, tests/servers/screen-sharing, and
+tests/servers/qemu-kvm, and are what CI runs before this module.
 
 On a platform with no native server described there is simply nothing to
 register, and on a platform that has one but hasn't set it up the test

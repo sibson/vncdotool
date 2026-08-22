@@ -219,7 +219,10 @@ Concretely:
 
 TigerVNC, TightVNC, x11vnc, QEMU, LibVNCServer examples, and later
 websockify/noVNC are all runnable on Linux, so we own them outright as a
-**Docker Compose fleet**:
+**Docker Compose fleet**. (QEMU here is a containerized guest for local-dev
+convenience — Docker Desktop has no `/dev/kvm`, so it runs TCG-only and
+boots slower; the CI-real, KVM-accelerated QEMU coverage lives in Tier 2
+below, run raw on the runner rather than in a container.)
 
 - One `tests/servers/docker-compose.yml` defines a service per
   server × configuration (`tigervnc`, `tigervnc-auth`, `tigervnc-tls`,
@@ -247,17 +250,35 @@ has nothing to serve — and they only run on Windows hosts anyway (no help
 for local dev on Linux/macOS, and no such thing as a macOS container at
 all). So these two stay on full GitHub-hosted `windows-latest` /
 `macos-latest` VMs, which are free for public repositories — but we only
-spin them up when something relevant changes:
+spin them up when something relevant changes.
+
+**QEMU/KVM joins this tier too, but for a different reason.** It's not a
+necessity — a container with `--device /dev/kvm` passed through works fine,
+and that's exactly what Tier 1's `qemu` service is for local dev. It's here
+by choice: GitHub-hosted `ubuntu-latest` runners have had `/dev/kvm` since
+2023 (enabled for the Android emulator action's nested virtualization), so a
+raw `qemu-system-x86_64 -enable-kvm -vnc :0` on the bare runner — no
+container, no guest OS even, the BIOS/firmware framebuffer alone is enough
+to exercise QEMU's own RFB server — matches how real users actually meet
+this server (a cloud provider's VM console, `virt-manager`, a bare `qemu`
+invocation) more closely than a Dockerized one would. Same rationale as
+Windows/macOS being untouched by a Python display driver: the server under
+test should look like what a user's server actually looks like. It runs on
+`ubuntu-latest` rather than `windows-latest`/`macos-latest`, so it's cheaper
+than the other two Tier 2 jobs, but it follows the same change-triggered
+trigger policy and setup/diagnostics script pattern below.
+
+For all three jobs, we only spin them up when something relevant changes:
 
 - The workflow triggers on `pull_request`/`push` **path-filtered to code
   that can affect server compatibility** (`vncdotool/**`, the workflow
   itself, server setup scripts) plus `workflow_dispatch` for on-demand
   runs. No scheduled runs: doc- and test-only changes never start an OS
   VM, and a quiet repository consumes nothing.
-- Accepted trade-off: drift in the runner images or the Chocolatey
-  package surfaces on the next change-triggered run rather than the night
-  it happens, and blocks the PR that triggered it like any other CI
-  failure.
+- Accepted trade-off: drift in the runner images or the packaged server
+  (Chocolatey, apt) surfaces on the next change-triggered run rather than
+  the night it happens, and blocks the PR that triggered it like any other
+  CI failure.
 - Each successful run can upload a wire capture as an artifact for
   offline debugging.
 
@@ -457,6 +478,14 @@ service-mode setup steps and move passwords into repository secrets.
 change-triggered, path-filtered, and PR-blocking per the policy above.
 Credentials come from `VNC_OS_SERVER_USERNAME`/`VNC_OS_SERVER_PASSWORD`
 repository secrets, falling back to the spike values when unset.
+
+**QEMU/KVM joined as a third leg, KVM-accelerated for real:** CI run
+[32595062750](https://github.com/sibson/vncdotool/actions/runs/32595062750)
+confirms `-accel kvm` (not a silent `tcg` fall back), `qemu-kvm: ready
+after 1 attempt(s)`, and all four scenarios passing. The `os-server`
+composite action calls `tests/servers/qemu-kvm/setup.sh` directly rather
+than adding a `linux.sh` alongside `macos.sh`/`windows.ps1`, since the
+script already does everything the action needs.
 
 ## Sequencing and effort
 
