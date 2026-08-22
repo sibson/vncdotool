@@ -32,9 +32,8 @@ anything in-process. See `specs/testing-framework.md` and
 Comments follow the `writing-code-comments` skill in
 `.claude/skills/`. What is particular to this repo: `loggingproxy.py` has
 the shape of a comment that earns its place -- "SetEncodings only says what
-the client asked for, and a server may ignore it." `rfb.py` is vendored
-from a 2003-era import and was never in this repo's style, so leave its
-comments alone and do not sample it for what good looks like here.
+the client asked for, and a server may ignore it." `rfb.py` is the file the
+skill's vendored-code rule is about here: a 2003-era import, added whole.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
