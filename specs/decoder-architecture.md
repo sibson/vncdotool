@@ -273,10 +273,11 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ## Module layout
 
 ```
-vncdotool/pixelformat.py         PixelFormat -> Pillow raw mode, CPIXEL/TPIXEL widths
+vncdotool/pixelformat.py         PixelFormat, its Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, built from the decoder classes
 vncdotool/decoders/base.py       Decoder, PixelDecoder, ClientDecoder
 vncdotool/decoders/buffer.py     RectBuffer
+vncdotool/decoders/errors.py     DecodeError
 vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
 vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
 vncdotool/rfb.py                 negotiation, auth, message framing, the pump

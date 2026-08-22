@@ -20,7 +20,7 @@ from .capture import CaptureWriter, HandshakeScrubber
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import VNCDoToolClient
 from .keys import KEYMAP
-from .rfb import PixelFormat, Rect
+from .rfb import PixelFormat
 
 log = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ class VNCLoggingClient(VNCDoToolClient):
             self.capture.note_encoding(encoding)
         super()._handleRectangle(block)
 
-    def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
+    def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.capture_file:
             assert self.screen is not None
             self.screen.save(self.capture_file)

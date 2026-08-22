@@ -1,6 +1,6 @@
 import unittest
 
-from vncdotool.decoders.base import DecodeError
+from vncdotool.decoders import DecodeError
 from vncdotool.decoders.buffer import RectBuffer
 
 

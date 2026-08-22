@@ -1,26 +1,74 @@
 """
-Pixel format resolution: :class:`rfb.PixelFormat` -> Pillow raw mode, and the
-CPIXEL width/offset rules ZRLE depends on.
+The :class:`PixelFormat` wire structure, its resolution to a Pillow raw mode,
+and the CPIXEL width/offset rules ZRLE depends on.
 
 Reference:
+https://www.rfc-editor.org/rfc/rfc6143#section-7.4
 https://www.rfc-editor.org/rfc/rfc6143#section-7.7.5
 https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst (ZRLE Encoding)
 """
 from __future__ import annotations
 
 import functools
-
-from . import rfb
+from dataclasses import astuple, dataclass
+from struct import Struct
+from typing import ClassVar, cast
 
 _32BPP_MODES = {"RGBX", "BGRX", "XRGB", "XBGR"}
 _24BPP_MODES = {"RGB", "BGR"}
 
 
+@dataclass(frozen=True)
+class PixelFormat:
+    """:rfc:`6143` §7.4. Pixel Format Data Structure."""
+
+    bpp: int = 32  # u8: bits-per-pixel
+    depth: int = 24  # u8
+    bigendian: bool = False  # u8
+    truecolor: bool = True  # u8
+    redmax: int = 255  # u16
+    greenmax: int = 255  # u16
+    bluemax: int = 255  # u16
+    redshift: int = 0  # u8
+    greenshift: int = 8  # u8
+    blueshift: int = 16  # u8
+
+    STRUCT: ClassVar = Struct("!BB??HHHBBBxxx")
+    VALIDATE: ClassVar = False
+
+    def __post_init__(self) -> None:
+        if not self.VALIDATE:
+            return
+        assert self.bpp in {8, 16, 24, 32}, f"bpp={self.bpp}"
+        assert 1 <= self.depth <= self.bpp, f"depth={self.depth} <= bpp={self.bpp}"
+        if self.truecolor:
+            for max, shift in zip(
+                (self.redmax, self.greenmax, self.bluemax),
+                (self.redshift, self.greenshift, self.blueshift),
+            ):
+                assert 1 <= max <= 0xFFFF, f"1 <= max={max} <= 0xffff"
+                assert max & (max + 1) == 0, f"max={max} not a 2**n-1"
+                assert (
+                    0 <= shift <= self.bpp - max.bit_length()
+                ), f"shift={shift} not in bpp={self.bpp}"
+
+    @property
+    def bypp(self) -> int:  # bytes-per-pixel
+        return (7 + self.bpp) // 8
+
+    @classmethod
+    def from_bytes(cls, block: bytes) -> PixelFormat:
+        return cls(*cls.STRUCT.unpack(block))
+
+    def to_bytes(self) -> bytes:
+        return cast(bytes, self.STRUCT.pack(*astuple(self)))
+
+
 class UnsupportedPixelFormat(Exception):
-    """No Pillow raw mode exists for this :class:`rfb.PixelFormat`."""
+    """No Pillow raw mode exists for this :class:`PixelFormat`."""
 
 
-def _channel_widths(pixel_format: rfb.PixelFormat) -> tuple[int, int, int]:
+def _channel_widths(pixel_format: PixelFormat) -> tuple[int, int, int]:
     return (
         pixel_format.redmax.bit_length(),
         pixel_format.greenmax.bit_length(),
@@ -28,9 +76,7 @@ def _channel_widths(pixel_format: rfb.PixelFormat) -> tuple[int, int, int]:
     )
 
 
-def _byte_positions(
-    pixel_format: rfb.PixelFormat, nbytes: int
-) -> dict[int, str]:
+def _byte_positions(pixel_format: PixelFormat, nbytes: int) -> dict[int, str]:
     positions: dict[int, str] = {}
     for shift, channel in (
         (pixel_format.redshift, "R"),
@@ -48,7 +94,7 @@ def _byte_positions(
 
 
 @functools.lru_cache(maxsize=None)
-def raw_mode(pixel_format: rfb.PixelFormat) -> str:
+def raw_mode(pixel_format: PixelFormat) -> str:
     """The Pillow raw mode that reads bytes in this layout, ignoring depth."""
     if not pixel_format.truecolor:
         raise UnsupportedPixelFormat("colour-mapped pixel formats are not supported")
@@ -98,7 +144,7 @@ def raw_mode(pixel_format: rfb.PixelFormat) -> str:
     raise UnsupportedPixelFormat(f"bpp={pixel_format.bpp} is not supported")
 
 
-def _cpixel_placement(pixel_format: rfb.PixelFormat) -> str | None:
+def _cpixel_placement(pixel_format: PixelFormat) -> str | None:
     widths = _channel_widths(pixel_format)
     shifts = (pixel_format.redshift, pixel_format.greenshift, pixel_format.blueshift)
     fits_low = all(shift + width <= 24 for shift, width in zip(shifts, widths))
@@ -112,7 +158,7 @@ def _cpixel_placement(pixel_format: rfb.PixelFormat) -> str | None:
     return None
 
 
-def cpixel_bytes(pixel_format: rfb.PixelFormat) -> int:
+def cpixel_bytes(pixel_format: PixelFormat) -> int:
     """3 for a CPIXEL-eligible format, otherwise ``bypp`` (a PIXEL)."""
     if (
         pixel_format.truecolor
@@ -124,7 +170,7 @@ def cpixel_bytes(pixel_format: rfb.PixelFormat) -> int:
     return pixel_format.bypp
 
 
-def cpixel_offset(pixel_format: rfb.PixelFormat) -> int:
+def cpixel_offset(pixel_format: PixelFormat) -> int:
     """Byte offset of the 3 CPIXEL bytes within a PIXEL: 0 or ``bypp - 3``.
 
     The placement is in value space and the offset is in byte space, so
@@ -137,8 +183,8 @@ def cpixel_offset(pixel_format: rfb.PixelFormat) -> int:
     return 0 if low != pixel_format.bigendian else pixel_format.bypp - 3
 
 
-PIXEL_FORMATS: dict[str, rfb.PixelFormat] = {
-    "bgrx8888": rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0),
-    "rgbx8888": rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16),
-    "rgb565": rfb.PixelFormat(16, 16, False, True, 31, 63, 31, 11, 5, 0),
+PIXEL_FORMATS: dict[str, PixelFormat] = {
+    "bgrx8888": PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0),
+    "rgbx8888": PixelFormat(32, 24, False, True, 255, 255, 255, 0, 8, 16),
+    "rgb565": PixelFormat(16, 16, False, True, 31, 63, 31, 11, 5, 0),
 }
