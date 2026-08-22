@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from ..const import Encoding
-from .base import ClientDecoder, DecodeError, Decoder, PixelDecoder, Rect
+from .base import ClientDecoder, Decoder, PixelDecoder
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
+from .errors import DecodeError
 from .raw import RawDecoder
 
 # Classes, not instances: ZRLE and Tight own a zlib stream that lives for
@@ -30,7 +31,6 @@ __all__ = [
     "DecodeError",
     "Decoder",
     "PixelDecoder",
-    "Rect",
     "RectBuffer",
     "for_connection",
 ]

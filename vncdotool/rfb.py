@@ -42,7 +42,6 @@ from twisted.python.failure import Failure
 
 from . import decoders
 from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
-from .decoders import Rect
 from .keys import Key
 from .pixelformat import PixelFormat
 
@@ -382,7 +381,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
-        self.rectanglePos: list[Rect] = []
+        self.rectanglePos: list[tuple[int, int, int, int]] = []
         self.beginUpdate()
         self._doConnection()
 
@@ -459,7 +458,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         )
 
     def _finishRectangle(
-        self, decoder: decoders.PixelDecoder, target: decoders.RectBuffer, rect: Rect
+        self,
+        decoder: decoders.PixelDecoder,
+        target: decoders.RectBuffer,
+        rect: tuple[int, int, int, int],
     ) -> None:
         x, y, width, height = rect
         self.updateRectangle(
@@ -489,7 +491,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self,
         block: bytes | None,
         generator: Iterator[int],
-        finish: tuple[decoders.PixelDecoder, decoders.RectBuffer, Rect] | None,
+        finish: tuple[
+            decoders.PixelDecoder, decoders.RectBuffer, tuple[int, int, int, int]
+        ] | None,
     ) -> None:
         try:
             size = generator.send(block)
@@ -1098,7 +1102,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """called before a series of :meth:`updateRectangle`,
         :meth:`copyRectangle` or :meth:`fillRectangle`."""
 
-    def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
+    def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         """called after a series of :meth:`updateRectangle`, :meth:`copyRectangle`
         or :meth:`fillRectangle` are finished.
 

@@ -1,21 +1,11 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, Iterator, Tuple
+from typing import ClassVar, Iterator
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
-
-# buffer.py raises DecodeError, so it imports this module and cannot be
-# imported back from it at runtime.
-if TYPE_CHECKING:  # pragma: no cover
-    from .buffer import RectBuffer
-
-Rect = Tuple[int, int, int, int]
-
-
-class DecodeError(Exception):
-    """Malformed, oversized or unsupported encoded data."""
+from .buffer import RectBuffer
 
 
 class Decoder:
@@ -32,7 +22,7 @@ class Decoder:
         raise NotImplementedError
 
     def decodeForClient(
-        self, client: object, rect: Rect, pixel_format: PixelFormat
+        self, client: object, rect: tuple[int, int, int, int], pixel_format: PixelFormat
     ) -> Iterator[int]:
         raise NotImplementedError
 

@@ -251,7 +251,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
 
-    def _expectCompare(self, data: object, box: rfb.Rect, maxrms: float) -> Deferred:
+    def _expectCompare(self, data: object, box: tuple[int, int, int, int], maxrms: float) -> Deferred:
         incremental = False
         if self.screen:
             incremental = True
@@ -424,7 +424,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.drawCursor()
 
-    def commitUpdate(self, rectangles: list[rfb.Rect] | None = None) -> None:
+    def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
             if not rectangles:
                 # No rectangle in this update painted self.screen; wait for

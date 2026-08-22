@@ -8,7 +8,8 @@
   - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
   - Fix ``VMWareClient`` raising ``AttributeError`` instead of detecting the VMware single-pixel update it exists to filter (@sibson, #400)
-  - ``PixelFormat`` is now defined in ``vncdotool.pixelformat`` and documented there; ``vncdotool.rfb.PixelFormat`` still imports it and is the same class (@sibson, #415)
+  - ``PixelFormat`` moves to ``vncdotool.pixelformat``; ``vncdotool.rfb.PixelFormat`` still imports (@sibson, #415)
+  - [BREAKING] ``vncdotool.rfb.Rect`` is gone; annotate rectangles as ``tuple[int, int, int, int]`` (@sibson, #415)
   - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
   - Fix ``make release`` tagging an empty version (@sibson, #382)
 

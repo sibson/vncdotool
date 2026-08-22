@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .base import DecodeError
+from .errors import DecodeError
 
 
 class RectBuffer:
