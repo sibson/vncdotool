@@ -168,6 +168,23 @@ def _run(*args: str) -> Optional[str]:
     return out.stdout.strip()
 
 
+def _dirty(record_path: Path) -> bool:
+    """Whether the tree differs from the commit the entry will name.
+
+    The record file is exempt: it is tracked and this run is about to
+    append to it, so counting it would mark every run after the first as
+    measuring uncommitted code it did not measure.
+    """
+    status = _git("status", "--porcelain")
+    if not status:
+        return False
+    try:
+        exempt = record_path.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        exempt = None
+    return any(line[3:].strip() != exempt for line in status.splitlines())
+
+
 def _record(path: Path, entry: Dict[str, object]) -> None:
     with path.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, sort_keys=True) + "\n")
@@ -222,11 +239,12 @@ def main() -> int:
     print(f"  median {us(0.50):8.1f} us")
 
     if args.record:
+        path = Path(args.record)
         counts = _call_counts(init, steps)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git("rev-parse", "HEAD"),
-            "dirty": bool(_git("status", "--porcelain")),
+            "dirty": _dirty(path),
             "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
             "fixture": args.fixture,
             "updates": len(steps),
@@ -243,7 +261,6 @@ def main() -> int:
             "pillow": PIL.__version__,
         }
         entry.update(_machine())
-        path = Path(args.record)
         _record(path, entry)
         print(f"  recorded {entry['calls_total']} calls to {path}")
     return 0
