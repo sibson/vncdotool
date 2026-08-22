@@ -5,9 +5,9 @@ Two families of server are described here and driven by the same code:
 * ``docker`` -- the Linux servers built and run by
   ``tests/servers/docker-compose.yml`` (see ``make servers-up``);
 * ``os`` -- an OS-hosted server on the machine running the tests, i.e.
-  UltraVNC on Windows or Apple Screen Sharing on macOS, set up by the
-  scripts under ``tests/servers/ultravnc`` and
-  ``tests/servers/screen-sharing``.
+  UltraVNC on Windows, Apple Screen Sharing on macOS, or a raw QEMU on
+  Linux, set up by the scripts under ``tests/servers/ultravnc``,
+  ``tests/servers/screen-sharing``, and ``tests/servers/qemu-kvm``.
 
 The two differ only in how the server is started and in what a capture is
 allowed to contain, so everything else -- connecting, capturing, the
@@ -133,14 +133,32 @@ SCREEN_SHARING = VNCServer(
     how_to_start="the OS server setup runs in CI only, see tests/servers/screen-sharing/README.md",
 )
 
+QEMU_KVM = VNCServer(
+    name="qemu-kvm",
+    port=OS_SERVER_PORT,
+    # Firmware's default VGA mode, not a geometry we ask for.
+    size=None,
+    timeout=OS_SERVER_TIMEOUT,
+    how_to_start="set the server up first with tests/servers/qemu-kvm/setup.sh",
+)
+
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "win32": [ULTRAVNC],
     "darwin": [SCREEN_SHARING],
 }
 
+# Unlike ULTRAVNC/SCREEN_SHARING, QEMU isn't tied to an OS -- it's tested
+# here because tests/servers/qemu-kvm/setup.sh actually started it, not
+# because of what platform we're running on. So this checks the env var it
+# sets, not sys.platform.
+VNCDOTOOL_OS_SERVER_LINUX = "VNCDOTOOL_OS_SERVER_LINUX"
+
 
 def os_servers(platform: str = sys.platform) -> List[VNCServer]:
-    return OS_SERVERS_BY_PLATFORM.get(platform, [])
+    servers = list(OS_SERVERS_BY_PLATFORM.get(platform, []))
+    if os.environ.get(VNCDOTOOL_OS_SERVER_LINUX):
+        servers.append(QEMU_KVM)
+    return servers
 
 
 def select_servers(group: str) -> List[VNCServer]:
