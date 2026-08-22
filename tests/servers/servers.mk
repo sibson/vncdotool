@@ -22,9 +22,10 @@ servers-down:
 test-servers:
 	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_server_compat_docker.py'
 
-# The VNC server hosted by this OS (UltraVNC on Windows, Screen Sharing on
-# macOS), set up beforehand by the scripts in tests/servers/ultravnc and
-# tests/servers/screen-sharing.
+# The server native to this machine (UltraVNC on Windows, Screen Sharing on
+# macOS, raw QEMU on Linux), set up beforehand by the scripts in
+# tests/servers/ultravnc, tests/servers/screen-sharing, and
+# tests/servers/qemu-kvm.
 .PHONY: test-os-server
 test-os-server:
 	uv run python -m unittest discover $(UNITTEST_ARGS) -s tests/functional -t . -p 'test_server_compat_native.py'

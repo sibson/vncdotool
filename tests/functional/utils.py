@@ -5,9 +5,9 @@ Two families of server are described here and driven by the same code:
 * ``docker`` -- the Linux servers built and run by
   ``tests/servers/docker-compose.yml`` (see ``make servers-up``);
 * ``os`` -- an OS-hosted server on the machine running the tests, i.e.
-  UltraVNC on Windows or Apple Screen Sharing on macOS, set up by the
-  scripts under ``tests/servers/ultravnc`` and
-  ``tests/servers/screen-sharing``.
+  UltraVNC on Windows, Apple Screen Sharing on macOS, or a raw QEMU on
+  Linux, set up by the scripts under ``tests/servers/ultravnc``,
+  ``tests/servers/screen-sharing``, and ``tests/servers/qemu-kvm``.
 
 The two differ only in how the server is started and in what a capture is
 allowed to contain, so everything else -- connecting, capturing, the
@@ -22,7 +22,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -106,36 +106,53 @@ OS_SERVER_PORT = int(os.environ.get("VNCDOTOOL_OS_SERVER_PORT", "5900"))
 # Screen Sharing took over five seconds to acknowledge a key event.
 OS_SERVER_TIMEOUT = float(os.environ.get("VNCDOTOOL_OS_SERVER_TIMEOUT", "60"))
 
-ULTRAVNC = VNCServer(
-    name="ultravnc",
-    port=OS_SERVER_PORT,
+
+def os_server(name: str, how_to_start: str, **overrides: Any) -> VNCServer:
+    # size=None throughout: an OS-hosted server serves whatever the host
+    # display or the firmware left behind, never a geometry we configure.
+    return VNCServer(
+        name=name,
+        port=OS_SERVER_PORT,
+        size=None,
+        timeout=OS_SERVER_TIMEOUT,
+        how_to_start=how_to_start,
+        **overrides,
+    )
+
+
+ULTRAVNC = os_server(
+    "ultravnc",
+    "the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
     password=OS_SERVER_PASSWORD,
-    # The Windows runner's own desktop resolution, not one we configure.
-    size=None,
-    timeout=OS_SERVER_TIMEOUT,
-    how_to_start="the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
 )
 
-SCREEN_SHARING = VNCServer(
-    name="screen-sharing",
-    port=OS_SERVER_PORT,
+SCREEN_SHARING = os_server(
+    "screen-sharing",
+    "the OS server setup runs in CI only, see tests/servers/screen-sharing/README.md",
     password=OS_SERVER_PASSWORD,
     # macOS Screen Sharing authenticates a local user over ARD/DH; the
     # legacy VNC-password path is silently accepted but non-functional on
     # current macOS.
     username=OS_SERVER_USERNAME,
-    size=None,
     # A hosted macOS runner has no rendered desktop session behind the
     # framebuffer, so captures come back black even though the protocol,
     # auth and input round trip all succeeded.
     renders_desktop=False,
-    timeout=OS_SERVER_TIMEOUT,
-    how_to_start="the OS server setup runs in CI only, see tests/servers/screen-sharing/README.md",
 )
+
+QEMU_KVM = os_server(
+    "qemu-kvm",
+    "set the server up first with tests/servers/qemu-kvm/setup.sh",
+)
+
+# Set by tests/servers/qemu-kvm/setup.sh, the only thing that starts this
+# server; other jobs share the Linux runners with it and never do.
+QEMU_KVM_OPT_IN = "VNCDOTOOL_OS_SERVER_LINUX"
 
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
     "win32": [ULTRAVNC],
     "darwin": [SCREEN_SHARING],
+    "linux": [QEMU_KVM] if os.environ.get(QEMU_KVM_OPT_IN) else [],
 }
 
 
