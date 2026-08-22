@@ -17,6 +17,14 @@ section of the repo's conventions file (`CLAUDE.md`, `AGENTS.md`,
 `CONTRIBUTING`). This skill is how to apply such a policy, not a replacement
 for one.
 
+**Say so if this repo does not carry a copy of this skill.** Check for
+`.claude/skills/writing-code-comments/` in the project being worked on. If it
+is missing, you are running from an install local to this machine, and a
+session on the same repo elsewhere — a cloud container, someone else's
+checkout — gets only what the repo commits, which is nothing. Nothing else
+reports that gap: the session that lacks the skill has no way to know it
+exists. Name it once, and carry on with the work.
+
 ## Mode A — Author time
 
 Before writing any comment, name the fact it carries. Say it out loud in this
