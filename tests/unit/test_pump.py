@@ -85,8 +85,8 @@ class TestControlDecoders(TestCase):
         cli._doConnection = mock.Mock()
         applied = []
 
-        class Control:
-            def apply(self, client: object, rect: tuple) -> None:
+        class Control(decoders.ControlDecoder):
+            def applyToClient(self, client: object, rect: tuple) -> None:
                 applied.append(rect)
 
         cli._decodeRectangle(Control(), 1, 2, 3, 4)
@@ -101,14 +101,11 @@ class TestMultiYieldDecoders(TestCase):
         cli.updateRectangle = mock.Mock()
         seen = []
 
-        class TwoStep:
-            def decode(self, target, pixel_format):
+        class TwoStep(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
                 seen.append((yield 2))
                 seen.append((yield 3))
                 target.blit(0, 0, target.width, target.height, b"\x01" * (target.width * target.height * target.bypp))
-
-            def output_format(self, pixel_format):
-                return pixel_format
 
         cli._decodeRectangle(TwoStep(), 0, 0, 1, 1)
         cli.dataReceived(b"ab")
@@ -121,13 +118,10 @@ class TestMultiYieldDecoders(TestCase):
         cli = make_pump_client()
         cli.vncProtocolError = mock.Mock()
 
-        class Bogus:
-            def decode(self, target, pixel_format):
+        class Bogus(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
                 block = yield 2
                 unpack("!I", block)  # four bytes wanted, two yielded
-
-            def output_format(self, pixel_format):
-                return pixel_format
 
         cli._decodeRectangle(Bogus(), 0, 0, 1, 1)
         cli.dataReceived(b"ab")
@@ -148,13 +142,10 @@ class TestAbort(TestCase):
         cli.updateRectangle = mock.Mock()
         cli.commitUpdate = mock.Mock()
 
-        class Failing:
-            def decode(self, target, pixel_format):
+        class Failing(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
                 yield 2
                 raise decoders.DecodeError("boom")
-
-            def output_format(self, pixel_format):
-                return pixel_format
 
         cli._decodeRectangle(Failing(), 0, 0, 2, 1)
         return cli
@@ -181,12 +172,9 @@ class TestAbort(TestCase):
         cli = make_pump_client()
         cli.vncProtocolError = mock.Mock()
 
-        class Backwards:
-            def decode(self, target, pixel_format):
+        class Backwards(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
                 yield -8
-
-            def output_format(self, pixel_format):
-                return pixel_format
 
         cli._decodeRectangle(Backwards(), 0, 0, 1, 1)
 
