@@ -23,7 +23,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from unittest import mock
 
 import PIL
@@ -54,7 +54,14 @@ def _replay(init: bytes, steps: List[bytes]) -> None:
         cli.dataReceived(step)
 
 
-def _call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
+def load_fixture(name: str) -> Tuple[bytes, List[bytes]]:
+    fixture = FIXTURE_ROOT / name
+    init = gzip.decompress((fixture / "init.bin.gz").read_bytes())
+    steps = [gzip.decompress(p.read_bytes()) for p in sorted(fixture.glob("step-*.bin.gz"))]
+    return init, steps
+
+
+def call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
     profiler = cProfile.Profile()
     profiler.enable()
     _replay(init, steps)
@@ -165,9 +172,7 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    fixture = FIXTURE_ROOT / args.fixture
-    init = gzip.decompress((fixture / "init.bin.gz").read_bytes())
-    steps = [gzip.decompress(p.read_bytes()) for p in sorted(fixture.glob("step-*.bin.gz"))]
+    init, steps = load_fixture(args.fixture)
 
     _replay(init, steps)  # warm PIL's plugin registry and the import graph
 
@@ -204,7 +209,7 @@ def main() -> int:
 
     if args.record:
         path = Path(args.record)
-        counts = _call_counts(init, steps)
+        counts = call_counts(init, steps)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git("rev-parse", "HEAD"),

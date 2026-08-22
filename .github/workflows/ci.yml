@@ -71,6 +71,55 @@ jobs:
       - name: Run flake8
         run: uv run flake8 --count --statistics vncdotool tests
 
+  counts:
+    name: Decode call counts
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          # git show needs the base commit, which the default shallow
+          # checkout of the PR merge ref does not fetch.
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync
+
+      # From the base branch, not the workspace: a row this PR appends
+      # would otherwise stand in as the truth it is checked against.
+      - name: Recover the baseline from the base branch
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: git show "$BASE_SHA:bench.jsonl" > base-bench.jsonl
+
+      - name: Compare this branch's call counts against it
+        run: uv run python -m tests.goldens.report --path base-bench.jsonl --check | tee counts.md
+
+      - name: Say whether anything moved
+        id: moved
+        run: test -s counts.md && echo "moved=true" >> "$GITHUB_OUTPUT" || true
+
+      # Forks get a read-only token, so the comment would fail rather than
+      # be refused.
+      - name: Comment on the pull request
+        if: >
+          steps.moved.outputs.moved == 'true' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr comment "$PR" --body-file counts.md --edit-last --create-if-none
+
   servers:
     name: Test server functional tests
     runs-on: ubuntu-latest

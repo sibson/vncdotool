@@ -93,6 +93,45 @@ def _diff(rows: List[Row], refs: Sequence[str]) -> None:
           f"  {sum(counts_after.values()) - sum(counts_before.values()):+}")
 
 
+def _baseline(rows: List[Row], fixture: str) -> Row:
+    """Dirty rows are skipped: their counts belong to a working tree
+    nobody can check out again.
+    """
+    usable = [r for r in rows if r.get("fixture") == fixture and not r.get("dirty")]
+    if not usable:
+        raise SystemExit(f"no clean record of {fixture} to compare against")
+    usable.sort(key=lambda r: str(r["timestamp"]))
+    return usable[-1]
+
+
+def _check(rows: List[Row], fixture: str) -> None:
+    """Print nothing at all when the counts match, so that a caller can
+    post whatever reaches stdout and stay silent otherwise.
+    """
+    from tests.goldens import benchmark
+
+    base = _baseline(rows, fixture)
+    recorded: Dict[str, int] = base.get("calls", {})  # type: ignore[assignment]
+    current = benchmark.call_counts(*benchmark.load_fixture(fixture))
+    if current == recorded:
+        return
+
+    commit = str(base.get("commit") or "?")[:7]
+    print("### Decode call counts changed\n")
+    print(f"Against `{fixture}` as recorded at {commit}"
+          f" (Python {base.get('python') or '?'}, Pillow {base.get('pillow') or '?'}).\n")
+    print("| function | baseline | here | delta |")
+    print("| --- | ---: | ---: | ---: |")
+    for key in sorted(set(recorded) | set(current)):
+        was, now = recorded.get(key, 0), current.get(key, 0)
+        if was != now:
+            print(f"| `{key}` | {was} | {now} | {now - was:+} |")
+    was_total, now_total = sum(recorded.values()), sum(current.values())
+    print(f"| **total** | {was_total} | {now_total} | {now_total - was_total:+} |")
+    print("\nCall counts are machine-independent; the timings in `bench.jsonl` are not,"
+          " so this says nothing about speed. Record a new baseline with `make bench`.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--path", type=Path, default=RECORD_PATH)
@@ -100,13 +139,20 @@ def main() -> int:
         "--diff", nargs="*", metavar="COMMIT",
         help="per-function call counts between two records, or the last two",
     )
+    parser.add_argument(
+        "--check", action="store_true",
+        help="replay here and report in markdown if the counts left the baseline",
+    )
+    parser.add_argument("--fixture", default="tigervnc-raw-bgrx8888")
     args = parser.parse_args()
 
     rows = _load(args.path)
     if not rows:
         raise SystemExit(f"{args.path} has no records")
 
-    if args.diff is None:
+    if args.check:
+        _check(rows, args.fixture)
+    elif args.diff is None:
         _table(rows)
     elif len(args.diff) not in (0, 2):
         raise SystemExit("--diff takes two commits, or none for the last two records")
