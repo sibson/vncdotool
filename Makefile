@@ -56,9 +56,6 @@ test-unit:
 bench:
 	uv run python -m tests.goldens.benchmark
 
-# bench.jsonl is tracked, so appending to it is its own target: measuring
-# is the common act and leaves the tree alone, recording is the deliberate
-# one and produces a line to commit.
 .PHONY: bench-record
 bench-record:
 	uv run python -m tests.goldens.benchmark --record

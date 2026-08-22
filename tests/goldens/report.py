@@ -92,10 +92,8 @@ def _diff(rows: List[Row], refs: Sequence[str]) -> None:
 
 
 def _compare(before_path: Path, after_path: Path) -> None:
-    """Print a markdown report of two counts files, or nothing if they match.
-
-    Silence is the contract: the caller posts whatever reaches stdout, so
-    a run that found no change has to produce no output at all.
+    """Silence is the contract: the caller posts whatever reaches stdout,
+    so a run that found no change has to produce no output at all.
     """
     before: Dict[str, int] = json.loads(before_path.read_text())
     after: Dict[str, int] = json.loads(after_path.read_text())

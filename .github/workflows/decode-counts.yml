@@ -1,8 +1,5 @@
 name: Decode call counts
 
-# Only when something that can move the counts moves: the library, the
-# fixture replayed against it, or the harness doing the counting. A pull
-# request that touches docs has nothing to compare.
 on:
   pull_request:
     paths:
@@ -56,9 +53,6 @@ jobs:
           uv run python -m tests.goldens.benchmark --counts > base.json
           git checkout HEAD -- vncdotool/
 
-      # Nothing here reads or writes bench.jsonl: the baseline is the base
-      # branch itself, so a landed change stops being reported once it is
-      # the base, instead of nagging until someone records a new row.
       - name: Compare
         run: uv run python -m tests.goldens.report --compare base.json head.json | tee counts.md
 
