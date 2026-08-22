@@ -1,6 +1,6 @@
 """Time a decoder against a committed golden fixture. No Twisted in the loop.
 
-N1: Raw is the only encoding in live use, so it is the only encoding with a
+Raw is the only encoding in live use, so it is the only one with a
 before-and-after to regress against. Run this on the commit before a change
 and on the change.
 """
