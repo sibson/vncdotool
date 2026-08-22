@@ -18,6 +18,7 @@ help:
 	@echo "goldens:	capture decoder golden fixtures from the fleet"
 	@echo "scenes:		regenerate the committed scene PNGs from tests/goldens/scenes.py"
 	@echo "bench:		time a decoder against a committed golden fixture"
+	@echo "bench-record:	time it and append the run to the tracked bench.jsonl"
 	@echo "bench-report:	tabulate bench.jsonl, or diff two runs' call counts"
 	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
@@ -53,6 +54,10 @@ test-unit:
 
 .PHONY: bench
 bench:
+	uv run python -m tests.goldens.benchmark
+
+.PHONY: bench-record
+bench-record:
 	uv run python -m tests.goldens.benchmark --record
 
 .PHONY: bench-report

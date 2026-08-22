@@ -69,6 +69,56 @@ suppresses the PR comment, so Codecov observes and never votes.
 runs. It writes ``combined/summary.md`` and prints it, so the same report
 can be produced locally.
 
+Decode performance
+------------------------
+
+Two numbers come out of replaying a captured frame against the decode
+path, and they are not equally trustworthy::
+
+    make bench           # time it, touching nothing
+    make bench-record    # time it and append a row to bench.jsonl
+    make bench-report    # tabulate the rows, ARGS=--diff to compare two
+
+Timings are only comparable against timings from the same machine, which
+is why every row carries a ``machine`` digest of the CPU, core count and
+OS, and why the report leaves the delta blank across a change of
+interpreter or Pillow. Call counts carry no such caveat: the same fixture
+bytes produce the same counts anywhere, so they are the number that
+compares across machines and across history.
+
+``bench.jsonl`` is a series a person appends to deliberately. Recording
+refuses on a dirty tree, because a row names a commit and one measured
+against uncommitted changes describes a tree nobody can check out again.
+CI never writes to it.
+
+What CI does instead is count the base branch and the pull request with
+the same harness, and comment only when they differ. The baseline is the
+base branch itself rather than a recorded row, so a change stops being
+reported once it has landed.
+
+Finding a regression that already landed
+..........................................
+
+Counts are exact and reproducible at any commit, which makes them a
+``git bisect`` predicate. Record what the counts should be, then let
+bisect find the commit that changed them::
+
+    git bisect start <bad> <good>
+    git bisect run sh -c \
+      'uv run python -m tests.goldens.benchmark --counts > /tmp/c.json && cmp -s /tmp/c.json good.json'
+
+where ``good.json`` came from ``--counts`` at the good commit. Timings can
+bisect the same way if the regression is in how long the work takes rather
+than how much of it there is, but give them a threshold rather than an
+equality, and expect noise to cost a few extra steps.
+
+``--counts`` only exists from the commit that introduced it, so a bisect
+reaching further back has to supply the harness rather than rely on the
+one in the tree: check ``tests/goldens`` out of a recent ref at the top of
+the predicate, since only ``vncdotool/`` needs to be the commit under
+test.
+
+
 Working with more than one checkout
 ------------------------------------
 

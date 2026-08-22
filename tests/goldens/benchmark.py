@@ -2,7 +2,9 @@
 
 ``--record`` appends a line to bench.jsonl per run: the timings, which are
 only comparable against other lines carrying the same ``machine`` digest,
-and the call counts, which are comparable against every line.
+and the call counts, which are comparable against every line. That file is
+tracked, so recording has a target of its own: ``make bench`` measures and
+leaves the tree alone, ``make bench-record`` appends.
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from unittest import mock
 
 import PIL
@@ -50,7 +52,19 @@ def _replay(init: bytes, steps: List[bytes]) -> None:
         cli.dataReceived(step)
 
 
-def _call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
+def load_fixture(name: str) -> Tuple[bytes, List[bytes]]:
+    fixture = FIXTURE_ROOT / name
+    init = gzip.decompress((fixture / "init.bin.gz").read_bytes())
+    steps = [gzip.decompress(p.read_bytes()) for p in sorted(fixture.glob("step-*.bin.gz"))]
+    return init, steps
+
+
+def call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
+    # The unprofiled replay is what makes the counts reproducible, not just
+    # a warm-up: pixelformat.raw_mode is lru_cached, so the first replay in
+    # a process counts 8 calls that no later one does.
+    _replay(init, steps)
+
     profiler = cProfile.Profile()
     profiler.enable()
     _replay(init, steps)
@@ -130,10 +144,10 @@ def _run(*args: str) -> Optional[str]:
 
 
 def _dirty(record_path: Path) -> bool:
-    """Whether the tree differs from the commit the entry will name.
+    """Whether the tree differs from the commit an entry would name.
 
     The record file is exempt: it is tracked and this run appends to it,
-    so counting it marks every run after the first as dirty.
+    so counting it would stop every run after the first from recording.
     """
     status = _git("status", "--porcelain")
     if not status:
@@ -159,11 +173,17 @@ def main() -> int:
         "--record", nargs="?", const=str(RECORD_PATH), default=None, metavar="PATH",
         help=f"append one JSON line per run to PATH (default {RECORD_PATH.name})",
     )
+    parser.add_argument(
+        "--counts", action="store_true",
+        help="print the call counts as JSON and exit, without timing anything",
+    )
     args = parser.parse_args()
 
-    fixture = FIXTURE_ROOT / args.fixture
-    init = gzip.decompress((fixture / "init.bin.gz").read_bytes())
-    steps = [gzip.decompress(p.read_bytes()) for p in sorted(fixture.glob("step-*.bin.gz"))]
+    init, steps = load_fixture(args.fixture)
+
+    if args.counts:
+        print(json.dumps(call_counts(init, steps), sort_keys=True))
+        return 0
 
     _replay(init, steps)  # warm PIL's plugin registry and the import graph
 
@@ -200,11 +220,14 @@ def main() -> int:
 
     if args.record:
         path = Path(args.record)
-        counts = _call_counts(init, steps)
+        if _dirty(path):
+            print(f"  not recorded: {path.name} takes measurements of a commit,"
+                  " and this tree has changes that are not in one")
+            return 0
+        counts = call_counts(init, steps)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git("rev-parse", "HEAD"),
-            "dirty": _dirty(path),
             "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
             "fixture": args.fixture,
             "updates": len(steps),
