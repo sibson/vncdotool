@@ -479,6 +479,14 @@ change-triggered, path-filtered, and PR-blocking per the policy above.
 Credentials come from `VNC_OS_SERVER_USERNAME`/`VNC_OS_SERVER_PASSWORD`
 repository secrets, falling back to the spike values when unset.
 
+**QEMU/KVM joined as a third leg, KVM-accelerated for real:** CI run
+[32595062750](https://github.com/sibson/vncdotool/actions/runs/32595062750)
+confirms `-accel kvm` (not a silent `tcg` fall back), `qemu-kvm: ready
+after 1 attempt(s)`, and all four scenarios passing. The `os-server`
+composite action calls `tests/servers/qemu-kvm/setup.sh` directly rather
+than adding a `linux.sh` alongside `macos.sh`/`windows.ps1`, since the
+script already does everything the action needs.
+
 ## Sequencing and effort
 
 | Phase | Rough size | Depends on |

@@ -2,9 +2,10 @@ name: OS-hosted VNC servers
 
 # Live, OS-bound VNC servers (UltraVNC on Windows, Apple Screen Sharing on
 # macOS, raw QEMU/KVM on Linux) -- see specs/server-compatibility-plan.md,
-# Tier 2. These are the only place UltraVNC and Screen Sharing compatibility
-# can be exercised live, so this job runs on real changes rather than never,
-# but it is deliberately change-triggered (path-filtered, no schedule).
+# Tier 2. These are the only place UltraVNC and Screen Sharing compatibility,
+# and QEMU's KVM-accelerated path, can be exercised live, so this job runs
+# on real changes rather than never, but it is deliberately change-triggered
+# (path-filtered, no schedule).
 #
 # What each server needs, and what it does and doesn't prove, is documented
 # in tests/servers/ultravnc/README.md, tests/servers/screen-sharing/README.md,
