@@ -58,6 +58,11 @@ grant_kvm_access() {
         sudo tee /etc/udev/rules.d/99-kvm-all-users.rules >/dev/null
     sudo udevadm control --reload-rules
     sudo udevadm trigger --name-match=kvm
+    # trigger only asks the kernel to re-emit the uevent; udevd applies the
+    # rule (including the chmod) asynchronously, so a check right after
+    # trigger can still see the pre-rule mode. settle blocks until udevd's
+    # queue is empty.
+    sudo udevadm settle
     if [ ! -r /dev/kvm ] || [ ! -w /dev/kvm ]; then
         ls -l /dev/kvm >&2
         echo "/dev/kvm is still not readable and writable by $(id -un)" >&2
