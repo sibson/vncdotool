@@ -2,7 +2,9 @@
 
 ``--record`` appends a line to bench.jsonl per run: the timings, which are
 only comparable against other lines carrying the same ``machine`` digest,
-and the call counts, which are comparable against every line.
+and the call counts, which are comparable against every line. That file is
+tracked, so recording has a target of its own: ``make bench`` measures and
+leaves the tree alone, ``make bench-record`` appends.
 """
 from __future__ import annotations
 
