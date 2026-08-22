@@ -1,7 +1,9 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, ClassVar, Iterator
+
+from ..const import Encoding
 
 if TYPE_CHECKING:  # pragma: no cover - imported for typing only
     from ..rfb import PixelFormat
@@ -16,6 +18,9 @@ class Decoder:
     """One encoding, in one of three shapes: a subclass overrides the one
     method its shape names, and the pump calls that method alone.
     """
+
+    # The encoding-type this decoder reads, RFC 6143 section 7.6.1.
+    ENCODING: ClassVar[Encoding]
 
     def decodePixels(
         self, target: "RectBuffer", pixel_format: "PixelFormat"

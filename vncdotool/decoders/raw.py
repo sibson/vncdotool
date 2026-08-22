@@ -1,8 +1,9 @@
 """Raw encoding. RFC 6143 section 7.7.1."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, ClassVar, Iterator
 
+from ..const import Encoding
 from .base import PixelDecoder
 
 if TYPE_CHECKING:  # pragma: no cover - imported for typing only
@@ -11,6 +12,8 @@ if TYPE_CHECKING:  # pragma: no cover - imported for typing only
 
 
 class RawDecoder(PixelDecoder):
+    ENCODING: ClassVar[Encoding] = Encoding.RAW
+
     def decodePixels(
         self, target: "RectBuffer", pixel_format: "PixelFormat"
     ) -> Iterator[int]:

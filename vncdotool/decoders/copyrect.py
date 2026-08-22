@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 from struct import unpack
-from typing import TYPE_CHECKING, Iterator
+from typing import TYPE_CHECKING, ClassVar, Iterator
 
+from ..const import Encoding
 from .base import ClientDecoder
 
 if TYPE_CHECKING:  # pragma: no cover - imported for typing only
@@ -11,6 +12,8 @@ if TYPE_CHECKING:  # pragma: no cover - imported for typing only
 
 
 class CopyRectDecoder(ClientDecoder):
+    ENCODING: ClassVar[Encoding] = Encoding.COPY_RECTANGLE
+
     def decodeForClient(
         self, client: object, rect: "Rect", pixel_format: "PixelFormat"
     ) -> Iterator[int]:
