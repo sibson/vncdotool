@@ -5,8 +5,8 @@ before-and-after to regress against. Run this on the commit before a change
 and on the change.
 
 ``--record`` appends a line to bench.jsonl per run: the timings, which are
-only comparable against other lines carrying the same ``machine``, and the
-call counts, which are comparable against every line.
+only comparable against other lines carrying the same ``machine`` digest,
+and the call counts, which are comparable against every line.
 """
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ import argparse
 import cProfile
 import gc
 import gzip
+import hashlib
 import json
 import os
 import platform
@@ -76,11 +77,62 @@ def _call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
 
 
 def _git(*args: str) -> Optional[str]:
+    return _run("git", "-C", str(REPO_ROOT), *args)
+
+
+def _cpu_model() -> str:
+    """The CPU's marketing name, which platform does not offer portably.
+
+    platform.processor() is the machine's own idea of itself: 'arm' on
+    macOS, empty on many Linuxes, only useful on Windows.
+    """
+    if platform.system() == "Darwin":
+        brand = _run("sysctl", "-n", "machdep.cpu.brand_string")
+        if brand:
+            return brand
+    elif platform.system() == "Linux":
+        try:
+            cpuinfo = Path("/proc/cpuinfo").read_text()
+        except OSError:
+            cpuinfo = ""
+        for line in cpuinfo.splitlines():
+            # x86 names the part on 'model name'; arm64 parts, when they are
+            # named at all, come back on 'Model'.
+            if line.split(":")[0].strip() in ("model name", "Model"):
+                return line.split(":", 1)[1].strip()
+    elif platform.system() == "Windows":
+        identifier = os.environ.get("PROCESSOR_IDENTIFIER", "")
+        if identifier:
+            return identifier
+    return platform.processor() or "unknown"
+
+
+def _machine() -> Dict[str, object]:
+    """Describe the hardware the timings came off, and nothing else.
+
+    Never the hostname or user: bench.jsonl is committed. A CPU model and
+    a core count say whether two runs are comparable and let someone else
+    reproduce them; a machine name says neither.
+    """
+    cpu = _cpu_model()
+    ci = os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI") == "true"
+    fields: Dict[str, object] = {
+        "cpu": cpu,
+        "cores": os.cpu_count(),
+        "system": f"{platform.system()}-{platform.machine()}",
+        "release": platform.release(),
+        "ci": ci,
+    }
+    # A short digest of the same fields, so runs can be grouped and plotted
+    # without string-matching a CPU model across five vendors' spellings.
+    digest = json.dumps(fields, sort_keys=True).encode()
+    fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
+    return fields
+
+
+def _run(*args: str) -> Optional[str]:
     try:
-        out = subprocess.run(
-            ("git", "-C", str(REPO_ROOT)) + args,
-            capture_output=True, text=True, check=True,
-        )
+        out = subprocess.run(args, capture_output=True, text=True, check=True)
     except (OSError, subprocess.CalledProcessError):
         return None
     return out.stdout.strip()
@@ -99,10 +151,6 @@ def main() -> int:
     parser.add_argument(
         "--record", nargs="?", const=str(RECORD_PATH), default=None, metavar="PATH",
         help=f"append one JSON line per run to PATH (default {RECORD_PATH.name})",
-    )
-    parser.add_argument(
-        "--machine", default=os.environ.get("VNCDOTOOL_BENCH_MACHINE", platform.node()),
-        help="label the timings belong to; only compare timings sharing one label",
     )
     args = parser.parse_args()
 
@@ -158,11 +206,10 @@ def main() -> int:
             "median_us": round(us(0.50), 1),
             "calls": counts,
             "calls_total": sum(counts.values()),
-            "machine": args.machine,
             "python": platform.python_version(),
             "implementation": platform.python_implementation(),
-            "system": f"{platform.system()}-{platform.machine()}",
         }
+        entry.update(_machine())
         path = Path(args.record)
         _record(path, entry)
         print(f"  recorded {entry['calls_total']} calls to {path}")
