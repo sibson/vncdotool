@@ -15,8 +15,11 @@ from .raw import RawDecoder
 # one connection (RFC 6143 section 7.7.6), so decoders cannot be shared
 # between them even though today's two hold no state.
 DECODERS: Dict[Encoding, Type[Decoder]] = {
-    Encoding.RAW: RawDecoder,
-    Encoding.COPY_RECTANGLE: CopyRectDecoder,
+    cls.ENCODING: cls
+    for cls in (
+        RawDecoder,
+        CopyRectDecoder,
+    )
 }
 
 

@@ -127,14 +127,35 @@ the whole connection and cannot be replayed.
 
 ## Three decoder shapes
 
-Not every encoding produces pixels. The registry maps each encoding to one of
-three shapes, distinguished by what the decoder produces:
+Not every encoding produces pixels. Each decoder subclasses one of three shapes,
+distinguished by what it produces:
 
-| Shape | Consumes | Produces | Encodings |
-|---|---|---|---|
-| `PixelDecoder` | bytes | fills a `RectBuffer` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
-| `ClientDecoder` | bytes | calls a client method | CopyRect, Cursor |
-| `ControlDecoder` | nothing | changes client state | DesktopSize, LastRect, QEMU extended key |
+| Shape | Consumes | Produces | Method it overrides | Encodings |
+|---|---|---|---|---|
+| `PixelDecoder` | bytes | fills a `RectBuffer` | `decodePixels` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
+| `ClientDecoder` | bytes | calls a client method | `decodeForClient` | CopyRect, Cursor |
+| `ControlDecoder` | nothing | changes client state | `applyToClient` | DesktopSize, LastRect, QEMU extended key |
+
+The shapes are nominal base classes under one `Decoder`, which defines all three
+methods and raises `NotImplementedError` for the two a given shape does not use.
+Structural typing cannot express this: the three take different arguments but
+`Protocol` matching compares method names, so every `PixelDecoder` satisfies
+`ClientDecoder` and the pump has to guess from the methods an object carries.
+
+Each decoder class also names the encoding-type it decodes (RFC 6143 §7.6.1) as
+`ENCODING`, and the registry is built from a list of classes rather than a
+hand-written mapping, so a key cannot drift from the class it points at.
+
+### The shape is resolved once per connection
+
+`build()` runs at connect time, so that is where each decoder is paired with the
+pump path its shape implies. A rectangle then costs one dict lookup and a call
+through a bound method — no `isinstance`, no probing for methods, and no shape
+tag to keep in step with the class hierarchy.
+
+Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
+`_pumpDecoder` and `_doConnection` to itself, and the per-shape drive methods
+that use them live with the pump rather than on the decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -245,7 +266,8 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 
 ```
 vncdotool/pixelformat.py         PixelFormat -> Pillow raw mode, CPIXEL/TPIXEL widths
-vncdotool/decoders/__init__.py   registry, the three shape protocols
+vncdotool/decoders/__init__.py   registry, built from the decoder classes
+vncdotool/decoders/base.py       Decoder and the three shape base classes
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
 vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
@@ -254,8 +276,9 @@ vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 
 `SUPPORTED_ENCODINGS` stops being the set literal in `RFBClient` and derives
 from the registry, filterable per connection, which is R4. It is also what makes
-R1's zero-line `rfb.py` diff possible: registering an encoding is a line in
-`decoders/__init__.py`, and nothing has to tell `rfb.py` the encoding exists.
+R1's zero-line `rfb.py` diff possible: registering an encoding is a module beside
+the others and its class in the list `decoders/__init__.py` builds `DECODERS`
+from, and nothing has to tell `rfb.py` the encoding exists.
 
 Third-party decoder plugins via entry points are out of scope. Nobody ships
 out-of-tree VNC encodings; the registry is a dict.

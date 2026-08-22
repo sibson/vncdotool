@@ -211,7 +211,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.width = 0
         self.height = 0
         self._rect_backing = bytearray()
-        self._decoders = decoders.build()
+        self._decoders = {
+            encoding: (decoder, self._driveFor(decoder))
+            for encoding, decoder in decoders.build().items()
+        }
 
     @property
     def bypp(self) -> int:
@@ -446,9 +449,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append((x, y, width, height))
-            decoder = self._decoders.get(encoding)
-            if decoder is not None:
-                self._decodeRectangle(decoder, x, y, width, height)
+            entry = self._decoders.get(encoding)
+            if entry is not None:
+                decoder, drive = entry
+                drive(decoder, x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.CORRE:
@@ -476,29 +480,38 @@ class RFBClient(Protocol):  # type: ignore[misc]
         else:
             self._doConnection()
 
-    def _decodeRectangle(
-        self, decoder: decoders.Decoder, x: int, y: int, width: int, height: int
-    ) -> None:
-        """Drive one decoder against `expect` until it stops."""
-        rect = (x, y, width, height)
+    def _driveFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.ControlDecoder):
-            decoder.applyToClient(self, rect)
-            self._doConnection()
-            return
-
+            return self._driveControl
         if isinstance(decoder, decoders.PixelDecoder):
-            target = self._rectBuffer(width, height)
-            if target is None:
-                return
-            self._pumpDecoder(
-                None,
-                decoder.decodePixels(target, self.pixel_format),
-                (decoder, target, rect),
-            )
-        else:
-            self._pumpDecoder(
-                None, decoder.decodeForClient(self, rect, self.pixel_format), None
-            )
+            return self._drivePixels
+        return self._driveForClient
+
+    def _driveControl(
+        self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        decoder.applyToClient(self, (x, y, width, height))
+        self._doConnection()
+
+    def _drivePixels(
+        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        target = self._rectBuffer(width, height)
+        if target is None:
+            return
+        self._pumpDecoder(
+            None,
+            decoder.decodePixels(target, self.pixel_format),
+            (decoder, target, (x, y, width, height)),
+        )
+
+    def _driveForClient(
+        self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        rect = (x, y, width, height)
+        self._pumpDecoder(
+            None, decoder.decodeForClient(self, rect, self.pixel_format), None
+        )
 
     def _finishRectangle(
         self, decoder: decoders.PixelDecoder, target: decoders.RectBuffer, rect: Rect
