@@ -141,10 +141,10 @@ def _run(*args: str) -> Optional[str]:
 
 
 def _dirty(record_path: Path) -> bool:
-    """Whether the tree differs from the commit the entry will name.
+    """Whether the tree differs from the commit an entry would name.
 
     The record file is exempt: it is tracked and this run appends to it,
-    so counting it marks every run after the first as dirty.
+    so counting it would stop every run after the first from recording.
     """
     status = _git("status", "--porcelain")
     if not status:
@@ -209,11 +209,14 @@ def main() -> int:
 
     if args.record:
         path = Path(args.record)
+        if _dirty(path):
+            print(f"  not recorded: {path.name} takes measurements of a commit,"
+                  " and this tree has changes that are not in one")
+            return 0
         counts = call_counts(init, steps)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git("rev-parse", "HEAD"),
-            "dirty": _dirty(path),
             "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
             "fixture": args.fixture,
             "updates": len(steps),

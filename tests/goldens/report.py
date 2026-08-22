@@ -52,8 +52,6 @@ def _table(rows: List[Row]) -> None:
         previous: Optional[Row] = None
         for row in group:
             commit = str(row.get("commit") or "-")[:7]
-            if row.get("dirty"):
-                commit += "*"
             print(f"  {commit:9} {str(row['timestamp'])[:10]:11} "
                   f"{str(row.get('python') or '-'):8} {str(row.get('pillow') or '-'):8} "
                   f"{row['best_us']:9.1f} {_delta(row, previous):>7} "
@@ -94,12 +92,9 @@ def _diff(rows: List[Row], refs: Sequence[str]) -> None:
 
 
 def _baseline(rows: List[Row], fixture: str) -> Row:
-    """Dirty rows are skipped: their counts belong to a working tree
-    nobody can check out again.
-    """
-    usable = [r for r in rows if r.get("fixture") == fixture and not r.get("dirty")]
+    usable = [r for r in rows if r.get("fixture") == fixture]
     if not usable:
-        raise SystemExit(f"no clean record of {fixture} to compare against")
+        raise SystemExit(f"no record of {fixture} to compare against")
     usable.sort(key=lambda r: str(r["timestamp"]))
     return usable[-1]
 
