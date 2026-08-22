@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from unittest import mock
 
+import PIL
+
 import vncdotool
 from vncdotool import client
 
@@ -91,11 +93,7 @@ def _cpu_model() -> str:
         if brand:
             return brand
     elif platform.system() == "Linux":
-        try:
-            cpuinfo = Path("/proc/cpuinfo").read_text()
-        except OSError:
-            cpuinfo = ""
-        for line in cpuinfo.splitlines():
+        for line in (_read("/proc/cpuinfo") or "").splitlines():
             # x86 names the part on 'model name'; arm64 parts, when they are
             # named at all, come back on 'Model'.
             if line.split(":")[0].strip() in ("model name", "Model"):
@@ -105,6 +103,35 @@ def _cpu_model() -> str:
         if identifier:
             return identifier
     return platform.processor() or "unknown"
+
+
+def _cpu_mhz() -> Optional[float]:
+    """The clock the run actually got, where the platform will say.
+
+    Two runs on one machine disagree mostly because one of them was
+    throttled or on a power-saving governor. Apple Silicon reports no
+    frequency at all -- hw.cpufrequency is absent -- so this is None
+    there rather than a fabricated nominal figure.
+    """
+    if platform.system() == "Linux":
+        khz = _read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
+        if khz:
+            return round(int(khz.strip()) / 1000, 1)
+        for line in (_read("/proc/cpuinfo") or "").splitlines():
+            if line.split(":")[0].strip() == "cpu MHz":
+                return round(float(line.split(":", 1)[1]), 1)
+    elif platform.system() == "Darwin":
+        hz = _run("sysctl", "-n", "hw.cpufrequency")
+        if hz:
+            return round(int(hz) / 1e6, 1)
+    return None
+
+
+def _read(path: str) -> Optional[str]:
+    try:
+        return Path(path).read_text()
+    except OSError:
+        return None
 
 
 def _machine() -> Dict[str, object]:
@@ -127,6 +154,9 @@ def _machine() -> Dict[str, object]:
     # without string-matching a CPU model across five vendors' spellings.
     digest = json.dumps(fields, sort_keys=True).encode()
     fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
+    # Outside the digest: the clock moves run to run, and hashing it would
+    # hand every run its own machine and group nothing with anything.
+    fields["cpu_mhz"] = _cpu_mhz()
     return fields
 
 
@@ -208,6 +238,9 @@ def main() -> int:
             "calls_total": sum(counts.values()),
             "python": platform.python_version(),
             "implementation": platform.python_implementation(),
+            # Pillow does the per-pixel work the timings are mostly made of,
+            # and it moves without any commit here moving.
+            "pillow": PIL.__version__,
         }
         entry.update(_machine())
         path = Path(args.record)
