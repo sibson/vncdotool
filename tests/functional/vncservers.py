@@ -230,6 +230,7 @@ def wait_until_ready(
                     colours = distinct_colours(image)
         except Exception as exc:  # noqa: BLE001 - any failure means try again
             print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
+            time.sleep(RETRY_DELAY)
             continue
         if not has_expected_content(server, colours):
             print(f"{server.name}: not ready yet (attempt {attempt}: capture is flat)")
