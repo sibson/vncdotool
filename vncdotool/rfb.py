@@ -172,8 +172,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
 
-    # A rectangle's dimensions are u16, so this bounds nothing on its own;
-    # it is the hook a subclass narrows.
+    # Greater than any u16 dimension, so it refuses nothing until a subclass
+    # narrows it.
     MAX_DESKTOP_SIZE = 0x10000
 
     _HEADER = b"RFB 000.000\n"
@@ -446,8 +446,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append((x, y, width, height))
-            if encoding in self._decoders:
-                self._decodeRectangle(self._decoders[encoding], x, y, width, height)
+            decoder = self._decoders.get(encoding)
+            if decoder is not None:
+                self._decodeRectangle(decoder, x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.CORRE:
@@ -543,9 +544,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doConnection()
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
-            # Malformed input reaches a decoder as struct.error out of
-            # unpack or zlib.error out of a corrupt stream, not only as
-            # DecodeError.
             generator.close()
             self.abortConnection(f"cannot decode this rectangle: {exc}")
             return
@@ -1023,8 +1021,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # incomming data redirector
     # ------------------------------------------------------
     def dataReceived(self, data: bytes) -> None:
-        # ~ sys.stdout.write(repr(data) + '\n')
-        # ~ print(f"{len(data), {len(self._packet)}")
         if self._aborted:
             return
         self._packet.extend(data)
