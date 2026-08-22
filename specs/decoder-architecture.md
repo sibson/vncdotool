@@ -154,8 +154,9 @@ through a bound method — no `isinstance`, no probing for methods, and no shape
 tag to keep in step with the class hierarchy.
 
 Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
-`_pumpDecoder` and `_doConnection` to itself, and the per-shape drive methods
-that use them live with the pump rather than on the decoder.
+`_pumpBlock` and `_doConnection` to itself, and the per-shape entry points that
+use them — `_pumpPixels`, `_pumpForClient`, `_pumpControl` — live with the pump
+rather than on the decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the

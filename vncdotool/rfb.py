@@ -212,7 +212,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.height = 0
         self._rect_backing = bytearray()
         self._decoders = {
-            encoding: (decoder, self._driveFor(decoder))
+            encoding: (decoder, self._pumpFor(decoder))
             for encoding, decoder in decoders.build().items()
         }
 
@@ -451,8 +451,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.rectanglePos.append((x, y, width, height))
             entry = self._decoders.get(encoding)
             if entry is not None:
-                decoder, drive = entry
-                drive(decoder, x, y, width, height)
+                decoder, pump = entry
+                pump(decoder, x, y, width, height)
             elif encoding == Encoding.HEXTILE:
                 self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
             elif encoding == Encoding.CORRE:
@@ -480,36 +480,36 @@ class RFBClient(Protocol):  # type: ignore[misc]
         else:
             self._doConnection()
 
-    def _driveFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
+    def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.ControlDecoder):
-            return self._driveControl
+            return self._pumpControl
         if isinstance(decoder, decoders.PixelDecoder):
-            return self._drivePixels
-        return self._driveForClient
+            return self._pumpPixels
+        return self._pumpForClient
 
-    def _driveControl(
+    def _pumpControl(
         self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         decoder.applyToClient(self, (x, y, width, height))
         self._doConnection()
 
-    def _drivePixels(
+    def _pumpPixels(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         target = self._rectBuffer(width, height)
         if target is None:
             return
-        self._pumpDecoder(
+        self._pumpBlock(
             None,
             decoder.decodePixels(target, self.pixel_format),
             (decoder, target, (x, y, width, height)),
         )
 
-    def _driveForClient(
+    def _pumpForClient(
         self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         rect = (x, y, width, height)
-        self._pumpDecoder(
+        self._pumpBlock(
             None, decoder.decodeForClient(self, rect, self.pixel_format), None
         )
 
@@ -540,7 +540,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self.abortConnection(f"no memory for a {width}x{height} rectangle")
             return None
 
-    def _pumpDecoder(
+    def _pumpBlock(
         self,
         block: bytes | None,
         generator: Iterator[int],
@@ -562,7 +562,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pumpDecoder, size, generator, finish)
+        self.expect(self._pumpBlock, size, generator, finish)
 
     # ---  RRE Encoding
 

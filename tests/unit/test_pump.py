@@ -26,15 +26,15 @@ def make_client() -> client.VNCDoToolClient:
     return cli
 
 
-def drive(cli: rfb.RFBClient, decoder, x: int, y: int, width: int, height: int) -> None:
+def pump(cli: rfb.RFBClient, decoder, x: int, y: int, width: int, height: int) -> None:
     """Dispatch one rectangle the way `_handleRectangle` would, without the
-    registry: the client pairs a decoder with a drive method at connect time.
+    registry: the client pairs a decoder with a pump method at connect time.
     """
-    cli._driveFor(decoder)(decoder, x, y, width, height)
+    cli._pumpFor(decoder)(decoder, x, y, width, height)
 
 
 def make_pump_client() -> rfb.RFBClient:
-    """A client in the state the drive methods run in."""
+    """A client in the state the pump methods run in."""
     cli = rfb.RFBClient()
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
@@ -79,7 +79,7 @@ class TestDecodeErrorHandling(TestCase):
             raise decoders.DecodeError("bogus subencoding")
             yield  # pragma: no cover - never reached
 
-        cli._pumpDecoder(None, failing(), None)
+        cli._pumpBlock(None, failing(), None)
 
         cli.vncProtocolError.assert_called_once()
         self.assertIn("bogus subencoding", cli.vncProtocolError.call_args.args[0])
@@ -96,7 +96,7 @@ class TestControlDecoders(TestCase):
             def applyToClient(self, client: object, rect: tuple) -> None:
                 applied.append(rect)
 
-        drive(cli, Control(), 1, 2, 3, 4)
+        pump(cli, Control(), 1, 2, 3, 4)
 
         self.assertEqual(applied, [(1, 2, 3, 4)])
         cli._doConnection.assert_called_once()
@@ -114,7 +114,7 @@ class TestMultiYieldDecoders(TestCase):
                 seen.append((yield 3))
                 target.blit(0, 0, target.width, target.height, b"\x01" * (target.width * target.height * target.bypp))
 
-        drive(cli, TwoStep(), 0, 0, 1, 1)
+        pump(cli, TwoStep(), 0, 0, 1, 1)
         cli.dataReceived(b"ab")
         cli.dataReceived(b"cde")
 
@@ -130,7 +130,7 @@ class TestMultiYieldDecoders(TestCase):
                 block = yield 2
                 unpack("!I", block)  # four bytes wanted, two yielded
 
-        drive(cli, Bogus(), 0, 0, 1, 1)
+        pump(cli, Bogus(), 0, 0, 1, 1)
         cli.dataReceived(b"ab")
 
         cli.vncProtocolError.assert_called_once()
@@ -154,7 +154,7 @@ class TestAbort(TestCase):
                 yield 2
                 raise decoders.DecodeError("boom")
 
-        drive(cli, Failing(), 0, 0, 2, 1)
+        pump(cli, Failing(), 0, 0, 2, 1)
         return cli
 
     def test_nothing_is_painted_after_a_failed_decode(self) -> None:
@@ -183,7 +183,7 @@ class TestAbort(TestCase):
             def decodePixels(self, target, pixel_format):
                 yield -8
 
-        drive(cli, Backwards(), 0, 0, 1, 1)
+        pump(cli, Backwards(), 0, 0, 1, 1)
 
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
@@ -233,7 +233,7 @@ class TestCopyRectPump(TestCase):
         cli.updateRectangle = mock.Mock()
         decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
 
-        drive(cli, decoder, 5, 6, 10, 20)
+        pump(cli, decoder, 5, 6, 10, 20)
         cli.dataReceived(pack("!HH", 1, 2))  # srcx, srcy
 
         cli.copyRectangle.assert_called_once_with(1, 2, 5, 6, 10, 20)
@@ -252,7 +252,7 @@ class TestOnePastePerRectangle(TestCase):
         width, height = 4, 3
         pixels = bytes(range(width * height * cli.bypp))
 
-        drive(cli, decoder, 0, 0, width, height)
+        pump(cli, decoder, 0, 0, width, height)
         cli.dataReceived(pixels[:5])
         cli.updateRectangle.assert_not_called()
         cli.dataReceived(pixels[5:])
@@ -267,7 +267,7 @@ class TestOnePastePerRectangle(TestCase):
         decoder, _ = cli._decoders[Encoding.RAW]
         pixels = bytes(range(2 * 2 * cli.bypp))
 
-        drive(cli, decoder, 7, 9, 2, 2)
+        pump(cli, decoder, 7, 9, 2, 2)
         cli.dataReceived(pixels)
 
         cli.updateRectangle.assert_called_once_with(7, 9, 2, 2, pixels, cli.pixel_format)
