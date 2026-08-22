@@ -16,8 +16,8 @@ class DecodeError(Exception):
 
 
 class Decoder:
-    """One encoding, in one of three shapes: a subclass overrides the one
-    method its shape names, and the pump calls that method alone.
+    """One encoding: a subclass overrides the one method its base class names,
+    and the pump calls that method alone.
     """
 
     # The encoding-type this decoder reads, RFC 6143 section 7.6.1.
@@ -33,9 +33,6 @@ class Decoder:
     ) -> Iterator[int]:
         raise NotImplementedError
 
-    def applyToClient(self, client: object, rect: tuple[int, int, int, int]) -> None:
-        raise NotImplementedError
-
 
 class PixelDecoder(Decoder):
     """Consumes bytes, fills a rect buffer."""
@@ -49,7 +46,3 @@ class PixelDecoder(Decoder):
 
 class ClientDecoder(Decoder):
     """Consumes bytes, calls a client method."""
-
-
-class ControlDecoder(Decoder):
-    """Consumes nothing, changes client state."""

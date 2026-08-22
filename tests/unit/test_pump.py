@@ -89,25 +89,6 @@ class TestDecodeErrorHandling(TestCase):
         cli.transport.loseConnection.assert_called_once()
 
 
-class TestControlDecoders(TestCase):
-    def setUp(self) -> None:
-        self.cli = make_pump_client()
-
-    def test_a_control_decoder_applies_and_the_loop_continues(self) -> None:
-        cli = self.cli
-        cli._doConnection = mock.Mock()
-        applied = []
-
-        class Control(decoders.ControlDecoder):
-            def applyToClient(self, client: object, rect: tuple) -> None:
-                applied.append(rect)
-
-        pump(cli, Control(), 1, 2, 3, 4)
-
-        self.assertEqual(applied, [(1, 2, 3, 4)])
-        cli._doConnection.assert_called_once()
-
-
 class TestMultiYieldDecoders(TestCase):
     def setUp(self) -> None:
         self.cli = make_pump_client()

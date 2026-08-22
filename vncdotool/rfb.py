@@ -481,17 +481,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
             self._doConnection()
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
-        if isinstance(decoder, decoders.ControlDecoder):
-            return self._pumpControl
         if isinstance(decoder, decoders.PixelDecoder):
             return self._pumpPixels
         return self._pumpForClient
-
-    def _pumpControl(
-        self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
-    ) -> None:
-        decoder.applyToClient(self, (x, y, width, height))
-        self._doConnection()
 
     def _pumpPixels(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int

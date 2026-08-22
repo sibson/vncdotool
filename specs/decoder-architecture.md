@@ -125,38 +125,45 @@ survives and decoders still reach into `client.bypp`, `client._zlib_stream` and
 `NeedMoreData(n)` to be re-run works until zlib — ZRLE and Tight streams live for
 the whole connection and cannot be replayed.
 
-## Three decoder shapes
+## Two decoder base classes
 
-Not every encoding produces pixels. Each decoder subclasses one of three shapes,
-distinguished by what it produces:
+Not every encoding produces pixels. A decoder subclasses whichever of these
+describes what it produces:
 
-| Shape | Consumes | Produces | Method it overrides | Encodings |
-|---|---|---|---|---|
-| `PixelDecoder` | bytes | fills a `RectBuffer` | `decodePixels` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
-| `ClientDecoder` | bytes | calls a client method | `decodeForClient` | CopyRect, Cursor |
-| `ControlDecoder` | nothing | changes client state | `applyToClient` | DesktopSize, LastRect, QEMU extended key |
+| Base class | Produces | Method it overrides | Encodings |
+|---|---|---|---|
+| `PixelDecoder` | fills a `RectBuffer` the pump allocates and pastes | `decodePixels` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
+| `ClientDecoder` | calls `copyRectangle` or `updateCursor` | `decodeForClient` | CopyRect, Cursor |
 
-The shapes are nominal base classes under one `Decoder`, which defines all three
-methods and raises `NotImplementedError` for the two a given shape does not use.
-Structural typing cannot express this: the three take different arguments but
+Both are nominal base classes under one `Decoder`, which defines both methods and
+raises `NotImplementedError` for the one a given subclass does not use.
+Structural typing cannot express this: the two take different arguments but
 `Protocol` matching compares method names, so every `PixelDecoder` satisfies
 `ClientDecoder` and the pump has to guess from the methods an object carries.
+
+The pseudo-encodings — DesktopSize, LastRect, QEMU extended key — are still on
+`rfb.py`'s own path and get their base class in phase 5, when there is a real one
+to design against. They consume no payload, which is a difference in arguments
+rather than in what they do to the client: DesktopSize resizes the framebuffer
+much as CopyRect writes to it. Whether that earns a third base class or is just a
+`ClientDecoder` whose generator returns without yielding is a question for the
+phase that migrates them.
 
 Each decoder class also names the encoding-type it decodes (RFC 6143 §7.6.1) as
 `ENCODING`, and the registry is built from a list of classes rather than a
 hand-written mapping, so a key cannot drift from the class it points at.
 
-### The shape is resolved once per connection
+### Which pump path a decoder takes is resolved once per connection
 
-`for_connection()` runs at connect time, so that is where each decoder is paired with the
-pump path its shape implies. A rectangle then costs one dict lookup and a call
-through a bound method — no `isinstance`, no probing for methods, and no shape
-tag to keep in step with the class hierarchy.
+`for_connection()` runs at connect time, so that is where each decoder is paired
+with the pump path its base class implies. A rectangle then costs one dict lookup
+and a call through a bound method — no `isinstance`, no probing for methods, and
+no tag to keep in step with the class hierarchy.
 
 Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
-`_pumpBlock` and `_doConnection` to itself, and the per-shape entry points that
-use them — `_pumpPixels`, `_pumpForClient`, `_pumpControl` — live with the pump
-rather than on the decoder.
+`_pumpBlock` and `_doConnection` to itself, and the entry points that use them —
+`_pumpPixels` and `_pumpForClient` — live with the pump rather than on the
+decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -173,9 +180,9 @@ padded to a whole number of bytes — `floor((width + 7) / 8)` — with the most
 significant bit of each byte representing the leftmost pixel and a 1-bit meaning
 the corresponding cursor pixel is valid.
 
-The genuine special cases are `ControlDecoder`: `LastRect` mutates the rectangle loop
-counter, and the QEMU extended key encoding mutates `negotiated_encodings` and
-removes the entry it just appended to `rectanglePos`.
+The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
+mutates the rectangle loop counter, and the QEMU extended key encoding mutates
+`negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
 
 ## Pixel format is shared, not per-decoder
 
@@ -268,7 +275,7 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ```
 vncdotool/pixelformat.py         PixelFormat -> Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, built from the decoder classes
-vncdotool/decoders/base.py       Decoder and the three shape base classes
+vncdotool/decoders/base.py       Decoder, PixelDecoder, ClientDecoder
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
 vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
@@ -576,8 +583,8 @@ or test depending on its wording cites a commit permalink rather than `master`.
 - No changes to authentication, negotiation, or transport.
 - No fix for cursor compositing being destructive — `drawCursor` pastes into
   `self.screen` and nothing erases the previous position, so stale pointers
-  persist where the server does not resend. Pre-existing, and the shape boundary
-  is drawn so fixing it later touches no decoder.
+  persist where the server does not resend. Pre-existing, and the boundary
+  between decoder and client is drawn so fixing it later touches no decoder.
 - No fix for `VNCDoToolClient.updateCursor`, where a zero-width or zero-height cursor sets
   `self.cursor = None` and then falls through to `Image.frombytes` with a zero
   dimension instead of returning. Worth a separate issue; it is a client bug, not
