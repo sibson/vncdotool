@@ -55,13 +55,6 @@ def _replay(init: bytes, steps: List[bytes]) -> None:
 
 
 def _call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
-    """Call counts for the vncdotool frames of one replay.
-
-    Same bytes in, same counts out on any machine, so these compare across
-    commits where the timings only compare within one machine. Keyed by
-    file and function, never line number, so an edit above a function does
-    not read as a change to it.
-    """
     profiler = cProfile.Profile()
     profiler.enable()
     _replay(init, steps)
@@ -73,6 +66,8 @@ def _call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
             relative = Path(filename).resolve().relative_to(PACKAGE_ROOT)
         except ValueError:
             continue
+        # Not pstats' own (file, line, name) key: an edit above a function
+        # would move its line and read as a change to the function.
         key = f"{relative.as_posix()}:{funcname}"
         counts[key] = counts.get(key, 0) + nc
     return dict(sorted(counts.items()))
@@ -83,10 +78,8 @@ def _git(*args: str) -> Optional[str]:
 
 
 def _cpu_model() -> str:
-    """The CPU's marketing name, which platform does not offer portably.
-
-    platform.processor() is the machine's own idea of itself: 'arm' on
-    macOS, empty on many Linuxes, only useful on Windows.
+    """The CPU model, read per-platform: platform.processor() returns 'arm'
+    on macOS and an empty string on many Linuxes.
     """
     if platform.system() == "Darwin":
         brand = _run("sysctl", "-n", "machdep.cpu.brand_string")
@@ -106,13 +99,6 @@ def _cpu_model() -> str:
 
 
 def _cpu_mhz() -> Optional[float]:
-    """The clock the run actually got, where the platform will say.
-
-    Two runs on one machine disagree mostly because one of them was
-    throttled or on a power-saving governor. Apple Silicon reports no
-    frequency at all -- hw.cpufrequency is absent -- so this is None
-    there rather than a fabricated nominal figure.
-    """
     if platform.system() == "Linux":
         khz = _read("/sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq")
         if khz:
@@ -121,6 +107,8 @@ def _cpu_mhz() -> Optional[float]:
             if line.split(":")[0].strip() == "cpu MHz":
                 return round(float(line.split(":", 1)[1]), 1)
     elif platform.system() == "Darwin":
+        # hw.cpufrequency is absent on Apple Silicon (observed on an M4 Pro),
+        # so those runs record no clock rather than a nominal one.
         hz = _run("sysctl", "-n", "hw.cpufrequency")
         if hz:
             return round(int(hz) / 1e6, 1)
@@ -137,9 +125,8 @@ def _read(path: str) -> Optional[str]:
 def _machine() -> Dict[str, object]:
     """Describe the hardware the timings came off, and nothing else.
 
-    Never the hostname or user: bench.jsonl is committed. A CPU model and
-    a core count say whether two runs are comparable and let someone else
-    reproduce them; a machine name says neither.
+    bench.jsonl is committed, so nothing here may identify the machine's
+    owner -- no hostname, no user.
     """
     cpu = _cpu_model()
     ci = os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI") == "true"
@@ -150,12 +137,10 @@ def _machine() -> Dict[str, object]:
         "release": platform.release(),
         "ci": ci,
     }
-    # A short digest of the same fields, so runs can be grouped and plotted
-    # without string-matching a CPU model across five vendors' spellings.
     digest = json.dumps(fields, sort_keys=True).encode()
     fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
-    # Outside the digest: the clock moves run to run, and hashing it would
-    # hand every run its own machine and group nothing with anything.
+    # After the digest: the clock moves run to run, and one inside it would
+    # give every run its own machine and group nothing with anything.
     fields["cpu_mhz"] = _cpu_mhz()
     return fields
 
@@ -171,9 +156,8 @@ def _run(*args: str) -> Optional[str]:
 def _dirty(record_path: Path) -> bool:
     """Whether the tree differs from the commit the entry will name.
 
-    The record file is exempt: it is tracked and this run is about to
-    append to it, so counting it would mark every run after the first as
-    measuring uncommitted code it did not measure.
+    The record file is exempt: it is tracked and this run appends to it,
+    so counting it marks every run after the first as dirty.
     """
     status = _git("status", "--porcelain")
     if not status:
@@ -256,8 +240,6 @@ def main() -> int:
             "calls_total": sum(counts.values()),
             "python": platform.python_version(),
             "implementation": platform.python_implementation(),
-            # Pillow does the per-pixel work the timings are mostly made of,
-            # and it moves without any commit here moving.
             "pillow": PIL.__version__,
         }
         entry.update(_machine())
