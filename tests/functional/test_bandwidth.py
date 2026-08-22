@@ -17,7 +17,7 @@ from unittest import TestCase
 
 from tests.goldens import scenes
 
-from .vncservers import HOST, TIGERVNC, VNCLOG, port_open, run_vncdo
+from .utils import HOST, TIGERVNC, VNCLOG, port_open, run_vncdo
 
 PROXY_PORT = 5998
 PROXY_STARTUP_DEADLINE = 10.0
