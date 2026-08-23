@@ -163,8 +163,8 @@ no tag to keep in step with the class hierarchy.
 
 Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
 `_pumpBlock` and `_doConnection` to itself, and the entry points that use them —
-`_pumpPixels` and `_pumpForClient` — live with the pump rather than on the
-decoder.
+`_pumpPixels`, `_pumpWholeRectangle` and `_pumpForClient` — live with the pump
+rather than on the decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -202,18 +202,23 @@ It is one optional method with a `None` default, not a second architecture. A
 decoder that says nothing gets the generator path unchanged, which is what
 every encoding after Raw is expected to want — none of RRE, Hextile, ZRLE or
 Tight can answer it, because none of them knows its byte count before
-decoding. The pump keeps one branch for it and the buffered path stays the
-general case.
+decoding.
+
+Whether a decoder ever answers `wholeRectangle` is fixed for the class, not
+per rectangle, so it is resolved the same place and the same way the
+`PixelDecoder`/`ClientDecoder` split already is: once per connection, in
+`_pumpFor`. A decoder whose `wholeRectangle` is not the base class's default
+gets `_pumpWholeRectangle`; every other `PixelDecoder` gets `_pumpPixels`
+unchanged and never calls `wholeRectangle` at all. Measured on
+`tigervnc-hextile-bgrx8888` (87 real Hextile rects, no Raw) before this method
+existed and after: 6271-6409us best across three runs each side, no
+difference outside the machine's own noise — the dispatch this replaced
+would have cost about the same, a `None`-returning call against Hextile's
+~9us per rectangle, but there is now no call to measure.
 
 What it does cost is that `_rectBuffer` no longer sees every rectangle, so R6's
 dimension check cannot live there; `_rectFits` is that check, called by both
 paths. See Benchmark below (N1) for the measurement that motivated this.
-
-Every other encoding pays one `wholeRectangle` call returning `None` per
-rectangle. Measured on `tigervnc-hextile-bgrx8888` (87 real Hextile rects, no
-Raw): best 6271-6409us before, 6268-6339us after, three runs each side. The
-ranges overlap; a `None`-returning call is tens of nanoseconds against
-Hextile's ~9us per rectangle, well under the machine's own run-to-run noise.
 
 ## Pixel format is shared, not per-decoder
 

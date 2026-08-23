@@ -423,29 +423,34 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
+            # Whether this decoder ever answers wholeRectangle is a property
+            # of its class, fixed for the connection -- resolved here so
+            # _pumpPixels never pays for a call that always returns None.
+            if type(decoder).wholeRectangle is not decoders.PixelDecoder.wholeRectangle:
+                return self._pumpWholeRectangle
             return self._pumpPixels
         return self._pumpForClient
+
+    def _pumpWholeRectangle(
+        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        # The decoder's whole output is one contiguous run of pixels, so
+        # there is nothing for a buffer to do but hold them: read them and
+        # hand them straight to the client.
+        size = decoder.wholeRectangle(width, height, self.pixel_format)
+        if not self._rectFits(width, height):
+            return
+        self.expect(self._finishWholeRectangle, size, decoder, x, y, width, height)
 
     def _pumpPixels(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        pixel_format = self.pixel_format
-        size = decoder.wholeRectangle(width, height, pixel_format)
-        if size is not None:
-            # The decoder's whole output is one contiguous run of pixels, so
-            # there is nothing for a buffer to do but hold them: read them and
-            # hand them straight to the client.
-            if not self._rectFits(width, height):
-                return
-            self.expect(self._finishWholeRectangle, size, decoder, x, y, width, height)
-            return
-
         target = self._rectBuffer(width, height)
         if target is None:
             return
         self._pumpBlock(
             None,
-            decoder.decodePixels(target, pixel_format),
+            decoder.decodePixels(target, self.pixel_format),
             (decoder, target, (x, y, width, height)),
         )
 
