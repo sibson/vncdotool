@@ -42,7 +42,7 @@ class ZRLEDecoder(PixelDecoder):
     def __init__(self) -> None:
         # RFC 6143 7.7.6: one zlib stream per connection, rectangles decoded
         # strictly in order. for_connection() gives each connection its own
-        # decoder instance, so the stream lives exactly that long (R7).
+        # decoder instance, so the stream lives exactly that long.
         self._zlib_stream = zlib.decompressobj(0)
 
     def decodePixels(
@@ -68,8 +68,6 @@ class ZRLEDecoder(PixelDecoder):
                 raw[i] = next(it)
             if cbytes == bypp:
                 return bytes(raw)
-            # CPIXEL is narrower than a PIXEL: place its bytes at the
-            # negotiated offset and leave the rest zero.
             buf = bytearray(bypp)
             buf[coffset:coffset + cbytes] = raw
             return bytes(buf)
