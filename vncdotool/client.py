@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import math
 import socket
-import warnings
 from pathlib import Path
 from struct import pack
 from typing import IO, Any, Callable, Iterator, TypeVar, Union
@@ -297,16 +296,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
         returnValue(self)
 
-    @property
-    def image_mode(self) -> str:
-        warnings.warn(
-            "image_mode will change in a future release; please comment on "
-            "https://github.com/sibson/vncdotool/issues/385 if you rely on it",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return self._image_mode
-
     def _rawModeFor(self, pixel_format: rfb.PixelFormat) -> str:
         # Called once per rectangle. A PixelFormat is a frozen dataclass, so
         # hashing one for a cache lookup costs more than the identity check
@@ -325,10 +314,7 @@ class VNCDoToolClient(rfb.RFBClient):
                 return
             except pixelformat.UnsupportedPixelFormat as exc:
                 log.debug("cannot unpack the server's format (%s), asking for another", exc)
-                if self._version_server == (3, 889):  # Apple Remote Desktop
-                    pixel_format = pixelformat.PIXEL_FORMATS["rgb565"]
-                else:
-                    pixel_format = pixelformat.PIXEL_FORMATS["rgbx8888"]
+                pixel_format = pixelformat.PIXEL_FORMATS["rgbx8888"]
 
         # Resolved before the request goes out: failing afterwards would
         # leave the server sending pixels in a format we cannot read.
