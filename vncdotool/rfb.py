@@ -424,11 +424,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
             if not decoder.buffered:
-                return self._pumpDirect
-            return self._pumpPixels
+                return self._pumpRectangle
+            return self._pumpBufferedRectangle
         return self._pumpForClient
 
-    def _pumpDirect(
+    def _pumpRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         if not self._rectFits(width, height):
@@ -436,10 +436,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         size = width * height * decoder.output_format(self.pixel_format).bypp
         self.expect(self._finishRectangle, size, decoder, (x, y, width, height))
 
-    def _pumpPixels(
+    def _pumpBufferedRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        target = self._allocateRectBuffer(width, height)
+        target = self._allocateBuffer(width, height)
         if target is None:
             return
         self._pumpBlock(
@@ -480,7 +480,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             return False
         return True
 
-    def _allocateRectBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
+    def _allocateBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
         """A buffer for one rectangle, or None having failed the connection."""
         if not self._rectFits(width, height):
             return None

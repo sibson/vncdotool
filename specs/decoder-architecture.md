@@ -193,7 +193,7 @@ decoder's wire bytes are already its output bytes, so it reads `width * height
 * output_format().bypp` of them and calls `updateRectangle` directly.
 
 The dimension check malformed input must still get (R6) can no longer live in
-`_allocateRectBuffer`, since this path never allocates one; `_rectFits` is that
+`_allocateBuffer`, since this path never allocates one; `_rectFits` is that
 check, called by both paths. See Benchmark below (N1) for the measurement that
 motivated this.
 

@@ -191,7 +191,7 @@ class TestRectBufferValidation(TestCase):
         cli.width, cli.height = 64, 48
         cli.vncProtocolError = mock.Mock()
 
-        result = cli._allocateRectBuffer(65, 10)
+        result = cli._allocateBuffer(65, 10)
 
         self.assertIsNone(result)
         cli.vncProtocolError.assert_called_once()
@@ -201,8 +201,8 @@ class TestRectBufferValidation(TestCase):
         cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
-        self.assertIsNotNone(cli._allocateRectBuffer(0, 10))
-        self.assertIsNotNone(cli._allocateRectBuffer(10, 0))
+        self.assertIsNotNone(cli._allocateBuffer(0, 10))
+        self.assertIsNotNone(cli._allocateBuffer(10, 0))
 
         cli.vncProtocolError.assert_not_called()
 
@@ -213,7 +213,7 @@ class TestRectBufferValidation(TestCase):
         cli = self.cli
         cli.vncProtocolError = mock.Mock()
 
-        self.assertIsNotNone(cli._allocateRectBuffer(cli.MAX_DESKTOP_SIZE, 1))
+        self.assertIsNotNone(cli._allocateBuffer(cli.MAX_DESKTOP_SIZE, 1))
 
         cli.vncProtocolError.assert_not_called()
 
@@ -303,13 +303,13 @@ class TestRectBufferReuse(TestCase):
     def test_smaller_rectangle_after_larger_gets_only_its_own_bytes(self) -> None:
         cli = self.cli
 
-        big = cli._allocateRectBuffer(4, 4)
+        big = cli._allocateBuffer(4, 4)
         half = bytes([0xFF]) * (4 * 2 * cli.bypp)
         big.blit(0, 0, 4, 2, half)
         big.blit(0, 2, 4, 2, half)
         self.assertEqual(big.tobytes(), bytes([0xFF]) * (4 * 4 * cli.bypp))
 
-        small = cli._allocateRectBuffer(2, 2)
+        small = cli._allocateBuffer(2, 2)
         row = bytes([0xAA]) * (2 * 1 * cli.bypp)
         small.blit(0, 0, 2, 1, row)
         small.blit(0, 1, 2, 1, row)
@@ -344,7 +344,7 @@ class TestUnbufferedDecoders(TestCase):
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
         """The unbuffered path computes its byte count from the rectangle
         header, so it has to bound the dimensions itself rather than
-        inheriting the check `_allocateRectBuffer` makes.
+        inheriting the check `_allocateBuffer` makes.
         """
         cli = make_pump_client()
         cli.width, cli.height = 64, 48
