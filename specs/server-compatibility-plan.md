@@ -29,17 +29,18 @@ installed. No other server implementation is exercised anywhere.
   TLS-fronted servers need VeNCrypt: #138.
 - **Unsupported encodings** — servers that assume Tight support: #264.
 - **Pixel-format assumptions** — black or corrupted captures when a server
-  ignores our `SetPixelFormat` or uses a format outside the handful mapped
-  in `client.PF2IM`: #90, #275. The ZRLE decoder hard-codes 3-byte
-  compressed pixels (32bpp/depth-24/little-endian only), the Raw path has a
-  literal `TODO convert pixel format?`, and the CoRRE subrect decoder has
-  two latent bugs (`format` string missing its f-prefix, loop bound uses
-  `sz` instead of `end`) that bite the first time a server sends CoRRE
-  subrects. CopyRect is a silent no-op: `RFBClient.copyRectangle` is a
-  docstring-only stub that no subclass overrides, so the destination
-  region keeps stale pixels whenever a server sends CopyRect. Both this
-  and the CoRRE case are pinned as expected failures in
-  tests/unit/test_decoder_bugs.py.
+  ignores our `SetPixelFormat` or uses a format outside what
+  `vncdotool/pixelformat.py` maps: #90, #275. The ZRLE decoder (still on
+  the old `rfb.py` path, not yet migrated to `vncdotool/decoders/`) hard-codes
+  3-byte compressed pixels (32bpp/depth-24/little-endian only) — this part
+  is still open. The rest of this bullet is resolved: the decoder refactor
+  (#402–#430) fixed both CoRRE bugs and implemented real `CopyRect` as part
+  of moving RRE/CoRRE/CopyRect onto the `vncdotool/decoders/` registry
+  (#405); the pinned-failure tests that tracked them
+  (`tests/unit/test_decoder_bugs.py`) were retired in the same change. Raw
+  now blits its bytes directly (#430) with no pixel-format conversion step
+  and no TODO marking the gap — conversion is still unimplemented, just no
+  longer flagged in a comment.
 - **Hangs instead of errors** — when negotiation or decoding goes wrong the
   reactor keeps waiting forever and the API never returns: #322 (silent
   disconnect/hang against shared TigerVNC), #284 ("Stopping factory" with
@@ -120,7 +121,8 @@ debugging session into a good bug report.
 - Handle `ServerCutText` with a signed length and ignore Extended
   Clipboard payloads gracefully instead of misreading them as a huge
   unsigned read (prime suspect for #322).
-- Fix the CoRRE decoder bugs; enable `PixelFormat.VALIDATE` in tests.
+- ~~Fix the CoRRE decoder bugs~~ — done in #405. Still open: enable
+  `PixelFormat.VALIDATE` in tests.
 - On unknown rectangle encodings, include the encoding name/number and the
   negotiated list in the error so reports like #264 arrive pre-diagnosed.
 
