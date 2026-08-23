@@ -73,9 +73,6 @@ class TestSplit(unittest.TestCase):
         self.assertIsNone(steps[0].key)
 
     def test_the_requested_format_reads_the_bytes_the_server_sent(self) -> None:
-        # A capture whose client asked for something other than the announced
-        # format: the SetPixelFormat that made the server switch is c2s, so
-        # nothing in the replayed stream says the layout changed.
         stream = handshake_bytes(pixelformat.PIXEL_FORMATS["bgrx8888"]) + raw_update(screen("s"))
         _, steps = distill.split(stream, "rgbx8888")
         self.assertEqual([step.key for step in steps], ["s"])

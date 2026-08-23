@@ -199,9 +199,9 @@ different things and share one capture run:
   sent (see [pixel-format.md](pixel-format.md)). It needs no external truth, but
   a decoder wrong the same way at every depth passes it.
 
-Cross-format self-consistency runs from `tigervnc-raw-rgbx8888` against
-`tigervnc-raw-bgrx8888`. The tolerance oracle waits on a reduced-depth format;
-today's tolerance is zero, and both formats here are 32bpp truecolour.
+Cross-format self-consistency runs today. The tolerance oracle waits on a
+reduced-depth format: every format captured so far is 32bpp truecolour, which
+is why the tolerance is zero.
 
 ## The unit test
 

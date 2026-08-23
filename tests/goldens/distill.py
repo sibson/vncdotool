@@ -84,12 +84,10 @@ class _Recorder(client.VNCDoToolClient):
 
 
 def _make_client(pixel_format: Optional[str]) -> _Recorder:
-    """``pixel_format`` is what the capturing client asked the server for.
-
-    `SetPixelFormat` is client-to-server (:rfc:`6143` §7.5.1), so it is not in
-    the s2c stream being replayed: without being told, the recorder unpacks
-    the bytes in whatever format ServerInit announced and every channel comes
-    out permuted.
+    """SetPixelFormat is client-to-server (RFC 6143 section 7.5.1), so the s2c
+    stream being replayed never says the server switched layouts. Untold, the
+    recorder unpacks the bytes as ServerInit announced them and permutes every
+    channel.
     """
     recorder = _Recorder()
     if pixel_format is not None:
