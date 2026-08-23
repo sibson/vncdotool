@@ -167,6 +167,11 @@ opening anything.
 
 ## conditions.json
 
+`--pixel-format` is required, so `pixel_format` always names a format rather
+than recording "the server's own". Nothing on the wire would correct it — the
+server never acknowledges `SetPixelFormat` — so a fixture that does not say
+what it asked for cannot be replayed at the format its pixels are in.
+
 Written by the harness from what happened, never from what was intended: the
 compose service, the geometry, and vnclog's own `meta` — protocol version,
 security types, the encodings the server actually used, and the capture
@@ -185,23 +190,23 @@ file the server was shown.
 
 At reduced depth the server quantizes, so a decoded frame will not equal that
 image, and modelling the rounding ourselves would put our reading of the spec
-back into the oracle. Two checks are used together, because they fail on
-different things and share one capture run:
+back into the oracle. The comparison instead allows per-channel error bounded
+by the format's step, which bounds the server's rounding without modelling it
+and still catches channel swaps, wrong shifts, endianness errors and colour-map
+misindexing — the whole defect class R3, the framebuffer not depending on the
+negotiated format, is about. Every fixture is checked this way at the format it
+was captured at, and that is where R3 is checked.
 
-- **Source with tolerance.** Compare against the oracle allowing per-channel
-  error bounded by the format's step. This bounds the server's rounding without
-  modelling it, and still catches channel swaps, wrong shifts, endianness
-  errors and colour-map misindexing — the whole defect class R3, the framebuffer
-  not depending on the negotiated format, is about.
-- **Cross-format self-consistency.** Decode the same scene at every format and
-  assert the framebuffers agree within tolerance. This is R3 stated directly —
-  and it is where R3 is checked at all, since decoders emit the layout they were
-  sent (see [pixel-format.md](pixel-format.md)). It needs no external truth, but
-  a decoder wrong the same way at every depth passes it.
+The tolerance waits on a reduced-depth format: every format captured so far is
+32bpp truecolour, which is why it is zero.
 
-Cross-format self-consistency runs today. The tolerance oracle waits on a
-reduced-depth format: every format captured so far is 32bpp truecolour, which
-is why the tolerance is zero.
+**Cross-format self-consistency** — decode one scene at two formats, assert the
+framebuffers agree — is not used, though it reads like R3 stated directly. It
+cannot fail alone: every fixture is pinned to the PNG, so one member of a pair
+equals the PNG exactly and comparing the other against it is the comparison
+above at a looser bound. Reduced depth does not change that. The version with
+independent power — quantize the PNG onto the reduced grid, demand exact
+equality — is the rounding model this section rejects.
 
 ## The unit test
 

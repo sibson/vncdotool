@@ -49,8 +49,9 @@ Stated independently of how. Each design decision should trace to one.
 - **R3** The framebuffer a client sees does not depend on the pixel format the
   server negotiated. Stated over the framebuffer rather than over decoder
   output, because decoders emit the layout they were sent and name it; the
-  format-independence is the client's paste, and the goldens' cross-format
-  comparison is what checks it. Servers that ignore `SetPixelFormat` cause #90
+  format-independence is the client's paste, and what checks it is each golden
+  fixture decoding to its scene PNG at the format it was captured at. Servers
+  that ignore `SetPixelFormat` cause #90
   and #275.
 - **R4** The user can choose which encodings are offered (#167, #168). Without
   this, every encoding except Raw is dead code and none of it can be tested

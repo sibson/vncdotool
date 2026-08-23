@@ -39,12 +39,12 @@ def screen(key: str) -> Image.Image:
 
 class TestSplit(unittest.TestCase):
     def test_init_stops_at_the_first_update(self) -> None:
-        init, _ = distill.split(handshake_bytes() + raw_update(screen("0")), None)
+        init, _ = distill.split(handshake_bytes() + raw_update(screen("0")), "rgbx8888")
         self.assertEqual(init, handshake_bytes())
 
     def test_one_step_per_update(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
-        _, steps = distill.split(stream, None)
+        _, steps = distill.split(stream, "rgbx8888")
         self.assertEqual([step.index for step in steps], [1, 2])
 
     def test_a_scene_split_across_updates_is_one_step(self) -> None:
@@ -53,23 +53,23 @@ class TestSplit(unittest.TestCase):
         # scene ends.
         first, second = raw_update(screen("0")), raw_update(screen("s"))
         stream = handshake_bytes() + first + raw_update(screen("0")) + second
-        _, steps = distill.split(stream, None)
+        _, steps = distill.split(stream, "rgbx8888")
         self.assertEqual([step.key for step in steps], ["0", "s"])
         self.assertEqual(steps[0].data, first + raw_update(screen("0")))
         self.assertEqual(steps[1].data, second)
 
     def test_steps_are_labelled_by_the_patch(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("d"))
-        _, steps = distill.split(stream, None)
+        _, steps = distill.split(stream, "rgbx8888")
         self.assertEqual([step.key for step in steps], ["0", "d"])
 
     def test_a_step_holds_exactly_its_own_update_bytes(self) -> None:
         first, second = raw_update(screen("0")), raw_update(screen("s"))
-        _, steps = distill.split(handshake_bytes() + first + second, None)
+        _, steps = distill.split(handshake_bytes() + first + second, "rgbx8888")
         self.assertEqual([step.data for step in steps], [first, second])
 
     def test_an_unstamped_frame_has_no_key(self) -> None:
-        _, steps = distill.split(handshake_bytes() + raw_update(Image.new("RGB", SIZE, (1, 2, 3))), None)
+        _, steps = distill.split(handshake_bytes() + raw_update(Image.new("RGB", SIZE, (1, 2, 3))), "rgbx8888")
         self.assertIsNone(steps[0].key)
 
     def test_the_requested_format_reads_the_bytes_the_server_sent(self) -> None:
@@ -81,7 +81,7 @@ class TestSplit(unittest.TestCase):
 class TestWriteFixture(unittest.TestCase):
     def test_writes_one_pair_per_step_plus_conditions(self) -> None:
         stream = handshake_bytes() + raw_update(screen("0")) + raw_update(screen("s"))
-        init, steps = distill.split(stream, None)
+        init, steps = distill.split(stream, "rgbx8888")
         with tempfile.TemporaryDirectory() as tmp:
             directory = Path(tmp) / "fixture"
             distill.write_fixture(directory, init, steps, {"server": "tigervnc"})
