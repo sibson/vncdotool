@@ -91,6 +91,8 @@ def log_connected(pcol: TClient) -> TClient:
 
 
 class VNCDoCLIClient(VNCDoToolClient):
+    factory: VNCDoCLIFactory
+
     def vncRequestPassword(self) -> None:
         if self.factory.password is None:
             self.factory.password = getpass.getpass("VNC password:")
