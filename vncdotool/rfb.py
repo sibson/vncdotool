@@ -423,9 +423,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
-            # A decoder's wholeRectangle support is fixed for its class, not
-            # per rectangle.
-            if type(decoder).wholeRectangle is not decoders.PixelDecoder.wholeRectangle:
+            if type(decoder).wholeRectangleSize is not decoders.PixelDecoder.wholeRectangleSize:
                 return self._pumpWholeRectangle
             return self._pumpPixels
         return self._pumpForClient
@@ -433,18 +431,16 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _pumpWholeRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        size = decoder.wholeRectangle(width, height, self.pixel_format)
-        # _pumpFor never routes here a decoder whose wholeRectangle can
-        # return None.
+        size = decoder.wholeRectangleSize(width, height, self.pixel_format)
         assert size is not None
         if not self._rectFits(width, height):
             return
-        self.expect(self._finishRectangle, size, decoder, (x, y, width, height), True)
+        self.expect(self._finishRectangle, size, decoder, (x, y, width, height))
 
     def _pumpPixels(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        target = self._rectBuffer(width, height)
+        target = self._allocateRectBuffer(width, height)
         if target is None:
             return
         self._pumpBlock(
@@ -466,18 +462,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
         block: bytes,
         decoder: decoders.PixelDecoder,
         rect: tuple[int, int, int, int],
-        advance: bool,
     ) -> None:
-        """`advance` is False from the buffered path, which reaches this
-        through `_pumpBlock`, already the single place that calls
-        `_doConnection` for every decoder -- pixel-producing or not.
-        """
         x, y, width, height = rect
         self.updateRectangle(
             x, y, width, height, block, decoder.output_format(self.pixel_format)
         )
-        if advance:
-            self._doConnection()
+        self._doConnection()
 
     def _rectFits(self, width: int, height: int) -> bool:
         """Whether a rectangle fits the framebuffer, having failed the
@@ -491,7 +481,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             return False
         return True
 
-    def _rectBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
+    def _allocateRectBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
         """A buffer for one rectangle, or None having failed the connection."""
         if not self._rectFits(width, height):
             return None
@@ -515,10 +505,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
         try:
             size = generator.send(block)
         except StopIteration:
-            if finish is not None:
+            if finish is None:
+                self._doConnection()
+            else:
                 decoder, target, rect = finish
-                self._finishRectangle(target.tobytes(), decoder, rect, False)
-            self._doConnection()
+                self._finishRectangle(target.tobytes(), decoder, rect)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()

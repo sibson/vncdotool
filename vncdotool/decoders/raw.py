@@ -12,7 +12,7 @@ from .buffer import RectBuffer
 class RawDecoder(PixelDecoder):
     ENCODING: ClassVar[Encoding] = Encoding.RAW
 
-    def wholeRectangle(
+    def wholeRectangleSize(
         self, width: int, height: int, pixel_format: PixelFormat
     ) -> int | None:
         return width * height * pixel_format.bypp

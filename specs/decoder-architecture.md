@@ -161,10 +161,10 @@ with the pump path its base class implies. A rectangle then costs one dict looku
 and a call through a bound method — no `isinstance`, no probing for methods, and
 no tag to keep in step with the class hierarchy.
 
-Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
-`_pumpBlock` and `_doConnection` to itself, and the entry points that use them —
-`_pumpPixels`, `_pumpWholeRectangle` and `_pumpForClient` — live with the pump
-rather than on the decoder.
+Decoders depend on nothing from `rfb.py`: the pump keeps its own machinery —
+allocating buffers, driving generators, advancing the connection — to itself,
+and the entry points that use it live with the pump rather than on the
+decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
 `updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
@@ -185,36 +185,17 @@ The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
 mutates the rectangle loop counter, and the QEMU extended key encoding mutates
 `negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
 
-### A decoder that is only pixels does not need the machinery
+### wholeRectangleSize skips the buffer for a decoder that doesn't need it
 
-The apparatus above — a buffer, a generator, two `send` calls, a blit, a
-`tobytes` — exists to let a decoder write a rectangle in pieces, out of order,
-over several reads. Raw writes it in one piece, in order, in one read, and pays
-for all of it anyway. Since Raw is the only encoding in live use, that is the
-common case paying for the general one.
+Raw writes its rectangle in one piece, in order, in one read, and shortcuts the
+intermediate buffer: `PixelDecoder.wholeRectangleSize(width, height,
+pixel_format)` returns a byte count instead of `None`, and the pump reads that
+many bytes and calls `updateRectangle` with them directly.
 
-So a `PixelDecoder` may answer `wholeRectangle(width, height, pixel_format)`
-with a byte count, meaning: my entire output is that many bytes of pixels, laid
-out left-to-right and top-to-bottom in `output_format`. The pump then reads
-them and calls `updateRectangle` with them directly, and no buffer is built.
-
-It is one optional method with a `None` default, not a second architecture. A
-decoder that says nothing gets the generator path unchanged, which is what
-every encoding after Raw is expected to want — none of RRE, Hextile, ZRLE or
-Tight can answer it, because none of them knows its byte count before
-decoding.
-
-Whether a decoder ever answers `wholeRectangle` is fixed for the class, not
-per rectangle, so it is resolved the same place and the same way the
-`PixelDecoder`/`ClientDecoder` split already is: once per connection, in
-`_pumpFor`. A decoder whose `wholeRectangle` is not the base class's default
-gets `_pumpWholeRectangle`; every other `PixelDecoder` gets `_pumpPixels`
-unchanged and never calls `wholeRectangle` at all.
-
-What it does cost is that `_rectBuffer` no longer sees every rectangle, so the
-dimension check malformed input must still get (R6) cannot live there;
-`_rectFits` is that check, called by both paths. See Benchmark below (N1) for
-the measurement that motivated this.
+The dimension check malformed input must still get (R6) can no longer live in
+`_allocateRectBuffer`, since this path never allocates one; `_rectFits` is that
+check, called by both paths. See Benchmark below (N1) for the measurement that
+motivated this.
 
 ## Pixel format is shared, not per-decoder
 
@@ -594,7 +575,7 @@ path landed on top of Phase 2-4:
 | | best | median |
 |---|---|---|
 | generator pump, no fast path | 634 | 680 |
-| generator pump + `wholeRectangle` | 561 | 606 |
+| generator pump + `wholeRectangleSize` | 561 | 606 |
 
 `make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 

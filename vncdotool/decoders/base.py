@@ -30,7 +30,7 @@ class Decoder:
 class PixelDecoder(Decoder):
     """Consumes bytes, fills a rect buffer."""
 
-    def wholeRectangle(
+    def wholeRectangleSize(
         self, width: int, height: int, pixel_format: PixelFormat
     ) -> int | None:
         """The byte count to read when this decoder's entire output is that
