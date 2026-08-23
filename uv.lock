@@ -8,10 +8,6 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
-[options]
-exclude-newer = "2026-08-14T03:41:14.287644Z"
-exclude-newer-span = "P7D"
-
 [[package]]
 name = "alabaster"
 version = "1.0.0"
