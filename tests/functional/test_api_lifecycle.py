@@ -127,11 +127,7 @@ class TestApiLifecycle(unittest.TestCase):
             )
 
     def test_disconnect_after_command_error_returns_promptly(self) -> None:
-        """A failed command must not stop ``disconnect()`` from firing.
-
-        ``disconnect()`` chains onto ``factory.deferred``, which a failed
-        ``captureScreen`` leaves in an errored state -- see #146.
-        """
+        """A failed command must not stop ``disconnect()`` from firing."""
         client = connect(LIBVNC, timeout=SHORT_TIMEOUT)
 
         with self.assertRaises(FileNotFoundError):
