@@ -77,16 +77,11 @@ class ThreadedVNCClientProxy:
             event.set()
 
         def disconnector(_: Any) -> None:
-            # The argument is unused on purpose: addBoth passes whatever
-            # factory.deferred resolved to, which after a failed command is
-            # a Failure, not the protocol. self.protocol was captured
-            # separately in connect() and is still good to disconnect.
-            protocol = self.protocol
-            if protocol is None:
+            if self.protocol is None:
                 event.set()
                 return
             self.factory._disconnect_callbacks.append(on_disconnected)
-            protocol.transport.loseConnection()
+            self.protocol.transport.loseConnection()
 
         reactor.callFromThread(self.factory.deferred.addBoth, disconnector)
         event.wait(timeout=self.timeout)
