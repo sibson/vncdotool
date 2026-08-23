@@ -12,7 +12,6 @@ combined/
 docs/_build
 docs/rfbproto/
 .venv/
-uv.lock
 .vncdo/
 
 *~

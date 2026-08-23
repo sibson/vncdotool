@@ -38,7 +38,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run unittests
         run: uv run coverage run --parallel-mode -m unittest discover tests/unit
@@ -69,7 +69,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Run flake8
         run: uv run flake8 --count --statistics vncdotool tests
@@ -95,7 +95,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Resolve the fleet image tag
         run: echo "FLEET_TAG=$(git rev-parse HEAD:tests/servers)" >> "$GITHUB_ENV"
@@ -245,7 +245,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Download unit tier coverage data
         uses: actions/download-artifact@v4
