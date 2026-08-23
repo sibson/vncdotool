@@ -17,7 +17,7 @@ from unittest import mock
 from PIL import Image
 
 from tests.goldens import scenes
-from vncdotool import client
+from vncdotool import client, pixelformat
 
 
 @dataclass
@@ -83,8 +83,15 @@ class _Recorder(client.VNCDoToolClient):
         return s2c[: self.init_end], steps
 
 
-def _make_client() -> _Recorder:
+def _make_client(pixel_format: Optional[str]) -> _Recorder:
+    """SetPixelFormat is client-to-server (RFC 6143 section 7.5.1), so the s2c
+    stream being replayed never says the server switched layouts. Untold, the
+    recorder unpacks the bytes as ServerInit announced them and permutes every
+    channel.
+    """
     recorder = _Recorder()
+    if pixel_format is not None:
+        recorder.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
     recorder.transport = mock.Mock()
     recorder.factory = mock.Mock()
     recorder.factory.shared = 0
@@ -97,8 +104,8 @@ def _make_client() -> _Recorder:
     return recorder
 
 
-def split(s2c: bytes) -> Tuple[bytes, List[Step]]:
-    return _make_client().split(s2c)
+def split(s2c: bytes, pixel_format: Optional[str]) -> Tuple[bytes, List[Step]]:
+    return _make_client(pixel_format).split(s2c)
 
 
 def write_fixture(directory: Path, init: bytes, steps: List[Step], conditions: Dict[str, Any]) -> None:

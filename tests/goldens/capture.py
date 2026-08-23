@@ -105,7 +105,7 @@ def main() -> int:
             s2c = zipped.read("s2c.bin")
             meta = zipped.read("meta.json").decode()
 
-        init, steps = distill.split(s2c)
+        init, steps = distill.split(s2c, args.pixel_format)
         if not steps:
             raise SystemExit("capture holds no framebuffer updates; the stream desynced")
         for step in steps:

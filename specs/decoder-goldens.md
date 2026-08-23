@@ -199,7 +199,9 @@ different things and share one capture run:
   sent (see [pixel-format.md](pixel-format.md)). It needs no external truth, but
   a decoder wrong the same way at every depth passes it.
 
-Both are deferred until a second format exists. Today's tolerance is zero.
+Cross-format self-consistency runs today. The tolerance oracle waits on a
+reduced-depth format: every format captured so far is 32bpp truecolour, which
+is why the tolerance is zero.
 
 ## The unit test
 
@@ -225,7 +227,7 @@ Axes are crossed only where they interact.
 - 5 further encodings x 32bpp, 5 fixtures
 - ZRLE and Tight x the 3 non-default formats, 6 fixtures
 
-Fifteen fixtures at full build-out, one today. Each carries every scene in the
+Fifteen fixtures at full build-out, four today. Each carries every scene in the
 catalogue, so the scene axis multiplies steps rather than fixtures.
 
 The full cross is not needed. The pixel-format axis tests pixel plumbing, which
@@ -265,8 +267,7 @@ Recorded so they are not rediscovered as new ideas.
 - The **pnm-server** — a libvncserver example that declares its own rects — and
   the rect pathologies that need it (hundreds of tiny rects, mid-session
   resize).
-- **Cross-format equality** and the **tolerance oracle**, both of which need a
-  second format to exist.
+- The **tolerance oracle**, which needs a reduced-depth format to exist.
 - **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
   one. We find out by reading a capture, not by asserting it in advance.
 
