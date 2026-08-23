@@ -18,10 +18,15 @@ matrix has one fixture and the pixel plumbing has never run at a second format.
 
 ## Scope
 
-The `pixelformat.py` machinery, plus one new negotiated format: `rgb565`. That
-discharges R3 for two formats — one scene decoding to the same framebuffer at
-both. Colour map, and the layouts Pillow cannot unpack, wait for a server that
-needs them.
+The `pixelformat.py` machinery: computing a Pillow mode from any byte-aligned
+truecolor `PixelFormat` instead of a five-entry lookup table, plus the CPIXEL
+functions ZRLE needs at Phase 5. `rgb565` is in the registry as a second
+requestable format — RFB permits it and the code was already written for it —
+but nothing here depends on it: R3 (one scene decoding to the same framebuffer
+at two formats) is already discharged by `bgrx8888` and `rgbx8888`, both
+captured today. Verifying `rgb565` end-to-end — a golden fixture, a fleet
+case — is deferred; see below. Colour map, and the layouts Pillow cannot
+unpack, wait for a server that needs them.
 
 ## What servers actually send
 
@@ -52,9 +57,14 @@ Three consequences:
   only by declaring depth 32 — the historical quirk rfbproto warns about — so we
   renegotiate to a format byte-identical to the one already arriving. Computing
   the mode from the fields removes the failure mode.
-- **The 3.889 Apple branch never fires against current Screen Sharing**, whose
-  native is in `PF2IM` already. It is dropped rather than carried forward; if an
-  older ARD server needs it, it returns as a measurement.
+- **The version-3.889 special case (request `BGR;16` for Apple Remote
+  Desktop) is dropped, not carried forward.** It traced to PR #243 fixing
+  issue #205, a generic 16bpp black-screen report with no confirmation the
+  reporter's server was ARD or that `rgb565` was what fixed it. Measured
+  Screen Sharing today sends the same BGRX every other server does, already
+  readable by `raw_mode`, so the branch never fired. If an older ARD server
+  genuinely needs a non-default format, that comes back as a measurement, not
+  a guess kept on file.
 - **One dominant native is not a safe assumption.** `PF2IM` was shaped around
   the formats someone had met, and libvncserver-example is a depth declaration
   away from an entry.
@@ -217,32 +227,20 @@ and the negative cases falling back to PIXEL width.
 **Negotiation.** Mocked transport asserting the `SetPixelFormat` bytes, or their
 absence, which is step 2 and the case a test would otherwise skip.
 
-**Golden.** A second fixture, `tigervnc-raw-rgb565`, from `make goldens`. Its
-oracle is the same committed scene PNG, so tolerance stops being zero: the bound
-is the format's own step, 255/31 for the 5-bit channels and 255/63 for the
-6-bit, rounded up, which covers truncation and round-to-nearest alike without
-modelling either.
-
 `conditions.json` grows the pixel format, both the ServerInit one and any we
 requested. They are different facts and the interesting fixtures are where they
 differ.
 
-**Functional.** One fleet case: `--pixel-format rgb565` capture is not flat.
-
-**Capture script.** `scene.vdo` steps with `expect scenes/X.png 0`, a histogram
-RMS of exactly zero, which `rgb565` can never reach — every step would poll
-until the capture hung rather than failed. The driving script becomes
-per-format, `make goldens` supplying the maxrms; `session.vdo` in the archive
-records which ran.
+Golden and functional coverage at a second, reduced-precision format
+(`rgb565`) is deferred — see below — since R3 is already satisfied by the two
+32 bpp formats already captured.
 
 ## Phasing
 
 1. `pixelformat.py`, the registry, unit tests. No call sites change.
-2. `client.py` resolves the mode per rectangle; `PF2IM`, `setImageMode`,
-   `image_mode` go. BGRX behaviour unchanged (R5).
+2. `client.py` resolves the mode per rectangle; `PF2IM` and the `image_mode`
+   property go. BGRX behaviour unchanged (R5).
 3. `--pixel-format`, the policy, the `api.connect` keyword.
-4. Capture `tigervnc-raw-rgb565`; tolerance in `test_goldens.py`; the fleet
-   case.
 
 ## Validated against the specs
 
@@ -266,6 +264,14 @@ document covers it; a capture will.
 
 ## Deferred
 
+- **`rgb565` golden and fleet coverage.** The format is in the registry and
+  reachable from `--pixel-format`, but nothing has captured
+  `tigervnc-raw-rgb565` or run a fleet case against it — R3 doesn't need it,
+  and no server has been found that requires it over the two 32 bpp formats
+  already verified. Capturing it needs a per-format `maxrms` in the driving
+  script (`scene.vdo`'s exact-histogram `expect` can't pass at 5-bit
+  quantization) and the tolerance bound noted under Risks below, whenever
+  someone wants the second format actually exercised end-to-end.
 - The four layouts Pillow cannot unpack, each waiting for a capture from a
   server that sends one and ignores `SetPixelFormat`.
 - Colour map: `P` plus a palette, and the `SetColourMapEntries` ordering above.
@@ -280,12 +286,13 @@ document covers it; a capture will.
   [decoder-goldens.md](decoder-goldens.md). What hides is narrower than the
   whole class: a channel swap moves a coloured pixel much further than 255/31,
   so the tolerant comparison still fails on it, and what survives is a shift or
-  rounding error smaller than one quantization step.
+  rounding error smaller than one quantization step. Applies once the
+  deferred `rgb565` golden above is captured.
 - Tagging moves the trust from our arithmetic to Pillow's mode strings. A mode
   meaning something other than we think decodes silently wrong, where a bad
   shift would at least be ours to read — hence unit tests asserting Pillow's
   behaviour per mode, not only which mode we picked.
-- Retiring the 3.889 branch rests on one macOS version on a hosted runner. If an
-  older ARD server announces something unreadable, it now gets a
-  `SetPixelFormat` for `rgbx8888` — the correct fallback, untested against that
-  server.
+- Dropping the version-3.889 special case rests on one macOS version on a
+  hosted runner. If an older ARD server announces something unreadable, it
+  now gets a `SetPixelFormat` for `rgbx8888` — the correct fallback, untested
+  against that server.

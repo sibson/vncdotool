@@ -17,6 +17,8 @@
   - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
   - Fix ``VMWareClient`` raising ``AttributeError`` instead of detecting the VMware single-pixel update it exists to filter (@sibson, #400)
   - ``PixelFormat`` moves to ``vncdotool.pixelformat``; ``vncdotool.rfb.PixelFormat`` still imports (@sibson, #415)
+  - [BREAKING] ``VNCDoToolClient.image_mode`` is gone; its ``FutureWarning`` shipped in 1.4, see #385 (@sibson)
+  - A server that announces an unreadable pixel format is now asked for ``rgbx8888`` even when it identifies as Apple Remote Desktop (RFB 3.889); the previous ``rgb565`` fallback there was never confirmed necessary and never fired against any measured server (@sibson)
   - [BREAKING] ``vncdotool.rfb.Rect`` is gone; annotate rectangles as ``tuple[int, int, int, int]`` (@sibson, #415)
   - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
   - Fix ``make release`` tagging an empty version (@sibson, #382)
