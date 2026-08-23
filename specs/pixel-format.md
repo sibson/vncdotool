@@ -21,12 +21,9 @@ matrix has one fixture and the pixel plumbing has never run at a second format.
 The `pixelformat.py` machinery: computing a Pillow mode from any byte-aligned
 truecolor `PixelFormat` instead of a five-entry lookup table, plus the CPIXEL
 functions ZRLE needs at Phase 5. `rgb565` is in the registry as a second
-requestable format — RFB permits it and the code was already written for it —
-but nothing here depends on it: R3 (one scene decoding to the same framebuffer
-at two formats) is already discharged by `bgrx8888` and `rgbx8888`, both
-captured today. Verifying `rgb565` end-to-end — a golden fixture, a fleet
-case — is deferred; see below. Colour map, and the layouts Pillow cannot
-unpack, wait for a server that needs them.
+requestable format, but verifying it end-to-end is deferred (see below).
+Colour map, and the layouts Pillow cannot unpack, wait for a server that
+needs them.
 
 ## What servers actually send
 
@@ -232,8 +229,7 @@ requested. They are different facts and the interesting fixtures are where they
 differ.
 
 Golden and functional coverage at a second, reduced-precision format
-(`rgb565`) is deferred — see below — since R3 is already satisfied by the two
-32 bpp formats already captured.
+(`rgb565`) is deferred (see below).
 
 ## Phasing
 
