@@ -21,3 +21,6 @@ tests/servers/screenshots/
 .DS_Store
 .tool-versions
 .vscode/
+
+# issue-triage skill: per-run eval outputs, never committed
+issue-triage-workspace/

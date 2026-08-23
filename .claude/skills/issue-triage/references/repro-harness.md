@@ -143,10 +143,14 @@ synthetic framebuffer data.
 
 The functional tier (`tests/functional/`, run by CI) drives the real `vncdo`
 against libvncserver's example server — `make libvnc-examples` builds it,
-`make test-func` runs it, `pexpect` drives it. It exists for whole-client-loop
-behaviour, but it is one specific server run locally: prefer the unit tier,
-and don't mistake "passes against libvncserver" for "fixed against the
-reporter's server".
+`make test-func` runs it, `pexpect` drives it. There is also a docker-compose
+fleet of real servers (TigerVNC, UltraVNC and others) under `tests/servers/`,
+driven by `tests/servers/servers.mk` (`servers-up` / `test-servers`) — check
+whether the reporter's server is in that fleet before concluding it is out of
+reach. Both exist for whole-client-loop behaviour against specific servers:
+prefer the unit tier, and don't mistake "passes against libvncserver" for
+"fixed against the reporter's server" unless the fleet actually ran the
+reporter's server.
 
 Genuinely out of reach — outcome B — is behaviour that lives in the third-party
 server or the environment itself: whether TigerVNC in shared mode ever sends
