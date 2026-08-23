@@ -25,7 +25,7 @@ SCENES = ("0", "s")
 # 1.12.0 in #417, and upstream's EncodeManager::supported() accepts Raw, RRE,
 # Hextile, ZRLE and Tight only. Offering CoRRE here would prove the fallback
 # renders, not that CoRRE does.
-EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile"}
+EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile", "zrle"}
 
 
 def capture(test: TestCase, encodings: str, key: str) -> tuple[Image.Image, str]:
