@@ -2,18 +2,44 @@
 
 Tests are stdlib `unittest`, not pytest. Run the unit suite with `make test`
 (`python -m unittest discover tests/unit`) -- note the path: discovery over
-plain `tests` also collects `tests/functional/`, whose harness shells out to
-build libvncserver and fails on machines without the toolchain. Unit tests
-need no VNC server: protocol classes are driven directly with a mocked
-Twisted transport (see `tests/unit/test_rfb.py` and `test_client.py` for the
-patterns).
+plain `tests` also collects `tests/functional/`, whose tests need the Docker
+Compose test server fleet (`make servers-up`) and fail loudly without it --
+they never skip, so a down fleet can't pass as green.
+Unit tests need no VNC server: protocol classes are driven directly with a
+mocked Twisted transport (see `tests/unit/test_rfb.py` and `test_client.py`
+for the patterns).
+
+A worktree builds its own `.venv`: every `make` target runs through `uv run`,
+which syncs an editable install of that checkout into a `.venv` in the
+worktree root. Never symlink another checkout's `.venv` in -- the editable
+install still points at the checkout that created it, and
+`tests/functional/utils.py` names the console scripts (`vncdo`,
+`vnclog`) from `Path(sys.executable).parent`, so a subprocess exercises the
+other checkout's code while in-process imports resolve to this one, and the
+two halves of a functional test disagree about what they're testing.
 
 Never start the Twisted reactor in a unit test. `vncdotool/api.py` runs the
 reactor in a daemon thread and a reactor cannot be restarted
 (`docs/library.rst` documents this design), so a test that touches
 `api.connect` poisons or hangs the rest of the run. The functional suite
-(`make test-func`) is the place for whole-client behaviour; it needs
-libvncserver's example server (`make libvnc-examples`) on the PATH.
+(`make test-func`) is the place for whole-client behaviour: every scenario
+shells out to the real `vncdo` CLI via `subprocess.run` against the fleet
+(`tests/servers/docker-compose.yml`) rather than calling `api.connect()`,
+so a hang is contained by the kernel reaping the subprocess rather than by
+anything in-process. See `specs/testing-framework.md` and
+`tests/functional/utils.py`.
+
+Comments follow the `writing-code-comments` skill in
+`.claude/skills/`. What is particular to this repo: `loggingproxy.py` has
+the shape of a comment that earns its place -- "SetEncodings only says what
+the client asked for, and a server may ignore it." `rfb.py` is the file the
+skill's vendored-code rule is about here: a 2003-era import, added whole.
+
+Check the protocol documents before implementing anything that touches the
+wire -- a new encoding, security type, message or client command. The repo
+carries no copy of the spec; `DEVELOP.rst` says which of RFC 6143 and
+rfbproto covers what. Guessing a message layout from the surrounding code
+produces something that works against one server and no other.
 
 Lint is plain flake8, configured in `setup.cfg`: line length 127,
 `extend-ignore = E203`. CI runs `flake8 --count --statistics vncdotool tests`,
@@ -30,10 +56,30 @@ fix the underlying bug, move the test into the topical file, drop its
 `@unittest.expectedFailure` marker, and rename it for the behaviour it checks
 rather than the issue number.
 
+A test that runs the same body over a set -- every encoding, every pixel
+format, every golden fixture -- generates one case per member through
+`load_tests`, rather than looping inside a single test method. A failure then
+names the member in its test id (`TestRenders_corre.test_renders_every_scene`)
+instead of hiding it in a `subTest` under a green-looking method, and CI
+reports it without anyone reading the output. `tests/unit/test_goldens.py` and
+`tests/functional/test_pixel_format.py` are the pattern: a plain mixin holding
+the test body, and `load_tests` building one `TestCase` subclass per member.
+Where a test crosses two sets -- every encoding against every scene --
+generate the cross product, one case per pair, rather than generating one and
+looping the other.
+
+A pull request description is read by someone deciding where to spend their
+attention, not by the archive: a title plus a few sentences saying what
+changed, what a reviewer would not guess from the diff, and what was tested.
+Under ~15 lines. The commit bodies already carry the full rationale, and
+restaging them in the description only makes the reviewer read it twice.
+Findings outside the diff get a line and a pointer, not a section.
+
 # Release Process
 
-Version lives in `vncdotool/__init__.py` and is bumped by the release target.
-Always release from `main`; the target runs the unit tests, stamps
-`CHANGELOG.rst`, tags `vX.Y.Z`, and pushes:
+Version lives in `[project] version` in `pyproject.toml`; `vncdotool.__version__`
+reads it back from the installed distribution's metadata. Always release from
+`main`; the target runs the unit tests, bumps the version with `uv version`,
+stamps `CHANGELOG.rst`, tags `vX.Y.Z`, and pushes:
 
     make release

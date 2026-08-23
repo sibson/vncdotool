@@ -4,6 +4,15 @@ vncdotool is built with the Twisted_ framework, as such it best integrates with 
 Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatibility layer.
 It uses a separate thread to run the Twisted reactor and communicates with the main program using a thread-safe Queue.
 
+..  note::
+
+    The compatibility layer is designed for exactly two threads: one
+    application thread holding one client, and the single reactor thread
+    vncdotool starts for it.
+    Using clients from more than one application thread, or sharing one
+    client between threads, is not supported -- see `issue #192
+    <https://github.com/sibson/vncdotool/issues/192>`_.
+
 ..  warning::
 
     While the Twisted reactor runs as a *daemon* thread, the reactor itself will start additional *worker threads*, which are *no daemon threads*.

@@ -63,10 +63,10 @@ class Encoding(IntEnumLookup):
     JPEG_31 = -31
     JPEG_32 = -32
     TIGHT_33 = -33  # ... -218
-    LIBVNCSERVER_219 = -219  # historical
-    LIBVNCSERVER_220 = -220  # historical
-    LIBVNCSERVER_221 = -221  # historical
-    LIBVNCSERVER_222 = -222  # historical
+    LIBVNCSERVER_219 = -219
+    LIBVNCSERVER_220 = -220
+    LIBVNCSERVER_221 = -221
+    LIBVNCSERVER_222 = -222
     PSEUDO_DESKTOP_SIZE = -223
     PSEUDO_LAST_RECT = -224
     POINTER_POS = -225
@@ -137,7 +137,7 @@ class Encoding(IntEnumLookup):
 
 
 class HextileEncoding(IntFlag):
-    """:rfc:`6153` §7.7.4. Hextile Encoding."""
+    """:rfc:`6143` §7.7.4. Hextile Encoding."""
 
     RAW = 1
     BACKGROUND_SPECIFIED = 2

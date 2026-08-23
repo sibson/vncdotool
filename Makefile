@@ -1,51 +1,95 @@
 #!/usr/bin/make -f
 .DEFAULT: help
 
-REQUIREMENTS_TXT?=requirements-dev.txt
+ifeq ($(shell command -v uv 2>/dev/null),)
+$(error uv is required. Install it with `brew install uv`, `winget install astral-sh.uv`, or https://astral.sh/uv/install.sh)
+endif
 
 .PHONY: help
 help:
 	@echo "test:		run unit tests"
 	@echo "test-func:	run functional tests"
+	@echo "typecheck:	run mypy over vncdotool"
 	@echo "servers-up:	start the docker VNC test servers"
 	@echo "servers-down:	stop the docker VNC test servers"
 	@echo "test-servers:	run functional tests against the VNC test servers"
 	@echo "test-os-server:	run functional tests against this OS's VNC server"
+	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
+	@echo "goldens:	capture decoder golden fixtures from the fleet"
+	@echo "scenes:		regenerate the committed scene PNGs from tests/goldens/scenes.py"
+	@echo "bench:		time a decoder against a committed golden fixture"
+	@echo "bench-record:	time it and append the run to the tracked bench.jsonl"
+	@echo "bench-report:	tabulate bench.jsonl, or diff two runs' call counts"
+	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
-VERSION := $(shell python -c "import vncdotool; print(vncdotool.__version__.split('.dev')[0])")
-NEXT_VERSION := $(shell python -c "v='$(VERSION)'.split('.'); v[-1]=str(int(v[-1])+1); print('.'.join(v)+'.dev0')")
+VERSION := $(shell uv version --bump stable --dry-run --short --no-sync 2>/dev/null)
+NEXT_VERSION := $(shell uv version --bump patch --bump dev=0 --dry-run --short --no-sync 2>/dev/null)
 
 .PHONY: release
 release: test-unit
 	@echo "Releasing $(VERSION)"
-	sed -i'' "s/^$(VERSION) (UNRELEASED)/$(VERSION) ($(shell date +%Y-%m-%d))/" CHANGELOG.rst
-	git add CHANGELOG.rst
+	uv version --bump stable --no-sync
+	sd "^$(VERSION) \(UNRELEASED\)" "$(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.rst
+	git add pyproject.toml CHANGELOG.rst
 	git commit -m "Release $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
-	sed -i'' "s/__version__ = .*/__version__ = \"$(NEXT_VERSION)\"/" vncdotool/__init__.py
+	uv version --bump patch --bump dev=0 --no-sync
 	printf '$(NEXT_VERSION) (UNRELEASED)\n----------------------\n\n' | cat - CHANGELOG.rst > CHANGELOG.rst.tmp && mv CHANGELOG.rst.tmp CHANGELOG.rst
-	git add vncdotool/__init__.py CHANGELOG.rst
+	git add pyproject.toml CHANGELOG.rst
 	git commit -m "Bump version to $(NEXT_VERSION)"
 	git push origin main
 
 .PHONY: docs
 docs:
-	$(MAKE) -C docs/ html
+	uv run $(MAKE) -C docs/ html
 
-.PHONY: test testall test-unit test-func
+.PHONY: test testall test-unit
 test: test-unit
 testall: test-unit test-func
 test-unit:
-	$(VENV)/python -m unittest discover tests/unit
+	uv run python -m unittest discover tests/unit
 
-include libvncserver.mk
+.PHONY: bench
+bench:
+	uv run python -m tests.goldens.benchmark
 
-test-func: libvnc-examples test-libvnc
+.PHONY: bench-record
+bench-record:
+	uv run python -m tests.goldens.benchmark --record
+
+.PHONY: bench-report
+bench-report:
+	uv run python -m tests.goldens.report $(ARGS)
+
+# Needs `make servers-up`: an unreachable server fails its tests rather
+# than skipping them, so a down fleet cannot pass as green.
+.PHONY: test-func
+test-func:
+	uv run python -m unittest discover -s tests/functional -t .
+
+.PHONY: typecheck
+typecheck:
+	uv run mypy vncdotool
 
 include tests/servers/servers.mk
 
-include Makefile.venv
+# Coverage, kept off the plain `test` targets because measuring costs
+# runtime not worth paying on every edit-run loop. See DEVELOP.rst.
+.PHONY: coverage coverage-unit coverage-func coverage-report
+coverage: coverage-unit coverage-func coverage-report
+
+coverage-unit:
+	uv run coverage run --parallel-mode -m unittest discover tests/unit
+
+coverage-func:
+	uv run coverage run --parallel-mode -m unittest discover -s tests/functional -t .
+
+coverage-report:
+	uv run coverage combine
+	uv run coverage report
+	uv run coverage html
+	@echo "open htmlcov/index.html"

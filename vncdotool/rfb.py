@@ -5,7 +5,8 @@ Override :class:`RFBClient` and :class:`RFBFactory` in your application.
 See vncviewer.py for an example.
 
 Reference:
-http://www.realvnc.com/docs/rfbproto.pdf
+https://www.rfc-editor.org/rfc/rfc6143
+https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 """
 # (C) 2003 cliechti@gmx.net
 #
@@ -17,12 +18,10 @@ import getpass
 import sys
 import warnings
 import zlib
-from dataclasses import astuple, dataclass
-from struct import Struct, pack, unpack, unpack_from
+from struct import error as StructError, pack, unpack, unpack_from
 from typing import (
     Any,
     Callable,
-    ClassVar,
     Collection,
     Iterator,
     List,
@@ -33,66 +32,22 @@ from typing import (
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives import hashes
+from cryptography.utils import CryptographyDeprecationWarning
 from twisted.application import internet, service
 from twisted.internet import protocol
-from twisted.internet.interfaces import IConnector
+from twisted.internet.interfaces import IConnector, ITransport
 from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
-from .const import Encoding, HextileEncoding, AuthTypes, MsgC2S, MsgS2C
+from . import decoders
+from .const import Encoding, AuthTypes, MsgC2S, MsgS2C
 from .keys import Key
+from .pixelformat import PixelFormat
 
-Rect = Tuple[int, int, int, int]
 Ver = Tuple[int, int]
 
 # ~ from twisted.internet import reactor
-
-
-@dataclass(frozen=True)
-class PixelFormat:
-    """:rfc:`6143` §7.4. Pixel Format Data Structure."""
-
-    bpp: int = 32  # u8: bits-per-pixel
-    depth: int = 24  # u8
-    bigendian: bool = False  # u8
-    truecolor: bool = True  # u8
-    redmax: int = 255  # u16
-    greenmax: int = 255  # u16
-    bluemax: int = 255  # u16
-    redshift: int = 0  # u8
-    greenshift: int = 8  # u8
-    blueshift: int = 16  # u8
-
-    STRUCT: ClassVar = Struct("!BB??HHHBBBxxx")
-    VALIDATE: ClassVar = False
-
-    def __post_init__(self) -> None:
-        if not self.VALIDATE:
-            return
-        assert self.bpp in {8, 16, 24, 32}, f"bpp={self.bpp}"
-        assert 1 <= self.depth <= self.bpp, f"depth={self.depth} <= bpp={self.bpp}"
-        if self.truecolor:
-            for max, shift in zip(
-                (self.redmax, self.greenmax, self.bluemax),
-                (self.redshift, self.greenshift, self.blueshift),
-            ):
-                assert 1 <= max <= 0xFFFF, f"1 <= max={max} <= 0xffff"
-                assert max & (max + 1) == 0, f"max={max} not a 2**n-1"
-                assert (
-                    0 <= shift <= self.bpp - max.bit_length()
-                ), f"shift={shift} not in bpp={self.bpp}"
-
-    @property
-    def bypp(self) -> int:  # bytes-per-pixel
-        return (7 + self.bpp) // 8
-
-    @classmethod
-    def from_bytes(cls, block: bytes) -> PixelFormat:
-        return cls(*cls.STRUCT.unpack(block))
-
-    def to_bytes(self) -> bytes:
-        return cast(bytes, self.STRUCT.pack(*astuple(self)))
 
 
 # ZRLE helpers
@@ -138,7 +93,7 @@ def _zrle_next_nibble(it: Iterator[int], pixels_in_tile: int) -> Iterator[int]:
                 return
 
 
-class RFBClient(Protocol):  # type: ignore[misc]
+class RFBClient(Protocol):
     # https://www.rfc-editor.org/rfc/rfc6143#section-7.1.1
     SUPPORTED_SERVER_VERSIONS = {
         (3, 3),
@@ -156,21 +111,37 @@ class RFBClient(Protocol):  # type: ignore[misc]
         AuthTypes.VNC_AUTHENTICATION,
         AuthTypes.DIFFIE_HELLMAN,
     }
-    SUPPORTED_ENCODINGS = {
-        Encoding.RAW,
-        Encoding.COPY_RECTANGLE,
-        Encoding.RRE,
-        Encoding.CORRE,
-        Encoding.HEXTILE,
+    _UNMIGRATED_ENCODINGS = {
         Encoding.ZRLE,
         Encoding.PSEUDO_CURSOR,
         Encoding.PSEUDO_DESKTOP_SIZE,
         Encoding.PSEUDO_LAST_RECT,
         Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
+    SUPPORTED_ENCODINGS = set(decoders.DECODERS) | _UNMIGRATED_ENCODINGS
+
+    # Greater than any u16 dimension, so it refuses nothing until a subclass
+    # narrows it.
+    MAX_DESKTOP_SIZE = 0x10000
 
     _HEADER = b"RFB 000.000\n"
     _HEADER_TRANSLATE = bytes.maketrans(b"0123456789", b"0" * 10)
+
+    _CHANGING_HOOKS = ("fillRectangle", "updateRectangle")
+
+    transport: ITransport
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        for name in cls._CHANGING_HOOKS:
+            if not getattr(cls, name).__module__.startswith("vncdotool."):
+                warnings.warn(
+                    f"{name} will change in a future release; please comment "
+                    "on https://github.com/sibson/vncdotool/issues/385 if "
+                    "you rely on it",
+                    FutureWarning,
+                    stacklevel=2,
+                )
 
     def __init__(self) -> None:
         self._packet = bytearray()
@@ -179,6 +150,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self._expected_args: tuple[Any, ...] = ()
         self._expected_kwargs: dict[str, Any] = {}
         self._already_expecting = False
+        self._aborted = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
         self._zlib_stream = zlib.decompressobj(0)
@@ -186,6 +158,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
             Encoding.RAW,
         }
         self.pixel_format = PixelFormat()
+        self.width = 0
+        self.height = 0
+        self._rect_backing = bytearray()
+        self._decoders = {
+            encoding: (decoder, self._pumpFor(decoder))
+            for encoding, decoder in decoders.for_connection().items()
+        }
 
     @property
     def bypp(self) -> int:
@@ -220,7 +199,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
         elif not self._HEADER.startswith(norm):
-            log.msg(f"invalid initial server response {head!r}")
+            self.vncProtocolError(f"invalid initial server response {head!r}")
             self.transport.loseConnection()
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
@@ -248,7 +227,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
             elif sec_type == AuthTypes.DIFFIE_HELLMAN:
                 self.expect(self._handleDHAuth, 4)
         else:
-            log.msg(f"unknown security types: {types!r}")
+            self.vncProtocolError(f"unknown security types: {types!r}")
             self.transport.loseConnection()
 
     def _handleAuth(self, block: bytes) -> None:
@@ -261,7 +240,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
-            log.msg(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+            self.vncProtocolError(f"unknown auth response {AuthTypes.lookup(auth)!r}")
             self.transport.loseConnection()
 
     def _handleConnFailed(self, block: bytes) -> None:
@@ -269,7 +248,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block: bytes) -> None:
-        log.msg(f"Connection refused: {block!r}")
+        self.vncProtocolError(f"Connection refused: {block!r}")
         self.transport.loseConnection()
 
     def _handleVNCAuth(self, block: bytes) -> None:
@@ -298,8 +277,13 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
         p = int.from_bytes(self.modulus, "big")
         sk = int.from_bytes(self.serverKey, "big")
-        param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
-        server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
+        with warnings.catch_warnings():
+            # ARD auth is specified over classic finite-field DH; the server
+            # picks p/g and there is no other algorithm to negotiate into.
+            # Tracking upstream removal: https://github.com/sibson/vncdotool/issues/388
+            warnings.simplefilter("ignore", CryptographyDeprecationWarning)
+            param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
+            server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
 
         params = param_nums.parameters()
         private_key = params.generate_private_key()
@@ -390,12 +374,12 @@ class RFBClient(Protocol):  # type: ignore[misc]
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
-            log.msg(f"unknown message received {MsgS2C.lookup(msgid)!r}")
+            self.vncProtocolError(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
-        self.rectanglePos: list[Rect] = []
+        self.rectanglePos: list[tuple[int, int, int, int]] = []
         self.beginUpdate()
         self._doConnection()
 
@@ -408,30 +392,16 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _handleRectangle(self, block: bytes) -> None:
         (x, y, width, height, encoding) = unpack("!HHHHi", block)
-        log.msg(f"x={x} y={y} w={width} h={height} {Encoding.lookup(encoding)!r}")
         if encoding == Encoding.PSEUDO_LAST_RECT:
             self.rectangles = 0
 
         if self.rectangles:
             self.rectangles -= 1
             self.rectanglePos.append((x, y, width, height))
-            if encoding == Encoding.COPY_RECTANGLE:
-                self.expect(self._handleDecodeCopyrect, 4, x, y, width, height)
-            elif encoding == Encoding.RAW:
-                self.expect(
-                    self._handleDecodeRAW,
-                    width * height * self.bypp,
-                    x,
-                    y,
-                    width,
-                    height,
-                )
-            elif encoding == Encoding.HEXTILE:
-                self._doNextHextileSubrect(None, None, x, y, width, height, None, None)
-            elif encoding == Encoding.CORRE:
-                self.expect(self._handleDecodeCORRE, 4 + self.bypp, x, y, width, height)
-            elif encoding == Encoding.RRE:
-                self.expect(self._handleDecodeRRE, 4 + self.bypp, x, y, width, height)
+            entry = self._decoders.get(encoding)
+            if entry is not None:
+                decoder, pump = entry
+                pump(decoder, x, y, width, height)
             elif encoding == Encoding.ZRLE:
                 self.expect(self._handleDecodeZRLE, 4, x, y, width, height)
             elif encoding == Encoding.PSEUDO_CURSOR:
@@ -439,328 +409,119 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 length += ((width + 7) // 8) * height
                 self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
             elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
+                del self.rectanglePos[-1]  # undo append as this carries no pixel data
                 self._handleDecodeDesktopSize(width, height)
             elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
                 self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
                 del self.rectanglePos[-1]  # undo append as this is no real update
                 self._doConnection()
             else:
-                log.msg(f"unknown encoding received {Encoding.lookup(encoding)!r}")
+                self.vncProtocolError(
+                    f"unknown encoding received {Encoding.lookup(encoding)!r}"
+                )
                 self.transport.loseConnection()
         else:
             self._doConnection()
 
-    # ---  RAW Encoding
+    def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
+        if isinstance(decoder, decoders.PixelDecoder):
+            if not decoder.buffered:
+                return self._pumpRectangle
+            return self._pumpBufferedRectangle
+        return self._pumpForClient
 
-    def _handleDecodeRAW(
-        self, block: bytes, x: int, y: int, width: int, height: int
+    def _pumpRectangle(
+        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        # TODO convert pixel format?
-        self.updateRectangle(x, y, width, height, block)
-        self._doConnection()
+        if not self._rectFits(width, height):
+            return
+        output_format = decoder.output_format(self.pixel_format)
+        size = width * height * output_format.bypp
+        self.expect(self._finishRectangle, size, output_format, (x, y, width, height))
 
-    # ---  CopyRect Encoding
-
-    def _handleDecodeCopyrect(
-        self, block: bytes, x: int, y: int, width: int, height: int
+    def _pumpBufferedRectangle(
+        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        (srcx, srcy) = unpack("!HH", block)
-        self.copyRectangle(srcx, srcy, x, y, width, height)
-        self._doConnection()
+        target = self._allocateBuffer(width, height)
+        if target is None:
+            return
+        self._pumpBlock(
+            None,
+            decoder.decodePixels(target, self.pixel_format),
+            (decoder, target, (x, y, width, height)),
+        )
 
-    # ---  RRE Encoding
-
-    def _handleDecodeRRE(
-        self, block: bytes, x: int, y: int, width: int, height: int
+    def _pumpForClient(
+        self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        (subrects,) = unpack("!I", block[:4])
-        color = block[4:]
-        self.fillRectangle(x, y, width, height, color)
-        if subrects:
-            self.expect(self._handleRRESubRectangles, (8 + self.bypp) * subrects, x, y)
-        else:
-            self._doConnection()
+        rect = (x, y, width, height)
+        self._pumpBlock(
+            None, decoder.decodeForClient(self, rect, self.pixel_format), None
+        )
 
-    def _handleRRESubRectangles(self, block: bytes, topx: int, topy: int) -> None:
-        # ~ print("_handleRRESubRectangle")
-        pos = 0
-        end = len(block)
-        sz = self.bypp + 8
-        format = f"!{self.bypp}sHHHH"
-        while pos < end:
-            (color, x, y, width, height) = unpack(format, block[pos : pos + sz])
-            self.fillRectangle(topx + x, topy + y, width, height, color)
-            pos += sz
-        self._doConnection()
-
-    # ---  CoRRE Encoding
-
-    def _handleDecodeCORRE(
-        self, block: bytes, x: int, y: int, width: int, height: int
-    ) -> None:
-        (subrects,) = unpack("!I", block[:4])
-        color = block[4:]
-        self.fillRectangle(x, y, width, height, color)
-        if subrects:
-            self.expect(
-                self._handleDecodeCORRERectangles, (4 + self.bypp) * subrects, x, y
-            )
-        else:
-            self._doConnection()
-
-    def _handleDecodeCORRERectangles(self, block: bytes, topx: int, topy: int) -> None:
-        # ~ print("_handleDecodeCORRERectangle")
-        pos = 0
-        sz = self.bypp + 4
-        format = "!{self.bypp}sBBBB"
-        while pos < sz:
-            (color, x, y, width, height) = unpack(format, block[pos : pos + sz])
-            self.fillRectangle(topx + x, topy + y, width, height, color)
-            pos += sz
-        self._doConnection()
-
-    # ---  Hexile Encoding
-
-    def _doNextHextileSubrect(
-        self,
-        bg: bytes | None,
-        color: bytes | None,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int | None,
-        ty: int | None,
-    ) -> None:
-        # ~ print("_doNextHextileSubrect %r" % ((color, x, y, width, height, tx, ty),))
-        # coords of next tile
-        # its line after line of tiles
-        # finished when the last line is completly received
-
-        # dont inc the first time
-        if tx is not None:
-            assert ty is not None
-            # calc next subrect pos
-            tx += 16
-            if tx >= x + width:
-                tx = x
-                ty += 16
-        else:
-            tx = x
-            ty = y
-        # more tiles?
-        if ty >= y + height:
-            self._doConnection()
-        else:
-            self.expect(
-                self._handleDecodeHextile, 1, bg, color, x, y, width, height, tx, ty
-            )
-
-    def _handleDecodeHextile(
+    def _finishRectangle(
         self,
         block: bytes,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
+        output_format: PixelFormat,
+        rect: tuple[int, int, int, int],
     ) -> None:
-        subencoding = HextileEncoding(block[0])
-        # calc tile size
-        tw = th = 16
-        if x + width - tx < 16:
-            tw = x + width - tx
-        if y + height - ty < 16:
-            th = y + height - ty
-        # decode tile
-        if subencoding & HextileEncoding.RAW:
-            self.expect(
-                self._handleDecodeHextileRAW,
-                tw * th * self.bypp,
-                bg,
-                color,
-                x,
-                y,
-                width,
-                height,
-                tx,
-                ty,
-                tw,
-                th,
+        x, y, width, height = rect
+        self.updateRectangle(x, y, width, height, block, output_format)
+        self._doConnection()
+
+    def _rectFits(self, width: int, height: int) -> bool:
+        """Whether a rectangle fits the framebuffer, having failed the
+        connection if it does not."""
+        limit_w = self.width or self.MAX_DESKTOP_SIZE
+        limit_h = self.height or self.MAX_DESKTOP_SIZE
+        if not (0 <= width <= limit_w and 0 <= height <= limit_h):
+            self.abortConnection(
+                f"rectangle {width}x{height} does not fit a {limit_w}x{limit_h} framebuffer"
             )
-        else:
-            numbytes = 0
-            if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
-                numbytes += self.bypp
-            if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
-                numbytes += self.bypp
-            if subencoding & HextileEncoding.ANY_SUBRECTS:
-                numbytes += 1
-            if numbytes:
-                self.expect(
-                    self._handleDecodeHextileSubrect,
-                    numbytes,
-                    subencoding,
-                    bg,
-                    color,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
+            return False
+        return True
+
+    def _allocateBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
+        """A buffer for one rectangle, or None having failed the connection."""
+        if not self._rectFits(width, height):
+            return None
+        needed = width * height * self.bypp
+        try:
+            if len(self._rect_backing) < needed:
+                self._rect_backing = bytearray(needed)
+            return decoders.RectBuffer(width, height, self.bypp, self._rect_backing)
+        except MemoryError:
+            self.abortConnection(f"no memory for a {width}x{height} rectangle")
+            return None
+
+    def _pumpBlock(
+        self,
+        block: bytes | None,
+        generator: Iterator[int],
+        finish: tuple[
+            decoders.PixelDecoder, decoders.RectBuffer, tuple[int, int, int, int]
+        ] | None,
+    ) -> None:
+        try:
+            size = generator.send(block)
+        except StopIteration:
+            if finish is None:
+                self._doConnection()
             else:
-                self.fillRectangle(tx, ty, tw, th, bg)
-                self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
+                decoder, target, rect = finish
+                output_format = decoder.output_format(self.pixel_format)
+                self._finishRectangle(target.tobytes(), output_format, rect)
+            return
+        except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
+            generator.close()
+            self.abortConnection(f"cannot decode this rectangle: {exc}")
+            return
 
-    def _handleDecodeHextileSubrect(
-        self,
-        block: bytes,
-        subencoding: HextileEncoding,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        subrects = 0
-        pos = 0
-        if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
-            bg = block[: self.bypp]
-            pos += self.bypp
-        self.fillRectangle(tx, ty, tw, th, bg)
-        if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
-            color = block[pos : pos + self.bypp]
-            pos += self.bypp
-        if subencoding & HextileEncoding.ANY_SUBRECTS:
-            # ~ (subrects, ) = unpack("!B", block)
-            subrects = block[pos]
-        # ~ print(subrects)
-        if subrects:
-            if subencoding & HextileEncoding.SUBRECTS_COLORED:
-                self.expect(
-                    self._handleDecodeHextileSubrectsColoured,
-                    (self.bypp + 2) * subrects,
-                    bg,
-                    color,
-                    subrects,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
-            else:
-                self.expect(
-                    self._handleDecodeHextileSubrectsFG,
-                    2 * subrects,
-                    bg,
-                    color,
-                    subrects,
-                    x,
-                    y,
-                    width,
-                    height,
-                    tx,
-                    ty,
-                    tw,
-                    th,
-                )
-        else:
-            self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileRAW(
-        self,
-        block: bytes,
-        bg: bytes,
-        color: bytes,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """the tile is in raw encoding"""
-        self.updateRectangle(tx, ty, tw, th, block)
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileSubrectsColoured(
-        self,
-        block: bytes,
-        bg: bytes | None,
-        color: bytes | None,
-        subrects: int,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """subrects with their own color"""
-        sz = self.bypp + 2
-        pos = 0
-        end = len(block)
-        while pos < end:
-            pos2 = pos + self.bypp
-            color = block[pos:pos2]
-            xy = block[pos2]
-            wh = block[pos2 + 1]
-            sx = xy >> 4
-            sy = xy & 0xF
-            sw = (wh >> 4) + 1
-            sh = (wh & 0xF) + 1
-            self.fillRectangle(tx + sx, ty + sy, sw, sh, color)
-            pos += sz
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
-
-    def _handleDecodeHextileSubrectsFG(
-        self,
-        block: bytes,
-        bg: bytes,
-        color: bytes,
-        subrects: int,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        tx: int,
-        ty: int,
-        tw: int,
-        th: int,
-    ) -> None:
-        """all subrect with same color"""
-        pos = 0
-        end = len(block)
-        while pos < end:
-            xy = block[pos]
-            wh = block[pos + 1]
-            sx = xy >> 4
-            sy = xy & 0xF
-            sw = (wh >> 4) + 1
-            sh = (wh & 0xF) + 1
-            self.fillRectangle(tx + sx, ty + sy, sw, sh, color)
-            pos += 2
-        self._doNextHextileSubrect(bg, color, x, y, width, height, tx, ty)
+        if size < 0:
+            generator.close()
+            self.abortConnection(f"decoder asked for {size} bytes")
+            return
+        self.expect(self._pumpBlock, size, generator, finish)
 
     # ---  ZRLE Encoding
     def _handleDecodeZRLE(
@@ -852,14 +613,18 @@ class RFBClient(Protocol):  # type: ignore[misc]
                     if num_pixels != pixels_in_tile:
                         raise ValueError("too many pixels")
 
-                self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+                self.updateRectangle(
+                    tx, ty, tw, th, bytes(pixel_data), self.pixel_format
+                )
             else:
                 # No RLE
                 if palette_size == 0:
                     # Raw pixel data
                     for _ in range(pixels_in_tile):
                         pixel_data.extend(cpixel(it))
-                    self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+                    self.updateRectangle(
+                        tx, ty, tw, th, bytes(pixel_data), self.pixel_format
+                    )
                 elif palette_size == 1:
                     # Fill tile with plain color
                     color = cpixel(it)
@@ -877,7 +642,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
                     for palette_index in next_index:
                         pixel_data.extend(palette[palette_index])
-                    self.updateRectangle(tx, ty, tw, th, bytes(pixel_data))
+                    self.updateRectangle(
+                        tx, ty, tw, th, bytes(pixel_data), self.pixel_format
+                    )
 
             # Next tile
             tx = tx + 64
@@ -929,14 +696,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # incomming data redirector
     # ------------------------------------------------------
     def dataReceived(self, data: bytes) -> None:
-        # ~ sys.stdout.write(repr(data) + '\n')
-        # ~ print(f"{len(data), {len(self._packet)}")
+        if self._aborted:
+            return
         self._packet.extend(data)
         self._handler()
 
     def _handleExpected(self) -> None:
         if len(self._packet) >= self._expected_len:
-            while len(self._packet) >= self._expected_len:
+            # `expect` is the only thing that re-arms the parked handler, so
+            # a handler that gives up without calling it would be re-entered
+            # by this loop with the next block.
+            while len(self._packet) >= self._expected_len and not self._aborted:
                 self._already_expecting = True
                 block = bytes(self._packet[: self._expected_len])
                 del self._packet[: self._expected_len]
@@ -945,6 +715,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
                     block, *self._expected_args, **self._expected_kwargs
                 )
             self._already_expecting = False
+
+    def abortConnection(self, reason: str) -> None:
+        """Report a protocol failure and stop parsing for good.
+
+        loseConnection is asynchronous and bytes already buffered are still
+        delivered, so the parser has to be stopped here as well.
+        """
+        self._aborted = True
+        self._packet.clear()
+        self.vncProtocolError(reason)
+        self.transport.loseConnection()
 
     def expect(
         self, handler: Callable[..., None], size: int, *args: Any, **kwargs: Any
@@ -962,6 +743,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
     # ------------------------------------------------------
 
     def setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        log.msg(f"Requesting {pixel_format}")
         pixformat = pixel_format.to_bytes()
         self.transport.write(pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixformat))
         self.pixel_format = pixel_format
@@ -1027,11 +809,16 @@ class RFBClient(Protocol):  # type: ignore[misc]
         the connection is closed."""
         log.msg(f"Cannot connect {reason}")
 
+    def vncProtocolError(self, reason: str) -> None:
+        """called when the server sends something we cannot handle.
+        the connection is closed."""
+        log.msg(reason)
+
     def beginUpdate(self) -> None:
         """called before a series of :meth:`updateRectangle`,
         :meth:`copyRectangle` or :meth:`fillRectangle`."""
 
-    def commitUpdate(self, rectangles: list[Rect] | None = None) -> None:
+    def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         """called after a series of :meth:`updateRectangle`, :meth:`copyRectangle`
         or :meth:`fillRectangle` are finished.
 
@@ -1042,11 +829,18 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """
 
     def updateRectangle(
-        self, x: int, y: int, width: int, height: int, data: bytes
+        self,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        data: bytes,
+        pixel_format: PixelFormat,
     ) -> None:
         """new bitmap data.
 
-        :param data: bytes in the pixel format set up earlier.
+        :param data: bytes in `pixel_format`, which is the negotiated format
+            for every encoding in use today but need not be.
         """
 
     def copyRectangle(
@@ -1064,7 +858,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         """
         # fallback variant, use update recatngle
         # override with specialized function for better performance
-        self.updateRectangle(x, y, width, height, color * width * height)
+        self.updateRectangle(
+            x, y, width, height, color * width * height, self.pixel_format
+        )
 
     def updateCursor(
         self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes
@@ -1085,7 +881,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         (aka clipboard)"""
 
 
-class RFBFactory(protocol.ClientFactory):  # type: ignore[misc]
+class RFBFactory(protocol.ClientFactory):
     """A factory for remote frame buffer connections."""
 
     # the class of the protocol to build
@@ -1111,9 +907,7 @@ def des_encrypt(key: bytes, data: bytes) -> bytes:
 
 
 def reverse_bits(data: bytes) -> bytes:
-    """Reverse the bit order within each byte.
-
-    The bit-reversal the VNC family applies to a DES key before using it,
+    """The bit-reversal the VNC family applies to a DES key before using it,
     both for the authentication challenge response here and for the
     password obfuscation in ~/.vnc/passwd files."""
     return bytes(
@@ -1149,11 +943,17 @@ if __name__ == "__main__":
             self.framebufferUpdateRequest()
 
         def updateRectangle(
-            self, x: int, y: int, width: int, height: int, data: bytes
+            self,
+            x: int,
+            y: int,
+            width: int,
+            height: int,
+            data: bytes,
+            pixel_format: PixelFormat,
         ) -> None:
             print("%s " * 5 % (x, y, width, height, repr(data[:20])))
 
-    class RFBTestFactory(protocol.ClientFactory):  # type: ignore[misc]
+    class RFBTestFactory(protocol.ClientFactory):
         """test factory"""
 
         protocol = RFBTest
@@ -1173,7 +973,7 @@ if __name__ == "__main__":
 
             reactor.stop()
 
-    class Options(usage.Options):  # type: ignore[misc]
+    class Options(usage.Options):
         """command line options"""
 
         optParameters = [

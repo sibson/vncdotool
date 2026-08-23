@@ -1,5 +1,58 @@
-1.3.1 (UNRELEASED)
+2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Dependency resolution ignores releases younger than a week, so a compromised upload has to survive public scrutiny before it can reach a build here (@sibson)
+  - CI installs from the committed ``uv.lock`` and fails if it is stale, rather than silently resolving something else; ``uv.lock`` is no longer listed in ``.gitignore``, where it had no effect anyway (@sibson)
+  - ``--encodings hextile`` offers Hextile, which sends less than Raw on ordinary screen content (@sibson)
+  - Add ``vncdo --encodings LIST``, choosing which encodings to offer the server (@sibson, #167, #168)
+  - Fix CoRRE decoding (@sibson)
+  - Fix CopyRect leaving the screen unchanged (@sibson)
+  - Malformed or oversized pixel data now ends the session with a reported error instead of waiting for bytes that never arrive (@sibson)
+  - [BREAKING] ``RFBClient.updateRectangle`` takes the ``PixelFormat`` its bytes are in, and is called once per rectangle; ``fillRectangle`` is no longer called for any migrated encoding. Subclasses overriding either have been warned since 1.4.1, see #385 (@sibson)
+  - Add ``vncdo --pixel-format FORMAT``, asking the server for ``bgrx8888``, ``rgbx8888``, or ``rgb565`` instead of accepting the format it announces (@sibson)
+  - Any byte-aligned truecolor pixel format the server announces can now be captured, not just the five formats vncdotool used to recognize (@sibson)
+  - Add ``make typecheck``, running mypy over ``vncdotool`` and ``tests`` (@sibson, #401)
+  - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
+  - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
+  - Drop the per-rectangle debug trace: never used to diagnose anything, and decoding a full-screen update is 30% faster without it (@sibson)
+  - Fix screenshots shifted against any server whose first rectangle does not start at (0, 0) (@sibson)
+  - Fix ``VMWareClient`` raising ``AttributeError`` instead of detecting the VMware single-pixel update it exists to filter (@sibson, #400)
+  - ``PixelFormat`` moves to ``vncdotool.pixelformat``; ``vncdotool.rfb.PixelFormat`` still imports (@sibson, #415)
+  - [BREAKING] ``VNCDoToolClient.image_mode`` is gone; its ``FutureWarning`` shipped in 1.4, see #385 (@sibson)
+  - A server that announces an unreadable pixel format is now asked for ``rgbx8888`` even when it identifies as Apple Remote Desktop (RFB 3.889); the previous ``rgb565`` fallback there was never confirmed necessary and never fired against any measured server (@sibson)
+  - [BREAKING] ``vncdotool.rfb.Rect`` is gone; annotate rectangles as ``tuple[int, int, int, int]`` (@sibson, #415)
+  - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
+  - Fix ``make release`` tagging an empty version (@sibson, #382)
+  - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
+  - Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update (@sibson)
+
+1.4.1 (2026-08-19)
+----------------------
+  - Start the pluggable-decoders migration (see ``specs/decoder-architecture.md``): subclassing ``RFBClient.fillRectangle`` or ``RFBClient.updateRectangle``, or reading/writing ``VNCDoToolClient.image_mode``, now raises a ``FutureWarning``, since both contracts will change once decoders move out of ``rfb.py``. No behavior changes yet; comment on #385 if you rely on either (@sibson, #385)
+
+1.4.0 (2026-08-19)
+----------------------
+  - Fix: ``api.connect()`` now hands the connection setup to the reactor thread rather than running it on the calling thread. Previously DNS resolution and connector setup ran on the application thread, reaching into reactor internals from outside the reactor (@sibson, #192)
+  - Fix black screen captures from servers that announce DesktopSize before sending pixel data, e.g. TightVNC (@sibson, #90)
+  - Fix the dead protocol reference in the published ``rfb`` module documentation, which pointed at a RealVNC PDF that has been 403 for years; RFC 6143 and the rfbproto community document replace it (@sibson)
+  - Declare python_requires >=3.10, matching the versions CI tests and the development requirements. 3.9 was advertised but neither tested nor able to install the dev environment (@sibson, #357)
+  - [BREAKING] vncdo exit codes now say what went wrong: single digits for bad input, including 3 for authentication, and tens grouped by cause out on the wire, 10s connection, 20s protocol, 30s command, 40s timeout, documented in docs/usage.rst.  Scripts reading the exit code see new values: authentication failure is now 3 and a session cut short 11, both of which used to be 0; an unknown action is now 2, previously 1 (@sibson, #345)
+  - Fix: vncdo reports failure instead of success when the connection closes before the requested commands finish, including on VNC authentication failure (@sibson, #345)
+  - Fix: vncdo reports the error and exits non-zero when a command fails, rather than hanging (@sibson, #345)
+  - Protocol errors abort the session instead of only being logged, reported through the new ``RFBClient.vncProtocolError`` hook (@sibson, #345)
+  - Add ``vnclog --capture-raw FILE.zip``, an upload-ready wire capture for filing bugs against servers we can't host. The auth exchange is stripped rather than redacted, so the archive holds no credential bytes and replays without a password; ``--capture-raw-unsafe`` records the handshake whole. See docs/capture.rst (@sibson, #352)
+  - Add ``vncdo-replay``, serving a capture back at a real client (``--server``) or running the session recorded inside it (@sibson, #352)
+  - Add ``vnclog --one-shot``, serving a single session then exiting; implied
+    by ``--capture-raw``
+  - [BREAKING] ``vnclog --forever`` is renamed ``--file-per-client``. It never
+    controlled how long vnclog ran -- vnclog has always accepted connections
+    until stopped -- it selects a separate ``.vdo`` per client connection.
+    Scripts passing ``--forever`` must be updated
+  - ``vnclog`` no longer drops a session when its own logging fails to parse a
+    message: the semantic log is an observer, and a server the real client
+    copes with should not be cut off by the proxy
+  - Fix ``vnclog`` desyncing against RFB 3.7+ servers using VNC password
+    authentication (it ate the 16-byte auth response instead of skipping it,
+    then lost track of the client message stream entirely) (@sibson, #272)
 
 1.3.0 (2026-04-03)
 ----------------------

@@ -1,19 +1,15 @@
 name: OS-hosted VNC servers
 
 # Live, OS-bound VNC servers (UltraVNC on Windows, Apple Screen Sharing on
-# macOS) that only exist on GitHub-hosted windows-latest / macos-latest VMs --
-# see docs/server-compatibility-plan.md, Tier 2. These are the only place
-# UltraVNC and Screen Sharing compatibility can be exercised live, so this
-# job runs on real changes rather than never, but it is deliberately
-# change-triggered (path-filtered, no schedule) and report-only: see the
-# `continue-on-error` note on the job below.
+# macOS, raw QEMU/KVM on Linux) -- see specs/server-compatibility-plan.md,
+# Tier 2. These are the only place UltraVNC and Screen Sharing compatibility,
+# and QEMU's KVM-accelerated path, can be exercised live, so this job runs
+# on real changes rather than never, but it is deliberately change-triggered
+# (path-filtered, no schedule).
 #
 # What each server needs, and what it does and doesn't prove, is documented
-# next to the setup scripts in tests/servers/ultravnc/README.md and
-# tests/servers/screen-sharing/README.md. This file only wires those scripts
-# and tests/functional/test_os_servers.py together: the two OSes differ by
-# which script sets the server up and which shell runs it, so they are one
-# matrix job rather than two near-identical ones.
+# in tests/servers/ultravnc/README.md, tests/servers/screen-sharing/README.md,
+# and tests/servers/qemu-kvm/README.md.
 
 on:
   push:
@@ -24,41 +20,31 @@ on:
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
+      - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   pull_request:
     paths:
       - 'vncdotool/**'
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
       - 'tests/servers/screen-sharing/**'
+      - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
+      - '.github/actions/os-server/**'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 env:
-  PIP_DISABLE_PIP_VERSION_CHECK: '1'
-  PIP_NO_PYTHON_VERSION_WARNING: '1'
   VNCDOTOOL_SCREENSHOT_DIR: screenshots
-  # Spike credentials for a throwaway runner, deliberately visible as the
-  # fallback. A repo secret overrides them without touching this file or
-  # tests/functional/vncservers.py, which just reads the environment.
-  VNCDOTOOL_OS_SERVER_USERNAME: ${{ secrets.VNC_OS_SERVER_USERNAME || 'vncspike' }}
-  VNCDOTOOL_OS_SERVER_PASSWORD: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
 jobs:
   os-server:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
-    # Report-only, never PR-blocking: per the plan, Tier 2 runs on hosted
-    # Windows/macOS VMs we don't own, and drift in the runner image or the
-    # Chocolatey package surfaces here first. continue-on-error keeps a
-    # failure visible (the job shows as failed in the run) without turning
-    # it red on the PR. Promote to blocking (drop this line) only once the
-    # job has proven stable -- see docs/server-compatibility-plan.md, Tier 2.
-    continue-on-error: true
     strategy:
       # One OS failing must never take down the other: each is a separate
       # data point about that OS, not a step in a shared pipeline.
@@ -68,15 +54,21 @@ jobs:
           - name: Windows - UltraVNC
             runner: windows-latest
             shell: pwsh
+            os: windows
             server: ultravnc
-            setup: ./tests/servers/ultravnc/setup.ps1
             diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
           - name: macOS - Screen Sharing
             runner: macos-latest
             shell: bash
+            os: macos
             server: screen-sharing
-            setup: bash tests/servers/screen-sharing/setup.sh
             diagnostics: bash tests/servers/screen-sharing/collect-diagnostics.sh
+          - name: Linux - QEMU/KVM
+            runner: ubuntu-latest
+            shell: bash
+            os: linux
+            server: qemu-kvm
+            diagnostics: bash tests/servers/qemu-kvm/collect-diagnostics.sh
     defaults:
       run:
         shell: ${{ matrix.shell }}
@@ -84,43 +76,47 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: '3.13'
+          enable-cache: true
 
       - name: Install vncdotool
-        run: |
-          python -m pip install --upgrade pip
-          pip install . pillow
+        run: uv sync
 
+      # A spike credential for a throwaway runner, deliberately visible as the
+      # fallback; a repo secret replaces it.
       - name: Set up the VNC server
-        run: ${{ matrix.setup }}
+        uses: ./.github/actions/os-server
+        with:
+          os: ${{ matrix.os }}
+          password: ${{ secrets.VNC_OS_SERVER_PASSWORD || 'vncspike1' }}
 
       # An open port is not readiness: the first connection to macOS Screen
       # Sharing is what starts it, and that connection can stall for good
       # while the next one succeeds immediately.
       - name: Wait for the server to serve a screen
-        run: python tests/functional/wait_for_servers.py os
+        run: uv run python tests/functional/wait_for_servers.py os
 
       - name: Run OS server functional tests
-        run: python -m unittest discover -v -s tests/functional -t . -p 'test_os_servers.py'
+        run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 
       # Everything below is diagnostics and artifact collection, so it runs
-      # with if: always() -- a failing test is exactly when the screenshot
-      # and the server's own logs are worth having. The steps above are the
-      # test itself and deliberately stop the job when they fail.
+      # with if: failure() -- a failing test is exactly when the screenshot
+      # and the server's own logs are worth having, and a green run has
+      # nobody to read them. The steps above are the test itself and
+      # deliberately stop the job when they fail.
       - name: Capture screenshots and build the gallery
-        if: always()
+        if: failure()
         timeout-minutes: 3
-        run: python tests/functional/capture_screenshots.py os
+        run: uv run python tests/functional/capture_screenshots.py os
 
       - name: Collect server diagnostics
-        if: always()
+        if: failure()
         run: ${{ matrix.diagnostics }}
 
       - name: Upload screenshots
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.server }}-screenshots
@@ -128,7 +124,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload diagnostics
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.server }}-diagnostics

@@ -1,0 +1,148 @@
+"""Read bench.jsonl back: a table per machine, or a call-count diff.
+
+Timings only mean anything against timings from the same machine running
+the same interpreter and Pillow, so the table groups by machine and
+leaves the delta column blank across a change in either. The call counts
+carry no such caveat, which is what ``--diff`` reads.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Sequence
+
+REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+RECORD_PATH = REPO_ROOT / "bench.jsonl"
+
+Row = Dict[str, object]
+
+
+def _load(path: Path) -> List[Row]:
+    with path.open(encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh if line.strip()]
+
+
+def _comparable(row: Row, previous: Row) -> bool:
+    return all(row.get(k) == previous.get(k) for k in ("python", "implementation", "pillow"))
+
+
+def _delta(row: Row, previous: Optional[Row]) -> str:
+    if previous is None:
+        return ""
+    if not _comparable(row, previous):
+        return "n/c"
+    before, after = previous["best_us"], row["best_us"]
+    return f"{(after - before) / before * 100:+.1f}%"
+
+
+def _table(rows: List[Row]) -> None:
+    machines: Dict[str, List[Row]] = {}
+    for row in rows:
+        machines.setdefault(str(row.get("machine", "unknown")), []).append(row)
+
+    for machine, group in machines.items():
+        group.sort(key=lambda r: str(r["timestamp"]))
+        head = group[-1]
+        where = " (CI)" if head.get("ci") else ""
+        print(f"machine {machine}  {head.get('cpu')}, {head.get('cores')} cores, "
+              f"{head.get('system')}{where}")
+        print(f"  {'commit':9} {'date':11} {'python':8} {'pillow':8} "
+              f"{'best_us':>9} {'delta':>7} {'calls':>7}")
+        previous: Optional[Row] = None
+        for row in group:
+            commit = str(row.get("commit") or "-")[:7]
+            print(f"  {commit:9} {str(row['timestamp'])[:10]:11} "
+                  f"{str(row.get('python') or '-'):8} {str(row.get('pillow') or '-'):8} "
+                  f"{row['best_us']:9.1f} {_delta(row, previous):>7} "
+                  f"{row.get('calls_total', 0):7}")
+            previous = row
+        print()
+
+
+def _find(rows: List[Row], ref: str) -> Row:
+    matches = [r for r in rows if str(r.get("commit") or "").startswith(ref)]
+    if not matches:
+        raise SystemExit(f"no record for commit {ref}")
+    return matches[-1]
+
+
+def _diff(rows: List[Row], refs: Sequence[str]) -> None:
+    if refs:
+        before, after = _find(rows, refs[0]), _find(rows, refs[1])
+    elif len(rows) >= 2:
+        before, after = rows[-2], rows[-1]
+    else:
+        raise SystemExit("need two records to diff")
+
+    counts_before: Dict[str, int] = before.get("calls", {})  # type: ignore[assignment]
+    counts_after: Dict[str, int] = after.get("calls", {})  # type: ignore[assignment]
+    print(f"{str(before.get('commit'))[:7]} -> {str(after.get('commit'))[:7]}")
+
+    changed = False
+    for key in sorted(set(counts_before) | set(counts_after)):
+        was, now = counts_before.get(key, 0), counts_after.get(key, 0)
+        if was != now:
+            changed = True
+            print(f"  {key:52} {was:6} -> {now:6}  {now - was:+}")
+    if not changed:
+        print("  no call-count change")
+    print(f"  {'total':52} {sum(counts_before.values()):6} -> {sum(counts_after.values()):6}"
+          f"  {sum(counts_after.values()) - sum(counts_before.values()):+}")
+
+
+def _compare(before_path: Path, after_path: Path) -> None:
+    """Silence is the contract: the caller posts whatever reaches stdout,
+    so a run that found no change has to produce no output at all.
+    """
+    before: Dict[str, int] = json.loads(before_path.read_text())
+    after: Dict[str, int] = json.loads(after_path.read_text())
+    if before == after:
+        return
+
+    print("### Decode call counts changed\n")
+    print("| function | base | this branch | delta |")
+    print("| --- | ---: | ---: | ---: |")
+    for key in sorted(set(before) | set(after)):
+        was, now = before.get(key, 0), after.get(key, 0)
+        if was != now:
+            print(f"| `{key}` | {was} | {now} | {now - was:+} |")
+    was_total, now_total = sum(before.values()), sum(after.values())
+    print(f"| **total** | {was_total} | {now_total} | {now_total - was_total:+} |")
+    print("\nCounts are exact and machine-independent, so this is a real change in the"
+          " work the decode path does -- but it says nothing about speed. Time it with"
+          " `make bench`, and `make bench-record` to add a row to `bench.jsonl`.")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--path", type=Path, default=RECORD_PATH)
+    parser.add_argument(
+        "--diff", nargs="*", metavar="COMMIT",
+        help="per-function call counts between two records, or the last two",
+    )
+    parser.add_argument(
+        "--compare", nargs=2, metavar=("BASE", "HEAD"),
+        help="two files of `benchmark --counts` output; prints only if they differ",
+    )
+    args = parser.parse_args()
+
+    if args.compare:
+        _compare(Path(args.compare[0]), Path(args.compare[1]))
+        return 0
+
+    rows = _load(args.path)
+    if not rows:
+        raise SystemExit(f"{args.path} has no records")
+
+    if args.diff is None:
+        _table(rows)
+    elif len(args.diff) not in (0, 2):
+        raise SystemExit("--diff takes two commits, or none for the last two records")
+    else:
+        _diff(rows, args.diff)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -4,14 +4,23 @@ dist
 MANIFEST
 vncdotool.egg-info
 .coverage
+.coverage.*
+coverage.xml
+htmlcov/
+combined/
 .tox
 docs/_build
+docs/rfbproto/
 .venv/
 .vncdo/
 
 *~
 #*
 tests/servers/screenshots/
+
+.DS_Store
+.tool-versions
+.vscode/
 
 # issue-triage skill: per-run eval outputs, never committed
 issue-triage-workspace/

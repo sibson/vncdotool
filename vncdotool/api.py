@@ -68,7 +68,7 @@ class ThreadedVNCClientProxy:
             return protocol
 
         self.factory.deferred.addCallback(capture_protocol)
-        reactor.callWhenRunning(factory_connect, self.factory, host, port, family)
+        reactor.callFromThread(factory_connect, self.factory, host, port, family)
 
     def disconnect(self) -> None:
         event = threading.Event()
@@ -76,11 +76,14 @@ class ThreadedVNCClientProxy:
         def on_disconnected(reason: Any) -> None:
             event.set()
 
-        def disconnector(protocol: VNCDoToolClient) -> None:
+        def disconnector(_: Any) -> None:
+            if self.protocol is None:
+                event.set()
+                return
             self.factory._disconnect_callbacks.append(on_disconnected)
-            protocol.transport.loseConnection()
+            self.protocol.transport.loseConnection()
 
-        reactor.callFromThread(self.factory.deferred.addCallback, disconnector)
+        reactor.callFromThread(self.factory.deferred.addBoth, disconnector)
         event.wait(timeout=self.timeout)
 
     def __getattr__(self, attr: str) -> Any:

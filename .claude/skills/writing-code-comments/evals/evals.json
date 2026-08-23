@@ -1,0 +1,30 @@
+{
+  "skill_name": "writing-code-comments",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Audit the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, then counts by verdict.",
+      "expected_output": "All four blocks are deleted: delete=4 rewrite=0 keep=0. Each block either restates visible code or repeats a fact already housed in the commit body or specs/ quoted in the fixture. Block 1 is the trap for partial redundancy (two of its three paragraphs are redundant, one fact survives) and must come back as delete plus a separate decision about the surviving fact, never as a rewrite that keeps the favoured sentence. Block 3 is the trap for a genuinely surprising fact that is nonetheless verbatim in the commit body of a repo whose policy routes rationale to commits.",
+      "files": ["evals/files/sweep-redundant-blocks.md"],
+      "expectations": [
+        "Every one of the four blocks receives the verdict delete",
+        "The counts line reports delete=4, rewrite=0, keep=0",
+        "Block 1 is not classified as a rewrite on the grounds that one of its three paragraphs carries a surviving fact",
+        "The reasoning for block 3 cites that the fact is already in the commit message, rather than keeping it because it explains the magic value --timeout 2",
+        "No block is retained by dropping some of its sentences and keeping the remainder"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Audit the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, then counts by verdict.",
+      "expected_output": "Discrimination, not uniform deletion: delete=1 keep=2, or delete=1 with one keep and one rewrite. Blocks 1 and 3 state external behaviour that nothing in the code enforces and that appears nowhere else, in a repo with no convention routing rationale to commits, so they survive. Block 2 paraphrases the single line beneath it and is deleted.",
+      "files": ["evals/files/sweep-mixed-keep-delete.md"],
+      "expectations": [
+        "Block 1 is kept, or rewritten while preserving both the may-ignore behaviour and the trust-the-rectangle instruction",
+        "Block 3 is kept, or rewritten while preserving both the 32bpp/depth-24/little-endian limitation and the silent-wrong-decode consequence",
+        "Block 2 is deleted",
+        "Not every block is deleted"
+      ]
+    }
+  ]
+}

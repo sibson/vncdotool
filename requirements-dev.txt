@@ -1,5 +1,0 @@
--r requirements.txt
-pexpect>=4.9.0
-pyvirtualdisplay>=3.0
-sphinx
-twine

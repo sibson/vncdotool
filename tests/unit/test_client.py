@@ -1,8 +1,13 @@
 from unittest import TestCase, mock
 import io
+import struct
 
-from vncdotool import client
+from vncdotool import client, pixelformat, rfb
+from vncdotool.pixelformat import PIXEL_FORMATS
 from vncdotool.keys import Key
+
+COLOUR_MAPPED = rfb.PixelFormat(8, 8, False, False, 0, 0, 0, 0, 0, 0)
+RGB24 = rfb.PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
 
 
 class TestVNCDoToolClient(TestCase):
@@ -21,10 +26,10 @@ class TestVNCDoToolClient(TestCase):
         self.client.factory = mock.Mock()
 
         # mock out a bunch of base class functions
-        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[assignment]
-        self.client.pointerEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.keyEvent = mock.Mock()  # type: ignore[assignment]
-        self.client.setEncodings = mock.Mock()  # type: ignore[assignment]
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.pointerEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.keyEvent = mock.Mock()  # type: ignore[method-assign]
+        self.client.setEncodings = mock.Mock()  # type: ignore[method-assign]
 
     def test_vncConnectionMade(self):
         cli = self.client
@@ -175,13 +180,31 @@ class TestVNCDoToolClient(TestCase):
     def test_updateRectangeFullScreen(self, frombytes):
         cli = self.client
         cli.image = mock.Mock()
+        cli.width, cli.height = 100, 200
         data = mock.Mock()
+        frombytes.return_value = client.Image.new("RGB", (100, 200), (10, 20, 30))
 
-        cli.updateRectangle(0, 0, 100, 200, data)
+        cli.updateRectangle(0, 0, 100, 200, data, cli.pixel_format)
 
         client.Image.frombytes.assert_called_once_with('RGB', (100, 200), data, 'raw', 'RGBX')
 
-        assert cli.screen == client.Image.frombytes.return_value
+        assert cli.screen.size == (100, 200)
+        assert cli.screen.getpixel((0, 0)) == (10, 20, 30)
+
+    def test_updateRectangle_first_rect_not_at_origin(self) -> None:
+        cli = self.client
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(struct.pack("!HH", 300, 200) + self.MSG_INIT[4:])
+
+        color = (200, 150, 50)
+        data = (bytes(color) + b"\x00") * (10 * 10)
+        cli.updateRectangle(50, 30, 10, 10, data, cli.pixel_format)
+
+        assert cli.screen is not None
+        assert cli.screen.size == (300, 200)
+        assert cli.screen.getpixel((50, 30)) == color
+        assert cli.screen.getpixel((0, 0)) == (0, 0, 0)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeRegion(self, frombytes):
@@ -191,7 +214,7 @@ class TestVNCDoToolClient(TestCase):
         cli.screen.size = (100, 100)
         data = mock.Mock()
 
-        cli.updateRectangle(20, 10, 50, 40, data)
+        cli.updateRectangle(20, 10, 50, 40, data, cli.pixel_format)
 
         client.Image.frombytes.assert_called_once_with('RGB', (50, 40), data, 'raw', 'RGBX')
 
@@ -206,12 +229,79 @@ class TestVNCDoToolClient(TestCase):
 
         self.deferred.callback.assert_called_once_with(self.client)
 
+    # A framebuffer update whose only rectangle is the DesktopSize
+    # pseudo-encoding carries no pixel data.
+    MSG_FBU_DESKTOP_SIZE_ONLY = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x07\x80\x04\xb0"  # x=0 y=0 w=1920 h=1200
+        b"\xff\xff\xff\x21"  # PSEUDO_DESKTOP_SIZE (-223)
+    )
+    MSG_FBU_ONE_PIXEL = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x00\x01\x00\x01"  # x=0 y=0 w=1 h=1
+        b"\x00\x00\x00\x00"  # Encoding.RAW
+        b"\xff\x00\x00\x00"  # one RGBX pixel
+    )
+
+    def _connect(self) -> None:
+        self.client._packet = bytearray(self.MSG_HANDSHAKE)
+        self.client._handleInitial()
+        self.client._handleServerInit(self.MSG_INIT)
+
+    def test_desktop_size_only_update_rerequests_instead_of_completing(self) -> None:
+        cli = self.client
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+        cli.framebufferUpdateRequest.reset_mock()
+
+        cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
+
+        self.assertEqual(fired, [])
+        cli.framebufferUpdateRequest.assert_called_once_with()
+
+    def test_refresh_completes_once_pixel_data_arrives(self) -> None:
+        cli = self.client
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+
+        cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
+        cli.dataReceived(self.MSG_FBU_ONE_PIXEL)
+
+        self.assertEqual(fired, [cli])
+        assert cli.screen is not None
+        self.assertEqual(cli.screen.size, (1920, 1200))
+
     def test_vncRequestPassword_attribute(self):
         cli = self.client
         cli.sendPassword = mock.Mock()
         cli.factory.password = 'mushroommushroom'
         cli.vncRequestPassword()
         cli.sendPassword.assert_called_once_with(cli.factory.password)
+
+    def test_vncAuthFailed_reports_connection_failed(self):
+        cli = self.client
+        cli.vncAuthFailed(b'Authentication failure')
+
+        assert cli.factory.clientConnectionFailed.called
+        reason = cli.factory.clientConnectionFailed.call_args[0][1]
+        assert isinstance(reason.value, client.AuthenticationError)
+
+    def test_vncProtocolError_reports_connection_failed(self):
+        cli = self.client
+        cli.vncProtocolError('unknown encoding received')
+
+        assert cli.factory.clientConnectionFailed.called
+        reason = cli.factory.clientConnectionFailed.call_args[0][1]
+        assert isinstance(reason.value, client.ProtocolError)
+        assert 'unknown encoding' in str(reason.value)
 
 
 class TestVNCDoToolFactory(TestCase):
@@ -240,3 +330,117 @@ class TestVNCDoToolFactory(TestCase):
         self.factory.clientConnectionFailed(connector, reason)
 
         deferred.errback.assert_called_once_with(reason)
+
+
+class TestImageMode(TestCase):
+
+    def setUp(self) -> None:
+        self.client = client.VNCDoToolClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+
+    def patch_setPixelFormat(self) -> mock.Mock:
+        """patch.object rather than assignment: it restores the method
+        afterwards, and mypy does not read a bound method as assignable.
+        """
+        patcher = mock.patch.object(self.client, "setPixelFormat")
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
+    def test_setImageMode_keeps_the_negotiated_mode(self):
+        self.client.pixel_format = RGB24
+        self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        assert self.client._image_mode == "RGB"
+
+    def test_setImageMode_falls_back_when_the_server_format_cannot_be_unpacked(self):
+        self.client.pixel_format = COLOUR_MAPPED
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_called_once_with(PIXEL_FORMATS["rgbx8888"])
+        assert self.client._image_mode == "RGBX"
+
+    def test_setImageMode_keeps_a_server_format_pillow_can_unpack(self):
+        self.client.pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 24, 16, 8)
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_not_called()
+        assert self.client._image_mode == "XBGR"
+
+    def test_setImageMode_asks_for_the_format_the_caller_requested(self):
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = PIXEL_FORMATS["rgb565"]
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_called_once_with(PIXEL_FORMATS["rgb565"])
+        assert self.client._image_mode == "BGR;16"
+
+    def test_setImageMode_keeps_bypp_in_step_with_the_negotiated_format(self):
+        # setPixelFormat is real here, not mocked like the tests above: bypp
+        # is a read-through of the pixel_format it assigns, so a mock hides
+        # any drift between it and the raw mode _image_mode negotiates.
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = PIXEL_FORMATS["rgb565"]
+
+        self.client.setImageMode()
+
+        assert self.client.bypp == PIXEL_FORMATS["rgb565"].bypp
+        assert self.client._image_mode == pixelformat.raw_mode(PIXEL_FORMATS["rgb565"])
+
+    def test_setImageMode_fails_the_connection_for_a_format_it_cannot_read(self):
+        self.client.pixel_format = PIXEL_FORMATS["rgbx8888"]
+        self.client.requested_pixel_format = COLOUR_MAPPED
+        setPixelFormat = self.patch_setPixelFormat()
+
+        self.client.setImageMode()
+
+        setPixelFormat.assert_not_called()
+        self.client.factory.clientConnectionFailed.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+
+
+class TestVMWareClient(TestCase):
+
+    def setUp(self) -> None:
+        self.client = client.VMWareClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client._handler = mock.Mock()
+
+    def test_dataReceived_recognizes_single_pixel_update(self) -> None:
+        payload = struct.pack(
+            "!BxHHHHHixxxx",
+            client.rfb.MsgS2C.FRAMEBUFFER_UPDATE,
+            1,  # number-of-rectangles
+            0,  # x-position
+            0,  # y-position
+            1,  # width
+            1,  # height
+            client.rfb.Encoding.RAW,
+        )
+
+        self.client.dataReceived(payload)
+
+        self.client.framebufferUpdateRequest.assert_called_once_with()
+        self.client._handler.assert_called_once_with()
+
+
+class TestRequestedPixelFormat(TestCase):
+
+    def test_factory_hands_its_format_to_each_client(self):
+        factory = client.VNCDoToolFactory()
+        factory.pixel_format = PIXEL_FORMATS["rgb565"]
+
+        assert factory.buildProtocol(None).requested_pixel_format == PIXEL_FORMATS["rgb565"]
+
+    def test_clients_ask_for_nothing_by_default(self):
+        assert client.VNCDoToolFactory().buildProtocol(None).requested_pixel_format is None

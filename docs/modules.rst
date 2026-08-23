@@ -25,6 +25,14 @@ Code Documentation
     :undoc-members:
     :show-inheritance:
 
+:mod:`pixelformat` Module
+-------------------------
+
+.. automodule:: vncdotool.pixelformat
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 :mod:`command` Module
 ---------------------
 

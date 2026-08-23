@@ -1,1 +1,3 @@
-__version__ = "1.3.1.dev0"
+from importlib.metadata import version
+
+__version__ = version("vncdotool")

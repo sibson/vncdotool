@@ -55,6 +55,39 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
     > vncdo rexpect region.png 100 200 0
 
 
+Exit Status
+-------------------
+vncdo exits 0 when every action completed.  Failures are grouped by cause, so
+a script can tell a server that is down from one that rejected the password::
+
+    > vncdo -s $HOST -p $PASSWORD type hello
+    > case $? in
+    >   0)  echo "done" ;;
+    >   3)  echo "wrong password" ;;
+    >   1?) echo "cannot reach $HOST" ;;
+    >   *)  echo "failed" ;;
+    > esac
+
+===== ==================================================================
+Code  Meaning
+===== ==================================================================
+0     all actions completed
+1     unexpected error
+2     bad command line or unknown action
+3     authentication failed, usually a wrong password
+10    could not connect: refused, unreachable, or name lookup failed
+11    connection closed before the actions finished
+20    server spoke something we could not understand
+30    an action failed, such as writing a capture to an unwritable path
+40    ``--timeout`` elapsed before the actions finished
+===== ==================================================================
+
+Single digits are for things you told us: the command line and the
+credentials.  Failures out on the wire are grouped in tens by cause, so
+new codes can be added to a group later.  Match on the group when you
+only care about the category.
+
+
 Running Scripts
 -------------------
 For more complex automation you can read commands from stdin or a file.
@@ -99,15 +132,20 @@ to the correct ports::
     > vncviewer localhost:2  # do something and then exit viewer
     > vncdo keylog.vdo
 
-By running with --forever vnclog will create a new file for every client
-connection and record each clients activity.
+By running with --file-per-client vnclog will create a new file for every
+client connection and record each clients activity.
 This can be useful for quickly recording a number of testcases.::
 
-    > vnclog --forever --listen 6000 /tmp
+    > vnclog --file-per-client --listen 6000 /tmp
     > vncviewer localhost::6000
     # do some stuff then exit and start new session
     > vncviewer localhost::6000
     # do some other stuff
     > ls /tmp/*.vdo
+
+``vnclog`` keeps accepting connections until you stop it. Use ``--one-shot``
+to record a single session and exit::
+
+    > vnclog --one-shot --listen 6000 keylog.vdo
 
 .. _Pillow: http://www.pythonware.com/products/pil
