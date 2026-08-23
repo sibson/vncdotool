@@ -209,6 +209,12 @@ What it does cost is that `_rectBuffer` no longer sees every rectangle, so R6's
 dimension check cannot live there; `_rectFits` is that check, called by both
 paths. See Benchmark below (N1) for the measurement that motivated this.
 
+Every other encoding pays one `wholeRectangle` call returning `None` per
+rectangle. Measured on `tigervnc-hextile-bgrx8888` (87 real Hextile rects, no
+Raw): best 6271-6409us before, 6268-6339us after, three runs each side. The
+ranges overlap; a `None`-returning call is tens of nanoseconds against
+Hextile's ~9us per rectangle, well under the machine's own run-to-run noise.
+
 ## Pixel format is shared, not per-decoder
 
 Almost nothing about pixel format varies between decoders, so it lives once in
