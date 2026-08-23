@@ -8,12 +8,14 @@ import socket
 import sys
 import time
 from struct import unpack, unpack_from
-from typing import IO, Callable, Sequence
+from typing import IO, Callable, Iterable, Sequence, cast
 
 from twisted.internet.error import ReactorNotRunning
-from twisted.internet.protocol import Protocol
+from twisted.internet.interfaces import IAddress, ITCPTransport, ITransport
+from twisted.internet.protocol import Protocol, connectionDone
 from twisted.protocols import portforward
 from twisted.python.failure import Failure
+from zope.interface import implementer
 
 from . import __version__ as VNCDOTOOL_VERSION
 from .capture import CaptureWriter, HandshakeScrubber
@@ -46,7 +48,10 @@ class RFBServer(Protocol):
 
     def connectionMade(self) -> None:
         super().connectionMade()
-        self.transport.setTcpNoDelay(True)
+        # Only ever reached via listenTCP (see command.py) -- unlike
+        # client.py's transport, which also serves UNIX sockets, there is no
+        # real ambiguity to check here.
+        cast(ITCPTransport, self.transport).setTcpNoDelay(True)
 
         self.buffer = bytearray()
         # XXX send version message
@@ -61,7 +66,7 @@ class RFBServer(Protocol):
         msg = self.buffer[:12]
         del self.buffer[:12]
         if not msg.startswith(b"RFB 003.") and msg.endswith(b"\n"):
-            self.transport.loseConnection()
+            cast(ITransport, self.transport).loseConnection()
 
         version = msg[8:11]
         if version in (b"003", b"005"):
@@ -171,17 +176,24 @@ class RFBServer(Protocol):
         self.handle_keyEvent(keysym, down)
 
 
+@implementer(ITransport)
 class NullTransport:
     addressFamily = socket.AF_UNSPEC
 
     def write(self, data: bytes) -> None:
         return
 
-    def writeSequence(self, data: bytes) -> None:
+    def writeSequence(self, data: Iterable[bytes]) -> None:
         return
 
     def setTcpNoDelay(self, enabled: bool) -> None:
         return
+
+    def getPeer(self) -> IAddress:
+        raise NotImplementedError("vnclog's server-side client has no real peer")
+
+    def getHost(self) -> IAddress:
+        raise NotImplementedError("vnclog's server-side client has no real host")
 
     def loseConnection(self) -> None:
         return
@@ -192,6 +204,7 @@ class VNCLoggingClient(VNCDoToolClient):
 
     capture_file: str | None = None
     capture: CaptureWriter | None = None
+    recorder: Callable[[str], int] | None = None
 
     def _handleRectangle(self, block: bytes) -> None:
         # Tallied off the decoded stream: SetEncodings only says what the
@@ -205,6 +218,7 @@ class VNCLoggingClient(VNCDoToolClient):
         if self.capture_file:
             assert self.screen is not None
             self.screen.save(self.capture_file)
+            assert self.recorder is not None
             self.recorder("expect %s\n" % self.capture_file)
             self.capture_file = None
 
@@ -274,7 +288,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     """
 
     clientProtocolFactory = VNCLoggingClientFactory
-    factory: VNCLoggingServerFactory
+    factory: VNCLoggingServerFactory  # type: ignore[assignment]
     peer: VNCLoggingClientProxy
 
     server: str | None = None
@@ -289,19 +303,25 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
     refused: bool = False
     took_session: bool = False
 
+    def _peerHost(self) -> object:
+        # Only IPv4Address/IPv6Address carry .host; this proxy only ever
+        # listens with listenTCP, so that's what getPeer() returns in
+        # practice, but IAddress itself doesn't promise it.
+        return getattr(self.transport.getPeer(), "host", None)
+
     def connectionMade(self) -> None:
         # Taken on accept rather than on first byte, so a second concurrent
         # connection is refused rather than interleaved into the session.
         if self.factory.one_shot and self.factory.session_taken:
             log.warning(
                 "--one-shot: already serving a session; refusing connection from %s",
-                self.transport.getPeer().host,
+                self._peerHost(),
             )
             self.refused = True
             self.transport.loseConnection()
             return
 
-        log.info("new connection from %s", self.transport.getPeer().host)
+        log.info("new connection from %s", self._peerHost())
         super().connectionMade()
         RFBServer.connectionMade(self)
         self.mouse: tuple[int | None, int | None] = (None, None)
@@ -316,7 +336,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
                 scrubber=HandshakeScrubber(preserve_auth=self.factory.capture_preserve_auth),
             )
 
-    def connectionLost(self, reason: Failure) -> None:
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
         if self.refused:
             # Touching the factory here would release the live session's
             # claim, or close the recorder it is still writing to.
