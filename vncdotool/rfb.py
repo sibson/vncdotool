@@ -440,7 +440,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         size = decoder.wholeRectangle(width, height, self.pixel_format)
         if not self._rectFits(width, height):
             return
-        self.expect(self._finishWholeRectangle, size, decoder, x, y, width, height)
+        self.expect(self._finishRectangle, size, decoder, (x, y, width, height), True)
 
     def _pumpPixels(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
@@ -454,18 +454,6 @@ class RFBClient(Protocol):  # type: ignore[misc]
             (decoder, target, (x, y, width, height)),
         )
 
-    def _finishWholeRectangle(
-        self,
-        block: bytes,
-        decoder: decoders.PixelDecoder,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-    ) -> None:
-        self._paintRectangle(decoder, x, y, width, height, block)
-        self._doConnection()
-
     def _pumpForClient(
         self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
@@ -476,25 +464,24 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _finishRectangle(
         self,
+        block: bytes,
         decoder: decoders.PixelDecoder,
-        target: decoders.RectBuffer,
         rect: tuple[int, int, int, int],
+        advance: bool,
     ) -> None:
-        x, y, width, height = rect
-        self._paintRectangle(decoder, x, y, width, height, target.tobytes())
+        """Paint one rectangle's pixels, from either source: the fast path's
+        bytes straight off the wire, or the buffered path's `tobytes()`.
 
-    def _paintRectangle(
-        self,
-        decoder: decoders.PixelDecoder,
-        x: int,
-        y: int,
-        width: int,
-        height: int,
-        data: bytes,
-    ) -> None:
+        `advance` is False from the buffered path, which reaches this through
+        `_pumpBlock`, already the single place that calls `_doConnection` for
+        every decoder -- pixel-producing or not.
+        """
+        x, y, width, height = rect
         self.updateRectangle(
-            x, y, width, height, data, decoder.output_format(self.pixel_format)
+            x, y, width, height, block, decoder.output_format(self.pixel_format)
         )
+        if advance:
+            self._doConnection()
 
     def _rectFits(self, width: int, height: int) -> bool:
         """Whether a rectangle fits the framebuffer, having failed the
@@ -533,7 +520,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
             size = generator.send(block)
         except StopIteration:
             if finish is not None:
-                self._finishRectangle(*finish)
+                decoder, target, rect = finish
+                self._finishRectangle(target.tobytes(), decoder, rect, False)
             self._doConnection()
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
