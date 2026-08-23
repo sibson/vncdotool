@@ -5,7 +5,7 @@ from struct import pack
 
 from vncdotool.const import Encoding
 
-from tests.unit.decoder_fixtures import (
+from tests.unit.utils import (
     _pixel,
     assert_pixels,
     framebuffer_update,

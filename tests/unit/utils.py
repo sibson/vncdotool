@@ -5,8 +5,6 @@ this implementation chose, which are noted where they are decided. That is
 enough to pin a decoder against a picture, and is not enough to call an
 encoding verified against a real server -- specs/decoder-goldens.md is
 where that happens.
-
-Not named test*.py: unittest discovery would collect it as a test module.
 """
 from __future__ import annotations
 
