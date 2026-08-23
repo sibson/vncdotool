@@ -70,13 +70,12 @@ fix the underlying bug, move the test into the topical file, drop its
 `@unittest.expectedFailure` marker, and rename it for the behaviour it checks
 rather than the issue number.
 
-Per-encoding decode tests are one file per decoder --
-`test_decoder_hextile.py`, `test_decoder_rre.py` (RRE and the CoRRE subclass
-that shares its shape), `test_decoder_copyrect.py` -- over the fixture
-builders in `tests/unit/decoder_fixtures.py`, which is deliberately not named
-`test*.py` so discovery does not collect it. A new encoding gets its own
-file; anything encoding-specific lives beside its tests, and only what a
-second decoder needs moves into the shared module.
+Per-encoding decode tests get one file per decoder, `test_decoder_<name>.py`,
+over the fixture builders in `tests/unit/decoder_fixtures.py` -- not named
+`test*.py`, so discovery does not collect it. A builder only one decoder uses
+stays in that decoder's file; it moves into the shared module when a second
+decoder needs it. Decoders that subclass another share a file, as CoRRE does
+with RRE.
 
 A test that runs the same body over a set -- every encoding, every pixel
 format, every golden fixture -- generates one case per member through

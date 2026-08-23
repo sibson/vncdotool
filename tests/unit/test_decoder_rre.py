@@ -1,10 +1,3 @@
-"""RRE and CoRRE decode tests: wire bytes in, framebuffer out.
-
-CoRRE is RRE with u8 subrectangle geometry, and the decoder is a subclass,
-so the two sets of tests are deliberately parallel: a change to one that
-does not need the same change to the other is a sign the subclass has
-drifted.
-"""
 from __future__ import annotations
 
 import unittest

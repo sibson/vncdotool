@@ -1,4 +1,3 @@
-"""Hextile decode tests: wire bytes in, framebuffer out."""
 from __future__ import annotations
 
 import unittest
