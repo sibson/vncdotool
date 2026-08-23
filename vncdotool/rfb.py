@@ -463,9 +463,7 @@ class RFBClient(Protocol):  # type: ignore[misc]
         width: int,
         height: int,
     ) -> None:
-        self.updateRectangle(
-            x, y, width, height, block, decoder.output_format(self.pixel_format)
-        )
+        self._paintRectangle(decoder, x, y, width, height, block)
         self._doConnection()
 
     def _pumpForClient(
@@ -483,9 +481,19 @@ class RFBClient(Protocol):  # type: ignore[misc]
         rect: tuple[int, int, int, int],
     ) -> None:
         x, y, width, height = rect
+        self._paintRectangle(decoder, x, y, width, height, target.tobytes())
+
+    def _paintRectangle(
+        self,
+        decoder: decoders.PixelDecoder,
+        x: int,
+        y: int,
+        width: int,
+        height: int,
+        data: bytes,
+    ) -> None:
         self.updateRectangle(
-            x, y, width, height, target.tobytes(),
-            decoder.output_format(self.pixel_format),
+            x, y, width, height, data, decoder.output_format(self.pixel_format)
         )
 
     def _rectFits(self, width: int, height: int) -> bool:
