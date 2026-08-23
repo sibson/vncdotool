@@ -209,16 +209,12 @@ per rectangle, so it is resolved the same place and the same way the
 `PixelDecoder`/`ClientDecoder` split already is: once per connection, in
 `_pumpFor`. A decoder whose `wholeRectangle` is not the base class's default
 gets `_pumpWholeRectangle`; every other `PixelDecoder` gets `_pumpPixels`
-unchanged and never calls `wholeRectangle` at all. Measured on
-`tigervnc-hextile-bgrx8888` (87 real Hextile rects, no Raw) before this method
-existed and after: 6271-6409us best across three runs each side, no
-difference outside the machine's own noise — the dispatch this replaced
-would have cost about the same, a `None`-returning call against Hextile's
-~9us per rectangle, but there is now no call to measure.
+unchanged and never calls `wholeRectangle` at all.
 
-What it does cost is that `_rectBuffer` no longer sees every rectangle, so R6's
-dimension check cannot live there; `_rectFits` is that check, called by both
-paths. See Benchmark below (N1) for the measurement that motivated this.
+What it does cost is that `_rectBuffer` no longer sees every rectangle, so the
+dimension check malformed input must still get (R6) cannot live there;
+`_rectFits` is that check, called by both paths. See Benchmark below (N1) for
+the measurement that motivated this.
 
 ## Pixel format is shared, not per-decoder
 

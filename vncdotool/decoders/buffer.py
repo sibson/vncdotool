@@ -35,8 +35,8 @@ class RectBuffer:
 
     def blit(self, x: int, y: int, w: int, h: int, pixels: bytes) -> None:
         if x == 0 and y == 0 and w == self.width and h == self.height:
-            # Covering the buffer exactly is its own bounds check, so this
-            # runs before _check_rect rather than after it.
+            # Covering the buffer exactly already proves the write is in
+            # bounds, so _check_rect is skipped rather than called.
             expected = self._nbytes
             if len(pixels) != expected:
                 raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")

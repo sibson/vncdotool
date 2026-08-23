@@ -423,9 +423,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
-            # Whether this decoder ever answers wholeRectangle is a property
-            # of its class, fixed for the connection -- resolved here so
-            # _pumpPixels never pays for a call that always returns None.
+            # A decoder's wholeRectangle support is fixed for its class, not
+            # per rectangle.
             if type(decoder).wholeRectangle is not decoders.PixelDecoder.wholeRectangle:
                 return self._pumpWholeRectangle
             return self._pumpPixels
@@ -434,13 +433,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _pumpWholeRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        # The decoder's whole output is one contiguous run of pixels, so
-        # there is nothing for a buffer to do but hold them: read them and
-        # hand them straight to the client.
         size = decoder.wholeRectangle(width, height, self.pixel_format)
-        # _pumpFor only routes here a decoder whose wholeRectangle is
-        # overridden, and RawDecoder's never returns None -- but the base
-        # signature is Optional, so this states the guarantee for mypy too.
+        # _pumpFor never routes here a decoder whose wholeRectangle can
+        # return None.
         assert size is not None
         if not self._rectFits(width, height):
             return
@@ -473,12 +468,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
         rect: tuple[int, int, int, int],
         advance: bool,
     ) -> None:
-        """Paint one rectangle's pixels, from either source: the fast path's
-        bytes straight off the wire, or the buffered path's `tobytes()`.
-
-        `advance` is False from the buffered path, which reaches this through
-        `_pumpBlock`, already the single place that calls `_doConnection` for
-        every decoder -- pixel-producing or not.
+        """`advance` is False from the buffered path, which reaches this
+        through `_pumpBlock`, already the single place that calls
+        `_doConnection` for every decoder -- pixel-producing or not.
         """
         x, y, width, height = rect
         self.updateRectangle(
