@@ -10,10 +10,11 @@ from .errors import DecodeError
 from .hextile import HextileDecoder
 from .raw import RawDecoder
 from .rre import CoRREDecoder, RREDecoder
+from .zrle import ZRLEDecoder
 
 # Classes, not instances: ZRLE and Tight own a zlib stream that lives for
 # one connection (RFC 6143 section 7.7.6), so decoders cannot be shared
-# between them even though today's four hold no state.
+# between them even though most decoders hold no state.
 DECODERS: Dict[Encoding, Type[Decoder]] = {
     cls.ENCODING: cls
     for cls in (
@@ -22,6 +23,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         RREDecoder,
         CoRREDecoder,
         HextileDecoder,
+        ZRLEDecoder,
     )
 }
 
@@ -33,6 +35,7 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "rre": Encoding.RRE,
     "corre": Encoding.CORRE,
     "hextile": Encoding.HEXTILE,
+    "zrle": Encoding.ZRLE,
 }
 
 
