@@ -94,7 +94,8 @@ so that class of bug cannot be written — including the live one, ZRLE's
 (`rfb.py`).
 
 R3 moves with it: stated over the framebuffer, not decoder output, and checked
-by the goldens' cross-format comparison.
+by each golden fixture decoding to its scene PNG at the format it was captured
+at.
 
 ## Surface
 
@@ -220,8 +221,7 @@ absence, which is step 2 and the case a test would otherwise skip.
 oracle is the same committed scene PNG, so tolerance stops being zero: the bound
 is the format's own step, 255/31 for the 5-bit channels and 255/63 for the
 6-bit, rounded up, which covers truncation and round-to-nearest alike without
-modelling either. Two fixtures then allow the cross-format check — decode both,
-assert the framebuffers agree — which is R3 as restated.
+modelling either.
 
 `conditions.json` grows the pixel format, both the ServerInit one and any we
 requested. They are different facts and the interesting fixtures are where they
@@ -241,8 +241,8 @@ records which ran.
 2. `client.py` resolves the mode per rectangle; `PF2IM`, `setImageMode`,
    `image_mode` go. BGRX behaviour unchanged (R5).
 3. `--pixel-format`, the policy, the `api.connect` keyword.
-4. Capture `tigervnc-raw-rgb565`; tolerance and the cross-format check in
-   `test_goldens.py`; the fleet case.
+4. Capture `tigervnc-raw-rgb565`; tolerance in `test_goldens.py`; the fleet
+   case.
 
 ## Validated against the specs
 
@@ -275,9 +275,12 @@ document covers it; a capture will.
 
 ## Risks
 
-- A tolerance wide enough for 5-bit quantization can hide a real defect. The
-  cross-format check compensates: no external truth needed, and it fails on the
-  channel-order and shift errors the loose bound would swallow.
+- A tolerance wide enough for 5-bit quantization can hide a real defect, and
+  nothing compensates — a cross-format comparison does not, for the reason in
+  [decoder-goldens.md](decoder-goldens.md). What hides is narrower than the
+  whole class: a channel swap moves a coloured pixel much further than 255/31,
+  so the tolerant comparison still fails on it, and what survives is a shift or
+  rounding error smaller than one quantization step.
 - Tagging moves the trust from our arithmetic to Pillow's mode strings. A mode
   meaning something other than we think decodes silently wrong, where a bad
   shift would at least be ours to read — hence unit tests asserting Pillow's

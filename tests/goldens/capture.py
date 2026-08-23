@@ -13,7 +13,6 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Optional
 
 from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
@@ -50,28 +49,13 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
     return proxy
 
 
-def _refuse_duplicate_format(name: str, pixel_format: Optional[str]) -> None:
-    """Two fixtures of one server and encoding captured at the same format
-    would compare equal whatever a client does with a format, leaving the
-    cross-format check asserting nothing.
-    """
-    group = name.rsplit("-", 1)[0]
-    for sibling in sorted(FIXTURE_ROOT.glob(f"{group}-*")):
-        if sibling.name == name or not (sibling / "conditions.json").exists():
-            continue
-        recorded = json.loads((sibling / "conditions.json").read_text()).get("pixel_format")
-        if recorded == pixel_format:
-            raise SystemExit(
-                f"{sibling.name} was already captured at {pixel_format or 'the server\'s own format'}"
-            )
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--pixel-format",
         choices=sorted(pixelformat.PIXEL_FORMATS),
-        help="format the capturing client asks the server for [the server's own]",
+        required=True,
+        help="format the capturing client asks the server for",
     )
     parser.add_argument(
         "--encoding",
@@ -81,11 +65,10 @@ def main() -> int:
     )
     parser.add_argument(
         "--name",
-        help="fixture directory name [tigervnc-ENCODING-PIXEL_FORMAT, or -native]",
+        help="fixture directory name [tigervnc-ENCODING-PIXEL_FORMAT]",
     )
     args = parser.parse_args()
-    name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format or 'native'}"
-    _refuse_duplicate_format(name, args.pixel_format)
+    name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format}"
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"

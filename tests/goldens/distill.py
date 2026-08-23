@@ -83,15 +83,14 @@ class _Recorder(client.VNCDoToolClient):
         return s2c[: self.init_end], steps
 
 
-def _make_client(pixel_format: Optional[str]) -> _Recorder:
+def _make_client(pixel_format: str) -> _Recorder:
     """SetPixelFormat is client-to-server (RFC 6143 section 7.5.1), so the s2c
-    stream being replayed never says the server switched layouts. Untold, the
-    recorder unpacks the bytes as ServerInit announced them and permutes every
-    channel.
+    stream being replayed never says the server switched layouts. The recorder
+    has to be told, or it unpacks the bytes as ServerInit announced them and
+    permutes every channel.
     """
     recorder = _Recorder()
-    if pixel_format is not None:
-        recorder.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
+    recorder.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
     recorder.transport = mock.Mock()
     recorder.factory = mock.Mock()
     recorder.factory.shared = 0
@@ -104,7 +103,7 @@ def _make_client(pixel_format: Optional[str]) -> _Recorder:
     return recorder
 
 
-def split(s2c: bytes, pixel_format: Optional[str]) -> Tuple[bytes, List[Step]]:
+def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
     return _make_client(pixel_format).split(s2c)
 
 
