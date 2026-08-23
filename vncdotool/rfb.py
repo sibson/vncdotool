@@ -438,6 +438,10 @@ class RFBClient(Protocol):  # type: ignore[misc]
         # there is nothing for a buffer to do but hold them: read them and
         # hand them straight to the client.
         size = decoder.wholeRectangle(width, height, self.pixel_format)
+        # _pumpFor only routes here a decoder whose wholeRectangle is
+        # overridden, and RawDecoder's never returns None -- but the base
+        # signature is Optional, so this states the guarantee for mypy too.
+        assert size is not None
         if not self._rectFits(width, height):
             return
         self.expect(self._finishRectangle, size, decoder, (x, y, width, height), True)
