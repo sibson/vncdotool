@@ -30,6 +30,9 @@ class Decoder:
 class PixelDecoder(Decoder):
     """Consumes bytes, fills a rect buffer."""
 
+    # False when the decoder's wire bytes are already its output bytes, in order.
+    buffered: ClassVar[bool] = True
+
     def output_format(self, pixel_format: PixelFormat) -> PixelFormat:
         """The layout the bytes this decoder wrote are in, which is not
         always the negotiated one.

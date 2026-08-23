@@ -11,6 +11,7 @@ from .buffer import RectBuffer
 
 class RawDecoder(PixelDecoder):
     ENCODING: ClassVar[Encoding] = Encoding.RAW
+    buffered = False
 
     def decodePixels(
         self, target: RectBuffer, pixel_format: PixelFormat

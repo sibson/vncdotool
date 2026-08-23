@@ -24,7 +24,7 @@ class RectBuffer:
         # anything narrower has to clear it first.
         self._covered = False
 
-    def _check_rect(self, x: int, y: int, w: int, h: int) -> None:
+    def _check_bounds(self, x: int, y: int, w: int, h: int) -> None:
         if x < 0 or y < 0 or w < 0 or h < 0:
             raise DecodeError(f"negative rect: x={x}, y={y}, w={w}, h={h}")
         if x + w > self.width or y + h > self.height:
@@ -34,15 +34,18 @@ class RectBuffer:
             )
 
     def blit(self, x: int, y: int, w: int, h: int, pixels: bytes) -> None:
-        self._check_rect(x, y, w, h)
-        expected = w * h * self.bypp
-        if len(pixels) != expected:
-            raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
-
         if x == 0 and y == 0 and w == self.width and h == self.height:
+            expected = self._nbytes
+            if len(pixels) != expected:
+                raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
             self._whole = bytes(pixels)
             self._covered = True
             return
+
+        self._check_bounds(x, y, w, h)
+        expected = w * h * self.bypp
+        if len(pixels) != expected:
+            raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
         self._materialize()
         self._clear()
 
@@ -63,7 +66,7 @@ class RectBuffer:
             buf[dst:dst + row_bytes] = pixels[src:src + row_bytes]
 
     def fill(self, x: int, y: int, w: int, h: int, color: bytes) -> None:
-        self._check_rect(x, y, w, h)
+        self._check_bounds(x, y, w, h)
         if len(color) != self.bypp:
             raise DecodeError(f"fill color must be {self.bypp} bytes, got {len(color)}")
         self._materialize()

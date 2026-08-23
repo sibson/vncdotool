@@ -161,9 +161,9 @@ with the pump path its base class implies. A rectangle then costs one dict looku
 and a call through a bound method — no `isinstance`, no probing for methods, and
 no tag to keep in step with the class hierarchy.
 
-Decoders depend on nothing from `rfb.py`: the pump keeps `_rectBuffer`,
-`_pumpBlock` and `_doConnection` to itself, and the entry points that use them —
-`_pumpPixels` and `_pumpForClient` — live with the pump rather than on the
+Decoders depend on nothing from `rfb.py`: the pump keeps its own machinery —
+allocating buffers, driving generators, advancing the connection — to itself,
+and the entry points that use it live with the pump rather than on the
 decoder.
 
 There is no separate sink object. The pump calls the existing client callbacks —
@@ -184,6 +184,18 @@ the corresponding cursor pixel is valid.
 The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
 mutates the rectangle loop counter, and the QEMU extended key encoding mutates
 `negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
+
+### A decoder can opt out of the buffer entirely
+
+Raw writes its rectangle in one piece, in order, in one read, and shortcuts the
+intermediate buffer: `PixelDecoder.buffered = False` tells the pump this
+decoder's wire bytes are already its output bytes, so it reads `width * height
+* output_format().bypp` of them and calls `updateRectangle` directly.
+
+The dimension check malformed input must still get (R6) can no longer live in
+`_allocateBuffer`, since this path never allocates one; `_rectFits` is that
+check, called by both paths. See Benchmark below (N1) for the measurement that
+motivated this.
 
 ## Pixel format is shared, not per-decoder
 
@@ -555,6 +567,17 @@ Two distinct measurements, because only Raw has a past to regress against.
 **Raw, before and after (N1).** Decode a captured Raw frame N times with no
 Twisted in the loop, recorded before Phase 2 and after. This is the only
 regression test the migration can have.
+
+Measured on `tigervnc-raw-bgrx8888`, 8 updates of 87 rectangles, 300 replays,
+best and median in microseconds, before and after the whole-rectangle fast
+path landed on top of Phase 2-4:
+
+| | best | median |
+|---|---|---|
+| generator pump, no fast path | 634 | 680 |
+| generator pump + `buffered = False` | 561 | 606 |
+
+`make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 
 **Each new encoding (N2).** Two numbers against Raw on identical screen content:
 bytes over the wire, which should drop substantially, and render time, which must

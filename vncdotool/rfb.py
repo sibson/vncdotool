@@ -423,13 +423,24 @@ class RFBClient(Protocol):
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
-            return self._pumpPixels
+            if not decoder.buffered:
+                return self._pumpRectangle
+            return self._pumpBufferedRectangle
         return self._pumpForClient
 
-    def _pumpPixels(
+    def _pumpRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        target = self._rectBuffer(width, height)
+        if not self._rectFits(width, height):
+            return
+        output_format = decoder.output_format(self.pixel_format)
+        size = width * height * output_format.bypp
+        self.expect(self._finishRectangle, size, output_format, (x, y, width, height))
+
+    def _pumpBufferedRectangle(
+        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        target = self._allocateBuffer(width, height)
         if target is None:
             return
         self._pumpBlock(
@@ -448,24 +459,29 @@ class RFBClient(Protocol):
 
     def _finishRectangle(
         self,
-        decoder: decoders.PixelDecoder,
-        target: decoders.RectBuffer,
+        block: bytes,
+        output_format: PixelFormat,
         rect: tuple[int, int, int, int],
     ) -> None:
         x, y, width, height = rect
-        self.updateRectangle(
-            x, y, width, height, target.tobytes(),
-            decoder.output_format(self.pixel_format),
-        )
+        self.updateRectangle(x, y, width, height, block, output_format)
+        self._doConnection()
 
-    def _rectBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
-        """A buffer for one rectangle, or None having failed the connection."""
+    def _rectFits(self, width: int, height: int) -> bool:
+        """Whether a rectangle fits the framebuffer, having failed the
+        connection if it does not."""
         limit_w = self.width or self.MAX_DESKTOP_SIZE
         limit_h = self.height or self.MAX_DESKTOP_SIZE
         if not (0 <= width <= limit_w and 0 <= height <= limit_h):
             self.abortConnection(
                 f"rectangle {width}x{height} does not fit a {limit_w}x{limit_h} framebuffer"
             )
+            return False
+        return True
+
+    def _allocateBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
+        """A buffer for one rectangle, or None having failed the connection."""
+        if not self._rectFits(width, height):
             return None
         needed = width * height * self.bypp
         try:
@@ -487,9 +503,12 @@ class RFBClient(Protocol):
         try:
             size = generator.send(block)
         except StopIteration:
-            if finish is not None:
-                self._finishRectangle(*finish)
-            self._doConnection()
+            if finish is None:
+                self._doConnection()
+            else:
+                decoder, target, rect = finish
+                output_format = decoder.output_format(self.pixel_format)
+                self._finishRectangle(target.tobytes(), output_format, rect)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()
