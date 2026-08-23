@@ -433,8 +433,9 @@ class RFBClient(Protocol):  # type: ignore[misc]
     ) -> None:
         if not self._rectFits(width, height):
             return
-        size = width * height * decoder.output_format(self.pixel_format).bypp
-        self.expect(self._finishRectangle, size, decoder, (x, y, width, height))
+        output_format = decoder.output_format(self.pixel_format)
+        size = width * height * output_format.bypp
+        self.expect(self._finishRectangle, size, output_format, (x, y, width, height))
 
     def _pumpBufferedRectangle(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
@@ -459,13 +460,11 @@ class RFBClient(Protocol):  # type: ignore[misc]
     def _finishRectangle(
         self,
         block: bytes,
-        decoder: decoders.PixelDecoder,
+        output_format: PixelFormat,
         rect: tuple[int, int, int, int],
     ) -> None:
         x, y, width, height = rect
-        self.updateRectangle(
-            x, y, width, height, block, decoder.output_format(self.pixel_format)
-        )
+        self.updateRectangle(x, y, width, height, block, output_format)
         self._doConnection()
 
     def _rectFits(self, width: int, height: int) -> bool:
@@ -508,7 +507,8 @@ class RFBClient(Protocol):  # type: ignore[misc]
                 self._doConnection()
             else:
                 decoder, target, rect = finish
-                self._finishRectangle(target.tobytes(), decoder, rect)
+                output_format = decoder.output_format(self.pixel_format)
+                self._finishRectangle(target.tobytes(), output_format, rect)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()
