@@ -30,14 +30,8 @@ class Decoder:
 class PixelDecoder(Decoder):
     """Consumes bytes, fills a rect buffer."""
 
-    def wholeRectangleSize(
-        self, width: int, height: int, pixel_format: PixelFormat
-    ) -> int | None:
-        """The byte count to read when this decoder's entire output is that
-        many bytes of pixels, laid out left-to-right and top-to-bottom in
-        output_format. None when the decoder is not that shape.
-        """
-        return None
+    # False when the decoder's wire bytes are already its output bytes, in order.
+    buffered: ClassVar[bool] = True
 
     def output_format(self, pixel_format: PixelFormat) -> PixelFormat:
         """The layout the bytes this decoder wrote are in, which is not

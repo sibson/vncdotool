@@ -423,18 +423,17 @@ class RFBClient(Protocol):  # type: ignore[misc]
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
         if isinstance(decoder, decoders.PixelDecoder):
-            if type(decoder).wholeRectangleSize is not decoders.PixelDecoder.wholeRectangleSize:
-                return self._pumpWholeRectangle
+            if not decoder.buffered:
+                return self._pumpDirect
             return self._pumpPixels
         return self._pumpForClient
 
-    def _pumpWholeRectangle(
+    def _pumpDirect(
         self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        size = decoder.wholeRectangleSize(width, height, self.pixel_format)
-        assert size is not None
         if not self._rectFits(width, height):
             return
+        size = width * height * decoder.output_format(self.pixel_format).bypp
         self.expect(self._finishRectangle, size, decoder, (x, y, width, height))
 
     def _pumpPixels(

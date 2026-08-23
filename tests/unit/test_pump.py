@@ -319,12 +319,12 @@ class TestRectBufferReuse(TestCase):
         self.assertEqual(len(small.tobytes()), 2 * 2 * cli.bypp)
 
 
-class TestWholeRectangleDecoders(TestCase):
-    """A decoder whose whole output is one contiguous run of pixels skips the
-    buffer; one that says nothing keeps the generator path.
+class TestUnbufferedDecoders(TestCase):
+    """A decoder with `buffered = False` skips the buffer; the default
+    (`buffered = True`) keeps the generator path.
     """
 
-    def test_a_decoder_that_declares_nothing_still_decodes(self) -> None:
+    def test_a_buffered_decoder_still_decodes(self) -> None:
         cli = make_pump_client()
         cli.updateRectangle = mock.Mock()
 
@@ -342,9 +342,9 @@ class TestWholeRectangleDecoders(TestCase):
         )
 
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
-        """The fast path reads its byte count from the rectangle header, so
-        it has to bound the dimensions itself rather than inheriting the
-        check `_allocateRectBuffer` makes.
+        """The unbuffered path computes its byte count from the rectangle
+        header, so it has to bound the dimensions itself rather than
+        inheriting the check `_allocateRectBuffer` makes.
         """
         cli = make_pump_client()
         cli.width, cli.height = 64, 48

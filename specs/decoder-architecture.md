@@ -185,12 +185,12 @@ The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
 mutates the rectangle loop counter, and the QEMU extended key encoding mutates
 `negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
 
-### wholeRectangleSize skips the buffer for a decoder that doesn't need it
+### A decoder can opt out of the buffer entirely
 
 Raw writes its rectangle in one piece, in order, in one read, and shortcuts the
-intermediate buffer: `PixelDecoder.wholeRectangleSize(width, height,
-pixel_format)` returns a byte count instead of `None`, and the pump reads that
-many bytes and calls `updateRectangle` with them directly.
+intermediate buffer: `PixelDecoder.buffered = False` tells the pump this
+decoder's wire bytes are already its output bytes, so it reads `width * height
+* output_format().bypp` of them and calls `updateRectangle` directly.
 
 The dimension check malformed input must still get (R6) can no longer live in
 `_allocateRectBuffer`, since this path never allocates one; `_rectFits` is that
@@ -575,7 +575,7 @@ path landed on top of Phase 2-4:
 | | best | median |
 |---|---|---|
 | generator pump, no fast path | 634 | 680 |
-| generator pump + `wholeRectangleSize` | 561 | 606 |
+| generator pump + `buffered = False` | 561 | 606 |
 
 `make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 
