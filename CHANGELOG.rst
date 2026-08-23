@@ -8,6 +8,7 @@
   - [BREAKING] ``RFBClient.updateRectangle`` takes the ``PixelFormat`` its bytes are in, and is called once per rectangle; ``fillRectangle`` is no longer called for any migrated encoding. Subclasses overriding either have been warned since 1.4.1, see #385 (@sibson)
   - Add ``vncdo --pixel-format FORMAT``, asking the server for ``bgrx8888``, ``rgbx8888``, or ``rgb565`` instead of accepting the format it announces (@sibson)
   - Any byte-aligned truecolor pixel format the server announces can now be captured, not just the five formats vncdotool used to recognize (@sibson)
+  - Add ``make typecheck``, running mypy over ``vncdotool`` and ``tests`` (@sibson, #401)
   - ``vncdo`` failures print to stderr as plain messages (@sibson, #395)
   - ``vncdo -v`` logs the pixel format it requests, beside the native format it already logged (@sibson, #394)
   - Drop the per-rectangle debug trace: never used to diagnose anything, and decoding a full-screen update is 30% faster without it (@sibson)
