@@ -42,3 +42,9 @@ class PixelDecoder(Decoder):
 
 class ClientDecoder(Decoder):
     """Consumes bytes, calls a client method."""
+
+
+class ControlDecoder(Decoder):
+    """Calls a client method as a side effect; carries no framebuffer
+    content, so the pump never records its rectangle as a screen change.
+    """

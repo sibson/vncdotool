@@ -70,10 +70,7 @@ class RFBClient(Protocol):
     }
     _UNMIGRATED_ENCODINGS = {
         Encoding.ZRLE,
-        Encoding.PSEUDO_CURSOR,
-        Encoding.PSEUDO_DESKTOP_SIZE,
         Encoding.PSEUDO_LAST_RECT,
-        Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
     }
     SUPPORTED_ENCODINGS = set(decoders.DECODERS) | _UNMIGRATED_ENCODINGS
 
@@ -353,22 +350,10 @@ class RFBClient(Protocol):
 
         if self.rectangles:
             self.rectangles -= 1
-            self.rectanglePos.append((x, y, width, height))
             entry = self._decoders.get(encoding)
             if entry is not None:
                 decoder, pump = entry
                 pump(decoder, x, y, width, height)
-            elif encoding == Encoding.PSEUDO_CURSOR:
-                length = width * height * self.bypp
-                length += ((width + 7) // 8) * height
-                self.expect(self._handleDecodePsuedoCursor, length, x, y, width, height)
-            elif encoding == Encoding.PSEUDO_DESKTOP_SIZE:
-                del self.rectanglePos[-1]  # undo append as this carries no pixel data
-                self._handleDecodeDesktopSize(width, height)
-            elif encoding == Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT:
-                self.negotiated_encodings.add(Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
-                del self.rectanglePos[-1]  # undo append as this is no real update
-                self._doConnection()
             else:
                 self.vncProtocolError(
                     f"unknown encoding received {Encoding.lookup(encoding)!r}"
@@ -382,6 +367,8 @@ class RFBClient(Protocol):
             if not decoder.buffered:
                 return self._pumpRectangle
             return self._pumpBufferedRectangle
+        if isinstance(decoder, decoders.ControlDecoder):
+            return self._pumpForControl
         return self._pumpForClient
 
     def _pumpRectangle(
@@ -399,19 +386,30 @@ class RFBClient(Protocol):
         target = self._allocateBuffer(width, height)
         if target is None:
             return
-        self._pumpBlock(
-            None,
-            decoder.decodePixels(target, self.pixel_format),
-            (decoder, target, (x, y, width, height)),
-        )
+        rect = (x, y, width, height)
+
+        def on_done() -> None:
+            output_format = decoder.output_format(self.pixel_format)
+            self._finishRectangle(target.tobytes(), output_format, rect)
+
+        self._pumpBlock(None, decoder.decodePixels(target, self.pixel_format), on_done)
 
     def _pumpForClient(
         self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         rect = (x, y, width, height)
-        self._pumpBlock(
-            None, decoder.decodeForClient(self, rect, self.pixel_format), None
-        )
+
+        def on_done() -> None:
+            self.rectanglePos.append(rect)
+            self._doConnection()
+
+        self._pumpBlock(None, decoder.decodeForClient(self, rect, self.pixel_format), on_done)
+
+    def _pumpForControl(
+        self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        rect = (x, y, width, height)
+        self._pumpBlock(None, decoder.decodeForClient(self, rect, self.pixel_format), None)
 
     def _finishRectangle(
         self,
@@ -419,6 +417,7 @@ class RFBClient(Protocol):
         output_format: PixelFormat,
         rect: tuple[int, int, int, int],
     ) -> None:
+        self.rectanglePos.append(rect)
         x, y, width, height = rect
         self.updateRectangle(x, y, width, height, block, output_format)
         self._doConnection()
@@ -452,19 +451,15 @@ class RFBClient(Protocol):
         self,
         block: bytes | None,
         generator: Iterator[int],
-        finish: tuple[
-            decoders.PixelDecoder, decoders.RectBuffer, tuple[int, int, int, int]
-        ] | None,
+        on_done: Callable[[], None] | None,
     ) -> None:
         try:
             size = generator.send(block)
         except StopIteration:
-            if finish is None:
+            if on_done is None:
                 self._doConnection()
             else:
-                decoder, target, rect = finish
-                output_format = decoder.output_format(self.pixel_format)
-                self._finishRectangle(target.tobytes(), output_format, rect)
+                on_done()
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()
@@ -475,22 +470,7 @@ class RFBClient(Protocol):
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pumpBlock, size, generator, finish)
-
-    # --- Pseudo Cursor Encoding
-    def _handleDecodePsuedoCursor(
-        self, block: bytes, x: int, y: int, width: int, height: int
-    ) -> None:
-        split = width * height * self.bypp
-        image = block[:split]
-        mask = block[split:]
-        self.updateCursor(x, y, width, height, image, mask)
-        self._doConnection()
-
-    # --- Pseudo Desktop Size Encoding
-    def _handleDecodeDesktopSize(self, width: int, height: int) -> None:
-        self.updateDesktopSize(width, height)
-        self._doConnection()
+        self.expect(self._pumpBlock, size, generator, on_done)
 
     # ---  other server messages
 
