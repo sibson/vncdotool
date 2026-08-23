@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - ``uv.lock`` is no longer tracked, so ``uv sync`` resolves current releases rather than a pinned set; ``.gitignore`` has listed it since #383 but it stayed in the index (@sibson)
   - ``--encodings hextile`` offers Hextile, which sends less than Raw on ordinary screen content (@sibson)
   - Add ``vncdo --encodings LIST``, choosing which encodings to offer the server (@sibson, #167, #168)
   - Fix CoRRE decoding (@sibson)
