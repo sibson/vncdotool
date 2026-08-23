@@ -26,6 +26,7 @@ from vncdotool.capture import (
 )
 from vncdotool.const import AuthTypes, Encoding
 from vncdotool.loggingproxy import (
+    RFBServer,
     VNCLoggingClientProxy,
     VNCLoggingServerFactory,
     VNCLoggingServerProxy,
@@ -558,6 +559,17 @@ class TestCaptureWriter(TestCase):
         self.assertEqual(s2c, VERSION_33 + NONE_AUTH_33)
 
 
+class TestRFBServer(TestCase):
+
+    def test_connectionMade_sets_tcp_nodelay(self) -> None:
+        server = RFBServer()
+        server.transport = mock.Mock()
+
+        server.connectionMade()
+
+        server.transport.setTcpNoDelay.assert_called_once_with(True)
+
+
 class TestProxyCaptureWiring(TestCase):
     """Drive both proxy halves directly, with mocked transports standing in
     for the peer connections portforward would otherwise wire up.
@@ -799,6 +811,20 @@ class TestProxyCaptureWiring(TestCase):
         self.assertFalse(factory.session_taken)
         self.assertIsNone(probe.capture)
         factory.sessionFinished.assert_not_called()
+
+    def test_connectionLost_accepts_no_argument(self) -> None:
+        """Protocol.connectionLost has a default reason; an override that
+        drops the default breaks any caller relying on that contract.
+        """
+        factory = mock.Mock()
+
+        proxy = VNCLoggingServerProxy()
+        proxy.factory = factory
+        proxy.transport = mock.Mock()
+
+        proxy.connectionLost()
+
+        factory.clientConnectionLost.assert_called_once_with(proxy)
 
     def test_greeting_only_session_is_still_written(self) -> None:
         """A server rejecting the client before it speaks (TigerVNC's "Too

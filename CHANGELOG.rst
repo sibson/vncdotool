@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)
   - Dependency resolution ignores releases younger than a week, so a compromised upload has to survive public scrutiny before it can reach a build here (@sibson)
   - CI installs from the committed ``uv.lock`` and fails if it is stale, rather than silently resolving something else; ``uv.lock`` is no longer listed in ``.gitignore``, where it had no effect anyway (@sibson)
   - ``--encodings hextile`` offers Hextile, which sends less than Raw on ordinary screen content (@sibson)
