@@ -29,25 +29,11 @@ so a hang is contained by the kernel reaping the subprocess rather than by
 anything in-process. See `specs/testing-framework.md` and
 `tests/functional/utils.py`.
 
-A comment carries what the reader cannot get anywhere else: something
-surprising, particular to this code, and absent from the language, the
-library's documentation, the RFB specs and the code itself. A server
-that ignores what it was asked, an ordering nothing enforces, an obvious
-approach that does not work here. `loggingproxy.py` has the shape of it:
-"SetEncodings only says what the client asked for, and a server may
-ignore it."
-
-The reader knows the tools and can read the code, and an AI reader has
-every public document already. Anything they could look up, infer from a
-name, or learn by running it is not worth writing, and neither is
-anything about the change rather than the code -- the alternative you
-rejected, what used to be here, who calls it, the issue or PR it came
-from. That is commit-message and `docs/` material. Point elsewhere only
-when there is something surprising there too long to state here.
-
-Test by deleting it: keep it only if an intelligent reader would still
-be surprised later. Shortening an unnecessary comment leaves an
-unnecessary comment. One or two lines is the norm.
+Comments follow the `writing-code-comments` skill in
+`.claude/skills/`. What is particular to this repo: `loggingproxy.py` has
+the shape of a comment that earns its place -- "SetEncodings only says what
+the client asked for, and a server may ignore it." `rfb.py` is the file the
+skill's vendored-code rule is about here: a 2003-era import, added whole.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
