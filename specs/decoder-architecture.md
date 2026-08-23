@@ -185,6 +185,30 @@ The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
 mutates the rectangle loop counter, and the QEMU extended key encoding mutates
 `negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
 
+### A decoder that is only pixels does not need the machinery
+
+The apparatus above — a buffer, a generator, two `send` calls, a blit, a
+`tobytes` — exists to let a decoder write a rectangle in pieces, out of order,
+over several reads. Raw writes it in one piece, in order, in one read, and pays
+for all of it anyway. Since Raw is the only encoding in live use, that is the
+common case paying for the general one.
+
+So a `PixelDecoder` may answer `wholeRectangle(width, height, pixel_format)`
+with a byte count, meaning: my entire output is that many bytes of pixels, laid
+out left-to-right and top-to-bottom in `output_format`. The pump then reads
+them and calls `updateRectangle` with them directly, and no buffer is built.
+
+It is one optional method with a `None` default, not a second architecture. A
+decoder that says nothing gets the generator path unchanged, which is what
+every encoding after Raw is expected to want — none of RRE, Hextile, ZRLE or
+Tight can answer it, because none of them knows its byte count before
+decoding. The pump keeps one branch for it and the buffered path stays the
+general case.
+
+What it does cost is that `_rectBuffer` no longer sees every rectangle, so R6's
+dimension check cannot live there; `_rectFits` is that check, called by both
+paths. See Benchmark below (N1) for the measurement that motivated this.
+
 ## Pixel format is shared, not per-decoder
 
 Almost nothing about pixel format varies between decoders, so it lives once in
@@ -555,6 +579,17 @@ Two distinct measurements, because only Raw has a past to regress against.
 **Raw, before and after (N1).** Decode a captured Raw frame N times with no
 Twisted in the loop, recorded before Phase 2 and after. This is the only
 regression test the migration can have.
+
+Measured on `tigervnc-raw-bgrx8888`, 8 updates of 87 rectangles, 300 replays,
+best and median in microseconds, before and after the whole-rectangle fast
+path landed on top of Phase 2-4:
+
+| | best | median |
+|---|---|---|
+| generator pump, no fast path | 634 | 680 |
+| generator pump + `wholeRectangle` | 561 | 606 |
+
+`make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 
 **Each new encoding (N2).** Two numbers against Raw on identical screen content:
 bytes over the wire, which should drop substantially, and render time, which must

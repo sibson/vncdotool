@@ -19,6 +19,7 @@
   - Local development moves from Makefile.venv + pip to uv; ``make`` targets run under ``uv run`` (@sibson, #383)
   - Fix ``make release`` tagging an empty version (@sibson, #382)
   - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
+  - Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update (@sibson)
 
 1.4.1 (2026-08-19)
 ----------------------

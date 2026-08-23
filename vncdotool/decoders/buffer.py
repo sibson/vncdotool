@@ -34,15 +34,20 @@ class RectBuffer:
             )
 
     def blit(self, x: int, y: int, w: int, h: int, pixels: bytes) -> None:
+        if x == 0 and y == 0 and w == self.width and h == self.height:
+            # Covering the buffer exactly is its own bounds check, so this
+            # runs before _check_rect rather than after it.
+            expected = self._nbytes
+            if len(pixels) != expected:
+                raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
+            self._whole = bytes(pixels)
+            self._covered = True
+            return
+
         self._check_rect(x, y, w, h)
         expected = w * h * self.bypp
         if len(pixels) != expected:
             raise DecodeError(f"blit expected {expected} bytes, got {len(pixels)}")
-
-        if x == 0 and y == 0 and w == self.width and h == self.height:
-            self._whole = bytes(pixels)
-            self._covered = True
-            return
         self._materialize()
         self._clear()
 

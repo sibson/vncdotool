@@ -317,3 +317,43 @@ class TestRectBufferReuse(TestCase):
         expected = bytes([0xAA]) * (2 * 2 * cli.bypp)
         self.assertEqual(small.tobytes(), expected)
         self.assertEqual(len(small.tobytes()), 2 * 2 * cli.bypp)
+
+
+class TestWholeRectangleDecoders(TestCase):
+    """A decoder whose whole output is one contiguous run of pixels skips the
+    buffer; one that says nothing keeps the generator path.
+    """
+
+    def test_a_decoder_that_declares_nothing_still_decodes(self) -> None:
+        cli = make_pump_client()
+        cli.updateRectangle = mock.Mock()
+
+        class Ordinary(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
+                data = yield target.width * target.height * target.bypp
+                target.blit(0, 0, target.width, target.height, data)
+
+        pixels = bytes(range(2 * 2 * cli.bypp))
+        pump(cli, Ordinary(), 0, 0, 2, 2)
+        cli.dataReceived(pixels)
+
+        cli.updateRectangle.assert_called_once_with(
+            0, 0, 2, 2, pixels, cli.pixel_format
+        )
+
+    def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
+        """The fast path reads its byte count from the rectangle header, so
+        it has to bound the dimensions itself rather than inheriting the
+        check `_rectBuffer` makes.
+        """
+        cli = make_pump_client()
+        cli.width, cli.height = 64, 48
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+
+        decoder, _ = cli._decoders[Encoding.RAW]
+        pump(cli, decoder, 0, 0, 65, 10)
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
