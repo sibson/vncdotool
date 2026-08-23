@@ -1,0 +1,4 @@
+# A cooldown against supply-chain attacks: a release has to survive a week
+# of public scrutiny before it can enter a resolution. Under [tool.uv] in
+# pyproject.toml uv parses this key and then ignores it (0.10.9).
+exclude-newer = "7 days"
