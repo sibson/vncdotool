@@ -7,6 +7,7 @@ from .base import ClientDecoder, Decoder, PixelDecoder
 from .buffer import RectBuffer
 from .copyrect import CopyRectDecoder
 from .errors import DecodeError
+from .hextile import HextileDecoder
 from .raw import RawDecoder
 from .rre import CoRREDecoder, RREDecoder
 
@@ -20,6 +21,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         CopyRectDecoder,
         RREDecoder,
         CoRREDecoder,
+        HextileDecoder,
     )
 }
 
@@ -30,6 +32,7 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "copyrect": Encoding.COPY_RECTANGLE,
     "rre": Encoding.RRE,
     "corre": Encoding.CORRE,
+    "hextile": Encoding.HEXTILE,
 }
 
 
