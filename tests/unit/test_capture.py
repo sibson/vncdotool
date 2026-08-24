@@ -24,7 +24,7 @@ from vncdotool.capture import (
     HandshakeScrubber,
     check_capture_target,
 )
-from vncdotool.const import AuthTypes, Encoding
+from vncdotool.const import AuthTypes, Encoding, FenceFlags, MsgC2S
 from vncdotool.loggingproxy import (
     RFBServer,
     VNCLoggingClientProxy,
@@ -569,6 +569,26 @@ class TestRFBServer(TestCase):
 
         server.transport.setTcpNoDelay.assert_called_once_with(True)
 
+    def test_client_fence_is_parsed_without_desyncing_the_next_message(self) -> None:
+        """A ptype absent from TYPE_LEN reads a zero-length header and never
+        advances the buffer, desyncing every message after it (see
+        CLIENT_CUT_TEXT). CLIENT_FENCE carries a variable payload the same
+        way, so it must consume exactly what it declares.
+        """
+        server = RFBServer()
+        server.transport = mock.Mock()
+        server.buffer = bytearray()
+        server._handler = (server._handle_protocol, 1)
+        server.handle_clientFence = mock.Mock()  # type: ignore[method-assign]
+        server.handle_keyEvent = mock.Mock()  # type: ignore[method-assign]
+
+        fence = pack("!BxxxIB", MsgC2S.CLIENT_FENCE, int(FenceFlags.REQUEST), 3) + b"abc"
+        key_event = pack("!BBxxI", MsgC2S.KEY_EVENT, 1, ord("a"))
+        server.dataReceived(fence + key_event)
+
+        server.handle_clientFence.assert_called_once_with(FenceFlags.REQUEST, b"abc")
+        server.handle_keyEvent.assert_called_once_with(ord("a"), 1)
+
 
 class TestProxyCaptureWiring(TestCase):
     """Drive both proxy halves directly, with mocked transports standing in
@@ -700,6 +720,20 @@ class TestProxyCaptureWiring(TestCase):
             capture.encodings_seen,
             {int(Encoding.ZRLE): 2, int(Encoding.HEXTILE): 1},
         )
+
+    def test_shadow_client_vncConnectionMade_survives_a_real_factory(self) -> None:
+        """VNCDoToolClient.vncConnectionMade reads factory.fence; the shadow
+        client's factory is VNCLoggingServerFactory, which must carry every
+        flag VNCDoToolFactory does or this raises AttributeError -- silently,
+        since startLogging's caller only logs it as a parse failure.
+        """
+        from vncdotool.loggingproxy import VNCLoggingClient
+
+        vnclog = VNCLoggingClient()
+        vnclog.transport = mock.Mock()
+        vnclog.factory = VNCLoggingServerFactory("localhost", 5900)
+
+        vnclog.vncConnectionMade()
 
     def test_forwarding_failures_are_not_swallowed(self) -> None:
         """Only the observers are wrapped.
