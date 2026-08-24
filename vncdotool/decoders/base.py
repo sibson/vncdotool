@@ -51,3 +51,9 @@ class ClientDecoder(RectDecoder):
 class ControlDecoder(Decoder):
     """Calls a client method as a side effect; its rectangle is never
     recorded as a screen change."""
+
+    def decodeForControl(self, client: object, width: int, height: int) -> None:
+        """Unlike decodePixels/decodeForClient, not a generator: this
+        consumes no bytes, so there is nothing to yield for.
+        """
+        raise NotImplementedError

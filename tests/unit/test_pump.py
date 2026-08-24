@@ -82,7 +82,7 @@ class TestDecodeErrorHandling(TestCase):
             raise decoders.DecodeError("bogus subencoding")
             yield  # pragma: no cover - never reached
 
-        cli._pumpBlock(None, failing(), None)
+        cli._pumpGenerator(None, failing(), None)
 
         cli.vncProtocolError.assert_called_once()
         self.assertIn("bogus subencoding", cli.vncProtocolError.call_args.args[0])
