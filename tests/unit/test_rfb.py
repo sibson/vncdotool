@@ -48,10 +48,6 @@ class TestRFB(TestCase):
         self.client.vncProtocolError.assert_called_once()
 
     def test_unknown_encoding_stops_processing_buffered_rectangles(self):
-        # A rectangle with an unrecognized encoding should abort the
-        # connection immediately, not keep parsing whatever bytes of an
-        # undecodable stream happen to already be buffered as if they were
-        # more 12-byte rectangle headers.
         self.client.vncProtocolError = mock.Mock()
         self.client._handler = self.client._handleExpected
         self.client.rectangles = 3
