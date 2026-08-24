@@ -1,17 +1,3 @@
-"""Mid-session desktop resize: the case specs/decoder-architecture.md's
-scene-catalogue testing cannot reach, since the scene player has no way to
-make a server change geometry (see "Deferred" in decoder-goldens.md and
-"Testing" in decoder-architecture.md).
-
-libvncserver-example resizes only in response to ``XK_Up``/``XK_Down``
-(examples/example.c, LibVNCServer 0.9.14); no signal, stdin, or xrandr path
-exists.
-
-The cycle position is a static variable in the server process, not
-per-connection state, so a container a previous run already resized reports
-its current size at the next connection's ServerInit.
-"""
-
 from unittest import TestCase
 
 from PIL import Image
