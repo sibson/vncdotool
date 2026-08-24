@@ -38,6 +38,7 @@ TYPE_LEN = {
     MsgC2S.KEY_EVENT: 8,
     MsgC2S.POINTER_EVENT: 6,
     MsgC2S.QEMU_CLIENT_MESSAGE: 1,
+    MsgC2S.CLIENT_FENCE: 9,
 }
 
 REVERSE_MAP = {v: n for (n, v) in KEYMAP.items()}
@@ -135,6 +136,11 @@ class RFBServer(Protocol):
             self.handle_pointerEvent(x, y, buttonmask)
         elif ptype == MsgC2S.CLIENT_CUT_TEXT:
             self.handle_clientCutText(block)
+        elif ptype == MsgC2S.CLIENT_FENCE:
+            flags, length = unpack("!xxxIB", block)
+            payload = bytes(self.buffer[:length])
+            del self.buffer[:length]
+            self.handle_clientFence(flags, payload)
         elif ptype == MsgC2S.QEMU_CLIENT_MESSAGE:
             (subtype,) = unpack("!B", block)
             if subtype == QemuClientMessage.EXTENDED_KEY_EVENT:
@@ -170,6 +176,9 @@ class RFBServer(Protocol):
         pass
 
     def handle_clientCutText(self, block: bytes) -> None:
+        pass
+
+    def handle_clientFence(self, flags: int, payload: bytes) -> None:
         pass
 
     def handle_keyEventExtended(self, keysym: int, down: bool, keycode: int) -> None:
@@ -465,6 +474,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
+    fence = False
     force_caps = False
 
     password_required = False
