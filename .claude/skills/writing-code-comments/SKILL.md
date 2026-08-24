@@ -118,6 +118,20 @@ Auditing a diff, branch, or file:
    constraint does not become redundant because you learned it this morning.
    Delete it only if you can name where it is already written. A sweep that
    returns every block as a delete has usually stopped checking.
+
+   **Better than the default: hand the sweep to a reader who did not write
+   the code.** A subagent, given the diff, the commit body and this skill,
+   cannot supply the load, because it never had the reasoning. That is the
+   whole difficulty of this step solved by who is doing it rather than by a
+   rule they have to keep. Send the diff and the commit message; do not send
+   your verdicts, or you have handed over the load after all.
+
+   Do not delegate it to the cheapest model available. Measured on this
+   skill's own eval suite, the same document run by a small model scored
+   below what the *unimproved* skill scored on a mid-tier one: the sweep
+   turned into uniform deletion and took the load-bearing comments with it.
+   The judgement in step 2 is the expensive part. A model that reads the
+   diff and returns "delete everything" has not swept it.
 1. Enumerate **every** comment and docstring in scope — not only the ones
    review flagged. Reviews catch samples; the pattern is repo-wide. Drop
    vendored files and published API reference from scope first.
