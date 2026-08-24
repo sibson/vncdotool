@@ -691,6 +691,8 @@ class RFBFactory(protocol.ClientFactory):
     # should be overriden by application to use a derrived class
     protocol = RFBClient
 
+    username: str | None = None
+
     def __init__(self, password: str | None = None, shared: bool = False) -> None:
         self.password = password
         self.shared = shared

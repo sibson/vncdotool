@@ -107,6 +107,18 @@ class TestRFB(TestCase):
             mock.call(b"\x00"),  # shared
         ])
 
+    def test_ardRequestCredentials_prompts_when_factory_has_no_username(self):
+        self.client.factory = rfb.RFBFactory()
+        with (
+            mock.patch("builtins.input", return_value="alice") as input_,
+            mock.patch("getpass.getpass", return_value="secret") as getpass_,
+        ):
+            self.client.ardRequestCredentials()
+        input_.assert_called_once()
+        getpass_.assert_called_once()
+        assert self.client.factory.username == "alice"
+        assert self.client.factory.password == "secret"
+
 
 class TestRFBClientSubclassWarning(TestCase):
 
