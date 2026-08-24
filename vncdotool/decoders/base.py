@@ -27,7 +27,11 @@ class Decoder:
         raise NotImplementedError
 
 
-class PixelDecoder(Decoder):
+class RectDecoder(Decoder):
+    """Its rectangle is a real screen change, recorded as one."""
+
+
+class PixelDecoder(RectDecoder):
     """Consumes bytes, fills a rect buffer."""
 
     # False when the decoder's wire bytes are already its output bytes, in order.
@@ -40,5 +44,10 @@ class PixelDecoder(Decoder):
         return pixel_format
 
 
-class ClientDecoder(Decoder):
+class ClientDecoder(RectDecoder):
     """Consumes bytes, calls a client method."""
+
+
+class ControlDecoder(Decoder):
+    """Calls a client method as a side effect; its rectangle is never
+    recorded as a screen change."""

@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from ..const import Encoding
-from .base import ClientDecoder, Decoder, PixelDecoder
+from .base import ClientDecoder, ControlDecoder, Decoder, PixelDecoder, RectDecoder
 from .buffer import RectBuffer
+from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
 from .copyrect import CopyRectDecoder
+from .cursor import CursorDecoder
 from .errors import DecodeError
 from .hextile import HextileDecoder
 from .raw import RawDecoder
@@ -24,6 +26,9 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         CoRREDecoder,
         HextileDecoder,
         ZRLEDecoder,
+        CursorDecoder,
+        DesktopSizeDecoder,
+        QemuExtendedKeyDecoder,
     )
 }
 
@@ -45,11 +50,13 @@ def for_connection() -> Dict[Encoding, Decoder]:
 
 __all__ = [
     "ClientDecoder",
+    "ControlDecoder",
     "DECODERS",
     "DecodeError",
     "Decoder",
     "ENCODING_NAMES",
     "PixelDecoder",
     "RectBuffer",
+    "RectDecoder",
     "for_connection",
 ]
