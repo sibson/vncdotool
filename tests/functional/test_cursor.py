@@ -11,6 +11,7 @@ from unittest import TestCase
 
 from PIL import Image, ImageChops
 
+from .imagediff import assert_images_match
 from .utils import HOST, X11VNC, port_open, run_vncdo, screenshot_dir
 
 CURSOR_POS = (50, 50)
@@ -58,3 +59,32 @@ class TestLocalCursor(TestCase):
             left, top, right, bottom = bbox
             self.assertLess(left, CURSOR_POS[0] + 32, f"diff region {bbox} is not near the pointer")
             self.assertLess(top, CURSOR_POS[1] + 32, f"diff region {bbox} is not near the pointer")
+
+    def test_localcursor_matches_the_server_side_render(self) -> None:
+        """The client-side composite should look like what x11vnc renders itself.
+
+        A plain capture (no flags) gets x11vnc's own cursor baked into the
+        pixel data server-side. --localcursor gets none of that -- x11vnc
+        excludes the cursor once the encoding is negotiated -- and instead
+        composites the decoded image back on the client. The two should
+        still land on the same pixels: this is the check that CursorDecoder
+        didn't just receive bytes, but decoded and placed them correctly.
+        """
+        x, y = str(CURSOR_POS[0]), str(CURSOR_POS[1])
+        default_png = screenshot_dir() / "x11vnc-default.png"
+        localcursor_png = screenshot_dir() / "x11vnc-localcursor-vs-default.png"
+
+        default = run_vncdo(X11VNC, "move", x, y, "capture", str(default_png))
+        self.assertEqual(default.returncode, 0, f"vncdo failed: {default.stderr}")
+
+        localcursor = run_vncdo(X11VNC, "--localcursor", "move", x, y, "capture", str(localcursor_png))
+        self.assertEqual(localcursor.returncode, 0, f"vncdo --localcursor failed: {localcursor.stderr}")
+
+        with Image.open(default_png) as oracle, Image.open(localcursor_png) as captured:
+            assert_images_match(
+                self,
+                captured,
+                oracle,
+                label="x11vnc-localcursor-vs-server-render",
+                message="client-side cursor composite does not match x11vnc's own server-side render",
+            )
