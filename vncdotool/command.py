@@ -568,12 +568,12 @@ def vncdo(argv: list[str] | None = None) -> None:
     op.add_option(
         "--localcursor",
         action="store_true",
-        help="mouse pointer drawn client-side, useful when server does not include cursor",
+        help="request the cursor shape from the server and draw it into captures",
     )
     op.add_option(
         "--nocursor",
         action="store_true",
-        help="no mouse pointer in screen captures",
+        help="omit the mouse pointer from captures",
     )
     op.add_option(
         "--disable-desktop-resizing",

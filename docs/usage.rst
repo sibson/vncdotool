@@ -37,6 +37,17 @@ make screen captures of the session::
 
     > vncdo capture screenshot.png
 
+Per RFC 6143, the cursor pseudo-encoding exists so a client can draw the
+pointer locally instead of waiting on the server, cutting perceived lag for
+someone driving the session live. vncdo drives sessions with scripted
+commands rather than a live display, so that responsiveness rarely matters
+here. ``--localcursor`` is mostly only useful if a particular server does not
+otherwise draw the pointer into the framebuffer and you want it present in a
+capture; ``--nocursor`` does the opposite, forcing the pointer out of
+captures::
+
+    > vncdo --localcursor capture screenshot.png
+
 With Pillow_ installed, you can wait for the screen to match a known image::
 
     > vncdo expect somescreen.png 0
