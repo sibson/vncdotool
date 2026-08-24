@@ -467,6 +467,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.screen:
             new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
+        self.width, self.height = width, height
 
 
 class VMWareClient(VNCDoToolClient):
