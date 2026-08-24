@@ -202,12 +202,6 @@ Stripping a label, folding a citation inline, or dropping the offending clause
 are all deletions of part of a block, not rewrites of it. If what makes the
 block wrong is *what it says* rather than *how it says it*, no rewrite exists.
 
-A bare requirement label — `R1`, `N2` — is a symptom, not the defect. Removing
-the label leaves the sentence it introduced, and if that sentence restates the
-design document, the code, or what the repo already knows, the verdict was
-delete all along. Ask what the block would be worth with the label already
-gone, and answer that question instead.
-
 **"It is useful guidance" is not a keep.** A block that tells the reader what
 the layout will be, what an invariant is, or how to think about a design is
 still deleted when the code, the directory, or the type already shows it. The
