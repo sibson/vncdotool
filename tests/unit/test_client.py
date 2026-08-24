@@ -44,6 +44,7 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+            client.rfb.Encoding.PSEUDO_FENCE,
         ])
 
     def test_keyPress_single_alpha(self):
