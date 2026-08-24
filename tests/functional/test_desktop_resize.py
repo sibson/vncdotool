@@ -3,12 +3,9 @@ scene-catalogue testing cannot reach, since the scene player has no way to
 make a server change geometry (see "Deferred" in decoder-goldens.md and
 "Testing" in decoder-architecture.md).
 
-libvncserver-example is the one fleet server that can: its ``dokey()``
-(examples/example.c, LibVNCServer 0.9.14, matching this repo's pinned
-``LIBVNCSERVER_VERSION``) handles ``XK_Up``/``XK_Down`` by calling
-``rfbNewFramebuffer()``, cycling 640x480 -> 800x600 -> 1024x768 and back.
-There is no signal, stdin, or xrandr path -- only those two keysyms, which
-``vncdotool.keys.KEYMAP`` maps "up"/"down" onto exactly.
+libvncserver-example resizes only in response to ``XK_Up``/``XK_Down``
+(examples/example.c, LibVNCServer 0.9.14); no signal, stdin, or xrandr path
+exists.
 
 The cycle position is a static variable in the server process, not
 per-connection state, so a container a previous run already resized reports
@@ -19,7 +16,7 @@ from unittest import TestCase
 
 from PIL import Image
 
-from .utils import HOST, LIBVNCSERVER_EXAMPLE, port_open, run_vncdo, screenshot_dir
+from .utils import HOST, LIBVNCSERVER_EXAMPLE, distinct_colours, has_expected_content, port_open, run_vncdo, screenshot_dir
 
 FLOOR_SIZE = (640, 480)
 RESIZED_SIZE = (800, 600)
@@ -62,9 +59,21 @@ class TestDesktopResize(TestCase):
                 image.size, FLOOR_SIZE,
                 f"{LIBVNCSERVER_EXAMPLE.name}: two Downs did not floor the framebuffer at {FLOOR_SIZE}",
             )
+            colours = distinct_colours(image)
+
+        self.assertTrue(
+            has_expected_content(LIBVNCSERVER_EXAMPLE, colours),
+            f"{LIBVNCSERVER_EXAMPLE.name}: floor capture is a single flat colour, no screen content was decoded",
+        )
 
         with Image.open(resized_png) as image:
             self.assertEqual(
                 image.size, RESIZED_SIZE,
                 f"{LIBVNCSERVER_EXAMPLE.name}: one Up from the floor did not grow the framebuffer to {RESIZED_SIZE}",
             )
+            colours = distinct_colours(image)
+
+        self.assertTrue(
+            has_expected_content(LIBVNCSERVER_EXAMPLE, colours),
+            f"{LIBVNCSERVER_EXAMPLE.name}: resized capture is a single flat colour, no screen content was decoded",
+        )
