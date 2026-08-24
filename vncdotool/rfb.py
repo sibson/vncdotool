@@ -388,22 +388,22 @@ class RFBClient(Protocol):
             return
         rect = (x, y, width, height)
 
-        def on_done() -> None:
+        def finish_buffered() -> None:
             output_format = decoder.output_format(self.pixel_format)
             self._finishRectangle(target.tobytes(), output_format, rect)
 
-        self._pumpBlock(None, decoder.decodePixels(target, self.pixel_format), on_done)
+        self._pumpGenerator(None, decoder.decodePixels(target, self.pixel_format), finish_buffered)
 
     def _pumpForClient(
         self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         rect = (x, y, width, height)
 
-        def on_done() -> None:
+        def finish_client() -> None:
             self.rectanglePos.append(rect)
             self._doConnection()
 
-        self._pumpBlock(None, decoder.decodeForClient(self, rect, self.pixel_format), on_done)
+        self._pumpGenerator(None, decoder.decodeForClient(self, rect, self.pixel_format), finish_client)
 
     def _pumpForControl(
         self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
@@ -447,7 +447,7 @@ class RFBClient(Protocol):
             self.abortConnection(f"no memory for a {width}x{height} rectangle")
             return None
 
-    def _pumpBlock(
+    def _pumpGenerator(
         self,
         block: bytes | None,
         generator: Iterator[int],
@@ -470,7 +470,7 @@ class RFBClient(Protocol):
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pumpBlock, size, generator, on_done)
+        self.expect(self._pumpGenerator, size, generator, on_done)
 
     # ---  other server messages
 
