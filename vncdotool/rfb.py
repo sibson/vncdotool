@@ -363,6 +363,11 @@ class RFBClient(Protocol):
             self._doConnection()
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
+        # Called once per decoder in __init__, not per rectangle: the
+        # isinstance cost is paid here so the per-rectangle dispatch in
+        # _handleRectangle is a plain dict lookup and a bound-method call.
+        # See specs/decoder-architecture.md, "Which pump path a decoder
+        # takes is resolved once per connection".
         if isinstance(decoder, decoders.PixelDecoder):
             if not decoder.buffered:
                 return self._pumpRectangle
