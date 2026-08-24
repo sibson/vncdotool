@@ -510,8 +510,9 @@ class RFBClient(Protocol):
 
     def _doServerFence(self, flags: int, payload: bytes) -> None:
         if flags & FenceFlags.REQUEST:
-            # rfbproto ServerFence: the response clears Request and any bits
-            # the client does not understand, keeping the rest set.
+            # rfbproto ServerFence: masking to the flags handled here, rather
+            # than just clearing Request, is what lets the server tell which
+            # flags this client supports as new ones are defined.
             known = FenceFlags.BLOCK_BEFORE | FenceFlags.BLOCK_AFTER | FenceFlags.SYNC_NEXT
             self.clientFence(FenceFlags(flags) & known, payload)
         self.expect(self._handleConnection, 1)
