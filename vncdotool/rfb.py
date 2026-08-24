@@ -363,8 +363,6 @@ class RFBClient(Protocol):
             self._doConnection()
 
     def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
-        # Called once per decoder at connect time, not per rectangle -- see
-        # specs/decoder-architecture.md.
         if isinstance(decoder, decoders.PixelDecoder):
             if not decoder.buffered:
                 return self._pumpRectangle
