@@ -105,12 +105,17 @@ jobs:
       # and disconnects -- itself the positive result. A clean capture with
       # no such line is a negative. Revert this step and the "tight" entry
       # in vncdotool/decoders/__init__.py once the table cites the run.
-      - name: Probe Tight support
-        if: matrix.server != 'qemu-kvm'
+      - name: Probe Tight support (UltraVNC)
+        if: matrix.server == 'ultravnc'
+        continue-on-error: true
+        run: uv run vncdo -v --encodings tight -s 127.0.0.1::5900 -p "$env:VNCDOTOOL_OS_SERVER_PASSWORD" capture tight-probe.png
+
+      - name: Probe Tight support (Screen Sharing)
+        if: matrix.server == 'screen-sharing'
         continue-on-error: true
         run: >-
-          uv run vncdo -v --encodings tight -s 127.0.0.1::5900 -p vncspike1
-          ${{ matrix.server == 'screen-sharing' && '-u vncspike' || '' }}
+          uv run vncdo -v --encodings tight -s 127.0.0.1::5900
+          -p "$VNCDOTOOL_OS_SERVER_PASSWORD" -u "$VNCDOTOOL_OS_SERVER_USERNAME"
           capture tight-probe.png
 
       - name: Run OS server functional tests
