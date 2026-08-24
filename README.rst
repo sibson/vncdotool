@@ -1,7 +1,3 @@
-.. image:: https://img.shields.io/pypi/pyversions/vncdotool.svg
-   :target: https://pypi.python.org/pypi/vncdotool
-   :alt: Python Versions
-
 .. image:: https://img.shields.io/pypi/v/vncdotool
     :target: https://pypi.org/project/vncdotool/
     :alt: PyPi Package
