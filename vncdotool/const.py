@@ -146,6 +146,15 @@ class HextileEncoding(IntFlag):
     SUBRECTS_COLORED = 16
 
 
+class FenceFlags(IntFlag):
+    """rfbproto: ClientFence/ServerFence flags."""
+
+    BLOCK_BEFORE = 1 << 0
+    BLOCK_AFTER = 1 << 1
+    SYNC_NEXT = 1 << 2
+    REQUEST = 1 << 31
+
+
 class AuthTypes(IntEnumLookup):
     """:rfc:`6143` §7.1.2. Security Handshake."""
 

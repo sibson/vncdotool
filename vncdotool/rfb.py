@@ -41,7 +41,7 @@ from twisted.python import log, usage
 from twisted.python.failure import Failure
 
 from . import decoders
-from .const import Encoding, AuthTypes, MsgC2S, MsgS2C
+from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C
 from .keys import Key
 from .pixelformat import PixelFormat
 
@@ -326,6 +326,8 @@ class RFBClient(Protocol):
             self.expect(self._handleConnection, 1)
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
+        elif msgid == MsgS2C.SERVER_FENCE:
+            self.expect(self._handleServerFence, 8)
         else:
             self.vncProtocolError(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             self.transport.loseConnection()
@@ -495,6 +497,25 @@ class RFBClient(Protocol):
         self.copy_text(block.decode("iso-8859-1"))
         self.expect(self._handleConnection, 1)
 
+    def _handleServerFence(self, block: bytes) -> None:
+        # rfbproto ServerFence: 3 bytes padding, U32 flags, U8 payload-length.
+        flags, length = unpack("!xxxIB", block)
+        if length:
+            self.expect(self._handleServerFencePayload, length, flags)
+        else:
+            self._doServerFence(flags, b"")
+
+    def _handleServerFencePayload(self, block: bytes, flags: int) -> None:
+        self._doServerFence(flags, block)
+
+    def _doServerFence(self, flags: int, payload: bytes) -> None:
+        if flags & FenceFlags.REQUEST:
+            # rfbproto ServerFence: the response clears Request and any bits
+            # the client does not understand, keeping the rest set.
+            known = FenceFlags.BLOCK_BEFORE | FenceFlags.BLOCK_AFTER | FenceFlags.SYNC_NEXT
+            self.clientFence(FenceFlags(flags) & known, payload)
+        self.expect(self._handleConnection, 1)
+
     # ------------------------------------------------------
     # incomming data redirector
     # ------------------------------------------------------
@@ -589,6 +610,10 @@ class RFBClient(Protocol):
         """
         data = message.encode("iso-8859-1")
         self.transport.write(pack("!BxxxI", MsgC2S.CLIENT_CUT_TEXT, len(data)) + data)
+
+    def clientFence(self, flags: FenceFlags, payload: bytes = b"") -> None:
+        """Request, or respond to, a Fence synchronisation of the data stream."""
+        self.transport.write(pack("!BxxxIB", MsgC2S.CLIENT_FENCE, flags, len(payload)) + payload)
 
     # ------------------------------------------------------
     # callbacks
