@@ -1,5 +1,6 @@
 {
   "skill_name": "writing-code-comments",
+  "provenance": "Cases 3-10 are drawn from real corrections Marc made in sibson/vncdotool between 2026-08-17 and 2026-08-24, in sessions where this skill was loaded and on PRs 402-444. Each expectation restates a verdict he actually gave.",
   "evals": [
     {
       "id": 1,
@@ -24,6 +25,115 @@
         "Block 3 is kept, or rewritten while preserving both the 32bpp/depth-24/little-endian limitation and the silent-wrong-decode consequence",
         "Block 2 is deleted",
         "Not every block is deleted"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Follow the attached fixture's instructions exactly. Produce the rewritten pull request description, then list what you cut and why.",
+      "expected_output": "A description of a few plain sentences with no section headings, saying what changed and the one thing a reviewer would not guess from the diff. The three narrative paragraphs collapse to at most two sentences; the Summary and Test plan headings are gone; the test-plan checklist is cut because CI already runs the unit suite and flake8 and a red check blocks the merge; the rejected effective_pixel_format alternative is cut as commit-body material.",
+      "files": ["evals/files/pr-body-sized-to-diff.md"],
+      "expectations": [
+        "The rewritten description contains no '## Summary' heading and no '## Test plan' heading",
+        "The `make test` and flake8 checklist items are cut, and the stated reason is that CI already runs them and gates the merge",
+        "The paragraph about the rejected `effective_pixel_format` alternative is cut, and the stated reason routes it to the commit body",
+        "The rewritten description is at most six lines of prose",
+        "The rewritten description still says what changed: the guard now resolves both sides through the recorded ServerInit",
+        "The rewrite is a genuine cut, not the same three paragraphs with the headings stripped off"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Follow the attached fixture's instructions exactly. Give a verdict of keep-as-written or cut for each entry, write the replacement text for each entry you cut, then counts by verdict.",
+      "expected_output": "Entries 1 and 2 are cut and come back as single clauses naming only the user-visible symptom. Entry 3 is already one user-visible fact and is kept. Entry 4 is kept including its second sentence, because a flag whose meaning changed earns the sentence saying what to do.",
+      "expectations": [
+        "Entry 1 is cut",
+        "Entry 1's replacement names the user-visible symptom (failures print to stderr as plain messages) and drops the CRITICAL:root rendering, the -vv traceback, and the 'Exit statuses are unchanged' reassurance",
+        "Entry 2 is cut",
+        "Entry 2's replacement drops the updateCursor / ControlDecoder mechanism and the description of the old broken behaviour",
+        "Entry 3 is kept as written",
+        "Entry 4 is kept, and its second sentence telling the user what to do is not cut"
+      ],
+      "files": ["evals/files/changelog-cut-test.md"]
+    },
+    {
+      "id": 5,
+      "prompt": "Audit the prose in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, write out any replacement text in full, then counts by verdict.",
+      "expected_output": "No bare requirement label survives anywhere. Block 1 loses `R1` — deleted, or rewritten to name the constraint instead of its label. Block 2 is deleted rather than merely relabelled: stripping `N1:` leaves a sentence that restates what the repo already knows. Block 3 is deleted, because it paraphrases the design document it points at. Block 4 is deleted or rewritten down to something short and concrete about what the guard rejects; the u16 derivation does not survive.",
+      "files": ["evals/files/bare-identifier-citations.md"],
+      "expectations": [
+        "No block retains a bare `R1` or `N1` label in its final form",
+        "Block 2 is deleted, not rewritten by stripping the `N1:` prefix and keeping the sentence",
+        "Block 3 is deleted, and the reasoning is that it paraphrases the design document it cites",
+        "Block 4's u16 derivation does not survive: the block is either deleted or replaced by a short concrete statement of what the guard rejects",
+        "Block 1 is not kept as written"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Audit the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, write out any replacement text in full, then counts by verdict.",
+      "expected_output": "Every block goes: delete=5, or delete=4 with block 3 rewritten down to its first line only. Blocks 1, 2 and 3's second paragraph narrate the code directly beneath them. Block 4 is a commented-out debug statement. Block 5 is a reply to a review comment on #444, parked in the code.",
+      "files": ["evals/files/narrating-code.md"],
+      "expectations": [
+        "Block 1 is deleted",
+        "Block 2's bounds derivation does not survive: the block is deleted, or replaced by something on the order of a single short phrase naming the full-screen case",
+        "Block 3's second paragraph, about Protocol and isinstance checking method names, does not survive",
+        "Block 4 is deleted as a commented-out debug statement",
+        "Block 5 is deleted, and the reasoning names that it answers a review comment and cites a PR number",
+        "No block is kept whole"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Audit the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, write out any replacement text in full, then counts by verdict.",
+      "expected_output": "Discrimination, not uniform deletion. Blocks 1, 2 and 3 assert what an external server does with no source; each is deleted, or rewritten down to what the code actually does here. Block 4 names what was observed and where, so it survives. Hedging an unsourced claim is not a fix.",
+      "files": ["evals/files/unsourced-external-claims.md"],
+      "expectations": [
+        "Block 1's claim about what tigervnc answers does not survive as an assertion",
+        "Block 3 is deleted, and the reasoning names that the 10ms figure has no source",
+        "Block 4 is kept, or rewritten while preserving both the observation and where it was observed",
+        "Not every block is deleted",
+        "No block is repaired by hedging it — adding 'may', 'some servers', or 'appears to' is not accepted as a fix anywhere in the answer"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Audit the documentation in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, write out any replacement text in full, then counts by verdict.",
+      "expected_output": "Block 1's heading does not survive as written — it names no subject a reader can recognise — and its 'not a second architecture' sentence is deleted. Blocks 2 and 3 narrate the code and the change respectively and are deleted. Block 4 survives as a table but its 'calls a client method' effect cell is called out as too vague to be worth reading. Block 5 is deleted: the one-file-per-decoder layout is visible in the test directory once the branch lands.",
+      "files": ["evals/files/doc-journey-sweep.md"],
+      "expectations": [
+        "Block 1's heading is deleted or rewritten; it is not kept as written",
+        "Block 2 is deleted",
+        "Block 3 is deleted, and the reasoning names that it describes the change rather than the result",
+        "Block 4's 'calls a client method' cell is called out as uninformative and given a more concrete replacement",
+        "Block 5 is deleted, and the reasoning is that the layout is visible in the code once the branch lands"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Audit the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning, write out any replacement text in full, then counts by verdict.",
+      "expected_output": "Block 1 is rot: it points at a module that no longer exists, and the rewrite names test_server_compat_native.py and test_server_compat_docker.py. Block 2 does not belong at the top of the workflow file — deleted, or moved down beside the paths-ignore key it describes. Blocks 3 and 4 are a file header restating the module name and env vars, and a list of callers. Block 5 states server behaviour nothing in the file enforces and survives.",
+      "files": ["evals/files/headers-and-rot.md"],
+      "expectations": [
+        "Block 1 is not left as written: the dead `test_os_servers.py` reference is removed, and any replacement names the current module names",
+        "Block 2 is not left at the top of the workflow file — it is deleted, or explicitly relocated beside the `paths-ignore` key",
+        "Block 3 is deleted as a file header restating the module's name and the environment variables the code below reads",
+        "Block 4 is deleted, and the reasoning names that listing callers is what a search finds and that it goes stale",
+        "Block 5 is kept, or rewritten while preserving the depth-24 / 32-bit pixel format behaviour",
+        "Not every block is deleted"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Sweep the comments in the attached fixture and follow its instructions exactly. Report a verdict of delete, rewrite, or keep for each block, with one line of reasoning; for each keep, state the fact it carries; then counts by verdict.",
+      "expected_output": "Blocks 1, 2 and 4 are deleted: each states something the commit body quoted in the fixture already says, and the sweep is of the author's own work from the last hour. Block 3 survives — the reactor-cannot-be-restarted constraint comes from outside the file and appears in neither the code nor this commit body. The answer names, for the kept block, the fact that survives nowhere else.",
+      "files": ["evals/files/own-branch-sweep.md"],
+      "expectations": [
+        "Block 1 is deleted, and the reasoning names that the commit body already says the argument is unused",
+        "Block 2 is deleted, and the reasoning names that the commit body already explains addBoth",
+        "Block 4 is deleted",
+        "Block 3 is kept or rewritten, and the fact that the reactor cannot be restarted survives",
+        "Not every block is deleted",
+        "For the kept block the answer states the fact it carries, rather than only reporting counts"
       ]
     }
   ]
