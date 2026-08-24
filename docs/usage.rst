@@ -37,6 +37,14 @@ make screen captures of the session::
 
     > vncdo capture screenshot.png
 
+Some servers don't draw the mouse pointer into the framebuffer themselves, so
+it's absent from captures by default. ``--localcursor`` asks the server for
+the cursor shape and draws it in; ``--nocursor`` is the opposite, forcing the
+pointer out of captures even if the server would have included it. This is
+mostly only useful when the server does not include the cursor itself::
+
+    > vncdo --localcursor capture screenshot.png
+
 With Pillow_ installed, you can wait for the screen to match a known image::
 
     > vncdo expect somescreen.png 0
