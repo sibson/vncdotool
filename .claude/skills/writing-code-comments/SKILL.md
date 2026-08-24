@@ -1,6 +1,6 @@
 ---
 name: writing-code-comments
-description: Use when about to write or edit a comment, docstring, module header, or CHANGELOG entry in any language, and when auditing a diff, branch, file, or changelog section for prose quality — including when review feedback calls comments or entries verbose, redundant, obvious, noisy, restating the code, or when a repo's conventions file has a comments policy to apply.
+description: Use when about to write or edit a comment, docstring, module header, CHANGELOG entry, or PR/commit description in any language, and when auditing a diff, branch, file, changelog section, or PR body for prose quality — including when review feedback calls comments, entries, or PR descriptions verbose, redundant, obvious, noisy, restating the code, oversized for the diff, or when a repo's conventions file has a comments or PR-description policy to apply.
 ---
 
 # Writing Code Comments
@@ -94,6 +94,30 @@ to fix comments. Keep a final pass at PR time for what arrived by rebase.
 
 Auditing a diff, branch, or file:
 
+0. **Was any of this authored in this session or branch?** Then its starting
+   verdict is **delete**, and you may not decide otherwise by re-reading it.
+   Reading your own comment replays the reasoning that produced it, and it
+   scores as load-bearing because you are supplying the load. Reviewers come
+   back with "describes the code", "verbose", "unnecessary context" — on
+   comments the author's own sweep kept.
+
+   A keep has to survive naming an artifact instead: the file and line, the
+   commit subject, or the doc heading where the fact would live if the comment
+   went — and showing that artifact does not already contain it. "The commit
+   body I am about to write" is not such an artifact; it is the reason to
+   delete. What does rescue a comment is a fact from outside this file that is
+   written down nowhere: a server's behaviour, a constraint the language does
+   not express, a bound another system imposes.
+
+   **This step is a default, not a verdict, and it is the one place a keep is
+   most likely to be lost.** A constraint imposed by something this file does
+   not contain — a runtime that cannot be restarted, a library's threading
+   model, a server that ignores what it was asked, a bound another process
+   sets — survives the default and is exactly what the sweep is protecting.
+   Freshness is not evidence against a fact: a true, external, unwritten
+   constraint does not become redundant because you learned it this morning.
+   Delete it only if you can name where it is already written. A sweep that
+   returns every block as a delete has usually stopped checking.
 1. Enumerate **every** comment and docstring in scope — not only the ones
    review flagged. Reviews catch samples; the pattern is repo-wide. Drop
    vendored files and published API reference from scope first.
@@ -123,7 +147,9 @@ Auditing a diff, branch, or file:
    are now false — the file that no longer exists, the fallback that was
    removed, the caller that stopped calling. A wrong comment is worse than
    the verbose one next to it, and it survives sweeps because it reads as
-   considered.
+   considered. Renames inside your own branch are the commonest source: grep
+   the diff for every identifier and filename you renamed, and check the prose
+   that names them — comments, docs and specs alike.
 4. Apply. Re-read each rewrite against Mode A as if authoring it fresh.
 5. Report every verdict, and for each **keep**, the fact it carries in a
    handful of words. Counts alone read as diligence; a list of kept facts
@@ -132,23 +158,65 @@ Auditing a diff, branch, or file:
 **Shortening is not a fix.** A shortened unnecessary comment is still an
 unnecessary comment, now also cryptic.
 
-### Sweeping your own work
+### What a rewrite is
 
-Judging a comment you wrote an hour ago is not the same task. Reading it
-replays the reasoning that produced it, and it scores as load-bearing because
-you are supplying the load. Reviewers of that same branch come back with
-"describes the code", "verbose", "unnecessary context" — on comments the
-author's own sweep kept.
+**Rewrite is not a softer delete.** Before writing any replacement, put the
+block's fact through Mode A as if you were authoring a comment at that line
+today, with the original gone. Does that fact earn a comment here at all? If it
+does not — because it lives in the design document the block cites, in the code
+below it, in the docstring above it, in the commit body — then there is nothing
+to rewrite and the verdict is **delete**. A rewrite that relocates a redundant
+fact into better prose leaves the redundancy where it was and now makes it read
+as considered. Reach for rewrite only when the fact would survive Mode A on its
+own and it is the wording that fails.
 
-So for anything authored in this session or branch, do not decide by reading
-it. Decide by naming, out loud, where the fact lives if the comment goes:
+Stripping a label, folding a citation inline, or dropping the offending clause
+are all deletions of part of a block, not rewrites of it. If what makes the
+block wrong is *what it says* rather than *how it says it*, no rewrite exists.
 
-> "Deleting this, the fact survives in ___."
+A bare requirement label — `R1`, `N2` — is a symptom, not the defect. Removing
+the label leaves the sentence it introduced, and if that sentence restates the
+design document, the code, or what the repo already knows, the verdict was
+delete all along. Ask what the block would be worth with the label already
+gone, and answer that question instead.
 
-The commit body, the PR, the README, the code itself — any of those is a
-delete. Only "nowhere, and the next reader hits it at this line" is a keep.
-Anything written to explain a decision made *in this branch* starts as a
-delete: that is what the commit message is for, and you are about to write it.
+**"It is useful guidance" is not a keep.** A block that tells the reader what
+the layout will be, what an invariant is, or how to think about a design is
+still deleted when the code, the directory, or the type already shows it. The
+test is where the fact lives, never how helpful the sentence sounds.
+
+A rewrite carries every fact the original did, in prose someone can read once.
+It is not the original with words removed. Dropping words is the operation that
+produces the two failures below, and both were shipped by sweeps that reported
+themselves clean.
+
+A comment on a guard against oversized rectangles:
+
+> **before** — `# A rectangle's dimensions are u16, so this bounds nothing on
+> its own; the guard is against a server that sends a rectangle larger than the
+> framebuffer it announced, which the u16 range permits.`
+>
+> **the trim** — `# set greater than max value`. Shorter, and now nobody can
+> tell what it guards or why the constant has that value.
+>
+> **the rewrite** — `# Greater than any u16 dimension, so it refuses nothing
+> until a subclass narrows it.`
+
+A module docstring cut down mid-sentence by an earlier pass:
+
+> **before** — a paragraph re-teaching the design document it cites.
+>
+> **the trim** — a fragment with no verb, still re-teaching the design
+> document. Two defects where there was one.
+>
+> **the rewrite** — there isn't one. The fact was already in `specs/`; the
+> verdict was **delete** and the trim was avoiding it.
+
+A rewrite is finished when it is a complete grammatical sentence, when it
+states the fact rather than gesturing at it, and when it still reads correctly
+with the code hidden. **If your rewrite is shorter than the original but no
+clearer, the verdict was delete.** A block you are shortening because you
+cannot defend keeping it whole is a delete wearing a rewrite's label.
 
 ## Mode C — Changelog entries
 
@@ -203,6 +271,73 @@ to "why isn't it the other way" is journey, not documentation.
 Watch the line count across a branch. A doc that doubles while the code it
 describes gets simpler is recording the work, not the result.
 
+**A doc gets the same verdicts as a comment.** Sweep it with Mode B, including
+step 0, and read every row of the Quick reference against it: a paragraph that
+narrates the code is a delete in `specs/` exactly as it is in the file it
+describes, a section heading naming no recognisable subject is a rewrite, and a
+sentence describing what the branch changed — "now live with the pump rather
+than on the decoder" — is commit-message material wherever it sits. Tables are
+in scope too: a cell so generic it could describe any row is not documentation,
+whatever the table around it does.
+
+## Mode E — PR and commit bodies
+
+A PR or commit body is read by someone deciding where to spend their
+attention, not by the archive. Its size tracks the diff, not the session that
+produced it — a three-line deletion does not earn a "Summary" section, and a
+mistake made while landing the change (wrong branch, a push that missed a
+merge, a retried command) is memory for the session that made it, never
+reviewer material. The same routing Mode A applies to comments applies here.
+
+Write what changed and, if it isn't obvious from the diff, why — then stop:
+
+> Removes a comment on `_run()` in `benchmark.py` that only restated what
+> #422's commit message already says.
+
+The same body before the cut:
+
+> ## Summary
+> Follow-up to #422: the comment sweep asked for on that PR ran a commit
+> late, after #422 had already been squash-merged, so the cleanup never
+> reached main. This lands it: removes the comment on `_run()` in
+> `benchmark.py` that just restates what #422's commit body already says.
+>
+> ## Test plan
+> - [x] `make test`
+> - [x] `flake8 --count --statistics vncdotool tests`
+
+Both are accurate. The second spends two headers and a narrative paragraph on
+a one-line diff, and the fact a reviewer needs — what changed, and that it's
+covered by #422's rationale — is buried in the middle of it.
+
+**Size it, then cut to the size.** Roughly one line of body per ten lines of
+diff, and six lines maximum unless you were asked for more. The first line
+answers "what changed", and where the change is visible to a user it says so in
+those terms rather than in the vocabulary of the implementation. Reading only
+the first sentence is not the test — a body whose opening line is fine and
+whose next three paragraphs re-explain the diff fails while passing it.
+
+Count the lines of the body you are about to post. Over the budget, cut whole
+sentences — starting with any that restate the diff — and count again. Do not
+reflow a long body into fewer, denser lines; that is the trim the sweep section
+forbids, applied to a PR.
+
+**Say nothing about checks CI runs.** A "Tested:" line or a test-plan
+checklist naming the suite and the linter tells the reviewer what a red check
+would have told them, and they have to read it to find that out. Name only
+what you ran that CI does not — a manual repro, a mutation check, a run against
+a server the fleet does not carry.
+
+| In a PR/commit body | Verdict |
+|---|---|
+| What changed, sized to the diff | keep |
+| Why it changed, when not obvious from the diff | keep |
+| A "Tested:" line or checklist naming checks CI already runs and gates on | delete — a red check says it |
+| How the change was landed (wrong branch, late push, a retry) | delete — that's the assistant's own memory, not the reviewer's |
+| "Follow-up to #N" when the diff is self-explanatory without it | keep only if it changes how the reviewer reads the diff |
+| A "Summary" / "Test plan" header pair on a change too small to need sections | delete the headers, keep the two facts as plain lines |
+| What was deliberately left alone or considered and rejected | keep only if a reviewer would otherwise flag it — everything else is already in the commits |
+
 ## Three things this does not reach
 
 **Published API reference.** If a module is pulled into generated docs
@@ -241,14 +376,20 @@ language be surprised later? Restore it only then.
 | Names who calls this, or where it is used from | delete — that is what a search finds, and it goes stale |
 | Describes the change: "now watches", "no longer needs", "was previously" | delete — commit-message material |
 | Names the task, issue, PR, or an alternative you rejected | delete — commit-message and `docs/` material |
+| Answers a review comment, or points at the discussion that prompted it | delete — the reviewer reads the thread, the next reader does not |
 | Cites a requirement by bare identifier: `R3`, `N2` | rewrite — name the constraint, or the document by title |
 | Explains why the design is *this* rather than something else | delete — that is the commit body |
 | File header saying what the file is for, or which env vars it reads | delete — the name says the first, the code says the second |
 | True when written, false now: names a deleted file, a removed path, a caller that stopped calling | delete, and check its neighbours — rot arrives in clusters |
 | Banner or section-divider comment | delete, or fold into prose |
+| Commented-out code: a `# ~` debug write, a scratch print, a disabled branch | delete — that is what version control is for |
+| A heading naming no subject the reader can recognise | rewrite to name the thing it is about, or delete the section under it |
+| A docstring sentence pointing forward to something defined below it | rewrite to stand alone, or delete |
+| A doc table cell so generic it could describe any row: "calls a client method" | rewrite to name the specific thing, or drop the column |
 | Compressed until the reasoning is gone | rewrite at full length; clarity outranks brevity |
 | Asserts what an external system does, with no cited spec or stated observation | delete, or rewrite down to what was actually observed |
 | A behaviour nothing in the code enforces, or a constraint from outside the file | keep |
+| A PR/commit body with headers and a narrative for a diff a sentence would cover | delete the narrative — size the body to the diff (Mode E) |
 
 ## Red flags — stop
 
@@ -261,6 +402,7 @@ language be surprised later? Restore it only then.
 - "That's the file header, it's orientation" — headers are in scope. Same test, same verdicts.
 - "I wrote this an hour ago and it still reads as necessary" — of course it does. Name where the fact lives without it, or delete.
 - "I deleted six and rewrote thirteen, the sweep was thorough" — counts are not evidence. List what you kept and why; the weak keeps show up immediately.
+- "This PR body explains how I got here" — a rebase, a late push, a wrong branch is your own memory, not the reviewer's. Cut it.
 
 ## Rationalizations
 
@@ -275,3 +417,4 @@ language be surprised later? Restore it only then.
 | "It's the most plausible explanation for this code" | Plausible is not known. An invented why outlives everyone who could correct it. |
 | "I hedged it, so it's honest" | An unsourced guess with "may" in front is still an unsourced guess. |
 | "The changelog entry should explain the fix" | It should name the symptom. The reader wants to know if it was *their* bug, not how it worked. |
+| "A Summary section makes the PR easier to scan" | A header pair on a one-line diff makes it slower to scan, not easier. Plain lines, sized to the diff, scan fastest. |
