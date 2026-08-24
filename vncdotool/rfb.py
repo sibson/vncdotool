@@ -355,10 +355,9 @@ class RFBClient(Protocol):
                 decoder, pump = entry
                 pump(decoder, x, y, width, height)
             else:
-                self.vncProtocolError(
+                self.abortConnection(
                     f"unknown encoding received {Encoding.lookup(encoding)!r}"
                 )
-                self.transport.loseConnection()
         else:
             self._doConnection()
 

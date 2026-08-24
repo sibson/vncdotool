@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix an unrecognized rectangle encoding parsing further buffered bytes as bogus rectangle headers before the connection closed, instead of stopping immediately (@sibson)
   - Fix ``self.width``/``self.height`` staying at the negotiated size after a server sends ``PSEUDO_DESKTOP_SIZE`` mid-session (@sibson)
   - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)
   - Dependency resolution ignores releases younger than a week, so a compromised upload has to survive public scrutiny before it can reach a build here (@sibson)
