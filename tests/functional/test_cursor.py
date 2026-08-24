@@ -1,10 +1,6 @@
-"""``--localcursor`` decodes a live Cursor pseudo-encoding rectangle.
-
-x11vnc is the only fleet server exercised here: it answers the Cursor
-pseudo-encoding with a real 18x18 rectangle. tigervnc answers with a
-degenerate 0x0 rectangle instead, which decodes to no pixels and would pass
-this test whether or not CursorDecoder (vncdotool/decoders/cursor.py) ever
-ran.
+"""x11vnc is the only fleet server exercised here for --localcursor: it
+answers the Cursor pseudo-encoding with a real 18x18 rectangle. tigervnc
+answers a degenerate 0x0 one instead.
 """
 
 from unittest import TestCase
@@ -26,15 +22,7 @@ class TestLocalCursor(TestCase):
             )
 
     def test_localcursor_composites_a_decoded_cursor(self) -> None:
-        """Two captures at the same pointer position, --nocursor against
-        --localcursor: both negotiate the Cursor pseudo-encoding, so x11vnc
-        excludes its own server-side cursor from the pixel data either way
-        (a plain capture with neither flag would already have that baked
-        in, making it useless as a contrast here). --nocursor then discards
-        the decoded cursor while --localcursor pastes it onto the
-        framebuffer, so a live decode shows up as a pixel difference right
-        at the pointer position.
-        """
+        """--localcursor draws a decoded cursor onto the framebuffer that --nocursor discards."""
         x, y = str(CURSOR_POS[0]), str(CURSOR_POS[1])
         nocursor_png = screenshot_dir() / "x11vnc-nocursor.png"
         localcursor_png = screenshot_dir() / "x11vnc-localcursor.png"
@@ -61,15 +49,7 @@ class TestLocalCursor(TestCase):
             self.assertLess(top, CURSOR_POS[1] + 32, f"diff region {bbox} is not near the pointer")
 
     def test_localcursor_matches_the_server_side_render(self) -> None:
-        """The client-side composite should look like what x11vnc renders itself.
-
-        A plain capture (no flags) gets x11vnc's own cursor baked into the
-        pixel data server-side. --localcursor gets none of that -- x11vnc
-        excludes the cursor once the encoding is negotiated -- and instead
-        composites the decoded image back on the client. The two should
-        still land on the same pixels: this is the check that CursorDecoder
-        didn't just receive bytes, but decoded and placed them correctly.
-        """
+        """--localcursor's composited pixels match x11vnc's own server-side cursor render."""
         x, y = str(CURSOR_POS[0]), str(CURSOR_POS[1])
         default_png = screenshot_dir() / "x11vnc-default.png"
         localcursor_png = screenshot_dir() / "x11vnc-localcursor-vs-default.png"
