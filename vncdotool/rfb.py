@@ -408,8 +408,8 @@ class RFBClient(Protocol):
     def _pumpForControl(
         self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
     ) -> None:
-        rect = (x, y, width, height)
-        self._pumpBlock(None, decoder.decodeForClient(self, rect, self.pixel_format), None)
+        decoder.decodeForControl(self, width, height)
+        self._doConnection()
 
     def _finishRectangle(
         self,
