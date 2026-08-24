@@ -1,4 +1,5 @@
 import warnings
+from struct import pack
 from unittest import TestCase, mock
 
 from vncdotool import rfb
@@ -21,6 +22,7 @@ class TestRFB(TestCase):
         self.client._packet += b"X"
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_security_types_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
@@ -31,6 +33,7 @@ class TestRFB(TestCase):
         )
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_auth_type_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
@@ -40,11 +43,34 @@ class TestRFB(TestCase):
         )
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_message_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
         self.client._handleConnection(b"\x7f")
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
+
+    def test_connection_refused_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._handleConnMessage(b"nope")
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+        assert self.client._aborted
+
+    def test_unknown_encoding_stops_processing_buffered_rectangles(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._handler = self.client._handleExpected
+        self.client.rectangles = 3
+        self.client.expect(self.client._handleRectangle, 12)
+        unknown_encoding = 0x7F
+        header = pack("!HHHHi", 0, 0, 1, 1, unknown_encoding)
+        self.client._packet += header * 3
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+        assert self.client._aborted
+        assert not self.client._packet
 
     def test_auth_incmplete(self):
         self.client._packet += b"RFB 000.000"
