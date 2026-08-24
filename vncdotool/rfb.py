@@ -152,8 +152,7 @@ class RFBClient(Protocol):
             else:
                 self.expect(self._handleNumberSecurityTypes, 1)
         elif not self._HEADER.startswith(norm):
-            self.vncProtocolError(f"invalid initial server response {head!r}")
-            self.transport.loseConnection()
+            self.abortConnection(f"invalid initial server response {head!r}")
 
     def _handleNumberSecurityTypes(self, block: bytes) -> None:
         (num_types,) = unpack("!B", block)
@@ -180,8 +179,7 @@ class RFBClient(Protocol):
             elif sec_type == AuthTypes.DIFFIE_HELLMAN:
                 self.expect(self._handleDHAuth, 4)
         else:
-            self.vncProtocolError(f"unknown security types: {types!r}")
-            self.transport.loseConnection()
+            self.abortConnection(f"unknown security types: {types!r}")
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
@@ -193,16 +191,14 @@ class RFBClient(Protocol):
         elif auth == AuthTypes.VNC_AUTHENTICATION:
             self.expect(self._handleVNCAuth, 16)
         else:
-            self.vncProtocolError(f"unknown auth response {AuthTypes.lookup(auth)!r}")
-            self.transport.loseConnection()
+            self.abortConnection(f"unknown auth response {AuthTypes.lookup(auth)!r}")
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block: bytes) -> None:
-        self.vncProtocolError(f"Connection refused: {block!r}")
-        self.transport.loseConnection()
+        self.abortConnection(f"Connection refused: {block!r}")
 
     def _handleVNCAuth(self, block: bytes) -> None:
         self._challenge = block
@@ -327,8 +323,7 @@ class RFBClient(Protocol):
         elif msgid == MsgS2C.SERVER_CUT_TEXT:
             self.expect(self._handleServerCutText, 7)
         else:
-            self.vncProtocolError(f"unknown message received {MsgS2C.lookup(msgid)!r}")
-            self.transport.loseConnection()
+            self.abortConnection(f"unknown message received {MsgS2C.lookup(msgid)!r}")
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)

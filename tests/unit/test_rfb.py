@@ -22,6 +22,7 @@ class TestRFB(TestCase):
         self.client._packet += b"X"
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_security_types_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
@@ -32,6 +33,7 @@ class TestRFB(TestCase):
         )
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_auth_type_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
@@ -41,11 +43,20 @@ class TestRFB(TestCase):
         )
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_message_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
         self.client._handleConnection(b"\x7f")
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
+
+    def test_connection_refused_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._handleConnMessage(b"nope")
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+        assert self.client._aborted
 
     def test_unknown_encoding_stops_processing_buffered_rectangles(self):
         self.client.vncProtocolError = mock.Mock()
