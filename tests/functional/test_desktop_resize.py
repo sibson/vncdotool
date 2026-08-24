@@ -12,10 +12,7 @@ There is no signal, stdin, or xrandr path -- only those two keysyms, which
 
 The cycle position is a static variable in the server process, not
 per-connection state, so a container a previous run already resized reports
-its current size at the next connection's ServerInit. Two Downs floor it at
-640x480 regardless of where it started (at most two steps between any of
-the three sizes), making the floor -- and everything that follows it --
-independent of connection order.
+its current size at the next connection's ServerInit.
 """
 
 from unittest import TestCase
@@ -38,10 +35,9 @@ class TestDesktopResize(TestCase):
             )
 
     def test_mid_session_resize_is_decoded(self) -> None:
-        """Floor the server's geometry, capture it, grow it one step, capture
-        again: each capture's size is the server's actual PSEUDO_DESKTOP_SIZE
-        rectangle decoded and applied to the client's framebuffer, not the
-        size ServerInit negotiated at connect time.
+        """Each capture's size reflects the server's actual PSEUDO_DESKTOP_SIZE
+        rectangle decoded onto the client's framebuffer, not the size
+        ServerInit negotiated at connect time.
         """
         floor_png = screenshot_dir() / f"{LIBVNCSERVER_EXAMPLE.name}-resize-floor.png"
         resized_png = screenshot_dir() / f"{LIBVNCSERVER_EXAMPLE.name}-resize-grown.png"
