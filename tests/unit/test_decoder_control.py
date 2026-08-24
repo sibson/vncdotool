@@ -27,7 +27,6 @@ class TestDesktopSize(unittest.TestCase):
 
         self.assertIsNotNone(self.cli.screen)
         self.assertEqual(self.cli.screen.size, (8, 6))
-        # Only the Raw rect carries content; DesktopSize is not recorded.
         self.assertEqual(self.cli.rectanglePos, [(0, 0, 4, 4)])
 
 

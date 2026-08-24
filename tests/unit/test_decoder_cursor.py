@@ -18,9 +18,8 @@ class TestCursor(unittest.TestCase):
     def setUp(self) -> None:
         self.cli = make_client()
 
-    # Hotspot (1, 1), 2x2 image, fully-opaque mask -- rfbproto's Cursor
-    # pseudo-encoding: pixel values, then a byte-padded MSB-first scanline
-    # bitmask, one bit per pixel, 1 meaning valid.
+    # 2x2 image at hotspot (1, 1). MASK_2X2 is MSB-first, one bit per
+    # pixel; 0b11000000 flags both columns of each row valid.
     IMAGE_2X2 = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
     MASK_2X2 = bytes([0b11000000, 0b11000000])
 
@@ -34,8 +33,6 @@ class TestCursor(unittest.TestCase):
         self.assertIsNotNone(self.cli.cursor)
         assert_pixels(self, self.cli.cursor, self.IMAGE_2X2)
         self.assertEqual(self.cli.cfocus, (1, 1))
-        # Matches pre-migration behaviour: the cursor rectangle is still
-        # recorded, unlike DesktopSize/QEMU which carry no content.
         self.assertEqual(self.cli.rectanglePos, [(1, 1, 2, 2)])
 
 

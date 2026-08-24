@@ -1,6 +1,4 @@
-"""Cursor pseudo-encoding. rfbproto: pixel values, then a byte-padded
-MSB-first scanline bitmask, one bit per pixel.
-"""
+"""Cursor pseudo-encoding. rfbproto."""
 from __future__ import annotations
 
 from typing import ClassVar, Iterator

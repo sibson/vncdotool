@@ -45,6 +45,5 @@ class ClientDecoder(Decoder):
 
 
 class ControlDecoder(Decoder):
-    """Calls a client method as a side effect; carries no framebuffer
-    content, so the pump never records its rectangle as a screen change.
-    """
+    """Calls a client method as a side effect; its rectangle is never
+    recorded as a screen change."""

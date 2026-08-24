@@ -1,7 +1,4 @@
-"""DesktopSize and QEMU extended key pseudo-encodings: no payload, a client
-side effect only. LastRect stays on rfb.py's own path -- it mutates the
-rectangle loop counter itself rather than calling a client method.
-"""
+"""DesktopSize and QEMU extended key pseudo-encodings. rfbproto."""
 from __future__ import annotations
 
 from typing import ClassVar, Iterator
