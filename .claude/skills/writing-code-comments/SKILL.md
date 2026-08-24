@@ -151,9 +151,23 @@ Auditing a diff, branch, or file:
    the diff for every identifier and filename you renamed, and check the prose
    that names them — comments, docs and specs alike.
 4. Apply. Re-read each rewrite against Mode A as if authoring it fresh.
-5. Report every verdict, and for each **keep**, the fact it carries in a
-   handful of words. Counts alone read as diligence; a list of kept facts
-   shows which ones are really "explains the design I just chose".
+5. Report every verdict as a table, one row per block, with these columns:
+
+   | Block | Verdict | Fact it carries | Where else that fact lives |
+   |---|---|---|---|
+
+   Fill the last column for **every** row, keeps included. For a delete it
+   names where the fact already is — the file and line, the commit subject,
+   the doc heading, "the code below". For a keep it must read `nowhere`, and
+   writing that word is a claim you are making: that you looked at the
+   artifact the fact would otherwise live in and it is not there. Name that
+   artifact. `nowhere` with nothing behind it is the sweep failing silently.
+
+   The point of writing the column is that it is checkable by someone else.
+   A judgement you make and do not write down passes every time, because the
+   only thing testing it is the reasoning that produced the comment. Counts
+   alone read as diligence; a column of artifacts shows which keeps are
+   really "explains the design I just chose".
 
 **Shortening is not a fix.** A shortened unnecessary comment is still an
 unnecessary comment, now also cryptic.
