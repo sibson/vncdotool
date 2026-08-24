@@ -278,6 +278,15 @@ class TestVNCDoToolClient(TestCase):
         self.assertEqual(fired, [cli])
         assert cli.screen is not None
         self.assertEqual(cli.screen.size, (1920, 1200))
+        self.assertEqual((cli.width, cli.height), (1920, 1200))
+
+    def test_updateDesktopSize_updates_width_and_height(self) -> None:
+        cli = self.client
+        cli.width, cli.height = 100, 200
+
+        cli.updateDesktopSize(300, 400)
+
+        self.assertEqual((cli.width, cli.height), (300, 400))
 
     def test_vncRequestPassword_attribute(self):
         cli = self.client
