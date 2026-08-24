@@ -41,12 +41,6 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "corre": Encoding.CORRE,
     "hextile": Encoding.HEXTILE,
     "zrle": Encoding.ZRLE,
-    # Probe-only: no decoder exists yet (Phase 6). Offering it lets the OS
-    # server probe in os-servers.yml learn whether UltraVNC/Screen Sharing
-    # pick Tight, since an unregistered encoding still disconnects cleanly
-    # via the "unknown encoding received" path in rfb.py. Revert with the
-    # workflow step once that measurement is in specs/decoder-architecture.md.
-    "tight": Encoding.TIGHT,
 }
 
 

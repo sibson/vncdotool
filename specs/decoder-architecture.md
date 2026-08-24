@@ -466,7 +466,7 @@ exactly one encoding and reading back the encoding it actually used:
 | CoRRE | no [1] | yes [1] | yes | ? | ? |
 | Hextile | yes | yes | yes | ? | ? |
 | ZRLE | yes | yes | yes | ? | ? |
-| Tight | yes | no | — see below | ? | ? |
+| Tight | yes | no | — see below | yes [2] | no [2] |
 | TRLE | no | no | no | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
@@ -484,11 +484,24 @@ probe itself was committed and then removed within #417, so `git show` against
 that PR's history recovers the script without it living in the tree ahead of
 the Phase 3 tooling below.
 
-**The two Tier 2 columns are unmeasured**, and they are the servers users run.
-That matters most for Tight, the encoding this whole document exists for (#264):
-UltraVNC is the likeliest server in the fleet to speak it, and nothing here
-knows whether it does. Both already authenticate in CI (`os-servers.yml`), so
-the probe is what is missing, not access.
+**The two Tier 2 columns are otherwise unmeasured**, and they are the servers
+users run. Only the Tight cells are sourced, because Tight is the encoding this
+whole document exists for (#264) and both already authenticate in CI
+(`os-servers.yml`), so the probe was missing access to nothing.
+
+[2] Measured 2026-08-24 by adding a temporary `"tight": Encoding.TIGHT` entry to
+`ENCODING_NAMES` (no decoder registered, so it is offerable but not decodable)
+and a step to `os-servers.yml` running `vncdo -v --encodings tight ... capture`
+against each OS-hosted server: [UltraVNC run](https://github.com/sibson/vncdotool/actions/runs/32687599596)
+logged `unknown encoding received <Encoding.TIGHT: 7>` immediately after
+offering it — rfb.py's generic fallback for any encoding absent from the
+decoder registry, so a Tight rectangle really arrived. The same run's
+[Screen Sharing job](https://github.com/sibson/vncdotool/actions/runs/32687599596)
+produced no such line and the probe and the functional test both completed
+without error, so Tight was not what came back. Both the `ENCODING_NAMES`
+entry and the workflow step were reverted afterward, following the same
+committed-then-removed pattern PR #417 used for the CoRRE probe; recover them
+from this measurement's commits if the probe needs rerunning.
 
 Read these asymmetrically. A "yes" is proof: the server really emitted that
 encoding. A "no" is strong evidence but not certainty, because servers choose

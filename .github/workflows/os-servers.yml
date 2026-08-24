@@ -98,26 +98,6 @@ jobs:
       - name: Wait for the server to serve a screen
         run: uv run python tests/functional/wait_for_servers.py os
 
-      # Temporary: measures whether UltraVNC/Screen Sharing pick Tight when
-      # it is the only encoding offered (specs/decoder-architecture.md's
-      # unmeasured Tier 2 cells). No decoder exists for Tight yet, so if the
-      # server uses it, rfb.py's "unknown encoding received" path logs that
-      # and disconnects -- itself the positive result. A clean capture with
-      # no such line is a negative. Revert this step and the "tight" entry
-      # in vncdotool/decoders/__init__.py once the table cites the run.
-      - name: Probe Tight support (UltraVNC)
-        if: matrix.server == 'ultravnc'
-        continue-on-error: true
-        run: uv run vncdo -v --encodings tight -s 127.0.0.1::5900 -p "$env:VNCDOTOOL_OS_SERVER_PASSWORD" capture tight-probe.png
-
-      - name: Probe Tight support (Screen Sharing)
-        if: matrix.server == 'screen-sharing'
-        continue-on-error: true
-        run: >-
-          uv run vncdo -v --encodings tight -s 127.0.0.1::5900
-          -p "$VNCDOTOOL_OS_SERVER_PASSWORD" -u "$VNCDOTOOL_OS_SERVER_USERNAME"
-          capture tight-probe.png
-
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 
