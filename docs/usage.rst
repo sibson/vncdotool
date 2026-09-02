@@ -66,6 +66,34 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
     > vncdo rexpect region.png 100 200 0
 
 
+Encodings
+-------------------
+By default vncdo asks the server for raw pixels: every server can send
+them, and they cost the most bandwidth.  ``--encodings`` offers others, in
+preference order, and the server sends whichever of them it has::
+
+    > vncdo --encodings tight capture screen.png
+
+The names are ``raw``, ``copyrect``, ``rre``, ``corre``, ``hextile``,
+``zrle`` and ``tight``.  On ordinary screen content tight sends the least.
+
+Some tight rectangles can be JPEG, which is lossy.  A server only sends
+those to a client that asked for a JPEG quality level, and vncdo asks for
+none by default, so a capture is exact unless you request otherwise.
+``--jpeg-quality`` requests it, on the RFB scale of 0 (low) to 9 (high)
+rather than a percentage::
+
+    > vncdo --encodings tight --jpeg-quality 8 capture screen.png
+
+A JPEG rectangle is decoded whether or not it was invited, because nothing
+stops a server from sending one.  Two parts of tight are not implemented:
+the gradient filter, and TightPNG.  Neither is offered, and a server that
+sends one anyway ends the session with a message naming what arrived,
+exiting 20, rather than writing a wrong screen to your capture.  The tight
+*security type*, which some servers want before they will authenticate you,
+is a separate thing from the encoding and is also not implemented.
+
+
 Exit Status
 -------------------
 vncdo exits 0 when every action completed.  Failures are grouped by cause, so
