@@ -6,12 +6,13 @@ scripted handshake, so the observer client runs for real without a reactor.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from struct import pack
 from unittest import TestCase, mock
 
 from vncdotool import pixelformat
-from vncdotool.const import AuthTypes
+from vncdotool.const import AuthTypes, Encoding, MsgC2S, MsgS2C
 from vncdotool.loggingproxy import (
     VNCLoggingClientProxy,
     VNCLoggingServerFactory,
@@ -20,6 +21,18 @@ from vncdotool.loggingproxy import (
 
 VERSION_38 = b"RFB 003.008\n"
 NATIVE = pixelformat.PIXEL_FORMATS["bgrx8888"]
+RGB565 = pixelformat.PIXEL_FORMATS["rgb565"]
+
+RED_565 = b"\x00\xf8"
+BLUE_565 = b"\x1f\x00"
+
+
+def raw_update(x: int, y: int, w: int, h: int, pixels: bytes) -> bytes:
+    return (
+        pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
+        + pack("!HHHHi", x, y, w, h, Encoding.RAW)
+        + pixels
+    )
 
 
 class ProxyPair(TestCase):
@@ -54,6 +67,50 @@ class ProxyPair(TestCase):
 
         self.observer = self.client_proxy.vnclog
         assert self.observer is not None
+
+    def setPixelFormat(self, pixel_format: pixelformat.PixelFormat) -> None:
+        """Send SetPixelFormat from the real client, through the proxy."""
+        self.server_proxy.dataReceived(
+            pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixel_format.to_bytes())
+        )
+
+
+class TestObserverPixelFormat(ProxyPair):
+
+    def test_observer_starts_at_the_format_serverinit_announced(self) -> None:
+        self.assertEqual(self.observer.pixel_format, NATIVE)
+
+    def test_observer_adopts_a_format_the_client_asks_for(self) -> None:
+        self.setPixelFormat(RGB565)
+
+        self.assertEqual(self.observer.pixel_format, RGB565)
+        self.assertEqual(self.observer._image_mode, pixelformat.raw_mode(RGB565))
+
+    def test_observer_decodes_the_stream_at_the_new_format(self) -> None:
+        """Two updates, so the second only parses if the first consumed the
+        right number of bytes: at the native 4 bytes per pixel the observer
+        eats into the next message and desynchronises for good.
+        """
+        self.setPixelFormat(RGB565)
+
+        self.client_proxy.dataReceived(raw_update(0, 0, 2, 1, RED_565 + BLUE_565))
+        self.client_proxy.dataReceived(raw_update(0, 0, 2, 1, BLUE_565 + RED_565))
+
+        self.assertFalse(self.observer._aborted)
+        assert self.observer.screen is not None
+        self.assertEqual(
+            [self.observer.screen.getpixel((0, 0)), self.observer.screen.getpixel((1, 0))],
+            [(0, 0, 255), (255, 0, 0)],
+        )
+
+    def test_a_format_the_observer_cannot_unpack_fails_it_cleanly(self) -> None:
+        """The real client is free to ask for something vncdotool cannot
+        decode; that must not raise out of the proxy's parser.
+        """
+        with self.assertLogs("vncdotool.loggingproxy", level=logging.ERROR):
+            self.setPixelFormat(dataclasses.replace(RGB565, truecolor=False))
+
+        self.assertTrue(self.observer._aborted)
 
 
 class TestObserverFailureIsReported(ProxyPair):

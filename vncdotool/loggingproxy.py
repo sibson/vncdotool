@@ -428,6 +428,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         RFBServer._handle_clientInit(self)
         self.peer.startLogging(self)
 
+    def handle_setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        # SetPixelFormat is client-to-server (RFC 6143 7.5.1), so nothing in
+        # the stream the observer reads says the server switched layouts.
+        observer = self.vnclog_client
+        if observer is not None:
+            observer.requested_pixel_format = pixel_format
+            observer.setImageMode()
+
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
