@@ -180,10 +180,28 @@ threshold, and it carries its own coverage contract rather than the lossless
 one. And `expect` cannot sequence a lossy capture at all, which is why
 `scene-lossy.vdo` exists.
 
-**Stage 6 — live and measured.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
+**Stage 6 — live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves
-from `ENCODING_NAMES`. N2 lands as a bandwidth case in `test_bandwidth.py`
-beside Hextile's, plus a render-time comparison against Raw.
+from `ENCODING_NAMES` and render both scenes byte for byte. N2's bandwidth half
+lands as two cases in `test_bandwidth.py`, one per content class, and is met
+with room to spare against Raw at 256x192: 820 bytes against 196,899 on flat
+regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in the catalogue,
+worst case 0.68x on the gradient.
+
+**Render time is recorded, not compared against Raw.** Replaying
+`tigervnc-tight-bgrx8888` costs 1773 us over the same 87 rectangles, against
+Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. The cost is the
+per-rectangle pump plus `_unpalette`'s per-pixel loop, which is where to look if
+it wants optimising. `bench.jsonl` carries the row; N2 asks that it not regress
+against itself.
+
+Two things the plan had wrong, found here. `TestNegotiation` did not test
+negotiation: it searched the client's own log for `repr(Encoding.X)`, which only
+the "Offering" line carries, so adding any name to `EMITTED_BY_TIGERVNC` passed.
+The witness is `vnclog --capture-raw`'s `encodings_seen`. And `benchmark.py`
+replayed every fixture as if it were captured at the server's native format,
+which is invisible until a fixture is narrower than four bytes: the rgb565
+fixture desynchronised, aborted, and reported 112 us as if it were a win.
 
 **Stage 7 — docs, CHANGELOG, and the R1 check.** `git diff main` over `rfb.py`
 and `const.py` across the whole stack is empty. If it is not, the PR says so
