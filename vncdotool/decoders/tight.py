@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import zlib
 from typing import ClassVar, Generator, List, Optional
+
+from PIL import Image
 
 from ..const import Encoding
 from ..pixelformat import TPIXEL_FORMAT, PixelFormat, tpixel_bytes
@@ -60,7 +63,9 @@ class TightDecoder(WholeRectDecoder):
             )
 
         if comp_ctl == JPEG:
-            raise DecodeError("Tight JpegCompression is not supported")
+            # No filter byte, no zlib and no MIN_TO_COMPRESS rule (specs/tight-wire.md section 4).
+            length = yield from self._compactLength()
+            return self._decodeJpeg(bytes((yield length)), width, height), TPIXEL_FORMAT
 
         if comp_ctl & 0x08:
             if comp_ctl in BASIC_WITHOUT_ZLIB:
@@ -124,6 +129,22 @@ class TightDecoder(WholeRectDecoder):
             if byte & 0x80:
                 length |= (yield 1)[0] << 14
         return length
+
+    @staticmethod
+    def _decodeJpeg(block: bytes, width: int, height: int) -> bytes:
+        try:
+            image = Image.open(io.BytesIO(block))
+            # TurboVNC's -subsamp gray sends 1 component, not 3 (section 4).
+            rgb = image.convert("RGB")
+        except Exception as exc:
+            # Pillow raises DecompressionBombError, not OSError, on an implausible header.
+            raise DecodeError(f"Tight JPEG rectangle did not decode: {exc}") from None
+        if rgb.size != (width, height):
+            raise DecodeError(
+                f"Tight JPEG rectangle carries a {rgb.width}x{rgb.height} image "
+                f"for a {width}x{height} rectangle"
+            )
+        return rgb.tobytes()
 
     def _decompress(self, stream_id: int, block: bytes, size: int) -> bytes:
         stream = self._streams[stream_id]

@@ -104,8 +104,11 @@ def _make_client(pixel_format: str) -> _Recorder:
     return recorder
 
 
-def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
-    tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[pixel_format])
+def split(
+    s2c: bytes, pixel_format: str, tolerance: Optional[Tuple[int, int, int]] = None
+) -> Tuple[bytes, List[Step]]:
+    if tolerance is None:
+        tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[pixel_format])
     return _make_client(pixel_format).split(s2c, tolerance)
 
 

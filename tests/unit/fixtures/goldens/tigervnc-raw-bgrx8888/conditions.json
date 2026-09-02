@@ -33,5 +33,6 @@
   },
   "pixel_format": "bgrx8888",
   "server": "tigervnc",
-  "tolerance": [0, 0, 0]
+  "tolerance": [0, 0, 0],
+  "tolerance_kind": "format-quantization"
 }

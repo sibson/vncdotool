@@ -18,6 +18,8 @@ from vncdotool import client, pixelformat
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
+TOLERANCE_KINDS = ("format-quantization", "jpeg-lossy")
+
 
 class Fixture:
     """One committed capture: the bytes, what they were captured at, and a
@@ -33,6 +35,10 @@ class Fixture:
     def tolerance(self) -> Tuple[int, int, int]:
         red, green, blue = self.conditions["tolerance"]
         return red, green, blue
+
+    @property
+    def tolerance_kind(self) -> str:
+        return self.conditions["tolerance_kind"]
 
     def steps(self) -> List[Path]:
         return sorted(self.path.glob("step-*.bin.gz"))
@@ -93,6 +99,23 @@ class GoldenReplay:
 
     fixture: Fixture
 
+    def test_says_which_kind_of_tolerance_it_carries(self) -> None:
+        fixture = self.fixture
+        self.assertIn(  # type: ignore[attr-defined]
+            fixture.tolerance_kind, TOLERANCE_KINDS,
+            "a fixture must say whether its tolerance bounds the format's "
+            "quantization or a lossy encoding's error; the two are unrelated "
+            "numbers and only one of them falls out of the pixel format",
+        )
+        if fixture.tolerance_kind == "format-quantization":
+            self.assertEqual(  # type: ignore[attr-defined]
+                fixture.tolerance,
+                pixelformat.channel_tolerance(
+                    pixelformat.PIXEL_FORMATS[fixture.conditions["pixel_format"]]
+                ),
+                "a format-quantization tolerance is the format's own, never a chosen number",
+            )
+
     def test_decodes_to_its_oracle(self) -> None:
         fixture = self.fixture
         tolerance = fixture.tolerance
@@ -117,6 +140,7 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
     for fixture in fixtures():
         name = f"TestGolden_{fixture.name.replace('-', '_')}"
         case = type(name, (GoldenReplay, unittest.TestCase), {"fixture": fixture})
+        suite.addTest(case("test_says_which_kind_of_tolerance_it_carries"))
         suite.addTest(case("test_decodes_to_its_oracle"))
     return suite
 

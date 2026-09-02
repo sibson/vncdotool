@@ -1,9 +1,10 @@
 {
-  "encoding": "raw",
+  "encoding": "tight",
   "geometry": [256, 192],
+  "jpeg_quality": 9,
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-22T20:33:28Z",
+    "capture_timestamp": "2026-09-02T05:33:03Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -16,9 +17,9 @@
         "rectangles": 8
       },
       {
-        "encoding": 0,
-        "name": "raw",
-        "rectangles": 87
+        "encoding": 7,
+        "name": "tight",
+        "rectangles": 68
       }
     ],
     "geometry": {
@@ -32,8 +33,8 @@
     "server": "127.0.0.1::5931",
     "vncdotool_version": "2.0.0.dev0"
   },
-  "pixel_format": "rgbx8888",
+  "pixel_format": "bgrx8888",
   "server": "tigervnc",
-  "tolerance": [0, 0, 0],
-  "tolerance_kind": "format-quantization"
+  "tolerance": [8, 8, 8],
+  "tolerance_kind": "jpeg-lossy"
 }

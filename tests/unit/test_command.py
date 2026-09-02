@@ -486,6 +486,41 @@ class TestVncdoPixelFormatOption(unittest.TestCase):
         assert factory.pixel_format == pixelformat.PIXEL_FORMATS['rgb565']
 
 
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=mock.MagicMock)
+class TestVncdoJpegQualityOption(unittest.TestCase):
+
+    def test_a_level_reaches_the_factory(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
+                           '--jpeg-quality', '9', 'key', 'a'])
+
+        assert connect.call_args.args[0].jpeg_quality == 9
+
+    def test_a_level_without_tight_is_a_usage_error(self, reactor, connect) -> None:
+        for encodings in ([], ['--encodings', 'zrle']):
+            with self.subTest(encodings=encodings):
+                with self.assertRaises(SystemExit) as raised:
+                    command.vncdo(['-s', '127.0.0.1::5900', *encodings,
+                                   '--jpeg-quality', '9', 'key', 'a'])
+
+                assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_without_the_flag_no_level_is_offered(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', 'key', 'a'])
+
+        assert connect.call_args.args[0].jpeg_quality is None
+
+    def test_a_level_outside_the_ten_is_a_usage_error(self, reactor, connect) -> None:
+        for level in ('-1', '10'):
+            with self.subTest(level=level):
+                with self.assertRaises(SystemExit) as raised:
+                    command.vncdo(['-s', '127.0.0.1::5900', '--jpeg-quality', level, 'key', 'a'])
+
+                assert raised.exception.code == command.ExitStatus.USAGE
+
+
 class TestReplayClient(unittest.TestCase):
     """_replay_client turns a loaded Capture into a `vncdo` invocation."""
 

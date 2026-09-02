@@ -30,6 +30,7 @@ from twisted.python.log import PythonLoggingObserver
 from . import decoders, pixelformat
 from .capture import check_capture_target
 from .client import (
+    JPEG_QUALITY_ENCODINGS,
     AuthenticationError,
     ProtocolError,
     TClient,
@@ -609,6 +610,13 @@ def vncdo(argv: list[str] | None = None) -> None:
         "announces" % ", ".join(sorted(pixelformat.PIXEL_FORMATS)),
     )
     op.add_option(
+        "--jpeg-quality",
+        type="int",
+        metavar="LEVEL",
+        help="offer the JPEG Quality Level pseudo-encoding for LEVEL, 0 (low) "
+        "to 9 (high). Lossy [none]",
+    )
+    op.add_option(
         "-i",
         "--incremental-refreshes",
         action="store_true",
@@ -652,6 +660,17 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     if options.pixel_format:
         factory.pixel_format = pixelformat.PIXEL_FORMATS[options.pixel_format]
+
+    if options.jpeg_quality is not None:
+        if options.jpeg_quality not in range(len(JPEG_QUALITY_ENCODINGS)):
+            op.error(
+                f"--jpeg-quality takes a level from 0 (low) to "
+                f"{len(JPEG_QUALITY_ENCODINGS) - 1} (high), not "
+                f"{options.jpeg_quality}"
+            )
+        if decoders.ENCODING_NAMES["tight"] not in (factory.encodings or []):
+            op.error("--jpeg-quality only applies to Tight; add --encodings tight")
+        factory.jpeg_quality = options.jpeg_quality
 
     if options.timeout:
         message = "TIMEOUT Exceeded (%ss)" % options.timeout

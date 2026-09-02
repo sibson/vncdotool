@@ -34,5 +34,6 @@
   },
   "pixel_format": "rgb565",
   "server": "tigervnc",
-  "tolerance": [7, 3, 7]
+  "tolerance": [7, 3, 7],
+  "tolerance_kind": "format-quantization"
 }

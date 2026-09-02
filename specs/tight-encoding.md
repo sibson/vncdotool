@@ -65,10 +65,17 @@ fails in the field. What is conditional is whether we *invite* JPEG.
 conforming server sends JPEG only to a client that advertised -23..-32, so the
 default keeps captures lossless, which is what a screenshot tool should do, and
 the flag is what makes a JPEG rectangle capturable at all — which is what makes
-the decode path testable rather than dead. Its fixture carries a non-zero
-per-channel tolerance in `conditions.json`, the first use of a field
-[decoder-goldens.md](decoder-goldens.md) reserved for reduced-depth formats:
-JPEG is lossy, so the oracle comparison against the scene PNG cannot be exact.
+the decode path testable rather than dead. The level is the RFB quality level
+0–9 the wire carries, not a percentage: the protocol has ten values and every
+viewer's own control is that same 0–9 scale, so a percentage would invent a
+mapping onto ten buckets that no two servers agree on.
+
+Its fixture cannot reuse the reduced-depth tolerance field, as this plan first
+assumed. That number is `255 >> channel_width` and bounds the server's
+quantization; JPEG error is unrelated to it and much larger, and widening it
+would loosen every other fixture at once. The fixture records a separate
+`tolerance_kind`, and [decoder-goldens.md](decoder-goldens.md) carries the
+bound, where it came from and the mutations that show it can still fail.
 
 **The gradient filter raises `DecodeError`, naming what arrived.** No encoder in
 the fleet emits one, so no fixture can cover it, and the brief records an
@@ -154,13 +161,24 @@ non-default formats the matrix asks for: TPIXEL width varies with the negotiated
 format, and 32 bpp is exactly the case that hides it. `test_goldens.py` walks the
 tree and needs no edit.
 
-**Stage 5 — JPEG.** `--jpeg-quality N` offering one of -23..-32, the Pillow
-decode path in the decoder, and a `tigervnc-tight-jpeg-bgrx8888` fixture
-captured with the flag set and a per-channel tolerance recorded. Also the
-grayscale case: TurboVNC under `-subsamp gray` emits 1-component JPEG, so the
-decoder converts whatever components arrive to RGB rather than assuming three.
-That one has no fixture — no fleet server emits it — so it is a code path we
-take on the brief's authority alone, and the PR says so.
+**Stage 5 — JPEG. Done.** `--jpeg-quality N` offering one of -23..-32, the
+Pillow decode path in the decoder, and a `tigervnc-tight-jpeg-bgrx8888`
+fixture captured with the flag set, carrying a lossy-encoding tolerance and
+the quality level it was taken at. Also the grayscale case: TurboVNC under
+`-subsamp gray` emits 1-component JPEG, so the decoder converts whatever
+components arrive to RGB rather than assuming three. That one has no captured
+fixture — no fleet server emits it — so its unit case re-encodes a captured
+rectangle's own pixels with one component and splices them into that
+rectangle's framing, and the PR says the branch is taken on the brief's
+authority alone.
+
+Two things the plan had wrong, found here. Offering a quality level *moves*
+work off the other branches rather than adding to it: TigerVNC sends JPEG
+where it would have sent a full-colour copy rectangle, so the lossy capture
+reaches no copy filter, no implicit filter and nothing under the 12-byte
+threshold, and it carries its own coverage contract rather than the lossless
+one. And `expect` cannot sequence a lossy capture at all, which is why
+`scene-lossy.vdo` exists.
 
 **Stage 6 — live and measured.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves
