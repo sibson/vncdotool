@@ -21,13 +21,13 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, NamedTuple, Optional
 from unittest import mock
 
 import PIL
 
 import vncdotool
-from vncdotool import client
+from vncdotool import client, pixelformat
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 FIXTURE_ROOT = REPO_ROOT / "tests" / "unit" / "fixtures" / "goldens"
@@ -35,8 +35,24 @@ RECORD_PATH = REPO_ROOT / "bench.jsonl"
 PACKAGE_ROOT = Path(vncdotool.__file__).resolve().parent
 
 
-def _make_client() -> client.VNCDoToolClient:
-    cli = client.VNCDoToolClient()
+class Fixture(NamedTuple):
+    init: bytes
+    steps: List[bytes]
+    pixel_format: str
+
+
+class _Replay(client.VNCDoToolClient):
+    """The inherited path reports protocol errors through the Mock factory, which drops them."""
+
+    def vncProtocolError(self, reason: str) -> None:
+        raise AssertionError(f"replay stopped decoding: {reason}")
+
+
+def _make_client(pixel_format: str) -> _Replay:
+    cli = _Replay()
+    # SetPixelFormat is client-to-server (RFC 6143 7.5.1), so the recorded
+    # stream never says which layout the client asked for.
+    cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
     for name in ("shared", "nocursor", "pseudocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
@@ -45,29 +61,30 @@ def _make_client() -> client.VNCDoToolClient:
     return cli
 
 
-def _replay(init: bytes, steps: List[bytes]) -> None:
-    cli = _make_client()
-    cli.dataReceived(init)
-    for step in steps:
+def _replay(fixture: Fixture) -> None:
+    cli = _make_client(fixture.pixel_format)
+    cli.dataReceived(fixture.init)
+    for step in fixture.steps:
         cli.dataReceived(step)
 
 
-def load_fixture(name: str) -> Tuple[bytes, List[bytes]]:
-    fixture = FIXTURE_ROOT / name
-    init = gzip.decompress((fixture / "init.bin.gz").read_bytes())
-    steps = [gzip.decompress(p.read_bytes()) for p in sorted(fixture.glob("step-*.bin.gz"))]
-    return init, steps
+def load_fixture(name: str) -> Fixture:
+    directory = FIXTURE_ROOT / name
+    conditions = json.loads((directory / "conditions.json").read_text())
+    init = gzip.decompress((directory / "init.bin.gz").read_bytes())
+    steps = [gzip.decompress(p.read_bytes()) for p in sorted(directory.glob("step-*.bin.gz"))]
+    return Fixture(init, steps, conditions["pixel_format"])
 
 
-def call_counts(init: bytes, steps: List[bytes]) -> Dict[str, int]:
+def call_counts(fixture: Fixture) -> Dict[str, int]:
     # The unprofiled replay is what makes the counts reproducible, not just
     # a warm-up: pixelformat.raw_mode is lru_cached, so the first replay in
     # a process counts 8 calls that no later one does.
-    _replay(init, steps)
+    _replay(fixture)
 
     profiler = cProfile.Profile()
     profiler.enable()
-    _replay(init, steps)
+    _replay(fixture)
     profiler.disable()
 
     counts: Dict[str, int] = {}
@@ -179,22 +196,22 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    init, steps = load_fixture(args.fixture)
+    fixture = load_fixture(args.fixture)
 
     if args.counts:
-        print(json.dumps(call_counts(init, steps), sort_keys=True))
+        print(json.dumps(call_counts(fixture), sort_keys=True))
         return 0
 
-    _replay(init, steps)  # warm PIL's plugin registry and the import graph
+    _replay(fixture)  # warm PIL's plugin registry and the import graph
 
     if args.profile:
         profiler = cProfile.Profile()
         profiler.enable()
         for _ in range(args.profile):
-            _replay(init, steps)
+            _replay(fixture)
         profiler.disable()
         stats = pstats.Stats(profiler)
-        print(f"{args.fixture}: {len(steps)} updates x {args.profile} profiled runs")
+        print(f"{args.fixture}: {len(fixture.steps)} updates x {args.profile} profiled runs")
         stats.sort_stats("tottime").print_stats(25)
         return 0
 
@@ -202,7 +219,7 @@ def main() -> int:
     timings = []
     for _ in range(args.repeat):
         start = time.perf_counter()
-        _replay(init, steps)
+        _replay(fixture)
         timings.append(time.perf_counter() - start)
 
     timings.sort()
@@ -210,7 +227,7 @@ def main() -> int:
     def us(fraction: float) -> float:
         return timings[int(fraction * (len(timings) - 1))] * 1e6
 
-    print(f"{args.fixture}: {len(steps)} updates x {args.repeat} runs")
+    print(f"{args.fixture}: {len(fixture.steps)} updates x {args.repeat} runs")
     # Microseconds, and p10 as well as the median: the replay is under a
     # millisecond, so a tenth of a millisecond is a tenth of the measurement,
     # and the median alone moves with whatever else the machine is doing.
@@ -224,13 +241,13 @@ def main() -> int:
             print(f"  not recorded: {path.name} takes measurements of a commit,"
                   " and this tree has changes that are not in one")
             return 0
-        counts = call_counts(init, steps)
+        counts = call_counts(fixture)
         entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "commit": _git("rev-parse", "HEAD"),
             "branch": _git("rev-parse", "--abbrev-ref", "HEAD"),
             "fixture": args.fixture,
-            "updates": len(steps),
+            "updates": len(fixture.steps),
             "repeat": args.repeat,
             "best_us": round(us(0.0), 1),
             "p10_us": round(us(0.10), 1),
