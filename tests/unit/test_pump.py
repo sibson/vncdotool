@@ -10,6 +10,7 @@ from unittest import TestCase, mock
 
 from vncdotool import client, decoders, rfb
 from vncdotool.const import Encoding
+from vncdotool.pixelformat import PixelFormat
 
 FIXTURE = (
     Path(__file__).resolve().parent
@@ -49,6 +50,33 @@ def raw_update(x: int, y: int, width: int, height: int, pixels: bytes) -> bytes:
     header = pack("!BxH", 0, 1)  # msg-type, padding, number-of-rectangles
     rect_header = pack("!HHHHi", x, y, width, height, Encoding.RAW)
     return header + rect_header + pixels
+
+
+# Tight's TPIXEL: three bytes, red-green-blue order (rfbproto, Tight Encoding).
+TPIXEL = PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
+
+
+class FakeWholeRect(decoders.WholeRectDecoder):
+    """Fills the rectangle with one TPIXEL colour, in two reads so the pump
+    has to resume the generator.
+    """
+
+    ENCODING = Encoding.TIGHT
+
+    def decodeRect(self, width, height, pixel_format):
+        colour = yield 3
+        (invert,) = yield 1
+        if invert:
+            colour = bytes(byte ^ 0xFF for byte in colour)
+        return colour * (width * height), TPIXEL
+
+
+def whole_rect_update(*rects: tuple[int, int, int, int, bytes]) -> bytes:
+    """A FramebufferUpdate of `FakeWholeRect` rectangles. RFC 6143 7.6.1."""
+    out = pack("!BxH", 0, len(rects))
+    for x, y, width, height, payload in rects:
+        out += pack("!HHHHi", x, y, width, height, FakeWholeRect.ENCODING) + payload
+    return out
 
 
 class TestSegmentation(TestCase):
@@ -357,3 +385,168 @@ class TestUnbufferedDecoders(TestCase):
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
         cli.updateRectangle.assert_not_called()
+
+
+class TestWholeRectPump(TestCase):
+    """A `WholeRectDecoder` hands back the whole rectangle's bytes and the
+    format they are in, having filled no `RectBuffer`.
+    """
+
+    def setUp(self) -> None:
+        self.cli = make_pump_client()
+
+    def test_the_rectangle_carries_the_decoders_format_not_the_negotiated_one(self) -> None:
+        cli = self.cli
+        cli.updateRectangle = mock.Mock()
+
+        pump(cli, FakeWholeRect(), 3, 4, 2, 2)
+        cli.dataReceived(b"\x10\x20\x30\x00")
+
+        cli.updateRectangle.assert_called_once_with(
+            3, 4, 2, 2, b"\x10\x20\x30" * 4, TPIXEL
+        )
+        self.assertNotEqual(TPIXEL.bypp, cli.pixel_format.bypp)
+
+    def test_no_buffer_is_allocated(self) -> None:
+        cli = self.cli
+        cli.updateRectangle = mock.Mock()
+
+        pump(cli, FakeWholeRect(), 0, 0, 8, 8)
+        cli.dataReceived(b"\x10\x20\x30\x00")
+
+        cli.updateRectangle.assert_called_once()
+        self.assertEqual(cli._rect_backing, bytearray())
+
+    def test_nothing_is_painted_until_the_rectangle_is_complete(self) -> None:
+        cli = self.cli
+        cli.updateRectangle = mock.Mock()
+
+        pump(cli, FakeWholeRect(), 0, 0, 2, 2)
+        cli.dataReceived(b"\x10\x20\x30")
+
+        cli.updateRectangle.assert_not_called()
+
+        cli.dataReceived(b"\x01")
+
+        cli.updateRectangle.assert_called_once_with(
+            0, 0, 2, 2, b"\xef\xdf\xcf" * 4, TPIXEL
+        )
+
+    def test_the_rectangle_is_recorded_and_the_update_continues(self) -> None:
+        cli = self.cli
+        cli.updateRectangle = mock.Mock()
+        cli.commitUpdate = mock.Mock()
+
+        pump(cli, FakeWholeRect(), 3, 4, 2, 2)
+        cli.dataReceived(b"\x10\x20\x30\x00")
+
+        self.assertEqual(cli.rectanglePos, [(3, 4, 2, 2)])
+        cli.commitUpdate.assert_called_once_with([(3, 4, 2, 2)])
+
+    def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
+        cli = self.cli
+        cli.width, cli.height = 64, 48
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+
+        pump(cli, FakeWholeRect(), 0, 0, 65, 10)
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+
+    def test_a_decode_error_aborts_rather_than_propagating(self) -> None:
+        cli = self.cli
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+
+        class Failing(decoders.WholeRectDecoder):
+            def decodeRect(self, width, height, pixel_format):
+                yield 3
+                raise decoders.DecodeError("unknown compression control byte")
+
+        pump(cli, Failing(), 0, 0, 2, 2)
+        cli.dataReceived(b"\x10\x20\x30")
+
+        cli.vncProtocolError.assert_called_once()
+        self.assertIn(
+            "unknown compression control byte", cli.vncProtocolError.call_args.args[0]
+        )
+        cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+
+
+class TestWholeRectLength(TestCase):
+    """Neither a buffer nor a byte count off the wire bounds this path, so
+    the pump measures what the decoder handed back.
+    """
+
+    def _abort_for(self, produced: bytes) -> rfb.RFBClient:
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+
+        class WrongLength(decoders.WholeRectDecoder):
+            def decodeRect(self, width, height, pixel_format):
+                yield 1
+                return produced, TPIXEL
+
+        pump(cli, WrongLength(), 0, 0, 2, 2)
+        cli.dataReceived(b"\x00")
+        return cli
+
+    def test_too_few_bytes_is_refused(self) -> None:
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp - 1))
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+
+    def test_too_many_bytes_is_refused(self) -> None:
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp + 1))
+
+        cli.vncProtocolError.assert_called_once()
+        cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+
+    def test_the_exact_length_is_accepted(self) -> None:
+        """The refusals above pass just as well against a check that
+        rejects everything.
+        """
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp))
+
+        cli.vncProtocolError.assert_not_called()
+        cli.updateRectangle.assert_called_once()
+
+
+class TestWholeRectSegmentation(TestCase):
+    """`TestSegmentation` proves this of the buffered pump. The whole-rect
+    path parks its own generator, so it has to be proved again here.
+    """
+
+    def _client(self) -> client.VNCDoToolClient:
+        cli = make_client()
+        decoder = FakeWholeRect()
+        cli._decoders[FakeWholeRect.ENCODING] = (decoder, cli._pumpFor(decoder))
+        cli.dataReceived(gzip.decompress((FIXTURE / "init.bin.gz").read_bytes()))
+        return cli
+
+    def test_byte_at_a_time_matches_a_single_call(self) -> None:
+        update = whole_rect_update(
+            (0, 0, 4, 3, b"\xde\xad\xbe\x00"),
+            (8, 5, 2, 2, b"\x01\x02\x03\x01"),
+        )
+
+        whole = self._client()
+        whole.dataReceived(update)
+
+        trickled = self._client()
+        for i in range(len(update)):
+            trickled.dataReceived(update[i:i + 1])
+
+        assert whole.screen is not None
+        assert trickled.screen is not None
+        self.assertEqual(
+            whole.screen.convert("RGB").getpixel((0, 0)), (0xDE, 0xAD, 0xBE)
+        )
+        self.assertEqual(trickled.screen.tobytes(), whole.screen.tobytes())
