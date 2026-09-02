@@ -5,7 +5,14 @@ from unittest import TestCase
 from PIL import Image
 
 from vncdotool import rfb
-from vncdotool.pixelformat import UnsupportedPixelFormat, cpixel_bytes, cpixel_offset, raw_mode
+from vncdotool.pixelformat import (
+    TPIXEL_FORMAT,
+    UnsupportedPixelFormat,
+    cpixel_bytes,
+    cpixel_offset,
+    raw_mode,
+    tpixel_bytes,
+)
 
 BGRX8888 = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 16, 8, 0)
 BGRX8888_DEPTH32 = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 16, 8, 0)
@@ -220,3 +227,44 @@ class TestCPixel(TestCase):
         pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 4, 12, 20)
         self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
         self.assertEqual(cpixel_offset(pixel_format), 0)
+
+
+class TestTPixel(TestCase):
+
+    def test_truecolor_32bpp_depth_24_with_8_bit_channels_is_three_bytes(self):
+        self.assertEqual(tpixel_bytes(BGRX8888), 3)
+        self.assertEqual(tpixel_bytes(RGBX8888), 3)
+
+    def test_16bpp_is_never_a_tpixel(self):
+        self.assertEqual(tpixel_bytes(BGR565), BGR565.bypp)
+
+    def test_depth_32_is_never_a_tpixel(self):
+        self.assertEqual(tpixel_bytes(BGRX8888_DEPTH32), BGRX8888_DEPTH32.bypp)
+
+    def test_colour_mapped_is_never_a_tpixel(self):
+        pixel_format = rfb.PixelFormat(8, 8, False, False, 0, 0, 0, 0, 0, 0)
+        self.assertEqual(tpixel_bytes(pixel_format), pixel_format.bypp)
+
+    def test_a_channel_narrower_than_8_bits_is_never_a_tpixel(self):
+        for channel in range(3):
+            maxima = [255, 255, 255]
+            maxima[channel] = 127
+            pixel_format = rfb.PixelFormat(32, 24, False, True, *maxima, 16, 8, 0)
+            with self.subTest(pixel_format=pixel_format):
+                self.assertEqual(tpixel_bytes(pixel_format), pixel_format.bypp)
+
+    def test_a_depth_16_cpixel_is_not_a_tpixel(self):
+        """CPIXEL applies at depth 24 or less, TPIXEL at depth exactly 24."""
+        pixel_format = rfb.PixelFormat(32, 16, False, True, 31, 63, 31, 19, 13, 8)
+        self.assertEqual(cpixel_bytes(pixel_format), 3)
+        self.assertEqual(tpixel_bytes(pixel_format), pixel_format.bypp)
+
+    def test_the_layout_ignores_endianness_and_the_negotiated_shifts(self):
+        for pixel_format in (BGRX8888, RGBX8888, XRGB8888, XBGR8888, BGRX8888_BIGENDIAN):
+            with self.subTest(pixel_format=pixel_format):
+                self.assertEqual(tpixel_bytes(pixel_format), 3)
+        self.assertEqual(raw_mode(TPIXEL_FORMAT), "RGB")
+
+    def test_the_three_bytes_decode_as_red_green_blue(self):
+        image = Image.frombytes("RGB", (1, 1), bytes([0x20, 0x40, 0x60]), "raw", raw_mode(TPIXEL_FORMAT))
+        self.assertEqual(image.getpixel((0, 0)), (0x20, 0x40, 0x60))

@@ -1,11 +1,13 @@
 """
 The :class:`PixelFormat` wire structure, its resolution to a Pillow raw mode,
-and the CPIXEL width/offset rules ZRLE depends on.
+the CPIXEL width/offset rules ZRLE depends on, and the TPIXEL width Tight
+depends on.
 
 Reference:
 https://www.rfc-editor.org/rfc/rfc6143#section-7.4
 https://www.rfc-editor.org/rfc/rfc6143#section-7.7.5
 https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst (ZRLE Encoding)
+https://github.com/rfbproto/rfbproto/blob/152107db63cd34b3536ad8ddf54a0cfc9017a9f9/rfbproto.rst#tight-encoding
 """
 from __future__ import annotations
 
@@ -181,6 +183,29 @@ def cpixel_offset(pixel_format: PixelFormat) -> int:
         return 0
     low = _cpixel_placement(pixel_format) == "low"
     return 0 if low != pixel_format.bigendian else pixel_format.bypp - 3
+
+
+def tpixel_bytes(pixel_format: PixelFormat) -> int:
+    """3 for a TPIXEL-eligible format, otherwise ``bypp`` (a PIXEL).
+
+    Narrower than CPIXEL: rfbproto §Tight requires depth exactly 24 and three
+    8-bit channels, where CPIXEL takes depth 24 or less. See
+    ``specs/tight-wire.md`` §1.
+    """
+    if (
+        pixel_format.truecolor
+        and pixel_format.bpp == 32
+        and pixel_format.depth == 24
+        and _channel_widths(pixel_format) == (8, 8, 8)
+    ):
+        return 3
+    return pixel_format.bypp
+
+
+# The three bytes are byte 0 red, byte 1 green, byte 2 blue, whatever the
+# negotiated big-endian flag and channel shifts say; they only decide whether
+# the condition holds (rfbproto §Tight, specs/tight-wire.md §1).
+TPIXEL_FORMAT = PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
 
 
 PIXEL_FORMATS: dict[str, PixelFormat] = {
