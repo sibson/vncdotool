@@ -119,10 +119,7 @@ Two additions:
 A stack: each stage is a branch on the one below it, reviewed and merged on its
 own, and the next rebases onto what landed. Every stage is green on `make test`
 and on `flake8 --count --statistics vncdotool tests`, and adds no new
-`make typecheck` error, before it is offered for review. `make typecheck` is red
-on `main` — 83 errors in 13 files at `c0fa1ee`, 78 after stage 5 narrowed
-`pixelformat` — so "green" was never a gate this stack could pass or fail
-against.
+`make typecheck` error, before it is offered for review.
 
 **Stage 0 — wire brief. Done**, committed as [tight-wire.md](tight-wire.md).
 
@@ -157,13 +154,6 @@ by the decoder from `height * rowSize` and never signalled on the wire; a
 2-colour palette packs 1-bit rows padded to a byte boundary. The 2048-pixel width
 check exempts Fill, because TigerVNC servers before 1.16.0 sent wider Fill
 rectangles and its own decoder exempts them.
-
-One thing the plan had wrong, found between stages 3 and 4. Capturing at a
-non-native format needs `vnclog`'s own decoder to be right first, and it was
-not: it decoded at the format ServerInit announced whatever the client then
-asked for, so its `--capture-raw` metadata disagreed with the bytes beside it,
-and when it did give up it reported an `AttributeError` in place of the reason.
-Both fixes landed as a stage of their own before stage 4 could capture anything.
 
 **Stage 4 — goldens. Done.** `tests/goldens/capture.py --encoding tight
 --pixel-format bgrx8888`, committed as `tigervnc-tight-bgrx8888`, plus the
@@ -206,8 +196,8 @@ one. And `expect` cannot sequence a lossy capture at all, which is why
 from `ENCODING_NAMES` and render both scenes byte for byte. N2's bandwidth half
 lands as two cases in `test_bandwidth.py`, one per content class, and is met
 with room to spare against Raw at 256x192: 820 bytes against 196,899 on flat
-regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in the catalogue,
-worst case 0.68x on the gradient.
+regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in
+the catalogue, worst case 0.68x on the gradient.
 
 **Render time is recorded, not compared against Raw.** Replaying
 `tigervnc-tight-bgrx8888` costs 1773 us over the same 87 rectangles, against
@@ -280,12 +270,18 @@ golden, 8 updates x 200 replays, best microseconds:
 The JPEG fixture has no x-Raw column: it is a different capture with 68
 rectangles, so it is comparable to the other Tight rows and not to Raw.
 
+These rows are not in `bench.jsonl`: its newest rows are stage 6's and it holds
+no Hextile row at all, so this table and the profile below are a stage-7 run
+that survives only here. The replacement proposed below would require recording
+it.
+
 **Tight fails N2's render-time half, and so does every encoding measured here
-except CoRRE**, which alone lands inside the noise against Raw. RRE is 1.58x
-without decompressing anything; Hextile and ZRLE shipped in phases 4 and 5 with
-N2 stated and unmet at 11x and 55x. This is a requirement almost nothing has
-ever met, not a regression Tight introduced — and of the three encodings that
-decompress, Tight is by far the fastest.
+except CoRRE**, which alone lands inside the noise against Raw. What the slow
+rows share is per-rectangle Python decode work, not decompression: only Tight
+and ZRLE decompress at all, and RRE at 1.58x and Hextile at 11.2x reach those
+figures without zlib — Hextile's cost is per-subrectangle Python. Hextile and
+ZRLE shipped in phases 4 and 5 with N2 stated and unmet at 11x and 55x, so this
+is a requirement almost nothing has ever met, not a regression Tight introduced.
 
 The profile says why. Over 20 profiled replays of `tigervnc-tight-bgrx8888`,
 0.068 s total: `_unpalette` 0.012 s of self time (the per-pixel Python loop that
@@ -313,14 +309,6 @@ or reject.
 > than Raw over the same link is the thing to refuse, and that is a wire-time
 > and render-time question together, not render time alone.
 
-Two things this changes and one it does not. It keeps the bandwidth half exactly
-as it stands, including the content-class qualifier and why that is not a hedge.
-It replaces an absolute bar against Raw — failed by every encoding but CoRRE,
-and so gating nothing — with a per-encoding ratchet that can actually fail. And
-it names the question the absolute bar was reaching for, that a user should not
-trade latency for bandwidth, in terms that can be measured rather than in a
-comparison against the one encoding that does no work.
-
 If the owner prefers to keep an absolute bar, the alternative is to state it as
 a budget rather than a comparison — "no encoding costs more than N ms per
 full-screen update at 1920x1080" — and to accept that ZRLE fails it today and
@@ -333,16 +321,12 @@ tests in `tests/unit/test_decoder_tight.py` driven from captured bytes — never
 from bytes assembled out of the specification, per `decoder-goldens.md`. Tier 2
 is `test_encodings.py` against the fleet. Tier 3 is the existing scene
 catalogue, which covers the content classes the filters split on: solid fills
-(fill compression), dense detail (JPEG or raw copy), palette regions (palette
-filter), gradient (gradient filter).
+(fill compression), dense detail (JPEG or raw copy) and palette regions
+(palette filter).
 
 The scene catalogue was built before Tight was in view. If a filter turns out
 unreachable with the scenes we have, the fix is a scene, not a hand-built
 fixture.
-
-What the catalogue does *not* do is map one scene to one filter — see stage 4 —
-and a lossless and a lossy capture of the same catalogue reach different
-filters, so each carries its own coverage contract rather than sharing one.
 
 ## Deferred
 

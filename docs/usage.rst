@@ -75,23 +75,20 @@ preference order, and the server sends whichever of them it has::
     > vncdo --encodings tight capture screen.png
 
 The names are ``raw``, ``copyrect``, ``rre``, ``corre``, ``hextile``,
-``zrle`` and ``tight``.  On ordinary screen content tight sends the least.
+``zrle`` and ``tight``.  Tight sends less than raw on ordinary screen
+content.  Three parts of tight are not implemented: the gradient filter,
+TightPNG, and Tight Encoding Without Zlib.  A rectangle using any of them
+ends the session with a message naming what arrived, exiting 20.  The tight
+*security type*, which TightVNC servers want before they will authenticate
+you, is not implemented either.
 
-Some tight rectangles can be JPEG, which is lossy.  A server only sends
-those to a client that asked for a JPEG quality level, and vncdo asks for
-none by default, so a capture is exact unless you request otherwise.
-``--jpeg-quality`` requests it, on the RFB scale of 0 (low) to 9 (high)
-rather than a percentage::
+Some tight rectangles can be JPEG, which is lossy.  vncdo decodes them
+whether or not it asked for them; a conforming server sends them only to a
+client that asked for a JPEG quality level, and vncdo asks for none by
+default, so a capture is exact unless you request otherwise.
+``--jpeg-quality`` asks for one, on the RFB scale of 0 (low) to 9 (high)::
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
-
-A JPEG rectangle is decoded whether or not it was invited, because nothing
-stops a server from sending one.  Two parts of tight are not implemented:
-the gradient filter, and TightPNG.  Neither is offered, and a server that
-sends one anyway ends the session with a message naming what arrived,
-exiting 20, rather than writing a wrong screen to your capture.  The tight
-*security type*, which some servers want before they will authenticate you,
-is a separate thing from the encoding and is also not implemented.
 
 
 Exit Status
