@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix ``vnclog`` logging an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, and then carrying on decoding a stream it had already abandoned (@sibson)
   - Fix a malformed or unsupported server response (bad header, unknown security/auth type, connection refused, unknown message, unrecognized rectangle encoding) parsing further buffered bytes as if they were valid protocol data before the connection closed, instead of stopping immediately (@sibson)
   - Fix ``self.width``/``self.height`` staying at the negotiated size after a server sends ``PSEUDO_DESKTOP_SIZE`` mid-session (@sibson)
   - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)

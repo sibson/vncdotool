@@ -206,6 +206,12 @@ class VNCLoggingClient(VNCDoToolClient):
     capture: CaptureWriter | None = None
     recorder: Callable[[str], int] | None = None
 
+    def vncProtocolError(self, reason: str) -> None:
+        # NullTransport.loseConnection() is a no-op, so the parser has to be
+        # stopped here instead.
+        self._aborted = True
+        super().vncProtocolError(reason)
+
     def _handleRectangle(self, block: bytes) -> None:
         # Tallied off the decoded stream: SetEncodings only says what the
         # client asked for, and a server may ignore it.
@@ -512,6 +518,9 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
 
     def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:
         pass
+
+    def clientConnectionFailed(self, client: VNCLoggingClient, reason: object) -> None:
+        log.error("vnclog stopped decoding this session: %s", reason)
 
     def clientConnectionLost(self, client: VNCLoggingServerProxy) -> None:
         if self._out:
