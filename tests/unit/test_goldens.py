@@ -30,8 +30,9 @@ class Fixture:
         self.conditions = json.loads((path / "conditions.json").read_text())
 
     @property
-    def tolerance(self) -> int:
-        return self.conditions["tolerance"]
+    def tolerance(self) -> Tuple[int, int, int]:
+        red, green, blue = self.conditions["tolerance"]
+        return red, green, blue
 
     def steps(self) -> List[Path]:
         return sorted(self.path.glob("step-*.bin.gz"))
@@ -60,14 +61,21 @@ def fixtures() -> List[Fixture]:
     ]
 
 
-def first_difference(actual: Image.Image, expected: Image.Image, tolerance: int) -> Optional[Tuple[int, int, tuple, tuple]]:
+def first_difference(
+    actual: Image.Image, expected: Image.Image, tolerance: Tuple[int, int, int]
+) -> Optional[Tuple[int, int, tuple, tuple]]:
+    """The first pixel further from its oracle than the format can account for.
+
+    Per channel: rgb565's 6-bit green permits half the error its 5-bit red and
+    blue do.
+    """
     left, right = actual.convert("RGB").tobytes(), expected.convert("RGB").tobytes()
     if actual.size != expected.size:
         raise AssertionError(f"decoded {actual.size}, expected {expected.size}")
     width, _ = actual.size
     for offset in range(0, len(left), 3):
         got, want = left[offset:offset + 3], right[offset:offset + 3]
-        if any(abs(a - b) > tolerance for a, b in zip(got, want)):
+        if any(abs(a - b) > bound for a, b, bound in zip(got, want, tolerance)):
             pixel = offset // 3
             return pixel % width, pixel // width, tuple(got), tuple(want)
     return None

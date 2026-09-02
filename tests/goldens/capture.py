@@ -104,7 +104,9 @@ def main() -> int:
             "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
-            "tolerance": 0,
+            "tolerance": list(
+                pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])
+            ),
         }
         distill.write_fixture(directory, init, steps, conditions)
 

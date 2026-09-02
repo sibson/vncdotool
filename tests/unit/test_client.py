@@ -176,6 +176,42 @@ class TestVNCDoToolClient(TestCase):
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
         cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
 
+    def _expectAgainst(self, pixel_format, target, screen):
+        cli = self.client
+        cli.deferred = mock.Mock()
+        cli.pixel_format = pixel_format
+        cli.expected = target.histogram()
+        cli.expected_image = target
+        cli.screen = screen
+        return cli._expectCompare(cli, (0, 0) + target.size, 0)
+
+    @staticmethod
+    def _swatch(*pixels):
+        image = client.Image.new("RGB", (len(pixels), 1))
+        image.putdata(pixels)
+        return image
+
+    def test_expectCompareAllowsWhatTheFormatCannotExpress(self):
+        """`expect FILE 0` at rgb565 would otherwise poll until it timed out:
+        no 5-bit red can carry 0x2A, so an exact match never comes.
+        """
+        target = self._swatch((0x2A, 0x2A, 0x2A), (0xC1, 0xC1, 0xC1))
+        screen = self._swatch((0x29, 0x29, 0x29), (0xC6, 0xC3, 0xC6))
+        result = self._expectAgainst(PIXEL_FORMATS["rgb565"], target, screen)
+        assert result == self.client
+
+    def test_expectCompareStillRejectsASwappedChannel(self):
+        target = self._swatch((0xB4, 0x28, 0x28))
+        screen = self._swatch((0x28, 0x28, 0xB4))
+        result = self._expectAgainst(PIXEL_FORMATS["rgb565"], target, screen)
+        assert result == self.client.deferred
+
+    def test_expectCompareTolerates_nothing_at_8_bits_per_channel(self):
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        screen = self._swatch((0x2B, 0x2A, 0x2A))
+        result = self._expectAgainst(PIXEL_FORMATS["bgrx8888"], target, screen)
+        assert result == self.client.deferred
+
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeFullScreen(self, frombytes):
         cli = self.client

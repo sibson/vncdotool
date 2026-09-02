@@ -74,6 +74,14 @@ rather than a mislabelled fixture. It is not merely a check: it is how
 distillation labels a step at all, since the frame carries it and the c2s
 stream cannot be aligned against s2c.
 
+The key rides in the patch's red channel one unit per key, which assumed an
+8-bit red without saying so. At rgb565 `c`, `d` and `f` — 99, 100 and 102 —
+land on one 5-bit value, so the patch narrows a step to a *set* of keys and
+the frame breaks the tie by which scene it most resembles. That tie-break is
+deliberately a ranking over the candidates and not a threshold: a label chosen
+by "lands within the format's quantization of its scene" is the golden test's
+own claim, and a fixture labelled by it could never fail that test.
+
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
 
@@ -100,6 +108,13 @@ naming the image it waited for.
 
 It compares histograms rather than pixels, which is enough to sequence on; the
 pixel-exact comparison is the golden test's job, against the same file.
+
+At a reduced depth that histogram can never equal the scene PNG's, so `expect`
+also matches when every pixel is within the negotiated format's per-channel
+tolerance. `client.py` reads the tolerance off `self.pixel_format`, so nothing
+is written down in `scene.vdo` and every `expect` in the wild gains the same
+fix: at 8 bits per channel the tolerance is zero and the new condition is
+exact equality, which the old one already implied.
 
 ## Capture
 
@@ -175,8 +190,9 @@ what it asked for cannot be replayed at the format its pixels are in.
 Written by the harness from what happened, never from what was intended: the
 compose service, the geometry, and vnclog's own `meta` — protocol version,
 security types, the encodings the server actually used, and the capture
-timestamp. Per-channel comparison tolerance
-lives here too: zero today, non-zero when reduced-depth formats land.
+timestamp. The comparison tolerance lives here too, as the three per-channel
+bounds `pixelformat.channel_tolerance` computes from the requested format:
+`[0, 0, 0]` at 32bpp, `[7, 3, 7]` at rgb565.
 
 The driving script is not copied in. `session.vdo` inside the capture archive
 already is it, and a second copy is a second thing to keep true.
@@ -197,8 +213,17 @@ misindexing — the whole defect class R3, the framebuffer not depending on the
 negotiated format, is about. Every fixture is checked this way at the format it
 was captured at, and that is where R3 is checked.
 
-The tolerance waits on a reduced-depth format: every format captured so far is
-32bpp truecolour, which is why it is zero.
+The bound is `pixelformat.channel_tolerance`, and it falls out of the format
+rather than being tuned per fixture: a channel of *n* bits reaches only every
+2**(8-n)th 8-bit value, so an 8-bit value sits at most `255 >> n` short of one
+the channel can reach. It is per channel, not one number, because rgb565's
+6-bit green permits half the error its 5-bit red and blue do, and a single
+scalar of 7 would accept twice the green error the format can produce.
+
+The one place the tolerance is computed is `pixelformat.py`. `capture.py`
+records it, `test_goldens.py` compares within it, and the scene driver and
+distiller below use the same call, so no fixture carries a number someone
+chose.
 
 **Cross-format self-consistency** — decode one scene at two formats, assert the
 framebuffers agree — is not used, though it reads like R3 stated directly. It
@@ -272,7 +297,6 @@ Recorded so they are not rediscovered as new ideas.
 - The **pnm-server** — a libvncserver example that declares its own rects — and
   the rect pathologies that need it (hundreds of tiny rects, mid-session
   resize).
-- The **tolerance oracle**, which needs a reduced-depth format to exist.
 - **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
   one. We find out by reading a capture, not by asserting it in advance.
 

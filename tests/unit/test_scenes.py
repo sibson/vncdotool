@@ -39,6 +39,24 @@ class TestScenes(unittest.TestCase):
     def test_read_patch_rejects_an_unstamped_screen(self) -> None:
         self.assertIsNone(scenes.read_patch(scenes.base()))
 
+    def test_a_reduced_depth_patch_names_more_than_one_key(self) -> None:
+        # ord("c"), ord("d") and ord("f") are 99, 100 and 102, closer together
+        # than rgb565's 5-bit red can separate.
+        candidates = scenes.patch_candidates(scenes.apply("d", scenes.base()), (7, 3, 7))
+        self.assertCountEqual(candidates, ["c", "d", "f", "g"])
+
+    def test_an_8_bit_patch_names_exactly_one_key(self) -> None:
+        for key in scenes.SCENES:
+            with self.subTest(key=key):
+                self.assertEqual(scenes.patch_candidates(scenes.apply(key, scenes.base())), [key])
+
+    def test_the_scene_breaks_a_reduced_depth_tie(self) -> None:
+        screen = scenes.base()
+        for key in scenes.SCENES:
+            screen = scenes.apply(key, screen)
+            with self.subTest(key=key):
+                self.assertEqual(scenes.read_patch(screen, (7, 3, 7)), key)
+
     def test_reset_returns_the_base_screen(self) -> None:
         stamped = scenes.apply("0", scenes.apply("d", scenes.base()))
         expected = scenes.base()
