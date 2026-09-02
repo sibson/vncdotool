@@ -17,9 +17,8 @@ from .utils import HOST, TIGERVNC, capture_through_vnclog, port_open, run_vncdo
 
 PROXY_PORT = 5998
 
-# Solid fills and flat regions, which is what these encodings exist for, and
-# what a desktop mostly is.
 FLAT = "s"
+DENSE = "d"
 
 
 class TestBandwidth(TestCase):
@@ -58,3 +57,9 @@ class TestBandwidth(TestCase):
 
     def test_hextile_sends_less_than_raw(self) -> None:
         self._assert_sends_less_than_raw("hextile", FLAT)
+
+    def test_tight_sends_less_than_raw_on_flat_regions(self) -> None:
+        self._assert_sends_less_than_raw("tight", FLAT)
+
+    def test_tight_sends_less_than_raw_on_dense_detail(self) -> None:
+        self._assert_sends_less_than_raw("tight", DENSE)

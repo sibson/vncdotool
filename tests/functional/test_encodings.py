@@ -20,14 +20,13 @@ from .utils import HOST, TIGERVNC, capture_through_vnclog, port_open, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
-# vnclog listens here while it records what the server answered with.
 PROXY_PORT = 5997
 
 # tigervnc answers a CoRRE request with Raw: measured against the fleet's
 # 1.12.0 in #417, and upstream's EncodeManager::supported() accepts Raw, RRE,
 # Hextile, ZRLE and Tight only. Offering CoRRE here would prove the fallback
 # renders, not that CoRRE does.
-EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile", "zrle"}
+EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile", "zrle", "tight"}
 
 
 def capture(test: TestCase, encodings: str, key: str) -> Image.Image:
@@ -69,13 +68,7 @@ class RendersTheScene:
 
 
 class EmitsTheEncoding:
-    """One encoding the server is asked for, and what it answered with.
-
-    Without this the test above passes on a server that answered every
-    request with Raw, which proves only that Raw still works. The witness is
-    the capture archive's `encodings_seen`, tallied off the decoded server
-    stream: a client log says no more than which encodings were offered.
-    """
+    """Without this, the test above passes on a server that answered every request with Raw."""
 
     encoding: str
 
@@ -94,7 +87,7 @@ class EmitsTheEncoding:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """One case per encoding and scene, so a failure's test id names both."""
+    """One case per encoding, and one per encoding and scene, so a failure's test id names them."""
     suite = unittest.TestSuite()
     for encoding in sorted(EMITTED_BY_TIGERVNC):
         name = f"TestEmits_{encoding}"
