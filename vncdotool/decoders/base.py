@@ -1,7 +1,7 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import ClassVar, Iterator
+from typing import ClassVar, Generator, Iterator
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
@@ -42,6 +42,20 @@ class PixelDecoder(RectDecoder):
         always the negotiated one.
         """
         return pixel_format
+
+
+class WholeRectDecoder(RectDecoder):
+    """Consumes bytes, produces the whole rectangle itself.
+
+    The format it returns need not be the negotiated one: Tight's TPIXEL is
+    three bytes where the negotiated format is four (rfbproto, Tight
+    Encoding).
+    """
+
+    def decodeRect(
+        self, width: int, height: int, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, tuple[bytes, PixelFormat]]:
+        raise NotImplementedError
 
 
 class ClientDecoder(RectDecoder):
