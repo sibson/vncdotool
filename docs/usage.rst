@@ -72,6 +72,16 @@ leaves the difference that matters and drops the encoder's noise::
     > vncdo --encodings tight --jpeg-quality 5 --expect-blur 2 --expect-fuzz 64 \
             expect somescreen.png
 
+Before 2.0 the number after the filename was the root-mean-square difference
+between the two images' histograms, a different measurement on a different
+scale, so an old one cannot be converted and has to be picked again.
+``expect somescreen.png 0`` still means exact and needs no change; a fuzz of
+16 is a reasonable place to start for anything else.
+
+Expect the new bound to be stricter than the old number suggests. A 2x2 patch
+of the screen changing colour scores 126, where the old measurement scored
+0.4 -- histograms record that colours moved, not where or how far.
+
 Putting it all together you can specify multiple actions on a single
 command line.  You could automate a login with the following::
 
