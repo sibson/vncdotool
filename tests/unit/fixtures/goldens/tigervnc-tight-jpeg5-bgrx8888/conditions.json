@@ -3,10 +3,10 @@
   "encoding": "tight",
   "fuzz": 64,
   "geometry": [256, 192],
-  "jpeg_quality": 9,
+  "jpeg_quality": 5,
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-09-02T05:33:03Z",
+    "capture_timestamp": "2026-09-06T12:34:13Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -21,7 +21,7 @@
       {
         "encoding": 7,
         "name": "tight",
-        "rectangles": 68
+        "rectangles": 87
       }
     ],
     "geometry": {

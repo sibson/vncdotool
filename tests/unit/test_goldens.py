@@ -13,7 +13,7 @@ from unittest import mock
 
 from PIL import Image
 
-from vncdotool import client, pixelformat
+from vncdotool import client, imagematch, pixelformat
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
@@ -37,8 +37,34 @@ class Fixture:
         return red, green, blue
 
     @property
+    def fuzz(self) -> float:
+        return self.conditions["fuzz"]
+
+    @property
+    def blur(self) -> int:
+        return self.conditions["blur"]
+
+    @property
     def tolerance_kind(self) -> str:
         return self.conditions["tolerance_kind"]
+
+    def mismatch(self, actual: Image.Image, expected: Image.Image) -> Optional[str]:
+        """Why this frame is not its oracle, or None if it is.
+
+        The two kinds are unrelated numbers: a format's quantization is a
+        per-channel step it cannot land between, while a lossy encoder's error
+        is a perceived distance that only a blur brings back under a bound.
+        """
+        if self.tolerance_kind == "jpeg-lossy":
+            if imagematch.matches(actual, expected, self.fuzz, self.blur):
+                return None
+            worst = imagematch.worst_delta(actual, expected, self.blur)
+            return f"{worst:.1f} from its oracle, further than {self.fuzz} at blur {self.blur}"
+        difference = first_difference(actual, expected, self.tolerance)
+        if difference is None:
+            return None
+        x, y, got, want = difference
+        return f"pixel ({x},{y}) decoded {got}, expected {want}"
 
     def steps(self) -> List[Path]:
         return sorted(self.path.glob("step-*.bin.gz"))
@@ -115,20 +141,21 @@ class GoldenReplay:
                 ),
                 "a format-quantization tolerance is the format's own, never a chosen number",
             )
+        else:
+            self.assertIsInstance(fixture.fuzz, (int, float))  # type: ignore[attr-defined]
+            self.assertIsInstance(fixture.blur, int)  # type: ignore[attr-defined]
 
     def test_decodes_to_its_oracle(self) -> None:
         fixture = self.fixture
-        tolerance = fixture.tolerance
         cli = fixture.client()
         for step in fixture.steps():
             cli.dataReceived(gzip.decompress(step.read_bytes()))
             key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
             expected = Image.open(SCENES_DIR / f"{key}.png")
             self.assertIsNotNone(cli.screen, f"{step.name}: no framebuffer after the update")
-            difference = first_difference(cli.screen, expected, tolerance)
-            if difference is not None:
-                x, y, got, want = difference
-                self.fail(f"{fixture.name} {step.name}: pixel ({x},{y}) decoded {got}, expected {want}")
+            mismatch = fixture.mismatch(cli.screen, expected)
+            if mismatch is not None:
+                self.fail(f"{fixture.name} {step.name}: {mismatch}")
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
