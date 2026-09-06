@@ -14,7 +14,7 @@ _HERE = Path(__file__).resolve().parent
 # script works from a checkout without vncdotool having been pip installed.
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
-from utils import select_servers, wait_until_ready  # noqa: E402
+from utils import fleet_mismatch, select_servers, wait_until_ready  # noqa: E402
 
 from vncdotool import api  # noqa: E402
 
@@ -23,11 +23,16 @@ DEFAULT_GROUP = "os"
 
 def main(argv: List[str]) -> int:
     group = argv[1] if len(argv) > 1 else DEFAULT_GROUP
-    ready = [wait_until_ready(server) for server in select_servers(group)]
+    servers = select_servers(group)
+    ready = [wait_until_ready(server) for server in servers]
 
     api.shutdown()  # the reactor thread outlives its clients; this script hangs without it
 
-    return 0 if all(ready) else 1
+    mismatches = [message for message in (fleet_mismatch(server) for server in servers) if message]
+    for message in mismatches:
+        print(message)
+
+    return 0 if all(ready) and not mismatches else 1
 
 
 if __name__ == "__main__":

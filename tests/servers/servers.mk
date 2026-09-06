@@ -5,6 +5,11 @@ SCREENSHOT_DIR?=tests/servers/screenshots
 # tests/functional/utils.py.
 SCREENSHOT_GROUP?=docker
 
+# Per-checkout image tags, so a container another checkout started is visibly
+# not this one's -- see "Fleet identity" in specs/testing-framework.md.
+FLEET_TAG?=$(shell tests/servers/fleet-tag.sh)
+servers-up servers-down: export FLEET_TAG:=$(FLEET_TAG)
+
 # `up --wait` only gets as far as the containers' HEALTHCHECK, which is
 # liveness: the port is bound. wait_for_servers.py is the readiness gate --
 # it captures until each server serves the content it should, the same

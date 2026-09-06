@@ -56,6 +56,12 @@ VNCLOG_CAPTURE_DEADLINE = 60.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
+# `name:` in tests/servers/docker-compose.yml, and so the prefix compose
+# gives every container it starts from that file.
+FLEET_PROJECT = "vncdo-test-servers"
+FLEET_TAG_SCRIPT = Path(__file__).resolve().parents[1] / "servers" / "fleet-tag.sh"
+FLEET_PROBE_TIMEOUT = 30.0
+
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 # getcolors() returns None above this many distinct colours, which is itself
 # proof the capture isn't a flat colour, so the cap only needs to be cheap.
@@ -188,6 +194,57 @@ def running_in_ci(env: Optional[Mapping[str, str]] = None) -> bool:
 
 def absent_server_skips(server: VNCServer, env: Optional[Mapping[str, str]] = None) -> bool:
     return server.skip_when_down and not running_in_ci(env)
+
+
+def fleet_tag() -> Optional[str]:
+    """The tag this checkout's fleet images are built under, or None.
+
+    fleet-tag.sh reads the git object store, so a tree unpacked without
+    one has no tag to give.
+    """
+    try:
+        result = subprocess.run(
+            [str(FLEET_TAG_SCRIPT)], capture_output=True, text=True, timeout=FLEET_PROBE_TIMEOUT
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout.strip() or None if result.returncode == 0 else None
+
+
+def running_fleet_tag(server: VNCServer) -> Optional[str]:
+    """The tag of the image `server`'s container was started from, or None."""
+    container = f"{FLEET_PROJECT}-{server.name}-1"
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "--format", "{{.Config.Image}}", container],
+            capture_output=True,
+            text=True,
+            timeout=FLEET_PROBE_TIMEOUT,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    _, _, tag = result.stdout.strip().rpartition(":")
+    return tag or None
+
+
+def fleet_mismatch(server: VNCServer) -> Optional[str]:
+    """Why `server` is not this checkout's fleet, or None if it is or may be."""
+    expected, running = fleet_tag(), running_fleet_tag(server)
+    if expected is None or running is None or expected == running:
+        return None
+    return (
+        f"{server.name} is running image tag {running!r}, but this checkout's server sources "
+        f"hash to {expected!r}: the fleet was started from a different checkout and serves "
+        f"that checkout's files. Run `make servers-down && make servers-up`."
+    )
+
+
+def assert_fleet_current(test: TestCase, server: VNCServer) -> None:
+    mismatch = fleet_mismatch(server)
+    if mismatch is not None:
+        test.fail(mismatch)
 
 
 def screenshot_dir() -> Path:
