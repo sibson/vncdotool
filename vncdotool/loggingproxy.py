@@ -206,6 +206,12 @@ class VNCLoggingClient(VNCDoToolClient):
     capture: CaptureWriter | None = None
     recorder: Callable[[str], int] | None = None
 
+    def vncProtocolError(self, reason: str) -> None:
+        # NullTransport.loseConnection() is a no-op, so the parser has to be
+        # stopped here instead.
+        self._aborted = True
+        super().vncProtocolError(reason)
+
     def _handleRectangle(self, block: bytes) -> None:
         # Tallied off the decoded stream: SetEncodings only says what the
         # client asked for, and a server may ignore it.
@@ -422,6 +428,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         RFBServer._handle_clientInit(self)
         self.peer.startLogging(self)
 
+    def handle_setPixelFormat(self, pixel_format: PixelFormat) -> None:
+        # SetPixelFormat is client-to-server (RFC 6143 7.5.1), so nothing in
+        # the stream the observer reads says the server switched layouts.
+        observer = self.vnclog_client
+        if observer is not None:
+            observer.requested_pixel_format = pixel_format
+            observer.setImageMode()
+
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 
@@ -512,6 +526,9 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
 
     def clientConnectionMade(self, client: VNCLoggingServerProxy) -> None:
         pass
+
+    def clientConnectionFailed(self, client: VNCLoggingClient, reason: object) -> None:
+        log.error("vnclog stopped decoding this session: %s", reason)
 
     def clientConnectionLost(self, client: VNCLoggingServerProxy) -> None:
         if self._out:

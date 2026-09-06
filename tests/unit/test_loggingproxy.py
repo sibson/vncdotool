@@ -1,0 +1,130 @@
+"""Unit coverage for vnclog's proxy halves.
+
+Both protocol classes are driven directly on mocked transports through a
+scripted handshake, so the observer client runs for real without a reactor.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+import logging
+from struct import pack
+from unittest import TestCase, mock
+
+from vncdotool import pixelformat
+from vncdotool.const import AuthTypes, Encoding, MsgC2S, MsgS2C
+from vncdotool.loggingproxy import (
+    VNCLoggingClientProxy,
+    VNCLoggingServerFactory,
+    VNCLoggingServerProxy,
+)
+
+VERSION_38 = b"RFB 003.008\n"
+NATIVE = pixelformat.PIXEL_FORMATS["bgrx8888"]
+RGB565 = pixelformat.PIXEL_FORMATS["rgb565"]
+
+RED_565 = b"\x00\xf8"
+BLUE_565 = b"\x1f\x00"
+
+
+def raw_update(x: int, y: int, w: int, h: int, pixels: bytes) -> bytes:
+    return (
+        pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
+        + pack("!HHHHi", x, y, w, h, Encoding.RAW)
+        + pixels
+    )
+
+
+class ProxyPair(TestCase):
+    """A connected pair of proxy halves, taken through the handshake to the
+    point where the observer client is decoding the server stream.
+    """
+
+    def setUp(self) -> None:
+        self.factory = VNCLoggingServerFactory("localhost", 5900)
+        self.factory.password_required = False
+
+        self.server_proxy = VNCLoggingServerProxy()
+        self.server_proxy.transport = mock.Mock()
+        self.server_proxy.factory = self.factory
+        self.client_proxy = VNCLoggingClientProxy()
+        self.client_proxy.transport = mock.Mock()
+        self.server_proxy.peer = self.client_proxy
+        self.client_proxy.peer = self.server_proxy
+
+        self.server_proxy.connectionMade()
+        self.server_proxy.recorder = mock.Mock()
+
+        self.client_proxy.dataReceived(VERSION_38)
+        self.server_proxy.dataReceived(VERSION_38)
+        self.client_proxy.dataReceived(bytes([1, AuthTypes.NONE]))
+        self.server_proxy.dataReceived(bytes([AuthTypes.NONE]))
+        self.client_proxy.dataReceived(b"\x00\x00\x00\x00")
+        self.server_proxy.dataReceived(b"\x01")  # ClientInit: starts the observer
+        self.client_proxy.dataReceived(
+            pack("!HH16sI", 2, 1, NATIVE.to_bytes(), 4) + b"test"
+        )
+
+        self.observer = self.client_proxy.vnclog
+        assert self.observer is not None
+
+    def setPixelFormat(self, pixel_format: pixelformat.PixelFormat) -> None:
+        """Send SetPixelFormat from the real client, through the proxy."""
+        self.server_proxy.dataReceived(
+            pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixel_format.to_bytes())
+        )
+
+
+class TestObserverPixelFormat(ProxyPair):
+
+    def test_observer_starts_at_the_format_serverinit_announced(self) -> None:
+        self.assertEqual(self.observer.pixel_format, NATIVE)
+
+    def test_observer_adopts_a_format_the_client_asks_for(self) -> None:
+        self.setPixelFormat(RGB565)
+
+        self.assertEqual(self.observer.pixel_format, RGB565)
+        self.assertEqual(self.observer._image_mode, pixelformat.raw_mode(RGB565))
+
+    def test_observer_decodes_the_stream_at_the_new_format(self) -> None:
+        """Two updates, so the second only parses if the first consumed the
+        right number of bytes: at the native 4 bytes per pixel the observer
+        eats into the next message and desynchronises for good.
+        """
+        self.setPixelFormat(RGB565)
+
+        self.client_proxy.dataReceived(raw_update(0, 0, 2, 1, RED_565 + BLUE_565))
+        self.client_proxy.dataReceived(raw_update(0, 0, 2, 1, BLUE_565 + RED_565))
+
+        self.assertFalse(self.observer._aborted)
+        assert self.observer.screen is not None
+        self.assertEqual(
+            [self.observer.screen.getpixel((0, 0)), self.observer.screen.getpixel((1, 0))],
+            [(0, 0, 255), (255, 0, 0)],
+        )
+
+    def test_a_format_the_observer_cannot_unpack_fails_it_cleanly(self) -> None:
+        """The real client is free to ask for something vncdotool cannot
+        decode; that must not raise out of the proxy's parser.
+        """
+        with self.assertLogs("vncdotool.loggingproxy", level=logging.ERROR):
+            self.setPixelFormat(dataclasses.replace(RGB565, truecolor=False))
+
+        self.assertTrue(self.observer._aborted)
+
+
+class TestObserverFailureIsReported(ProxyPair):
+
+    def test_an_unreadable_server_message_is_reported_not_raised(self) -> None:
+        """VNCDoToolClient reports a protocol error to its factory, and the
+        observer's factory is the proxy's own.
+        """
+        unknown_message = bytes([250])
+
+        with self.assertLogs("vncdotool.loggingproxy", level=logging.ERROR) as logged:
+            self.client_proxy.dataReceived(unknown_message)
+
+        self.assertIn("unknown message received", "\n".join(logged.output))
+        self.assertTrue(self.observer._aborted)
+        # The byte still reached the real client: only the observer gave up.
+        self.server_proxy.transport.write.assert_any_call(unknown_message)
