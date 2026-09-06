@@ -18,8 +18,8 @@ class TestVNCDoToolClient(TestCase):
 
     MSG_HANDSHAKE = b"RFB 003.003\n"
     MSG_INIT = (
-        b"\x00\x00"  # width
-        b"\x00\x00"  # height
+        b"\x03\x20"  # width
+        b"\x02\x58"  # height
         b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
         b"\x00\x00\x00\x00"  # server-name-len
     )
@@ -48,7 +48,23 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+            client.rfb.Encoding.PSEUDO_FENCE,
         ])
+
+    def test_fence_is_not_offered_by_default(self):
+        """The mocked factory above answers True to every flag, so the real
+        one is needed to see what is actually offered. A server sends fences
+        only to a client that asked for them, and nothing here waits on one.
+        """
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
 
     def test_keyPress_single_alpha(self):
         cli = self.client
@@ -119,75 +135,70 @@ class TestVNCDoToolClient(TestCase):
 
         image_open.assert_called_once_with(fname)
 
-        assert cli.expected == client.Image.open.return_value.histogram.return_value
-        Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
+        assert cli.expected_image == client.Image.open.return_value.convert.return_value
+        Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5, 0)
 
-    def test_expectCompareSuccess(self) -> None:
+    def _comparing(self, target, screen):
         cli = self.client
         cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 2, 3]
-        cli.screen.crop.return_value = cli.screen
-        result = cli._expectCompare(cli, None, 5)
+        cli.framebufferUpdateRequest = mock.Mock()
+        cli.expected_image = target
+        cli.screen = screen
+        return cli
+
+    def test_expectCompareSuccess(self) -> None:
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, self._swatch((0x2C, 0x2A, 0x2A)))
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 5, 0)
         assert result == cli
 
     def test_expectCompareExactSuccess(self) -> None:
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [2, 2, 2]
-        cli.screen.crop.return_value = cli.screen
-        result = cli._expectCompare(cli, None, 0)
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, target.copy())
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 0, 0)
         assert result == cli
 
     @mock.patch('vncdotool.client.Deferred')
     def test_expectCompareFails(self, Deferred):
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.framebufferUpdateRequest = mock.Mock()
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 1, 1]
-        cli.screen.crop.return_value = cli.screen
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, self._swatch((0x2B, 0x2A, 0x2A)))
 
-        result = cli._expectCompare(cli, None, 0)
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 0, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, (0, 0, 1, 1), 0, 0)
 
     @mock.patch('vncdotool.client.Deferred')
     def test_expectCompareMismatch(self, Deferred):
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2]
-        cli.framebufferUpdateRequest = mock.Mock()
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 1, 1]
-        cli.screen.crop.return_value = cli.screen
+        """A target the screen is not the size of never matches, however lax
+        the fuzz."""
+        cli = self._comparing(self._swatch((0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A)),
+                              self._swatch((0x2A, 0x2A, 0x2A)))
 
-        result = cli._expectCompare(cli, None, 0)
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 255, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
+
+    def test_expectCompareBlurLetsALossyFrameThrough(self):
+        target = self._swatch((0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A))
+        screen = self._swatch((0x2A, 0x2A, 0x2A), (0x6A, 0x6A, 0x6A), (0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, screen)
+        assert cli._expectCompare(cli, (0, 0, 3, 1), 20, 0) == cli.deferred
+        cli.deferred = mock.Mock()
+        assert cli._expectCompare(cli, (0, 0, 3, 1), 20, 2) == cli
 
     def _expectAgainst(self, pixel_format, target, screen):
-        cli = self.client
-        cli.deferred = mock.Mock()
+        cli = self._comparing(target, screen)
         cli.pixel_format = pixel_format
-        cli.expected = target.histogram()
-        cli.expected_image = target
-        cli.screen = screen
-        return cli._expectCompare(cli, (0, 0) + target.size, 0)
+        return cli._expectCompare(cli, (0, 0) + target.size, cli._expectFuzz(None), 0)
 
     @staticmethod
     def _swatch(*pixels):
@@ -196,8 +207,8 @@ class TestVNCDoToolClient(TestCase):
         return image
 
     def test_expectCompareAllowsWhatTheFormatCannotExpress(self):
-        """`expect FILE 0` at rgb565 would otherwise poll until it timed out:
-        no 5-bit red can carry 0x2A, so an exact match never comes.
+        """`expect FILE` at rgb565 would otherwise poll until it timed out: no
+        5-bit red can carry 0x2A, so an exact match never comes.
         """
         target = self._swatch((0x2A, 0x2A, 0x2A), (0xC1, 0xC1, 0xC1))
         screen = self._swatch((0x29, 0x29, 0x29), (0xC6, 0xC3, 0xC6))
@@ -215,6 +226,63 @@ class TestVNCDoToolClient(TestCase):
         screen = self._swatch((0x2B, 0x2A, 0x2A))
         result = self._expectAgainst(PIXEL_FORMATS["bgrx8888"], target, screen)
         assert result == self.client.deferred
+
+    def _screenOf(self, size):
+        cli = self.client
+        cli.width, cli.height = size
+        cli.screen = client.Image.new("RGB", size, (200, 100, 50))
+        return cli
+
+    def _expectRegionAt(self, x, y, size=(10, 10)):
+        target = client.Image.new("RGB", size, (1, 2, 3))
+        with mock.patch("PIL.Image.open", return_value=target):
+            return self.client.expectRegion("target.png", x, y)
+
+    def test_expectRegionRejectsARegionPastTheEdge(self):
+        self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError) as caught:
+            self._expectRegionAt(60, 60, (100, 100))
+        assert "(60, 60, 160, 160)" in str(caught.exception)
+        assert "100x100" in str(caught.exception)
+
+    def test_expectRegionRejectsANegativeOrigin(self):
+        self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            self._expectRegionAt(-1, 0)
+
+    def test_expectRegionAllowsARegionFlushWithTheEdge(self):
+        self._screenOf((100, 100))
+        self._expectRegionAt(90, 90)
+
+    def test_expectRegionMeasuresTheNegotiatedSizeBeforeAnyUpdateArrives(self):
+        cli = self.client
+        cli.width, cli.height = 100, 100
+        self._expectRegionAt(90, 90)
+        with self.assertRaises(client.RegionError):
+            self._expectRegionAt(95, 95)
+
+    def test_expectRegionRejectsARegionADesktopResizeShrankOff(self):
+        cli = self._screenOf((100, 100))
+        cli.expected_image = client.Image.new("RGB", (100, 100), (1, 2, 3))
+        cli.updateDesktopSize(50, 50)
+        with self.assertRaises(client.RegionError):
+            cli._expectCompare(cli, (0, 0, 100, 100), 0, 0)
+
+    def test_captureRegionRejectsARegionPastTheEdge(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.captureRegion(io.BytesIO(), 60, 60, 100, 100)
+
+    def test_captureRegionRejectsANegativeOrigin(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.captureRegion(io.BytesIO(), -1, 0, 10, 10)
+
+    def test_captureRegionAllowsARegionFlushWithTheEdge(self):
+        cli = self._screenOf((100, 100))
+        fp = io.BytesIO()
+        cli._captureSave(None, fp, 90, 90, 100, 100, format="png")
+        assert client.Image.open(fp).size == (10, 10)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeFullScreen(self, frombytes):
@@ -526,11 +594,11 @@ class TestStableScreen(TestCase):
         self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
         self.client.screen = Image.new("RGB", (4, 4), "black")
 
-    def waitStable(self, seconds, maxrms, region=None):
+    def waitStable(self, seconds, fuzz, region=None):
         d = (
-            self.client.stableRegion(seconds, maxrms, *region)
+            self.client.stableRegion(seconds, *region, fuzz)
             if region
-            else self.client.stableScreen(seconds, maxrms)
+            else self.client.stableScreen(seconds, fuzz)
         )
         settled: list = []
         d.addCallback(settled.append)

@@ -8,7 +8,6 @@ Twisted based VNC client protocol and factory.
 from __future__ import annotations
 
 import logging
-import math
 import socket
 from pathlib import Path
 from struct import pack
@@ -32,12 +31,14 @@ log = logging.getLogger(__name__)
 # won't work but at least we can still offer key, type, press and
 # move.
 try:
-    from PIL import Image, ImageChops, ImageStat
+    from PIL import Image
 
     # Init PIL to make sure it will not try to import plugin libraries
     # in a thread.
     Image.preinit()
     Image.init()
+
+    from . import imagematch
 except ImportError:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
@@ -46,8 +47,7 @@ except ImportError:
             raise ImportError("PIL")
 
     Image = _RuntimeImportError()  # type: ignore[assignment]
-    ImageChops = _RuntimeImportError()  # type: ignore[assignment]
-    ImageStat = _RuntimeImportError()  # type: ignore[assignment]
+    imagematch = _RuntimeImportError()  # type: ignore[assignment]
     PIL = _RuntimeImportError()
 
 
@@ -63,6 +63,10 @@ class ProtocolError(VNCDoException):
     """VNC Server sent something we cannot handle"""
 
 
+class RegionError(VNCDoException):
+    """A region to compare or capture is not on the screen"""
+
+
 # Level 0 is -32 (low) up to level 9 at -23; no offer means no JPEG (specs/tight-wire.md section 8).
 JPEG_QUALITY_ENCODINGS = [
     rfb.Encoding(rfb.Encoding.JPEG_32 + level) for level in range(10)
@@ -73,7 +77,7 @@ class _StableWatch:
     """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
 
     Waits for a trailing window of ``seconds`` in which no framebuffer update
-    changed the screen by more than ``maxrms``.  See
+    moved the screen further than ``fuzz`` from the frame before it.  See
     ``specs/screen-stability.md``.
     """
 
@@ -81,12 +85,14 @@ class _StableWatch:
         self,
         client: "VNCDoToolClient",
         seconds: float,
-        maxrms: float,
+        fuzz: int,
+        blur: int,
         box: tuple[int, int, int, int] | None = None,
     ) -> None:
         self.client = client
         self.seconds = seconds
-        self.maxrms = maxrms
+        self.fuzz = fuzz
+        self.blur = blur
         self.box = box
         self.baseline: Image.Image | None = None
         self.result: Deferred = Deferred()
@@ -128,14 +134,7 @@ class _StableWatch:
 
     def _changed(self, frame: Image.Image) -> bool:
         assert self.baseline is not None
-        if frame.size != self.baseline.size:
-            return True
-        difference = ImageChops.difference(
-            frame.convert("RGB"), self.baseline.convert("RGB")
-        )
-        rms = max(ImageStat.Stat(difference).rms)
-        log.debug("stable rms:%f maxrms:%f", rms, self.maxrms)
-        return rms > self.maxrms
+        return not imagematch.matches(frame, self.baseline, self.fuzz, self.blur)
 
     def _restart(self) -> None:
         if self.timer is not None and self.timer.active():
@@ -153,6 +152,8 @@ class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     requested_jpeg_quality: int | None = None
+    expect_fuzz: int | None = None
+    expect_blur: int = 0
     x = 0
     y = 0
     buttons = 0
@@ -282,6 +283,7 @@ class VNCDoToolClient(rfb.RFBClient):
     ) -> Deferred:
         """Save a region of the current display to filename"""
         log.debug("captureRegion %s", fp)
+        self._requireOnScreen((x, y, x + w, y + h))
         return self._capture(fp, incremental, x, y, x + w, y + h)
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
@@ -297,12 +299,24 @@ class VNCDoToolClient(rfb.RFBClient):
         d.addCallback(self._captureSave, fp, *args, **kwargs)
         return d
 
+    def _requireOnScreen(self, box: tuple[int, int, int, int]) -> None:
+        """Raise unless a region to crop lies on the screen.
+
+        ``Image.crop`` pads whatever falls outside the image with black
+        rather than failing, so an off-screen region compares against black
+        and captures it.
+        """
+        width, height = self.screen.size if self.screen else (self.width, self.height)
+        if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
+            raise RegionError(f"region {box} is not inside the {width}x{height} screen")
+
     def _captureSave(
         self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
     ) -> TClient:
         log.debug("captureSave %s", fp)
         assert self.screen is not None
         if args:
+            self._requireOnScreen(args)  # type: ignore[arg-type]
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
@@ -310,94 +324,115 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
+    def expectScreen(
+        self, filename: str, fuzz: int | None = None, blur: int | None = None
+    ) -> Deferred:
         """Wait until the display matches a target image
 
         :param filename: an image file to read and compare against.
-        :param maxrms: the maximum root mean square between histograms of the screen and target image.
+        :param fuzz: how far any one pixel may sit from the target, a whole
+            number from 0 (exact) to 255, as a perceived colour difference
+            where 255 is the furthest apart two pixels can be. Defaults to
+            what the negotiated pixel format cannot express.
+        :param blur: blur both screens by this radius before comparing, which
+            is what carries a match through a lossy encoding.
         """
         log.debug("expectScreen %s", filename)
-        return self._expectFramebuffer(filename, 0, 0, maxrms)
+        return self._expectFramebuffer(filename, 0, 0, fuzz, blur)
 
     def expectRegion(
-        self, filename: str, x: int, y: int, maxrms: float = 0
+        self, filename: str, x: int, y: int, fuzz: int | None = None, blur: int | None = None
     ) -> Deferred:
         """Wait until a portion of the screen matches the target image
 
         The region compared is defined by the box
         (x, y), (x + image.width, y + image.height)
+
+        :param fuzz: how far any one pixel may sit from the target, a whole
+            number from 0 (exact) to 255, as a perceived colour difference
+            where 255 is the furthest apart two pixels can be. Defaults to
+            what the negotiated pixel format cannot express.
+        :param blur: blur both screens by this radius before comparing, which
+            is what carries a match through a lossy encoding.
         """
         log.debug("expectRegion %s (%s, %s)", filename, x, y)
-        return self._expectFramebuffer(filename, x, y, maxrms)
+        return self._expectFramebuffer(filename, x, y, fuzz, blur)
 
-    def stableScreen(self, seconds: float, maxrms: float = 0) -> Deferred:
+    def stableScreen(
+        self, seconds: float, fuzz: int | None = None, blur: int | None = None
+    ) -> Deferred:
         """Wait until the display stops changing
 
         :param seconds: length of the trailing window during which the screen
             must not have changed.  The call takes at least this long, and
             longer whenever an update restarts the window.
-        :param maxrms: how much two frames may differ, as a per-channel RMS
-            over their pixel difference, and still count as unchanged.  Note
-            this is not the quantity :meth:`expectScreen` calls maxrms.
+        :param fuzz: how far any one pixel may sit from where it was in the
+            previous frame and still count as unchanged, on the scale
+            :meth:`expectScreen` takes, and with the same default.
+        :param blur: blur both frames by this radius before comparing.
         """
         log.debug("stableScreen %f", seconds)
-        return _StableWatch(self, seconds, maxrms).start()
+        return _StableWatch(
+            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur)
+        ).start()
 
     def stableRegion(
-        self, seconds: float, maxrms: float, x: int, y: int, w: int, h: int
+        self,
+        seconds: float,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        fuzz: int | None = None,
+        blur: int | None = None,
     ) -> Deferred:
         """Wait until a region of the display stops changing"""
         log.debug("stableRegion %f (%s, %s)", seconds, x, y)
-        return _StableWatch(self, seconds, maxrms, (x, y, x + w, y + h)).start()
+        box = (x, y, x + w, y + h)
+        self._requireOnScreen(box)
+        return _StableWatch(
+            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur), box
+        ).start()
 
     def _expectFramebuffer(
-        self, filename: str, x: int, y: int, maxrms: float
+        self, filename: str, x: int, y: int, fuzz: int | None, blur: int | None
     ) -> Deferred:
         image = Image.open(filename)
         w, h = image.size
-        self.expected = image.histogram()
         self.expected_image = image.convert("RGB")
 
-        return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
+        return self._expectCompare(
+            None, (x, y, x + w, y + h), self._expectFuzz(fuzz), self._expectBlur(blur)
+        )
 
-    def _quantizedMatch(self, image: Image.Image) -> bool:
-        """Whether the screen is as near the target as the negotiated format
-        can get.
-
-        A server sending 5-bit red cannot reproduce most 8-bit values, so an
+    def _expectFuzz(self, fuzz: int | None) -> int:
+        """A server sending 5-bit red cannot reproduce most 8-bit values, so an
         exact comparison never comes true however long it is polled for.
         """
+        if fuzz is not None:
+            return fuzz
+        if self.expect_fuzz is not None:
+            return self.expect_fuzz
         try:
-            tolerance = pixelformat.channel_tolerance(self.pixel_format)
+            return imagematch.fuzz_for_format(self.pixel_format)
         except pixelformat.UnsupportedPixelFormat:
-            return False
-        if not any(tolerance) or image.size != self.expected_image.size:
-            return False
-        difference = ImageChops.difference(image.convert("RGB"), self.expected_image)
-        worst = ImageStat.Stat(difference).extrema
-        return all(high <= bound for (_, high), bound in zip(worst, tolerance))
+            return 0
 
-    def _expectMatch(self, image: Image.Image, maxrms: float) -> bool:
-        hist = image.histogram()
-        if len(hist) == len(self.expected):
-            sum_ = sum((h - e) ** 2 for h, e in zip(hist, self.expected))
-            rms = math.sqrt(sum_ / len(hist))
+    def _expectBlur(self, blur: int | None) -> int:
+        return self.expect_blur if blur is None else blur
 
-            log.debug("rms:%f maxrms:%f", rms, maxrms)
-            if rms <= maxrms:
-                return True
-
-        return self._quantizedMatch(image)
-
-    def _expectCompare(self, data: object, box: tuple[int, int, int, int], maxrms: float) -> Deferred:
+    def _expectCompare(
+        self, data: object, box: tuple[int, int, int, int], fuzz: int, blur: int
+    ) -> Deferred:
+        self._requireOnScreen(box)
         incremental = False
         if self.screen:
             incremental = True
-            if self._expectMatch(self.screen.crop(box), maxrms):
+            if imagematch.matches(self.screen.crop(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, box, maxrms)
+        self.deferred.addCallback(self._expectCompare, box, fuzz, blur)
         self.framebufferUpdateRequest(
             incremental=incremental
         )  # use box ~(x, y, w - x, h - y)?
@@ -491,6 +526,8 @@ class VNCDoToolClient(rfb.RFBClient):
             encodings.append(rfb.Encoding.PSEUDO_LAST_RECT)
         if self.factory.qemu_extended_key:
             encodings.append(rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+        if self.factory.fence:
+            encodings.append(rfb.Encoding.PSEUDO_FENCE)
         if self.requested_jpeg_quality is not None:
             encodings.append(JPEG_QUALITY_ENCODINGS[self.requested_jpeg_quality])
         self.setEncodings(encodings)
@@ -643,10 +680,15 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
+    # Nothing here initiates a fence or waits on one, so offering the encoding
+    # would only invite traffic the client discards.
+    fence = False
     force_caps = False
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None
     jpeg_quality: int | None = None
+    expect_fuzz: int | None = None
+    expect_blur: int = 0
 
     def __init__(self) -> None:
         self.deferred = Deferred()
@@ -657,6 +699,8 @@ class VNCDoToolFactory(rfb.RFBFactory):
         protocol.requested_pixel_format = self.pixel_format
         protocol.requested_encodings = self.encodings
         protocol.requested_jpeg_quality = self.jpeg_quality
+        protocol.expect_fuzz = self.expect_fuzz
+        protocol.expect_blur = self.expect_blur
         return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:

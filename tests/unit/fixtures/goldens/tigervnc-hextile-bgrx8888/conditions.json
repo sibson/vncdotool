@@ -3,7 +3,7 @@
   "geometry": [256, 192],
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-22T20:10:02Z",
+    "capture_timestamp": "2026-09-06T14:57:46Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -18,7 +18,7 @@
       {
         "encoding": 5,
         "name": "hextile",
-        "rectangles": 87
+        "rectangles": 83
       }
     ],
     "geometry": {

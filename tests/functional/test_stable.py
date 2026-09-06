@@ -69,7 +69,7 @@ class TestStable(TestCase):
         width, height = scenes.SIZE
 
         screen = self.capture(
-            "key", "d", "rstable", "0.5", "0", "0", "0", str(width), str(height)
+            "key", "d", "rstable", "0.5", "0", "0", str(width), str(height), "0"
         )
 
         self.assertEqual(scenes.read_patch(screen), "d")

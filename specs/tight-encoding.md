@@ -14,9 +14,10 @@ inspection:
 - **TPIXEL does not exist.** Phase 1 delivered CPIXEL and its two placements
   (`pixelformat.cpixel_bytes`, `cpixel_offset`) and nothing else. Tight's
   narrower, fixed-order rule is unbuilt.
-- **A decoder's output format is per-decoder, not per-rectangle.** The pump
-  calls `decoder.output_format(self.pixel_format)` once per rectangle and sizes
-  the `RectBuffer` from the *negotiated* format (`rfb._allocateBuffer`). Tight
+- **A decoder's output format is per-decoder, not per-rectangle.**
+  `PixelDecoder.decode` calls `self.output_format(pixel_format)` once per
+  rectangle and sizes the `RectBuffer` from the *negotiated* format
+  (`rfb.rectBuffer`). Tight
   varies within one update: a JPEG rectangle is 24 bpp RGB whatever was
   negotiated, a basic rectangle is TPIXEL. At a 16 bpp negotiated format a JPEG
   rectangle wants more bytes than the buffer holds.
@@ -188,8 +189,8 @@ work off the other branches rather than adding to it: TigerVNC sends JPEG
 where it would have sent a full-colour copy rectangle, so the lossy capture
 reaches no copy filter, no implicit filter and nothing under the 12-byte
 threshold, and it carries its own coverage contract rather than the lossless
-one. And `expect` cannot sequence a lossy capture at all, which is why
-`scene-lossy.vdo` exists.
+one. And `expect` could not sequence a lossy capture at all, which
+[expect-matching.md](expect-matching.md) went on to fix.
 
 **Stage 6 — live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves
@@ -200,11 +201,11 @@ regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in
 the catalogue, worst case 0.68x on the gradient.
 
 **Render time is recorded, not compared against Raw.** Replaying
-`tigervnc-tight-bgrx8888` costs 1773 us over the same 87 rectangles, against
-Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. The cost is the
-per-rectangle pump plus `_unpalette`'s per-pixel loop, which is where to look if
-it wants optimising. `bench.jsonl` carries the row; N2 asks that it not regress
-against itself.
+`tigervnc-tight-bgrx8888` costs 1446 us over the same 87 rectangles, against
+Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. It cost 1773 us until
+`_unpalette` stopped expanding palette indices a pixel at a time; what is left is
+the per-rectangle pump and zlib, which is where to look next. `bench.jsonl`
+carries both rows; N2 asks that it not regress against itself.
 
 Two things the plan had wrong, found here. `TestNegotiation` did not test
 negotiation: it searched the client's own log for `repr(Encoding.X)`, which only
@@ -250,6 +251,11 @@ so the honest reading is that Phase 6 discharges R1 for *registration* and
 leaves open whether R1 also intends to bar new pump shapes. An encoding whose
 framing fits neither existing path costs an `rfb.py` edit once, and the next
 whole-rectangle encoding will cost none.
+
+Since resolved the other way: the pump now has a single entry point, and a base
+class decides for itself what to feed the generator and what its `Outcome` is
+(decoder-architecture.md, "One pump path"). A new framing costs no `rfb.py`
+edit at all.
 
 ### N2, recorded
 

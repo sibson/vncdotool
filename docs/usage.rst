@@ -50,7 +50,33 @@ captures::
 
 With Pillow_ installed, you can wait for the screen to match a known image::
 
-    > vncdo expect somescreen.png 0
+    > vncdo expect somescreen.png
+
+Every pixel has to be within a bound of the target, a whole number from 0
+(identical) to 255. Left out, the bound is whatever the pixel format cannot
+express, so a 5-bit-red server does not poll forever waiting to reproduce an
+8-bit value. To allow more, write it after the filename or pass
+``--expect-fuzz``::
+
+    > vncdo expect somescreen.png 16
+    > vncdo --expect-fuzz 16 expect somescreen.png
+
+``--jpeg-quality`` also blurs both images before comparing, because a JPEG
+frame is further from its target than any bound can separate from a wrong
+screen. ``--expect-blur RADIUS`` sets that radius, or ``0`` turns it off::
+
+    > vncdo --encodings tight --jpeg-quality 5 --expect-fuzz 64 \
+            expect somescreen.png
+
+Before 2.0 the number after the filename was the root-mean-square difference
+between the two images' histograms, a different measurement on a different
+scale, so an old one cannot be converted and has to be picked again.
+``expect somescreen.png 0`` still means exact and needs no change; a fuzz of
+16 is a reasonable place to start for anything else.
+
+Expect the new bound to be stricter than the old number suggests. A 2x2 patch
+of the screen changing colour scores 126, where the old measurement scored
+0.4 -- histograms record that colours moved, not where or how far.
 
 Putting it all together you can specify multiple actions on a single
 command line.  You could automate a login with the following::
@@ -59,35 +85,34 @@ command line.  You could automate a login with the following::
     > vncdo type password move 100 150 click 1 expect welcome_screen.png
 
 When you have no reference image -- because you do not yet know what the
-screen will look like, or because a lossy encoding means no single fuzz
-separates the right screen from the wrong one -- wait for the screen to stop
-changing instead.  ``stable`` takes the length of the quiet window and a
-fuzz, and returns once the screen has gone that long without changing::
+screen will look like -- wait for the screen to stop changing instead.
+``stable`` takes the length of the quiet window, and returns once the screen
+has gone that long without changing by more than the fuzz::
 
-    > vncdo key f5 stable 1.5 0 capture loaded.png
+    > vncdo key f5 stable 1.5 capture loaded.png
+
+The fuzz is the one ``expect`` takes, on the same scale and with the same
+default, because it is the same comparison run against the previous frame
+rather than against a file.
 
 It always takes at least the window you ask for, since there is no way to
 observe the absence of a change early, and longer whenever a late update
 restarts the window.  A screen that never goes quiet -- a clock, a blinking
 cursor -- never satisfies it, and the run ends when ``--timeout`` fires.
 
-The fuzz is not the quantity ``expect`` takes.  ``expect`` compares
-histograms against your reference image; ``stable`` compares successive
-frames pixel by pixel, so its fuzz is a per-channel RMS of the difference
-between them, from 0 (identical) to 255.  A small value absorbs the jitter of
-a JPEG encoding; a value carried over from a working ``expect`` means nothing
-here.
-
 Sometimes you only care about a portion of the screen, in which case you can
 use rcapture, rexpect and rstable. For instance, if your login window appears
 at x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
     > vncdo rcapture region.png 100 200 400 250
-    > vncdo rexpect region.png 100 200 0
-    > vncdo rstable 1.5 0 100 200 400 250
+    > vncdo rexpect region.png 100 200
+    > vncdo rstable 1.5 100 200 400 250
 
 ``rstable`` is also the way past a server that never goes quiet: wait on a
 region that excludes whatever is animating.
+
+The region has to lie on the screen; :doc:`commands` says what each command
+does with its arguments and how it fails.
 
 
 Encodings
@@ -114,6 +139,8 @@ default, so a capture is exact unless you request otherwise.
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
 
+
+.. _exit-status:
 
 Exit Status
 -------------------

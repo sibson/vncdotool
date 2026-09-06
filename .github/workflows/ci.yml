@@ -142,7 +142,7 @@ jobs:
         run: uv sync --locked
 
       - name: Resolve the fleet image tag
-        run: echo "FLEET_TAG=$(git rev-parse HEAD:tests/servers)" >> "$GITHUB_ENV"
+        run: echo "FLEET_TAG=$(tests/servers/fleet-tag.sh)" >> "$GITHUB_ENV"
 
       - name: Fetch or build the VNC test servers
         run: |

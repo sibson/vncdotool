@@ -3,7 +3,7 @@
   "geometry": [256, 192],
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-23T23:12:24Z",
+    "capture_timestamp": "2026-09-06T14:57:50Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -18,7 +18,7 @@
       {
         "encoding": 16,
         "name": "zrle",
-        "rectangles": 87
+        "rectangles": 83
       }
     ],
     "geometry": {

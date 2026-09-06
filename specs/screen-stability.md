@@ -11,10 +11,11 @@ Nothing blocks until the screen merely stops changing, and two callers want
 exactly that.
 
 `tests/goldens/scene-lossy.vdo` fakes it with `pause 1.5` between keystrokes
-plus throwaway `capture step.png` calls, because under a lossy encoding no
-single `maxrms` separates a JPEG rendering of the right scene from the wrong
-scene. The pause is a guess: too short and the capture tears, too long and the
-golden run pays for it eight times over.
+plus throwaway `capture step.png` calls, from when no fuzz separated a JPEG
+rendering of the right scene from the wrong one. The metric that fixed that is
+in [expect-matching.md](expect-matching.md), but a pause is still a guess: too
+short and the capture tears, too long and the golden run pays for it eight
+times over — and neither is a question about a reference image.
 
 The stronger case is outside the test suite. An agent driving `vncdo` captures
 a PNG and inspects it out of process; it cannot sit inside the reactor's
@@ -24,11 +25,12 @@ What it needs before looking is "the screen has settled", which is a question
 
 ## Command
 
-    stable SECONDS FUZZ
-    rstable SECONDS FUZZ X Y W H
+    stable SECONDS [FUZZ]
+    rstable SECONDS X Y W H [FUZZ]
 
-Both arguments are mandatory, matching `expect FILE FUZZ`, whose parser pops
-`FUZZ` unconditionally (`command.py:258`).
+FUZZ is optional and trails, as it does for `expect FILE [FUZZ]`, and is read
+by the same `_trailing_fuzz` — a whole number in 0..255, or the next command
+if it is not a number at all.
 
 `SECONDS` is **the length of the trailing window during which the framebuffer
 must have compared unchanged, within FUZZ, for the command to return.** It is
@@ -55,46 +57,37 @@ window. Without `rstable` the only answer for those servers is "time out and
 fail"; with it, the caller excludes the noisy corner and waits on the region it
 cares about. That is the recovery path, not a symmetry exercise.
 
-Geometry is appended, not infixed: `rstable SECONDS FUZZ X Y W H`.
+`rstable` needs all four geometry numbers. `rexpect FILE X Y [FUZZ]` gets away
+with two because the reference image's own dimensions supply the width and
+height; `rcapture FILE X Y W H` spells out all four because nothing else says
+how big the region is. `stable` has no reference image, so it is an `rcapture`
+in that respect.
 
-`rstable` needs all four numbers. `rexpect FILE X Y FUZZ` gets away with two
-because the reference image's own dimensions supply the width and height;
-`rcapture FILE X Y W H` spells out all four because nothing else says how big
-the region is. `stable` has no reference image, so it is structurally an
-`rcapture`.
-
-That matters because the two existing region commands disagree about where the
-geometry goes, and no command can follow both. `capture FILE` →
-`rcapture FILE X Y W H` appends the geometry after the base command's own
-arguments. `expect FILE FUZZ` → `rexpect FILE X Y FUZZ` (`command.py:272`)
-infixes it, wedging X and Y between the two arguments `expect` already had and
-pushing FUZZ to the end. Applied here the rules give
-`rstable SECONDS FUZZ X Y W H` and `rstable SECONDS X Y W H FUZZ`
-respectively.
+Where the geometry goes is not a free choice: an optional argument has to be
+last, so FUZZ trails and the geometry is infixed. That is `rexpect`'s shape
+rather than `rcapture`'s, which the two existing region commands disagree
+about — `rcapture` appends its geometry after the base command's arguments,
+`rexpect` wedges X and Y in ahead of the fuzz. Optionality settles it.
 
 ## What "unchanged" compares
 
-Not `_expectMatch`. That function compares **histograms** (`client.py:281`), and
-a histogram is spatially blind: a scrolling terminal, a window dragged across a
-uniform background, or any rearrangement that preserves the colour census reads
-as identical. Against a reference image that weakness is bounded, because the
-reference pins what the screen should contain. For a stability test it is the
-whole failure mode — two consecutive frames of moving content would be declared
-stable.
+`imagematch.matches(frame, baseline, fuzz, blur)` — the comparison `expect`
+uses, run against the previous frame instead of against a file. See
+[expect-matching.md](expect-matching.md) for the metric and the measurements
+behind it.
 
-`stable` compares successive frames per pixel:
+Nothing here needs its own comparison. What `stable` asks of a comparator is
+what `expect` asks: that it see a small change on a large screen, and that it
+not mistake a lossy re-encoding for one. Sharing it means FUZZ carries one
+meaning across both commands, `--expect-fuzz` and `--expect-blur` reach both,
+and the goldens that calibrated the metric calibrate this too.
 
-    max(ImageStat.Stat(ImageChops.difference(current, baseline)).rms)
-
-`ImageChops` and `ImageStat` are already imported for `_quantizedMatch`. The
-value is a per-channel RMS in 0–255 units; `FUZZ 0` demands exact equality, and
-a small non-zero value absorbs the JPEG jitter that motivated the lossy golden.
-
-**FUZZ therefore does not carry the same units as `expect`'s FUZZ.** Same name,
-same shape (`rms <= maxrms`), different quantity — one is a distance between
-histograms, the other a distance between images. `docs/usage.rst` has to say so
-where it introduces the command; a reader who transplants a working `expect`
-fuzz value into `stable` will otherwise get a number that means nothing here.
+One difference is worth knowing and not worth acting on. `expect` compares the
+screen against a file that was written in some other pixel format, so its
+default fuzz is what the negotiated format cannot express; `stable` compares
+two frames that came from the same server in the same format, where that
+quantisation cancels and the honest default would be 0. Sharing `--expect-fuzz`
+is worth more than the two or three units this gives away.
 
 ## How the window is driven
 
@@ -163,11 +156,13 @@ motivating case is an agent that will believe it. Fail loudly; the recovery is
 
 ## Python API
 
-    VNCDoToolClient.stableScreen(seconds: float, maxrms: float = 0) -> Deferred
-    VNCDoToolClient.stableRegion(seconds, maxrms, x, y, w, h) -> Deferred
+    VNCDoToolClient.stableScreen(seconds, fuzz=None, blur=None) -> Deferred
+    VNCDoToolClient.stableRegion(seconds, x, y, w, h, fuzz=None, blur=None) -> Deferred
 
-Beside `expectScreen`/`expectRegion` (`client.py:234`), sharing the private
-helper the way `_expectFramebuffer` is shared.
+Beside `expectScreen`/`expectRegion`, and resolving `fuzz` and `blur` through
+the same `_expectFuzz`/`_expectBlur`. `stableRegion` calls `_requireOnScreen`,
+so an off-screen region fails at once rather than settling against the black
+padding `Image.crop` supplies.
 
 `stableScreen` is not a verb phrase, unlike every neighbour — `captureScreen`,
 `refreshScreen`, `expectScreen`. It buys a 1:1 mapping from the script command,
@@ -185,10 +180,13 @@ and without it the watch would re-arm and request forever.
 **Fence (-312) and ContinuousUpdates (-313).** Fence is a barrier, not an idle
 detector: it reports that everything queued before it has been delivered, and
 says nothing about future updates. It could tighten the window's start — do not
-begin counting until a fence returns — but the repo has constants only
-(`const.py:101`, `const.py:217`, `const.py:254`) and no implementation, and
-`specs/server-compatibility-plan.md:166` schedules both for Phase 3. Neither is
-in RFC 6143, so a stability test cannot depend on them in any case.
+begin counting until a fence returns.
+
+`rfb.py` now answers a server-initiated fence and can send a `ClientFence`, but
+nothing yet initiates one and waits for it, which is what gating a window would
+need; the pseudo-encoding is not even offered until something uses a fence.
+ContinuousUpdates remains unimplemented. Neither is in RFC 6143, so a stability
+test could not depend on them in any case.
 
 ## Testing
 
@@ -218,9 +216,9 @@ works.
 
 ## Open questions
 
-- Whether `FUZZ` sharing a name with `expect`'s differently-scaled fuzz is
-  worth the confusion, or whether the argument wants a different name.
-  `docs/usage.rst` warns about it; a rename would be better.
+- Whether the default fuzz should be 0 rather than the pixel format's bound,
+  since both frames come from the same server in the same format. It would
+  cost `--expect-fuzz` reaching this command.
 - Whether any common server sends periodic no-op updates that a pixel
   comparison would correctly ignore but that would still churn CPU on a large
   framebuffer. Not yet checked against the fleet.

@@ -8,8 +8,8 @@ notes in tests/servers/ultravnc, tests/servers/screen-sharing, and
 tests/servers/qemu-kvm, and are what CI runs before this module.
 
 On a platform with no native server described there is simply nothing to
-register, and on a platform that has one but hasn't set it up the test
-fails with the command that would set it up.
+register. On a platform that has one but hasn't set it up, these skip off
+CI and fail on it -- see utils.absent_server_skips().
 """
 
 from .utils import os_servers, register_server_tests

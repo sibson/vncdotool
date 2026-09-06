@@ -45,6 +45,10 @@ log = logging.getLogger()
 
 SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif", "bmp")
 
+# A JPEG frame is further from its target than any per-pixel bound can
+# separate from a wrong screen; asking for a quality level asks for this too.
+LOSSY_EXPECT_BLUR = 2
+
 
 class TimeoutError(RuntimeError):
     pass
@@ -158,8 +162,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  move X Y\t\tmove the mouse cursor to position X,Y\n"
             "  click BUTTON\t\tsend a mouse BUTTON click\n"
             "  capture FILE\t\tsave current screen as FILE\n"
-            "  expect FILE FUZZ\twait until screen matches FILE\n"
-            "  stable SECONDS FUZZ\twait until screen stops changing\n"
+            "  expect FILE [FUZZ]\twait until screen matches FILE\n"
+            "  stable SECONDS [FUZZ]\twait until screen stops changing\n"
             "  pause SECONDS\t\twait SECONDS before sending next command\n"
             "\n"
             "Other Commands (CMD):\n"
@@ -170,8 +174,8 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  mouseup BUTTON\tsend BUTTON up\n"
             "  drag X Y\t\tmove the mouse to X,Y in small steps\n"
             "  rcapture FILE X Y W H\tcapture a region of the screen\n"
-            "  rexpect FILE X Y FUZZ\texpect that matches a region of the screen\n"
-            "  rstable SECONDS FUZZ X Y W H\tstable for a region of the screen\n"
+            "  rexpect FILE X Y [FUZZ]\texpect that matches a region of the screen\n"
+            "  rstable SECONDS X Y W H [FUZZ]\tstable for a region of the screen\n"
             "\n"
             "If a filename is given commands will be read from it, or stdin `-`\n"
         )
@@ -180,6 +184,24 @@ class VNCDoToolOptionParser(optparse.OptionParser):
 
 class CommandParseError(RuntimeError):
     pass
+
+
+def _trailing_fuzz(args: list[str], cmd: str = "expect") -> int | None:
+    if not args:
+        return None
+    try:
+        # Parsed as a float so that a script written against the old metric,
+        # which took one, says what is wrong with it rather than having its
+        # number read as the next command.
+        fuzz = float(args[0])
+    except ValueError:
+        return None
+    written = args.pop(0)
+    if fuzz != int(fuzz) or not 0 <= fuzz <= 255:
+        raise CommandParseError(
+            f"{cmd} takes a whole-number fuzz from 0 (exact) to 255, not {written}"
+        )
+    return int(fuzz)
 
 
 def build_command_list(
@@ -257,8 +279,9 @@ def build_command_list(
             )
         elif cmd == "expect":
             filename = args.pop(0)
-            rms = float(args.pop(0))
-            factory.deferred.addCallback(client.expectScreen, filename, rms)
+            factory.deferred.addCallback(
+                client.expectScreen, filename, _trailing_fuzz(args)
+            )
         elif cmd == "rcapture":
             filename = args.pop(0)
             x = int(args.pop(0))
@@ -275,26 +298,27 @@ def build_command_list(
             filename = args.pop(0)
             x = int(args.pop(0))
             y = int(args.pop(0))
-            rms = float(args.pop(0))
-            factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
+            factory.deferred.addCallback(
+                client.expectRegion, filename, x, y, _trailing_fuzz(args)
+            )
         elif cmd == "stable":
             seconds = float(args.pop(0))
-            rms = float(args.pop(0))
-            factory.deferred.addCallback(client.stableScreen, seconds, rms)
+            factory.deferred.addCallback(
+                client.stableScreen, seconds, _trailing_fuzz(args, cmd)
+            )
         elif cmd == "rstable":
             seconds = float(args.pop(0))
-            rms = float(args.pop(0))
             x = int(args.pop(0))
             y = int(args.pop(0))
             w = int(args.pop(0))
             h = int(args.pop(0))
             factory.deferred.addCallback(
-                client.stableRegion, seconds, rms, x, y, w, h
+                client.stableRegion, seconds, x, y, w, h, _trailing_fuzz(args, cmd)
             )
         elif cmd in ("pause", "sleep"):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
-        elif cmd in "drag":
+        elif cmd == "drag":
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseDrag, x, y)
         elif os.path.isfile(cmd):
@@ -633,6 +657,22 @@ def vncdo(argv: list[str] | None = None) -> None:
         "to 9 (high). Lossy [none]",
     )
     op.add_option(
+        "--expect-fuzz",
+        type="int",
+        metavar="N",
+        help="how far any one pixel may sit from the target image for expect "
+        "to call it a match, 0 (exact) to 255 [what the pixel format cannot "
+        "express]",
+    )
+    op.add_option(
+        "--expect-blur",
+        type="int",
+        metavar="RADIUS",
+        help="blur both screens by RADIUS before expect compares them, which "
+        "is what carries a match through a lossy encoding [%d with "
+        "--jpeg-quality, 0 without]" % LOSSY_EXPECT_BLUR,
+    )
+    op.add_option(
         "-i",
         "--incremental-refreshes",
         action="store_true",
@@ -687,6 +727,21 @@ def vncdo(argv: list[str] | None = None) -> None:
         if decoders.ENCODING_NAMES["tight"] not in (factory.encodings or []):
             op.error("--jpeg-quality only applies to Tight; add --encodings tight")
         factory.jpeg_quality = options.jpeg_quality
+
+    if options.expect_fuzz is not None:
+        if not 0 <= options.expect_fuzz <= 255:
+            op.error(
+                f"--expect-fuzz takes a bound from 0 (exact) to 255, not "
+                f"{options.expect_fuzz}"
+            )
+        factory.expect_fuzz = options.expect_fuzz
+
+    if options.expect_blur is None:
+        factory.expect_blur = LOSSY_EXPECT_BLUR if options.jpeg_quality is not None else 0
+    elif options.expect_blur < 0:
+        op.error(f"--expect-blur takes a radius of 0 or more, not {options.expect_blur}")
+    else:
+        factory.expect_blur = options.expect_blur
 
     if options.timeout:
         message = "TIMEOUT Exceeded (%ss)" % options.timeout

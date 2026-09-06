@@ -15,7 +15,8 @@ from vncdotool import pixelformat, rfb
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 
 PIXEL_FORMAT = rfb.PixelFormat()
-SIZE = (16, 16)
+# Large enough for a whole glyph patch, which stamp_patch refuses to clip.
+SIZE = (64, 64)
 
 
 def handshake_bytes(pixel_format: rfb.PixelFormat = PIXEL_FORMAT) -> bytes:

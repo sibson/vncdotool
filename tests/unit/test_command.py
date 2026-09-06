@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLo
 from twisted.python.failure import Failure
 
 from vncdotool import command, pixelformat
-from vncdotool.client import AuthenticationError, ProtocolError
+from vncdotool.client import AuthenticationError, ProtocolError, RegionError
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
 
@@ -95,13 +95,59 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('expect foo.png 10')
         self.assertCalled(self.client.expectScreen, 'foo.png', 10)
 
+    def test_expect_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('expect foo.png')
+        self.assertCalled(self.client.expectScreen, 'foo.png', None)
+
+    def test_expect_without_a_fuzz_before_another_command(self) -> None:
+        self.call_build_commands_list('expect foo.png key enter')
+        call = self.factory.deferred.addCallback
+        call.assert_any_call(self.client.expectScreen, 'foo.png', None)
+        call.assert_any_call(self.client.keyPress, 'enter')
+
+    def test_rexpect(self) -> None:
+        self.call_build_commands_list('rexpect foo.png 10 20 30')
+        self.assertCalled(self.client.expectRegion, 'foo.png', 10, 20, 30)
+
+    def test_rexpect_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('rexpect foo.png 10 20')
+        self.assertCalled(self.client.expectRegion, 'foo.png', 10, 20, None)
+
+    def test_expect_rejects_a_fractional_fuzz(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('expect foo.png 0.5')
+
+    def test_expect_rejects_a_fuzz_off_the_scale(self) -> None:
+        for fuzz in ('-1', '256'):
+            with self.subTest(fuzz=fuzz):
+                with self.assertRaises(command.CommandParseError):
+                    self.call_build_commands_list(f'expect foo.png {fuzz}')
+
     def test_stable(self) -> None:
         self.call_build_commands_list('stable 1.5 10')
         self.assertCalled(self.client.stableScreen, 1.5, 10)
 
+    def test_stable_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('stable 1.5')
+        self.assertCalled(self.client.stableScreen, 1.5, None)
+
+    def test_stable_without_a_fuzz_before_another_command(self) -> None:
+        self.call_build_commands_list('stable 1.5 key enter')
+        call = self.factory.deferred.addCallback
+        call.assert_any_call(self.client.stableScreen, 1.5, None)
+        call.assert_any_call(self.client.keyPress, 'enter')
+
     def test_rstable(self) -> None:
-        self.call_build_commands_list('rstable 1.5 10 100 200 400 250')
-        self.assertCalled(self.client.stableRegion, 1.5, 10, 100, 200, 400, 250)
+        self.call_build_commands_list('rstable 1.5 100 200 400 250 10')
+        self.assertCalled(self.client.stableRegion, 1.5, 100, 200, 400, 250, 10)
+
+    def test_rstable_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('rstable 1.5 100 200 400 250')
+        self.assertCalled(self.client.stableRegion, 1.5, 100, 200, 400, 250, None)
+
+    def test_stable_rejects_a_fuzz_off_the_scale(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('stable 1.5 256')
 
     def test_expect_not_png(self) -> None:
         pass
@@ -153,6 +199,14 @@ class TestBuildCommandList(unittest.TestCase):
     def test_drag(self) -> None:
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
+
+    def test_drag_rejects_a_prefix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('dra 100 200')
+
+    def test_drag_rejects_an_infix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('ra 100 200')
 
     def test_insert_delay(self) -> None:
         self.call_build_commands_list('click 1 key a', delay=100)
@@ -386,6 +440,11 @@ class TestVNCDoCLIFactory(unittest.TestCase):
 
         assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
 
+    def test_region_off_the_screen(self, reactor) -> None:
+        self.factory.error(Failure(RegionError('region (0, 0, 1, 1) is not inside the 0x0 screen')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
     def test_timeout(self, reactor) -> None:
         self.factory.error(Failure(command.TimeoutError('TIMEOUT Exceeded (5s)')))
 
@@ -527,6 +586,56 @@ class TestVncdoJpegQualityOption(unittest.TestCase):
                     command.vncdo(['-s', '127.0.0.1::5900', '--jpeg-quality', level, 'key', 'a'])
 
                 assert raised.exception.code == command.ExitStatus.USAGE
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=mock.MagicMock)
+class TestVncdoExpectOptions(unittest.TestCase):
+
+    def test_both_reach_the_factory(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', '64',
+                           '--expect-blur', '2', 'key', 'a'])
+
+        factory = connect.call_args.args[0]
+        assert factory.expect_fuzz == 64
+        assert factory.expect_blur == 2
+
+    def test_without_the_flags_the_format_decides(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', 'key', 'a'])
+
+        factory = connect.call_args.args[0]
+        assert factory.expect_fuzz is None
+        assert factory.expect_blur == 0
+
+    def test_a_jpeg_quality_blurs_without_being_asked(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
+                           '--jpeg-quality', '5', 'key', 'a'])
+
+        assert connect.call_args.args[0].expect_blur == command.LOSSY_EXPECT_BLUR
+
+    def test_an_explicit_blur_beats_the_jpeg_default(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
+                           '--jpeg-quality', '5', '--expect-blur', '0', 'key', 'a'])
+
+        assert connect.call_args.args[0].expect_blur == 0
+
+    def test_a_fuzz_off_the_scale_is_a_usage_error(self, reactor, connect) -> None:
+        for fuzz in ('-1', '256'):
+            with self.subTest(fuzz=fuzz):
+                with self.assertRaises(SystemExit) as raised:
+                    command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', fuzz, 'key', 'a'])
+
+                assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_a_negative_blur_is_a_usage_error(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['-s', '127.0.0.1::5900', '--expect-blur', '-1', 'key', 'a'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
 
 
 class TestReplayClient(unittest.TestCase):

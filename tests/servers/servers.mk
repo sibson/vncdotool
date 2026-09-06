@@ -57,6 +57,7 @@ goldens:
 	uv run python -m tests.goldens.capture --encoding tight --pixel-format bgrx8888
 	uv run python -m tests.goldens.capture --encoding tight --pixel-format rgb565
 	uv run python -m tests.goldens.capture --encoding tight --pixel-format bgrx8888 --jpeg-quality 9 --name tigervnc-tight-jpeg-bgrx8888
+	uv run python -m tests.goldens.capture --encoding tight --pixel-format bgrx8888 --jpeg-quality 5 --name tigervnc-tight-jpeg5-bgrx8888
 
 .PHONY: scenes
 scenes:

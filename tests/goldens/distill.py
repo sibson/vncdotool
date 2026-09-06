@@ -26,6 +26,7 @@ class Step:
     index: int
     key: Optional[str]
     data: bytes
+    screen: Optional[Image.Image] = None
 
 
 class _Recorder(client.VNCDoToolClient):
@@ -50,7 +51,7 @@ class _Recorder(client.VNCDoToolClient):
         super().commitUpdate(rectangles)
         self.update_ends.append(self.consumed)
 
-    def split(self, s2c: bytes, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> Tuple[bytes, List[Step]]:
+    def split(self, s2c: bytes) -> Tuple[bytes, List[Step]]:
         screens: List[Optional[Image.Image]] = []
         for offset in range(len(s2c)):
             self.consumed = offset + 1
@@ -73,11 +74,12 @@ class _Recorder(client.VNCDoToolClient):
             start = end
             if screen is None:
                 continue
-            key = scenes.read_patch(screen, tolerance)
+            key = scenes.read_patch(screen)
             if steps and key == steps[-1].key:
                 steps[-1].data += pending
+                steps[-1].screen = screen
             else:
-                steps.append(Step(index=len(steps) + 1, key=key, data=pending))
+                steps.append(Step(index=len(steps) + 1, key=key, data=pending, screen=screen))
             pending = b""
         if pending and steps:
             steps[-1].data += pending
@@ -104,12 +106,8 @@ def _make_client(pixel_format: str) -> _Recorder:
     return recorder
 
 
-def split(
-    s2c: bytes, pixel_format: str, tolerance: Optional[Tuple[int, int, int]] = None
-) -> Tuple[bytes, List[Step]]:
-    if tolerance is None:
-        tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[pixel_format])
-    return _make_client(pixel_format).split(s2c, tolerance)
+def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
+    return _make_client(pixel_format).split(s2c)
 
 
 _NUMBER_ARRAY = re.compile(r"\[\s+((?:-?\d+,\s+)*-?\d+)\s+\]")
