@@ -26,6 +26,7 @@ class Step:
     index: int
     key: Optional[str]
     data: bytes
+    screen: Optional[Image.Image] = None
 
 
 class _Recorder(client.VNCDoToolClient):
@@ -76,8 +77,9 @@ class _Recorder(client.VNCDoToolClient):
             key = scenes.read_patch(screen, tolerance)
             if steps and key == steps[-1].key:
                 steps[-1].data += pending
+                steps[-1].screen = screen
             else:
-                steps.append(Step(index=len(steps) + 1, key=key, data=pending))
+                steps.append(Step(index=len(steps) + 1, key=key, data=pending, screen=screen))
             pending = b""
         if pending and steps:
             steps[-1].data += pending

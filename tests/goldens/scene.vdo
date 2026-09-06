@@ -1,16 +1,16 @@
 key 0
-expect scenes/0.png 0
+expect scenes/0.png
 key s
-expect scenes/s.png 0
+expect scenes/s.png
 key d
-expect scenes/d.png 0
+expect scenes/d.png
 key x
-expect scenes/x.png 0
+expect scenes/x.png
 key g
-expect scenes/g.png 0
+expect scenes/g.png
 key p
-expect scenes/p.png 0
+expect scenes/p.png
 key c
-expect scenes/c.png 0
+expect scenes/c.png
 key f
-expect scenes/f.png 0
+expect scenes/f.png

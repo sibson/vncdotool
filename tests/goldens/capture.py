@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import select
 import shutil
 import subprocess
@@ -14,13 +15,15 @@ import time
 import zipfile
 from pathlib import Path
 
+from PIL import Image
+
 from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
-from vncdotool import decoders, pixelformat
+from vncdotool import decoders, imagematch, pixelformat
+from vncdotool.command import LOSSY_EXPECT_BLUR
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
-LOSSY_SCENE_VDO = Path(__file__).resolve().parent / "scene-lossy.vdo"
 PROXY_PORT = 5999
 PROXY_STARTUP_DEADLINE = 10.0
 CAPTURE_DEADLINE = 60.0
@@ -28,8 +31,16 @@ CAPTURE_DEADLINE = 60.0
 # naming the image it waited for, rather than recording the one before it.
 SCENE_DEADLINE = 30.0
 
-# Measured at quality level 9, not computed from the format; specs/decoder-goldens.md.
-JPEG_TOLERANCE = (8, 8, 8)
+# Measured against tigervnc at quality level 0, the worst it offers: the flat
+# 48x48 patch reads back within this.
+JPEG_PATCH_TOLERANCE = (8, 8, 8)
+
+# Wide enough for the worst quality level, not the one being captured.
+JPEG_FUZZ = 64
+
+# Headroom over what this capture measured, for the decode drifting a little
+# under another libjpeg.
+JPEG_FUZZ_MARGIN = 4
 
 
 def _start_vnclog(archive: Path) -> subprocess.Popen:
@@ -51,6 +62,16 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
         proxy.wait(timeout=PROXY_STARTUP_DEADLINE)
         raise SystemExit(f"vnclog never listened on {PROXY_PORT}")
     return proxy
+
+
+def _measured_fuzz(steps: list[distill.Step]) -> int:
+    worst = max(
+        imagematch.worst_delta(
+            step.screen, Image.open(scenes.OUT_DIR / f"{step.key}.png"), LOSSY_EXPECT_BLUR
+        )
+        for step in steps
+    )
+    return math.ceil(worst) + JPEG_FUZZ_MARGIN
 
 
 def main() -> int:
@@ -80,9 +101,9 @@ def main() -> int:
     lossy = args.jpeg_quality is not None
     name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format}"
     if lossy:
-        tolerance = JPEG_TOLERANCE
+        patch_tolerance = JPEG_PATCH_TOLERANCE
     else:
-        tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])
+        patch_tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
@@ -90,13 +111,17 @@ def main() -> int:
 
         # scene.vdo waits on `expect scenes/<key>.png`, named relative to
         # itself, so the driver runs from the directory holding both.
-        script = LOSSY_SCENE_VDO if lossy else SCENE_VDO
         subprocess.run(
             [VNCDO, "--timeout", str(SCENE_DEADLINE), "--encodings", args.encoding]
             + (["--pixel-format", args.pixel_format] if args.pixel_format else [])
-            + (["--jpeg-quality", str(args.jpeg_quality)] if lossy else [])
-            + ["-s", f"{HOST}::{PROXY_PORT}", str(script) if lossy else script.name],
-            check=True, timeout=CAPTURE_DEADLINE, cwd=tmp if lossy else SCENE_VDO.parent,
+            + (
+                [
+                    "--jpeg-quality", str(args.jpeg_quality),
+                    "--expect-fuzz", str(JPEG_FUZZ),
+                ] if lossy else []
+            )
+            + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
+            check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
         )
         proxy.wait(timeout=CAPTURE_DEADLINE)
 
@@ -104,7 +129,7 @@ def main() -> int:
             s2c = zipped.read("s2c.bin")
             meta = zipped.read("meta.json").decode()
 
-        init, steps = distill.split(s2c, args.pixel_format, tolerance)
+        init, steps = distill.split(s2c, args.pixel_format, patch_tolerance)
         if not steps:
             raise SystemExit("capture holds no framebuffer updates; the stream desynced")
         for step in steps:
@@ -120,11 +145,14 @@ def main() -> int:
             "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
-            "tolerance": list(tolerance),
             "tolerance_kind": "jpeg-lossy" if lossy else "format-quantization",
         }
         if lossy:
             conditions["jpeg_quality"] = args.jpeg_quality
+            conditions["fuzz"] = _measured_fuzz(steps)
+            conditions["blur"] = LOSSY_EXPECT_BLUR
+        else:
+            conditions["tolerance"] = list(patch_tolerance)
         distill.write_fixture(directory, init, steps, conditions)
 
         print(f"wrote {directory} ({len(steps)} steps)")
