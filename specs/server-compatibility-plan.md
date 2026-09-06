@@ -14,7 +14,7 @@ plan to close them.
 | Protocol versions | 3.3, 3.7, 3.8 + quirks: 3.889 (Apple ARD), 4.0 (Intel AMT), 4.1/5.0 (RealVNC) | Unknown versions are logged but negotiation picks the highest known version ≤ server's |
 | Security types | None (1), VNC Authentication (2), ARD Diffie-Hellman (30) | Anything else → "unknown security types" and disconnect |
 | Encodings | Raw, CopyRect, RRE, CoRRE, Hextile, ZRLE | No Tight, no TRLE, no JPEG quality/compression level pseudo-encodings |
-| Pseudo-encodings | Cursor, DesktopSize, LastRect, QEMU Extended Key Event | No ExtendedDesktopSize, ContinuousUpdates, Fence, Extended Clipboard |
+| Pseudo-encodings | Cursor, DesktopSize, LastRect, QEMU Extended Key Event, Fence | Fence is answered, never initiated; no ExtendedDesktopSize, ContinuousUpdates, Extended Clipboard |
 | Transports | TCP, Unix socket | No WebSocket (noVNC, Proxmox), no TLS |
 
 **Test coverage:** unit tests with hand-crafted byte strings; functional
@@ -163,8 +163,9 @@ pixel-exact against reference images for every supported pixel format.
 
 - **ExtendedDesktopSize** pseudo-encoding + **SetDesktopSize** client
   message (#301), replacing the legacy DesktopSize-only path.
-- **ContinuousUpdates + Fence** for reliable synchronization and faster
-  captures (#66, #201, #273).
+- **ContinuousUpdates**, and *initiating* Fence, for reliable
+  synchronization and faster captures (#66, #201, #273). Answering a
+  server's fence already ships; nothing yet sends one to sync on.
 - **Extended Clipboard** (beyond the Phase 1 "don't hang" guard) for
   non-Latin-1 text.
 - **WebSocket transport** (`ws://`/`wss://` server addresses) targeting
