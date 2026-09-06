@@ -55,6 +55,18 @@ matrix. A reduced capability model survives on the server descriptors
 (`renders_desktop`, `known_size`, auth fields) to drive honest skips —
 e.g. macOS Screen Sharing's black framebuffer.
 
+**Fleet identity**: the fleet is machine-global — fixed ports 5931-5935 and
+one compose project — while checkouts are many, and the Dockerfile bakes
+committed files (the scene PNGs, `scene_player.py`, the entrypoints) into
+its images. So a checkout that never ran `make servers-up` tests against
+whichever checkout did, reading that checkout's baked files back off the
+wire as if they were its own. `tests/servers/fleet-tag.sh` hashes the
+Dockerfile's COPY inputs; `servers.mk` tags the images with it, and
+`fleet_mismatch()` in `tests/functional/utils.py` reads the tag back off
+the running container, so the mismatch fails by name in `servers-up` and in
+the tests that depend on baked content. The hash is of `HEAD`, so a fleet
+built from uncommitted edits to those files tags as the commit it sits on.
+
 **Execution model**: every fleet scenario runs the real CLI via
 `subprocess.run(["vncdo", ...], timeout=N)`.
 

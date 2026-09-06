@@ -9,13 +9,14 @@ from PIL import Image
 
 from tests.goldens import scenes
 
-from .utils import TIGERVNC, port_open, HOST, run_vncdo
+from .utils import TIGERVNC, assert_fleet_current, port_open, HOST, run_vncdo
 
 
 class TestScenePlayer(TestCase):
     def setUp(self) -> None:
         if not port_open(HOST, TIGERVNC.port):
             self.fail(f"{TIGERVNC.name} is not listening on {TIGERVNC.port}; {TIGERVNC.how_to_start}")
+        assert_fleet_current(self, TIGERVNC)
 
     def _capture(self, *args: str) -> Image.Image:
         with tempfile.TemporaryDirectory() as tmp:
