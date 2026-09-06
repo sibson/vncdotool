@@ -50,7 +50,7 @@ class _Recorder(client.VNCDoToolClient):
         super().commitUpdate(rectangles)
         self.update_ends.append(self.consumed)
 
-    def split(self, s2c: bytes, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> Tuple[bytes, List[Step]]:
+    def split(self, s2c: bytes) -> Tuple[bytes, List[Step]]:
         screens: List[Optional[Image.Image]] = []
         for offset in range(len(s2c)):
             self.consumed = offset + 1
@@ -73,7 +73,7 @@ class _Recorder(client.VNCDoToolClient):
             start = end
             if screen is None:
                 continue
-            key = scenes.read_patch(screen, tolerance)
+            key = scenes.read_patch(screen)
             if steps and key == steps[-1].key:
                 steps[-1].data += pending
             else:
@@ -105,8 +105,7 @@ def _make_client(pixel_format: str) -> _Recorder:
 
 
 def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
-    tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[pixel_format])
-    return _make_client(pixel_format).split(s2c, tolerance)
+    return _make_client(pixel_format).split(s2c)
 
 
 _NUMBER_ARRAY = re.compile(r"\[\s+((?:-?\d+,\s+)*-?\d+)\s+\]")

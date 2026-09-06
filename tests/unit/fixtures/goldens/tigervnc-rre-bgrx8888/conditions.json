@@ -3,7 +3,7 @@
   "geometry": [256, 192],
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-08-22T19:48:33Z",
+    "capture_timestamp": "2026-09-06T12:46:49Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -18,12 +18,12 @@
       {
         "encoding": 0,
         "name": "raw",
-        "rectangles": 33
+        "rectangles": 35
       },
       {
         "encoding": 2,
         "name": "rre",
-        "rectangles": 54
+        "rectangles": 48
       }
     ],
     "geometry": {

@@ -68,19 +68,33 @@ whatever was on screen, so `d` after `s` and `d` after `x` are different wire
 bytes, and CopyRect exists only because of prior content. `0` makes any case
 reachable in isolation.
 
-Every scene image carries a small patch encoding its own key. It is fontless,
-it costs one harmless rect, and it turns a dropped key into a wrong patch
-rather than a mislabelled fixture. It is not merely a check: it is how
-distillation labels a step at all, since the frame carries it and the c2s
-stream cannot be aligned against s2c.
+Every scene image carries a small patch naming its own key. It costs one
+harmless rect, and it turns a dropped key into a wrong patch rather than a
+mislabelled fixture. It is not merely a check: it is how distillation labels a
+step at all, since the frame carries it and the c2s stream cannot be aligned
+against s2c.
 
-The key rides in the patch's red channel one unit per key, which assumed an
-8-bit red without saying so. At rgb565 `c`, `d` and `f` — 99, 100 and 102 —
-land on one 5-bit value, so the patch narrows a step to a *set* of keys and
-the frame breaks the tie by which scene it most resembles. That tie-break is
-deliberately a ranking over the candidates and not a threshold: a label chosen
-by "lands within the format's quantization of its scene" is the golden test's
-own claim, and a fixture labelled by it could never fail that test.
+The patch is the key's glyph, drawn from a 5x7 table in `scenes.py` at four
+pixels a cell, black on white, in a 26x34 box at the centre of the frame.
+`read_patch` samples one pixel per cell, thresholds it, and matches the
+bitmap against the table whole: a frame either carries a glyph or does not,
+with no tolerance anywhere.
+
+The table is literal rather than rendered because Pillow's default font is an
+implementation detail that has changed shape across releases, and a fixture
+labelled by a rendered glyph would be invalidated by an upgrade. The glyphs
+are the uppercase forms — 5x7 lowercase needs descenders for `g` and `p` —
+so the player folds an incoming keysym to lower case and `C` and `c` select
+the same scene.
+
+Black and white are what make this hold at any depth. They are every
+channel's extremes, and a pixel format reproduces its extremes exactly
+however few bits it keeps, so the patch reaches the client unquantized at
+rgb565 as much as at rgbx8888. The earlier patch instead carried the key as
+`ord(key)` in the red channel, which assumed an 8-bit red without saying so:
+at rgb565 `c`, `d`, `f` and `g` — 99, 100, 102 and 103 — landed on one 5-bit
+value, and a step could only be narrowed to a set of keys and then guessed at
+by which scene the frame most resembled.
 
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
