@@ -144,11 +144,13 @@ def _machine() -> Dict[str, object]:
         "cpu": cpu,
         "cores": os.cpu_count(),
         "system": f"{platform.system()}-{platform.machine()}",
-        "release": platform.release(),
         "ci": ci,
     }
     digest = json.dumps(fields, sort_keys=True).encode()
     fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
+    # Recorded after the digest, not in the dict above: a machine keeps its
+    # identity across an OS point update.
+    fields["release"] = platform.release()
     return fields
 
 

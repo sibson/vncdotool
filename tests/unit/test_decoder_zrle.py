@@ -309,6 +309,84 @@ class TestZRLE(unittest.TestCase):
 
         assert_pixels(self, self.cli.screen, [colour] * (width * height))
 
+    def test_zrle_rle_palette_may_hold_more_than_16_colours(self) -> None:
+        """The 16-colour cap is the packed form's (RFC 6143 7.7.6); the RLE
+        form's own limit is the 127 its size field can hold.
+        """
+        width, height = 20, 1
+        handshake(self.cli, width, height)
+
+        palette = [(i, i, i) for i in range(20)]
+        body = (
+            pack("!B", 0x80 | 20)
+            + b"".join(_cpixel(*c) for c in palette)
+            + bytes(range(20))  # each index once, top bit clear: 20 single pixels
+        )
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        assert_pixels(self, self.cli.screen, palette)
+
+    def test_zrle_packed_palette_ignores_an_undefined_index_in_row_padding(self) -> None:
+        """A row's padding bits are not pixels, so an index the palette does
+        not define is only an error where the row actually reaches it.
+        """
+        width, height = 3, 1
+        handshake(self.cli, width, height)
+
+        palette = [(i * 10, 0, 0) for i in range(5)]
+        # 3 nibbles of indices in 2 bytes; the fourth nibble is padding, set
+        # to 0xF, which this 5-colour palette does not define.
+        body = (
+            pack("!B", 5)
+            + b"".join(_cpixel(*c) for c in palette)
+            + bytes((0x01, 0x2F))
+        )
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        assert_pixels(self, self.cli.screen, [palette[0], palette[1], palette[2]])
+
+    def test_zrle_packed_palette_index_past_the_palette_is_a_protocol_error(self) -> None:
+        width, height = 3, 1
+        handshake(self.cli, width, height)
+        self.cli.vncProtocolError = mock.Mock()
+
+        palette = [(i * 10, 0, 0) for i in range(5)]
+        # The third nibble is a pixel, not padding, and index 9 is past a
+        # 5-colour palette.
+        body = (
+            pack("!B", 5)
+            + b"".join(_cpixel(*c) for c in palette)
+            + bytes((0x01, 0x9F))
+        )
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        self.cli.vncProtocolError.assert_called_once()
+        self.cli.transport.loseConnection.assert_called_once()
+
+    def test_zrle_rle_palette_index_past_the_palette_is_a_protocol_error(self) -> None:
+        width, height = 4, 1
+        handshake(self.cli, width, height)
+        self.cli.vncProtocolError = mock.Mock()
+
+        palette = [(1, 0, 0), (0, 1, 0)]
+        body = (
+            pack("!B", 0x80 | 2)
+            + b"".join(_cpixel(*c) for c in palette)
+            + bytes((0x80 | 5, 3))  # index 5 into a 2-colour palette
+        )
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        self.cli.vncProtocolError.assert_called_once()
+        self.cli.transport.loseConnection.assert_called_once()
+
     def test_zrle_palette_over_16_is_a_protocol_error(self) -> None:
         width = height = 8
         handshake(self.cli, width, height)
