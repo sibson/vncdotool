@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Tight palette rectangles decode about 1.3x faster: expanding indices into pixels now runs in C rather than a per-pixel Python loop (@sibson)
   - Fix ``expect`` polling until it timed out at a reduced-depth pixel format: 5-bit red cannot carry most 8-bit values, so no screen ever matched an 8-bit target image exactly. It now also matches when the screen is as close as the negotiated format can express (@sibson)
   - Fix ``vnclog`` decoding the session at the pixel format ServerInit announced even after the client asked the server for another one, which desynchronised its log and its ``--capture-raw`` metadata at any non-native format, ``vncdo --pixel-format rgb565`` among them (@sibson)
   - Fix ``vnclog`` logging an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, and then carrying on decoding a stream it had already abandoned (@sibson)
