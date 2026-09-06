@@ -74,11 +74,14 @@ Stated independently of how. Each design decision should trace to one.
 - **N1** Raw's render time does not regress, measured. Raw is the only valid
   before-and-after baseline, being the only encoding in use.
 - **N2** Each encoding added after Raw demonstrates fewer bytes over the wire
-  than Raw on the content class it is designed for, and no render-time
-  regression against Raw on any content class. The qualifier is not a hedge:
-  RRE expands on dense detail and only wins on flat regions, so a flat "beats
-  Raw everywhere" bar would fail an encoding that is working exactly as
-  specified. What must hold everywhere is the render-time half.
+  than Raw on the content class it is designed for. The qualifier is not a
+  hedge: RRE expands on dense detail and only wins on flat regions, so a flat
+  "beats Raw everywhere" bar would fail an encoding that is working exactly as
+  specified. Render time is recorded per encoding in `bench.jsonl` and must not
+  regress against that encoding's own last measurement. It is not compared
+  against Raw: the server picks the encoding, and every compressing one costs
+  more than a blit by construction, so the only speed question that is ours is
+  whether our implementation of it got slower.
 
 **Inherited constraints**
 
@@ -579,11 +582,11 @@ path landed on top of Phase 2-4:
 
 `make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 
-**Each new encoding (N2).** Two numbers against Raw on identical screen content:
-bytes over the wire, which should drop substantially, and render time, which must
-not regress. The bandwidth number is the reason users want these encodings; the
-render-time number is what stops us shipping one that trades their bandwidth for
-their latency.
+**Each new encoding (N2).** Bytes over the wire against Raw on identical screen
+content, which should drop substantially, and that encoding's own render time,
+which must not regress between runs. The bandwidth number is the reason users
+want these encodings; the render-time number tracks our implementation of one,
+which is the only part of its cost we control.
 
 Single paste is expected to help, but that expectation is arithmetic — 8,100 PIL
 round-trips becoming one — not measurement. Readability and testability justify

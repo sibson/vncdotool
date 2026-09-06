@@ -55,11 +55,11 @@ test-unit:
 
 .PHONY: bench
 bench:
-	uv run python -m tests.goldens.benchmark
+	uv run python -m tests.goldens.benchmark $(ARGS)
 
 .PHONY: bench-record
 bench-record:
-	uv run python -m tests.goldens.benchmark --record
+	uv run python -m tests.goldens.benchmark --record $(ARGS)
 
 .PHONY: bench-report
 bench-report:

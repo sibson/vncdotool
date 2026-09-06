@@ -239,6 +239,43 @@ records it, `test_goldens.py` compares within it, and the scene driver and
 distiller below use the same call, so no fixture carries a number someone
 chose.
 
+**A lossy encoding breaks that derivation, and says so in the fixture.** A
+Tight rectangle captured with `--jpeg-quality` is JPEG, whose error has
+nothing to do with the format's quantization step and is much the larger of
+the two at 32bpp, where the step is zero. Widening `channel_tolerance` to
+accommodate it would loosen every other fixture at the same time and destroy
+the property that the number falls out of the format, so the two are separate
+fields: `tolerance_kind` is `format-quantization` or `jpeg-lossy`, and
+`test_goldens.py` requires one of them and re-derives the first from the
+format, so a chosen number cannot be filed under the computed one.
+
+The lossy bound is measured, not computed, because nothing in the wire format
+implies it. It is `[8, 8, 8]`: two independent encoders put the worst case at
+3, 3, 4 — TigerVNC 1.12.0's own rectangles at quality level 9, and Pillow
+re-encoding the same scene PNGs at libjpeg quality 100 without chroma
+subsampling, which is what that level selects — and the bound is doubled so a
+libjpeg or server version does not turn the suite red. It is flat across the
+three channels, unlike the format-derived one, because JPEG's error lives in
+YCbCr and does not respect a channel boundary.
+
+A measured bound could be one that nothing can fail, so it is checked by
+mutation rather than asserted: swapping red and blue in the JPEG path, and
+reading a grayscale JPEG's single component as three, each fail the suite by
+two orders of magnitude. The bound only holds at a high quality level. At
+level 5 the same scenes reach a per-channel maximum of 229 and a whole-frame
+RMSE of 43 on dense noise, which no useful bound survives; a fixture at a low
+level would need a different oracle, and the level is recorded in
+`conditions.json` for that reason.
+
+**Sequencing a lossy capture is a separate problem.** `expect` polls until the
+screen matches the scene within the format's tolerance, which a JPEG frame
+never does, so it polls until the timeout. Histogram RMS cannot replace it
+either: replaying the committed level-9 fixture, the worst correct match is
+274 while the `d` frame sits 178 from the wrong scene `x`, so no threshold
+separates them. `scene-lossy.vdo` paces the driver instead, and the step is still
+labelled by the keysym patch in the frame — read within the same lossy bound,
+which at level 9 moves the patch by at most one unit per channel.
+
 **Cross-format self-consistency** — decode one scene at two formats, assert the
 framebuffers agree — is not used, though it reads like R3 stated directly. It
 cannot fail alone: every fixture is pinned to the PNG, so one member of a pair

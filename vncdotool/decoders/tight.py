@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import io
 import zlib
-from typing import ClassVar, Generator, List, Optional
+from functools import lru_cache
+from typing import ClassVar, Generator, List, Optional, Tuple
+
+from PIL import Image
 
 from ..const import Encoding
 from ..pixelformat import TPIXEL_FORMAT, PixelFormat, tpixel_bytes
@@ -24,6 +28,30 @@ MIN_TO_COMPRESS = 12
 
 # Exempts Fill: TigerVNC before 1.16.0 sent wider Fill rects (section 7).
 MAX_WIDTH = 2048
+
+
+# A palette entry is one TPIXEL, so bpp of 8/16/24/32 covers every width.
+_BAND_MODES = {2: "LA", 3: "RGB", 4: "RGBA"}
+
+
+@lru_cache(maxsize=64)
+def _mono_table(zero: bytes, one: bytes) -> Tuple[bytes, ...]:
+    """Each of the 256 bytes a 1-bit row can hold, as its 8 pixels, MSB first."""
+    return tuple(
+        b"".join(one if byte & (0x80 >> bit) else zero for bit in range(8))
+        for byte in range(256)
+    )
+
+
+@lru_cache(maxsize=64)
+def _palette_tables(palette: Tuple[bytes, ...]) -> Tuple[Tuple[bytes, ...], bytes]:
+    """One 256-byte translation table per channel, and the indices the palette defines."""
+    size = len(palette)
+    channels = tuple(
+        bytes(entry[offset] for entry in palette) + bytes(256 - size)
+        for offset in range(len(palette[0]))
+    )
+    return channels, bytes(range(size))
 
 
 def _output_format(pixel_format: PixelFormat) -> PixelFormat:
@@ -60,7 +88,9 @@ class TightDecoder(WholeRectDecoder):
             )
 
         if comp_ctl == JPEG:
-            raise DecodeError("Tight JpegCompression is not supported")
+            # No filter byte, no zlib and no MIN_TO_COMPRESS rule (specs/tight-wire.md section 4).
+            length = yield from self._compactLength()
+            return self._decodeJpeg(bytes((yield length)), width, height), TPIXEL_FORMAT
 
         if comp_ctl & 0x08:
             if comp_ctl in BASIC_WITHOUT_ZLIB:
@@ -82,7 +112,7 @@ class TightDecoder(WholeRectDecoder):
 
         stream_id = comp_ctl & 0x03
         tbytes = tpixel_bytes(pixel_format)
-        palette: Optional[List[bytes]] = None
+        palette: Optional[Tuple[bytes, ...]] = None
 
         if filter_id == FILTER_COPY:
             row_size = width * tbytes
@@ -90,7 +120,8 @@ class TightDecoder(WholeRectDecoder):
             # The byte is the palette size minus one, so 1 means two colours.
             palette_size = (yield 1)[0] + 1
             raw = yield palette_size * tbytes
-            palette = [raw[i * tbytes:(i + 1) * tbytes] for i in range(palette_size)]
+            # A tuple so the derived translation tables can be cached on it.
+            palette = tuple(raw[i * tbytes:(i + 1) * tbytes] for i in range(palette_size))
             # 2 colours pack 1 bit/pixel padded to a byte per row (section 5).
             row_size = (width + 7) // 8 if palette_size == 2 else width
         elif filter_id == FILTER_GRADIENT:
@@ -125,6 +156,22 @@ class TightDecoder(WholeRectDecoder):
                 length |= (yield 1)[0] << 14
         return length
 
+    @staticmethod
+    def _decodeJpeg(block: bytes, width: int, height: int) -> bytes:
+        try:
+            image = Image.open(io.BytesIO(block))
+            # TurboVNC's -subsamp gray sends 1 component, not 3 (section 4).
+            rgb = image.convert("RGB")
+        except Exception as exc:
+            # Pillow raises DecompressionBombError, not OSError, on an implausible header.
+            raise DecodeError(f"Tight JPEG rectangle did not decode: {exc}") from None
+        if rgb.size != (width, height):
+            raise DecodeError(
+                f"Tight JPEG rectangle carries a {rgb.width}x{rgb.height} image "
+                f"for a {width}x{height} rectangle"
+            )
+        return rgb.tobytes()
+
     def _decompress(self, stream_id: int, block: bytes, size: int) -> bytes:
         stream = self._streams[stream_id]
         if stream is None:
@@ -156,21 +203,33 @@ class TightDecoder(WholeRectDecoder):
 
     @staticmethod
     def _unpalette(
-        data: bytes, palette: List[bytes], width: int, height: int, row_size: int
+        data: bytes, palette: Tuple[bytes, ...], width: int, height: int, row_size: int
     ) -> bytes:
-        pixels = bytearray()
-        try:
-            if len(palette) == 2:
-                for row in range(height):
-                    base = row * row_size
-                    for x in range(width):
-                        byte = data[base + (x >> 3)]
-                        pixels += palette[(byte >> (7 - (x & 7))) & 1]
-            else:
-                for index in data:
-                    pixels += palette[index]
-        except IndexError:
+        if not data:
+            return b""
+
+        if len(palette) == 2:
+            table = _mono_table(palette[0], palette[1])
+            pixels = b"".join(map(table.__getitem__, data))
+            stride = width * len(palette[0])
+            padded = row_size * 8 * len(palette[0])
+            if padded == stride:
+                return pixels
+            # Expanding whole bytes overshoots each row's padding (section 5).
+            return b"".join(
+                pixels[row * padded:row * padded + stride] for row in range(height)
+            )
+
+        channels, defined = _palette_tables(palette)
+        # translate() with no table deletes every defined index, so a
+        # non-empty result is an index the palette does not have.
+        if data.translate(None, defined):
             raise DecodeError(
                 f"Tight palette index out of range for a {len(palette)}-colour palette"
-            ) from None
-        return bytes(pixels)
+            )
+        if len(channels) == 1:
+            return data.translate(channels[0])
+        return Image.merge(
+            _BAND_MODES[len(channels)],
+            [Image.frombytes("L", (width, height), data.translate(c)) for c in channels],
+        ).tobytes()

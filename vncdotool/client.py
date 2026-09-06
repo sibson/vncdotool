@@ -12,7 +12,7 @@ import math
 import socket
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, Callable, Iterator, TypeVar, Union
+from typing import IO, Any, Callable, Iterator, TypeVar, Union, cast
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
@@ -63,10 +63,17 @@ class ProtocolError(VNCDoException):
     """VNC Server sent something we cannot handle"""
 
 
+# Level 0 is -32 (low) up to level 9 at -23; no offer means no JPEG (specs/tight-wire.md section 8).
+JPEG_QUALITY_ENCODINGS = [
+    rfb.Encoding(rfb.Encoding.JPEG_32 + level) for level in range(10)
+]
+
+
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
+    requested_jpeg_quality: int | None = None
     x = 0
     y = 0
     buttons = 0
@@ -385,6 +392,8 @@ class VNCDoToolClient(rfb.RFBClient):
             encodings.append(rfb.Encoding.PSEUDO_LAST_RECT)
         if self.factory.qemu_extended_key:
             encodings.append(rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+        if self.requested_jpeg_quality is not None:
+            encodings.append(JPEG_QUALITY_ENCODINGS[self.requested_jpeg_quality])
         self.setEncodings(encodings)
         self.factory.clientConnectionMade(self)
 
@@ -538,15 +547,17 @@ class VNCDoToolFactory(rfb.RFBFactory):
     force_caps = False
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None
+    jpeg_quality: int | None = None
 
     def __init__(self) -> None:
         self.deferred = Deferred()
         self._disconnect_callbacks: list[Callable[[Failure], None]] = []
 
     def buildProtocol(self, addr: object) -> VNCDoToolClient:
-        protocol = super().buildProtocol(addr)
+        protocol = cast("VNCDoToolClient", super().buildProtocol(addr))
         protocol.requested_pixel_format = self.pixel_format
         protocol.requested_encodings = self.encodings
+        protocol.requested_jpeg_quality = self.jpeg_quality
         return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:

@@ -1,8 +1,9 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
-  - Fix ``expect`` polling until it timed out at a reduced-depth pixel format: 5-bit red cannot carry most 8-bit values, so no screen ever matched an 8-bit target image exactly. It now also matches when the screen is as close as the negotiated format can express (@sibson)
-  - Fix ``vnclog`` decoding the session at the pixel format ServerInit announced even after the client asked the server for another one, which desynchronised its log and its ``--capture-raw`` metadata at any non-native format, ``vncdo --pixel-format rgb565`` among them (@sibson)
-  - Fix ``vnclog`` logging an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, and then carrying on decoding a stream it had already abandoned (@sibson)
+  - Tight palette rectangles decode about 1.3x faster: expanding indices into pixels now runs in C rather than a per-pixel Python loop (@sibson)
+  - Fix ``expect`` never matching, and so polling until it timed out, at a reduced-depth pixel format such as ``--pixel-format rgb565``. A target image now matches a screen that is as close to it as the negotiated format can express (@sibson)
+  - Fix ``vnclog`` garbling its log and its ``--capture-raw`` metadata whenever the client asked the server for a pixel format other than the announced one, ``vncdo --pixel-format rgb565`` among them (@sibson)
+  - Fix ``vnclog`` reporting an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, then carrying on against a stream it had abandoned (@sibson)
   - Fix a malformed or unsupported server response (bad header, unknown security/auth type, connection refused, unknown message, unrecognized rectangle encoding) parsing further buffered bytes as if they were valid protocol data before the connection closed, instead of stopping immediately (@sibson)
   - Fix ``self.width``/``self.height`` staying at the negotiated size after a server sends ``PSEUDO_DESKTOP_SIZE`` mid-session (@sibson)
   - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)
@@ -31,7 +32,8 @@
   - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
   - Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update (@sibson)
   - ``--encodings zrle`` offers ZRLE, which sends substantially less than Raw on ordinary screen content (@sibson)
-  - ``--encodings tight`` offers Tight, decoding fill, copy-filter and palette-filter rectangles; a gradient-filter or JPEG rectangle ends the session with a named error (@sibson, #264)
+  - ``--encodings tight`` offers Tight, which sends less than Raw on ordinary screen content; Tight JPEG rectangles decode, and a rectangle it cannot decode ends the session with a named error rather than a wrong screen (@sibson, #264)
+  - Add ``vncdo --jpeg-quality LEVEL``, 0 (low) to 9 (high). A server sends Tight JPEG only to a client that asked for a level, so captures stay lossless unless you pass it (@sibson, #264)
 
 1.4.1 (2026-08-19)
 ----------------------

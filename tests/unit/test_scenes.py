@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import unittest
 
 from PIL import Image
@@ -82,6 +83,25 @@ class TestScenes(unittest.TestCase):
         self.assertEqual(stamped.tobytes(), expected.tobytes())
 
 
+class JpegRoundTrip:
+    """The glyph read back off a scene a lossy encoder has been through.
+
+    Tight offers JPEG once a quality level is advertised, so a captured frame
+    need not be the frame the scene player drew. Ink and paper differ only in
+    luma, which JPEG keeps far better than chroma, and a cell is sampled at
+    its centre rather than at the edges the ringing gathers on.
+    """
+
+    key: str
+    quality: int
+
+    def test_the_patch_names_its_own_scene(self) -> None:
+        buffer = io.BytesIO()
+        scenes.apply(self.key, scenes.base()).save(buffer, "JPEG", quality=self.quality, subsampling=2)
+        buffer.seek(0)
+        self.assertEqual(scenes.read_patch(Image.open(buffer)), self.key)
+
+
 class PatchRoundTrip:
     """One scene's glyph, read back off the screen a given format rebuilds."""
 
@@ -106,6 +126,14 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
                 f"TestPatch_{name}_{key}",
                 (PatchRoundTrip, unittest.TestCase),
                 {"key": key, "pixel_format_name": name},
+            )
+            suite.addTest(case("test_the_patch_names_its_own_scene"))
+    for quality in (95, 25):
+        for key in scenes.SCENES:
+            case = type(
+                f"TestPatch_jpeg{quality}_{key}",
+                (JpegRoundTrip, unittest.TestCase),
+                {"key": key, "quality": quality},
             )
             suite.addTest(case("test_the_patch_names_its_own_scene"))
     return suite

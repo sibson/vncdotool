@@ -2,23 +2,26 @@
 
 Each case states the bytes for the one rule it checks. Whole sessions a real
 server sent are replayed for their pixels by test_goldens.py, against the
-committed fixture under ``fixtures/goldens/tigervnc-tight-bgrx8888``.
+committed fixtures under ``fixtures/goldens/tigervnc-tight-*``.
 
 ``specs/tight-wire.md`` is the wire brief these cases check.
 """
 from __future__ import annotations
 
+import io
 import random
 import tracemalloc
 import unittest
 import zlib
 from typing import Optional, Sequence, Tuple
 
+from PIL import Image
+
 from vncdotool.decoders import DecodeError
 from vncdotool.decoders.tight import (
     FILL, FILTER_COPY, FILTER_GRADIENT, FILTER_PALETTE, JPEG, MIN_TO_COMPRESS, TightDecoder,
 )
-from vncdotool.pixelformat import PIXEL_FORMATS, tpixel_bytes
+from vncdotool.pixelformat import PIXEL_FORMATS, TPIXEL_FORMAT, PixelFormat, tpixel_bytes
 
 PIXEL_FORMAT = PIXEL_FORMATS["bgrx8888"]
 TBYTES = tpixel_bytes(PIXEL_FORMAT)
@@ -75,27 +78,39 @@ def basic(
     return bytes(wire + compact(len(block)) + block)
 
 
+def decode_rect(
+    wire: bytes,
+    width: int,
+    height: int,
+    decoder: Optional[TightDecoder] = None,
+    pixel_format: PixelFormat = PIXEL_FORMAT,
+) -> Tuple[bytes, PixelFormat, int]:
+    """The pixels one ``decodeRect`` produced, the format they are in, and how
+    many bytes it took. A framing bug shows up as the wrong count long before
+    it shows up as the wrong image.
+    """
+    generator = (decoder or TightDecoder()).decodeRect(width, height, pixel_format)
+    consumed, block = 0, None
+    while True:
+        try:
+            size = generator.send(block)
+        except StopIteration as stop:
+            pixels, output_format = stop.value
+            return pixels, output_format, consumed
+        block = wire[consumed:consumed + size]
+        if len(block) != size:
+            raise AssertionError(f"decoder asked for {size} bytes at offset {consumed}, {len(block)} left")
+        consumed += size
+
+
 def decode(
     wire: bytes,
     width: int,
     height: int,
     decoder: Optional[TightDecoder] = None,
 ) -> Tuple[bytes, int]:
-    """The pixels one ``decodeRect`` produced and how many bytes it took. A
-    framing bug shows up as the wrong count long before it shows up as the
-    wrong image.
-    """
-    generator = (decoder or TightDecoder()).decodeRect(width, height, PIXEL_FORMAT)
-    consumed, block = 0, None
-    while True:
-        try:
-            size = generator.send(block)
-        except StopIteration as stop:
-            return stop.value[0], consumed
-        block = wire[consumed:consumed + size]
-        if len(block) != size:
-            raise AssertionError(f"decoder asked for {size} bytes at offset {consumed}, {len(block)} left")
-        consumed += size
+    pixels, _, consumed = decode_rect(wire, width, height, decoder)
+    return pixels, consumed
 
 
 def compact_length(data: bytes) -> int:
@@ -310,11 +325,11 @@ class TestRefusals(unittest.TestCase):
 
         self.assertIn("Gradient", str(caught.exception))
 
-    def test_jpeg_is_refused_by_name(self) -> None:
+    def test_jpeg_data_that_is_not_a_jfif_stream_is_refused(self) -> None:
         with self.assertRaises(DecodeError) as caught:
             decode(bytes([JPEG << 4]) + compact(4) + b"\x00" * 4, 4, 1)
 
-        self.assertIn("Jpeg", str(caught.exception))
+        self.assertIn("JPEG", str(caught.exception))
 
     def test_basic_without_zlib_is_refused(self) -> None:
         for control in (0xA0, 0xE0):
@@ -337,6 +352,129 @@ class TestRefusals(unittest.TestCase):
             decode(wire, 4, 1)
 
         self.assertIn("palette", str(caught.exception))
+
+
+def jfif(image: Image.Image, quality: int = 100) -> bytes:
+    buffer = io.BytesIO()
+    image.save(buffer, "JPEG", quality=quality)
+    return buffer.getvalue()
+
+
+def jpeg_rect(payload: bytes, reset: int = 0) -> bytes:
+    return bytes([(JPEG << 4) | reset]) + compact(len(payload)) + payload
+
+
+def gradient_image(width: int, height: int) -> Image.Image:
+    return Image.frombytes(
+        "RGB", (width, height),
+        bytes(v for y in range(height) for x in range(width)
+              for v in (x * 8 % 256, y * 8 % 256, (x + y) * 4 % 256)),
+    )
+
+
+class TestJpeg(unittest.TestCase):
+    WIDTH = 16
+    HEIGHT = 8
+
+    def setUp(self) -> None:
+        self.image = gradient_image(self.WIDTH, self.HEIGHT)
+        self.payload = jfif(self.image)
+        self.wire = jpeg_rect(self.payload)
+
+    def test_a_compact_length_then_that_many_bytes_of_jfif(self) -> None:
+        _, _, consumed = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+
+        self.assertEqual(self.wire[0] >> 4, 0x09)
+        self.assertEqual(self.payload[:2], b"\xff\xd8", "a JFIF stream opens with SOI")
+        self.assertEqual(consumed, 1 + len(compact(len(self.payload))) + len(self.payload))
+
+    def test_the_min_to_compress_rule_does_not_apply(self) -> None:
+        tiny = jfif(gradient_image(1, 1))
+        wire = jpeg_rect(tiny)
+
+        _, _, consumed = decode_rect(wire, 1, 1)
+
+        self.assertEqual(consumed, 1 + len(compact(len(tiny))) + len(tiny))
+
+    def test_it_decodes_to_24bpp_rgb_whatever_was_negotiated(self) -> None:
+        self.assertEqual(PIXEL_FORMAT.bpp, 32)
+
+        pixels, output_format, _ = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+
+        self.assertEqual(output_format, TPIXEL_FORMAT)
+        self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
+
+    def test_it_stays_24bpp_rgb_at_a_16bpp_negotiated_format(self) -> None:
+        # At bgrx8888 a TPIXEL is three bytes too, so only a second format separates "JPEG is
+        # always 24 bpp RGB" from a coincidence.
+        pixels, output_format, _ = decode_rect(
+            self.wire, self.WIDTH, self.HEIGHT, pixel_format=PIXEL_FORMATS["rgb565"])
+
+        self.assertEqual(output_format, TPIXEL_FORMAT)
+        self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
+
+    def test_it_decodes_to_the_image_it_was_encoded_from(self) -> None:
+        pixels, _, _ = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+
+        original = self.image.tobytes()
+        worst = max(abs(a - b) for a, b in zip(pixels, original))
+        self.assertLessEqual(worst, 8, "quality 100 should stay within a lossy bound")
+
+    def test_a_jpeg_rectangle_honours_a_reset_bit(self) -> None:
+        # Reset bits apply even to a type carrying no zlib data (specs/tight-wire.md section 2).
+        payload = bytes(i % 3 for i in range(12))
+        palette = [RED, GREEN, BLUE]
+        decoder, stream = TightDecoder(), zlib.compressobj()
+        expected, _ = decode(
+            basic(payload, stream=2, filter_id=FILTER_PALETTE, palette=palette, compressor=stream),
+            12, 1, decoder)
+        decode(
+            basic(payload, stream=2, filter_id=FILTER_PALETTE, palette=palette, compressor=stream),
+            12, 1, decoder)
+
+        decode_rect(jpeg_rect(self.payload, reset=0x04), self.WIDTH, self.HEIGHT, decoder)
+        again, _ = decode(
+            basic(payload, stream=2, filter_id=FILTER_PALETTE, palette=palette,
+                  compressor=zlib.compressobj()),
+            12, 1, decoder)
+
+        self.assertEqual(again, expected)
+
+    def test_a_rectangle_whose_image_is_the_wrong_size_is_refused(self) -> None:
+        with self.assertRaises(DecodeError) as caught:
+            decode_rect(self.wire, self.WIDTH + 1, self.HEIGHT)
+
+        self.assertIn("JPEG", str(caught.exception))
+
+    def test_a_header_declaring_an_implausible_size_is_refused(self) -> None:
+        payload = bytearray(self.payload)
+        offset = 2
+        while payload[offset + 1] not in (0xC0, 0xC1, 0xC2):
+            self.assertEqual(payload[offset], 0xFF, "lost the JFIF marker chain")
+            offset += 2 + ((payload[offset + 2] << 8) | payload[offset + 3])
+        # A start-of-frame segment is length, precision, then height and width, two bytes each.
+        payload[offset + 5:offset + 9] = (65500).to_bytes(2, "big") * 2
+
+        with self.assertRaises(DecodeError) as caught:
+            decode_rect(jpeg_rect(bytes(payload)), self.WIDTH, self.HEIGHT)
+
+        self.assertIn("JPEG", str(caught.exception))
+
+    def test_a_one_component_jpeg_becomes_grey_rgb(self) -> None:
+        # TurboVNC under -subsamp gray sends a 1-component JPEG (specs/tight-wire.md section 4).
+        payload = jfif(self.image.convert("L"))
+        self.assertEqual(len(Image.open(io.BytesIO(payload)).getbands()), 1)
+
+        pixels, output_format, consumed = decode_rect(
+            jpeg_rect(payload), self.WIDTH, self.HEIGHT)
+
+        self.assertEqual(output_format, TPIXEL_FORMAT)
+        self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
+        triples = {pixels[i:i + 3] for i in range(0, len(pixels), 3)}
+        self.assertTrue(
+            all(triple[0] == triple[1] == triple[2] for triple in triples),
+            "one component expanded to three must leave every pixel grey",
+        )
 
 
 class TestOversizedZlibBlock(unittest.TestCase):

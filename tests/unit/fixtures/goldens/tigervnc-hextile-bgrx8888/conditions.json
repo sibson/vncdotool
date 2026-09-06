@@ -3,7 +3,7 @@
   "geometry": [256, 192],
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-09-06T12:46:47Z",
+    "capture_timestamp": "2026-09-06T14:07:28Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -34,5 +34,6 @@
   },
   "pixel_format": "bgrx8888",
   "server": "tigervnc",
-  "tolerance": [0, 0, 0]
+  "tolerance": [0, 0, 0],
+  "tolerance_kind": "format-quantization"
 }
