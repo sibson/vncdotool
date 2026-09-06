@@ -129,49 +129,59 @@ survives and decoders still reach into `client.bypp`, `client._zlib_stream` and
 `NeedMoreData(n)` to be re-run works until zlib — ZRLE and Tight streams live for
 the whole connection and cannot be replayed.
 
-## Two decoder base classes
+## Four decoder base classes, one entry point
 
 Not every encoding produces pixels. A decoder subclasses whichever of these
-describes what it produces:
+describes what it produces, and overrides that base class' one method:
 
 | Base class | Produces | Method it overrides | Encodings |
 |---|---|---|---|
-| `PixelDecoder` | fills a `RectBuffer` the pump allocates and pastes | `decodePixels` | Raw, RRE, CoRRE, Hextile, ZRLE, Tight |
+| `PixelDecoder` | fills a `RectBuffer` the pump allocates and pastes | `decodePixels` | RRE, CoRRE, Hextile, ZRLE, and Raw, which skips the buffer — see below |
+| `WholeRectDecoder` | the whole rectangle, in its own pixel format | `decodeRect` | Tight |
 | `ClientDecoder` | calls `copyRectangle` or `updateCursor` | `decodeForClient` | CopyRect, Cursor |
+| `ControlDecoder` | a side effect, and no screen change | `decodeForControl` | DesktopSize, QEMU extended key |
 
-Both are nominal base classes under one `Decoder`, which defines both methods and
-raises `NotImplementedError` for the one a given subclass does not use.
-Structural typing cannot express this: the two take different arguments but
+They are nominal base classes under one `Decoder`, which defines every method and
+raises `NotImplementedError` for the ones a given subclass does not use.
+Structural typing cannot express this: they take different arguments but
 `Protocol` matching compares method names, so every `PixelDecoder` satisfies
-`ClientDecoder` and the pump has to guess from the methods an object carries.
+`ClientDecoder` and the pump would have to guess from the methods an object
+carries.
 
-The pseudo-encodings — DesktopSize, LastRect, QEMU extended key — are still on
-`rfb.py`'s own path and get their base class in phase 5, when there is a real one
-to design against. They consume no payload, which is a difference in arguments
-rather than in what they do to the client: DesktopSize resizes the framebuffer
-much as CopyRect writes to it. Whether that earns a third base class or is just a
-`ClientDecoder` whose generator returns without yielding is a question for the
-phase that migrates them.
+`LastRect` is still on `rfb.py`'s own path: it mutates the rectangle loop
+counter, which is the pump's own state rather than anything a decoder produces.
 
 Each decoder class also names the encoding-type it decodes (RFC 6143 §7.6.1) as
 `ENCODING`, and the registry is built from a list of classes rather than a
 hand-written mapping, so a key cannot drift from the class it points at.
 
-### Which pump path a decoder takes is resolved once per connection
+### One pump path, whatever the decoder produces
 
-`for_connection()` runs at connect time, so that is where each decoder is paired
-with the pump path its base class implies. A rectangle then costs one dict lookup
-and a call through a bound method — no `isinstance`, no probing for methods, and
-no tag to keep in step with the class hierarchy.
+What the four differ in is what the pump feeds the generator and what it does
+with the result — not how the bytes are pumped. So each base class implements
+`decode(client, rect, pixel_format)`, the one entry point the pump calls, in
+terms of the method its subclasses override, and returns an `Outcome`: whether
+the rectangle counts as a screen change, and any pixels the pump is left to
+paste. A rectangle costs one dict lookup and one call; the pump asks nothing
+about the class it holds.
 
-Decoders depend on nothing from `rfb.py`: the pump keeps its own machinery —
-allocating buffers, driving generators, advancing the connection — to itself,
-and the entry points that use it live with the pump rather than on the
-decoder.
+That is what makes an encoding whose framing is new cost no `rfb.py` edit. The
+earlier design gave each base class its own pump method and picked between them
+with an `isinstance` chain at connect time, so `WholeRectDecoder` — a decoder
+that hands over its own bytes in its own format — could not be added without one
+(specs/tight-encoding.md, R1).
 
-There is no separate sink object. The pump calls the existing client callbacks —
-`updateRectangle`, `copyRectangle`, `updateCursor` — which is the vocabulary the
-codebase already uses.
+Decoders import nothing from `rfb.py`: driving generators, advancing the
+connection and turning a failure into a disconnect stay with the pump. What a
+decoder is handed is the client, and what it may ask of it is the vocabulary the
+codebase already uses — `updateRectangle`, `copyRectangle`, `updateCursor`,
+`updateDesktopSize` — plus `rectBuffer` and `requireFits`, which are the two
+things only the pump can answer: a rectangle-sized buffer, reused across
+rectangles, and whether a rectangle fits the framebuffer at all. Both raise
+`DecodeError` rather than reporting a failure the caller has to check, so the
+pump has one place that turns a bad rectangle into an abort.
+
+There is no separate sink object.
 
 CopyRect reads four bytes and no pixel data; it is a framebuffer-to-framebuffer
 blit needing the screen, not a rect buffer. Cursor produces an image and a mask,
@@ -184,21 +194,22 @@ padded to a whole number of bytes — `floor((width + 7) / 8)` — with the most
 significant bit of each byte representing the leftmost pixel and a 1-bit meaning
 the corresponding cursor pixel is valid.
 
-The genuine special cases are the pseudo-encodings phase 5 migrates: `LastRect`
-mutates the rectangle loop counter, and the QEMU extended key encoding mutates
-`negotiated_encodings` and removes the entry it just appended to `rectanglePos`.
+The genuine special case is `LastRect`, which mutates the rectangle loop
+counter. DesktopSize and the QEMU extended key encoding are `ControlDecoder`s:
+they consume no payload and return an `Outcome` that records no screen change,
+which is why the QEMU one leaves nothing in `rectanglePos` to remove.
 
 ### A decoder can opt out of the buffer entirely
 
-Raw writes its rectangle in one piece, in order, in one read, and shortcuts the
-intermediate buffer: `PixelDecoder.buffered = False` tells the pump this
-decoder's wire bytes are already its output bytes, so it reads `width * height
-* output_format().bypp` of them and calls `updateRectangle` directly.
+Raw writes its rectangle in one piece, in order, in one read, so it overrides
+`decode` rather than `decodePixels`: it reads `width * height * bypp` bytes and
+returns them as its outcome, never touching a buffer it would only copy back
+out. Nothing in the pump knows this; the shortcut is Raw's own.
 
-The dimension check malformed input must still get (R6) can no longer live in
-`_allocateBuffer`, since this path never allocates one; `_rectFits` is that
-check, called by both paths. See Benchmark below (N1) for the measurement that
-motivated this.
+The dimension check malformed input must still get (R6) therefore cannot live in
+buffer allocation alone. `requireFits` is that check, and a decoder that skips
+the buffer calls it itself. See Benchmark below (N1) for the measurement that
+motivated the shortcut.
 
 ## Pixel format is shared, not per-decoder
 
@@ -291,11 +302,11 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ```
 vncdotool/pixelformat.py         PixelFormat, its Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, built from the decoder classes
-vncdotool/decoders/base.py       Decoder, PixelDecoder, ClientDecoder
+vncdotool/decoders/base.py       Decoder and its four base classes, Outcome
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/errors.py     DecodeError
-vncdotool/decoders/{raw,rre,corre,hextile,zrle,cursor}.py
-vncdotool/decoders/control.py    DesktopSize, LastRect, QEMU extended key
+vncdotool/decoders/{raw,rre,hextile,zrle,tight,copyrect,cursor}.py
+vncdotool/decoders/control.py    DesktopSize, QEMU extended key
 vncdotool/rfb.py                 negotiation, auth, message framing, the pump
 ```
 
@@ -579,6 +590,28 @@ path landed on top of Phase 2-4:
 |---|---|---|
 | generator pump, no fast path | 634 | 680 |
 | generator pump + `buffered = False` | 561 | 606 |
+
+Collapsing the four pump methods into one entry point cost Raw that shortcut's
+separate path: it now runs as a generator like every other decoder, one yield
+long. Best microseconds, alternating between the two three times and taking the
+best of each:
+
+| fixture | before | after | |
+|---|---|---|---|
+| raw | 590 | 638 | +8% |
+| hextile | 4656 | 4709 | +1% |
+| tight | 1475 | 1504 | +2% |
+
+Alternate them rather than running every baseline and then every after: measured
+that way, all seven fixtures moved a uniform 4% and Raw moved 12%, which is the
+machine drifting across a ten-minute run with the real difference on top of it.
+Two of the three Hextile pairs came out with the branch ahead. The four fixtures
+not listed are in `bench.jsonl`, from that blocked run.
+
+Raw pays because it has the least work per rectangle to hide the generator
+behind: creating one, two `send`s and a `StopIteration` per rectangle, against
+`expect` called directly. Its recorded call count rises from 1188 to 1703 for
+the same 87 rectangles, and that is the whole of the difference.
 
 `make bench` runs this; `make bench-record` appends the run to `bench.jsonl`.
 

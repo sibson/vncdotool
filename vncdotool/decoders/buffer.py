@@ -15,9 +15,10 @@ class RectBuffer:
             raise ValueError(f"backing too small: need {needed} bytes, got {len(backing)}")
         self._backing = backing
         self._nbytes = needed
-        # A decoder that fills the whole rectangle in one blit -- Raw, every
-        # update -- hands over a buffer we can pass straight to the client,
-        # so hold the reference instead of copying it in and back out.
+        # A decoder that fills the whole rectangle in one blit -- a Hextile or
+        # ZRLE rectangle of a single tile -- hands over a buffer we can pass
+        # straight to the client, so hold the reference instead of copying it
+        # in and back out.
         self._whole: bytes | None = None
         # The backing is reused across rectangles, so it arrives holding the
         # previous one. A write covering the whole buffer replaces all of it;

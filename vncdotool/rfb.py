@@ -23,7 +23,7 @@ from typing import (
     Any,
     Callable,
     Collection,
-    Iterator,
+    Generator,
     List,
     Tuple,
     cast,
@@ -114,10 +114,7 @@ class RFBClient(Protocol):
         self.width = 0
         self.height = 0
         self._rect_backing = bytearray()
-        self._decoders = {
-            encoding: (decoder, self._pumpFor(decoder))
-            for encoding, decoder in decoders.for_connection().items()
-        }
+        self._decoders = decoders.for_connection()
 
     @property
     def bypp(self) -> int:
@@ -345,10 +342,9 @@ class RFBClient(Protocol):
 
         if self.rectangles:
             self.rectangles -= 1
-            entry = self._decoders.get(encoding)
-            if entry is not None:
-                decoder, pump = entry
-                pump(decoder, x, y, width, height)
+            decoder = self._decoders.get(encoding)
+            if decoder is not None:
+                self._pumpRectangle(decoder, x, y, width, height)
             else:
                 self.abortConnection(
                     f"unknown encoding received {Encoding.lookup(encoding)!r}"
@@ -356,129 +352,68 @@ class RFBClient(Protocol):
         else:
             self._doConnection()
 
-    def _pumpFor(self, decoder: decoders.Decoder) -> Callable[..., None]:
-        if isinstance(decoder, decoders.PixelDecoder):
-            if not decoder.buffered:
-                return self._pumpRectangle
-            return self._pumpBufferedRectangle
-        if isinstance(decoder, decoders.WholeRectDecoder):
-            return self._pumpWholeRectangle
-        if isinstance(decoder, decoders.ControlDecoder):
-            return self._pumpForControl
-        return self._pumpForClient
-
     def _pumpRectangle(
-        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
+        self, decoder: decoders.Decoder, x: int, y: int, width: int, height: int
     ) -> None:
-        if not self._rectFits(width, height):
-            return
-        output_format = decoder.output_format(self.pixel_format)
-        size = width * height * output_format.bypp
-        self.expect(self._finishRectangle, size, output_format, (x, y, width, height))
-
-    def _pumpBufferedRectangle(
-        self, decoder: decoders.PixelDecoder, x: int, y: int, width: int, height: int
-    ) -> None:
-        target = self._allocateBuffer(width, height)
-        if target is None:
-            return
         rect = (x, y, width, height)
+        self._pumpGenerator(None, decoder.decode(self, rect, self.pixel_format), rect)
 
-        def finish_buffered(_result: Any) -> None:
-            output_format = decoder.output_format(self.pixel_format)
-            self._finishRectangle(target.tobytes(), output_format, rect)
-
-        self._pumpGenerator(None, decoder.decodePixels(target, self.pixel_format), finish_buffered)
-
-    def _pumpWholeRectangle(
-        self, decoder: decoders.WholeRectDecoder, x: int, y: int, width: int, height: int
+    def _finishRectangle(
+        self, rect: tuple[int, int, int, int], outcome: decoders.Outcome
     ) -> None:
-        if not self._rectFits(width, height):
+        pixels, output_format = outcome.pixels, outcome.pixel_format
+        if (pixels is None) != (output_format is None):
+            self.abortConnection(
+                "decoder produced pixels in no format, or a format with no pixels"
+            )
             return
-        rect = (x, y, width, height)
-
-        def finish_whole(result: Any) -> None:
-            pixels, output_format = result
+        if pixels is not None and output_format is not None:
+            x, y, width, height = rect
             expected = width * height * output_format.bypp
             if len(pixels) != expected:
                 self.abortConnection(
-                    f"decoder produced {len(pixels)} bytes for a {width}x{height} "
-                    f"rectangle at {output_format.bypp} bytes per pixel, "
-                    f"which needs {expected}"
+                    f"decoder produced {len(pixels)} bytes for a "
+                    f"{width}x{height} rectangle at {output_format.bypp} "
+                    f"bytes per pixel, which needs {expected}"
                 )
                 return
-            self._finishRectangle(pixels, output_format, rect)
-
-        self._pumpGenerator(
-            None, decoder.decodeRect(width, height, self.pixel_format), finish_whole
-        )
-
-    def _pumpForClient(
-        self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
-    ) -> None:
-        rect = (x, y, width, height)
-
-        def finish_client(_result: Any) -> None:
+            self.updateRectangle(x, y, width, height, pixels, output_format)
+        if outcome.changed:
             self.rectanglePos.append(rect)
-            self._doConnection()
-
-        self._pumpGenerator(None, decoder.decodeForClient(self, rect, self.pixel_format), finish_client)
-
-    def _pumpForControl(
-        self, decoder: decoders.ControlDecoder, x: int, y: int, width: int, height: int
-    ) -> None:
-        decoder.decodeForControl(self, width, height)
         self._doConnection()
 
-    def _finishRectangle(
-        self,
-        block: bytes,
-        output_format: PixelFormat,
-        rect: tuple[int, int, int, int],
-    ) -> None:
-        self.rectanglePos.append(rect)
-        x, y, width, height = rect
-        self.updateRectangle(x, y, width, height, block, output_format)
-        self._doConnection()
+    # ---  what a decoder may ask of the pump
 
-    def _rectFits(self, width: int, height: int) -> bool:
-        """Whether a rectangle fits the framebuffer, having failed the
-        connection if it does not."""
+    def requireFits(self, width: int, height: int) -> None:
+        """Raise unless a rectangle fits the framebuffer."""
         limit_w = self.width or self.MAX_DESKTOP_SIZE
         limit_h = self.height or self.MAX_DESKTOP_SIZE
         if not (0 <= width <= limit_w and 0 <= height <= limit_h):
-            self.abortConnection(
-                f"rectangle {width}x{height} does not fit a {limit_w}x{limit_h} framebuffer"
+            raise decoders.DecodeError(
+                f"{width}x{height} does not fit a {limit_w}x{limit_h} framebuffer"
             )
-            return False
-        return True
 
-    def _allocateBuffer(self, width: int, height: int) -> decoders.RectBuffer | None:
-        """A buffer for one rectangle, or None having failed the connection."""
-        if not self._rectFits(width, height):
-            return None
+    def rectBuffer(self, width: int, height: int) -> decoders.RectBuffer:
+        """A buffer for one rectangle, reused across rectangles."""
+        self.requireFits(width, height)
         needed = width * height * self.bypp
         try:
             if len(self._rect_backing) < needed:
                 self._rect_backing = bytearray(needed)
-            return decoders.RectBuffer(width, height, self.bypp, self._rect_backing)
         except MemoryError:
-            self.abortConnection(f"no memory for a {width}x{height} rectangle")
-            return None
+            raise decoders.DecodeError(f"no memory for a {width}x{height} rectangle")
+        return decoders.RectBuffer(width, height, self.bypp, self._rect_backing)
 
     def _pumpGenerator(
         self,
         block: bytes | None,
-        generator: Iterator[int],
-        on_done: Callable[[Any], None] | None,
+        generator: Generator[int, Any, decoders.Outcome],
+        rect: tuple[int, int, int, int],
     ) -> None:
         try:
             size = generator.send(block)
         except StopIteration as stop:
-            if on_done is None:
-                self._doConnection()
-            else:
-                on_done(stop.value)
+            self._finishRectangle(rect, stop.value)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()
@@ -489,7 +424,7 @@ class RFBClient(Protocol):
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pumpGenerator, size, generator, on_done)
+        self.expect(self._pumpGenerator, size, generator, rect)
 
     # ---  other server messages
 

@@ -28,10 +28,10 @@ def make_client() -> client.VNCDoToolClient:
 
 
 def pump(cli: rfb.RFBClient, decoder, x: int, y: int, width: int, height: int) -> None:
-    """Dispatch one rectangle the way `_handleRectangle` would, without the
-    registry: the client pairs a decoder with a pump method at connect time.
+    """Dispatch one rectangle the way `_handleRectangle` would, without going
+    through the registry to find the decoder.
     """
-    cli._pumpFor(decoder)(decoder, x, y, width, height)
+    cli._pumpRectangle(decoder, x, y, width, height)
 
 
 def make_pump_client() -> rfb.RFBClient:
@@ -106,7 +106,7 @@ class TestDecodeErrorHandling(TestCase):
             raise decoders.DecodeError("bogus subencoding")
             yield  # pragma: no cover - never reached
 
-        cli._pumpGenerator(None, failing(), None)
+        cli._pumpGenerator(None, failing(), (0, 0, 1, 1))
 
         cli.vncProtocolError.assert_called_once()
         self.assertIn("bogus subencoding", cli.vncProtocolError.call_args.args[0])
@@ -213,33 +213,40 @@ class TestRectBufferValidation(TestCase):
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
         cli = self.cli
         cli.width, cli.height = 64, 48
+
+        with self.assertRaises(decoders.DecodeError):
+            cli.rectBuffer(65, 10)
+
+    def test_the_pump_turns_that_refusal_into_a_disconnect(self) -> None:
+        """`rectBuffer` raises inside the decoder's generator, which is the
+        pump's to catch: a decoder never sees it.
+        """
+        cli = self.cli
+        cli.width, cli.height = 64, 48
         cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
 
-        result = cli._allocateBuffer(65, 10)
+        class Ordinary(decoders.PixelDecoder):
+            def decodePixels(self, target, pixel_format):
+                yield target.width * target.height * target.bypp
 
-        self.assertIsNone(result)
+        pump(cli, Ordinary(), 0, 0, 65, 10)
+
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
+        cli.updateRectangle.assert_not_called()
 
     def test_a_zero_dimension_rectangle_is_not_an_error(self) -> None:
         cli = self.cli
-        cli.vncProtocolError = mock.Mock()
 
-        self.assertIsNotNone(cli._allocateBuffer(0, 10))
-        self.assertIsNotNone(cli._allocateBuffer(10, 0))
-
-        cli.vncProtocolError.assert_not_called()
+        self.assertIsNotNone(cli.rectBuffer(0, 10))
+        self.assertIsNotNone(cli.rectBuffer(10, 0))
 
     def test_the_largest_allowed_rectangle_is_accepted(self) -> None:
         """The refusals above pass just as well against an off-by-one that
         rejects everything.
         """
-        cli = self.cli
-        cli.vncProtocolError = mock.Mock()
-
-        self.assertIsNotNone(cli._allocateBuffer(cli.MAX_DESKTOP_SIZE, 1))
-
-        cli.vncProtocolError.assert_not_called()
+        self.assertIsNotNone(self.cli.rectBuffer(self.cli.MAX_DESKTOP_SIZE, 1))
 
 
 class TestCopyRectPump(TestCase):
@@ -255,7 +262,7 @@ class TestCopyRectPump(TestCase):
         cli.width, cli.height = 64, 48
         cli.copyRectangle = mock.Mock()
         cli.updateRectangle = mock.Mock()
-        decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
+        decoder = cli._decoders[Encoding.COPY_RECTANGLE]
 
         pump(cli, decoder, 5, 6, 10, 20)
         cli.dataReceived(pack("!HH", 1, 2))  # srcx, srcy
@@ -269,7 +276,7 @@ class TestCopyRectPump(TestCase):
         cli.copyRectangle = mock.Mock()
         cli.vncProtocolError = mock.Mock()
 
-        decoder, _ = cli._decoders[Encoding.COPY_RECTANGLE]
+        decoder = cli._decoders[Encoding.COPY_RECTANGLE]
         pump(cli, decoder, 0, 0, 10, 10)
         cli.dataReceived(pack("!HH", 60, 0))
 
@@ -289,7 +296,7 @@ class TestOnePastePerRectangle(TestCase):
     def test_single_call_with_negotiated_pixel_format(self) -> None:
         cli = self.cli
         cli.updateRectangle = mock.Mock()
-        decoder, _ = cli._decoders[Encoding.RAW]
+        decoder = cli._decoders[Encoding.RAW]
         width, height = 4, 3
         pixels = bytes(range(width * height * cli.bypp))
 
@@ -305,7 +312,7 @@ class TestOnePastePerRectangle(TestCase):
     def test_the_rectangle_lands_where_the_wire_said(self) -> None:
         cli = self.cli
         cli.updateRectangle = mock.Mock()
-        decoder, _ = cli._decoders[Encoding.RAW]
+        decoder = cli._decoders[Encoding.RAW]
         pixels = bytes(range(2 * 2 * cli.bypp))
 
         pump(cli, decoder, 7, 9, 2, 2)
@@ -327,13 +334,13 @@ class TestRectBufferReuse(TestCase):
     def test_smaller_rectangle_after_larger_gets_only_its_own_bytes(self) -> None:
         cli = self.cli
 
-        big = cli._allocateBuffer(4, 4)
+        big = cli.rectBuffer(4, 4)
         half = bytes([0xFF]) * (4 * 2 * cli.bypp)
         big.blit(0, 0, 4, 2, half)
         big.blit(0, 2, 4, 2, half)
         self.assertEqual(big.tobytes(), bytes([0xFF]) * (4 * 4 * cli.bypp))
 
-        small = cli._allocateBuffer(2, 2)
+        small = cli.rectBuffer(2, 2)
         row = bytes([0xAA]) * (2 * 1 * cli.bypp)
         small.blit(0, 0, 2, 1, row)
         small.blit(0, 1, 2, 1, row)
@@ -343,9 +350,9 @@ class TestRectBufferReuse(TestCase):
         self.assertEqual(len(small.tobytes()), 2 * 2 * cli.bypp)
 
 
-class TestUnbufferedDecoders(TestCase):
-    """A decoder with `buffered = False` skips the buffer; the default
-    (`buffered = True`) keeps the generator path.
+class TestDecodersThatSkipTheBuffer(TestCase):
+    """Raw hands the pump its wire bytes rather than filling a buffer; an
+    ordinary `PixelDecoder` still gets one allocated for it.
     """
 
     def test_a_buffered_decoder_still_decodes(self) -> None:
@@ -364,18 +371,35 @@ class TestUnbufferedDecoders(TestCase):
         cli.updateRectangle.assert_called_once_with(
             0, 0, 2, 2, pixels, cli.pixel_format
         )
+        self.assertNotEqual(cli._rect_backing, bytearray())
+
+    def test_raw_allocates_no_buffer(self) -> None:
+        """Nothing in the pump knows Raw skips the buffer, so nothing but
+        this holds the shortcut in place.
+        """
+        cli = make_pump_client()
+        cli.updateRectangle = mock.Mock()
+
+        pixels = bytes(range(2 * 2 * cli.bypp))
+        pump(cli, cli._decoders[Encoding.RAW], 0, 0, 2, 2)
+        cli.dataReceived(pixels)
+
+        cli.updateRectangle.assert_called_once_with(
+            0, 0, 2, 2, pixels, cli.pixel_format
+        )
+        self.assertEqual(cli._rect_backing, bytearray())
 
     def test_a_rectangle_larger_than_the_framebuffer_is_refused(self) -> None:
-        """The unbuffered path computes its byte count from the rectangle
-        header, so it has to bound the dimensions itself rather than
-        inheriting the check `_allocateBuffer` makes.
+        """Raw computes its byte count from the rectangle header, so it has
+        to bound the dimensions itself rather than inheriting the check
+        `rectBuffer` makes.
         """
         cli = make_pump_client()
         cli.width, cli.height = 64, 48
         cli.vncProtocolError = mock.Mock()
         cli.updateRectangle = mock.Mock()
 
-        decoder, _ = cli._decoders[Encoding.RAW]
+        decoder = cli._decoders[Encoding.RAW]
         pump(cli, decoder, 0, 0, 65, 10)
 
         cli.vncProtocolError.assert_called_once()
@@ -494,6 +518,31 @@ class TestWholeRectLength(TestCase):
         cli.transport.loseConnection.assert_called_once()
         cli.updateRectangle.assert_not_called()
 
+    def test_a_refused_rectangle_is_not_recorded_as_a_screen_change(self) -> None:
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp - 1))
+
+        self.assertEqual(cli.rectanglePos, [])
+
+    def test_pixels_without_a_format_are_refused(self) -> None:
+        """The pump cannot size them, and recording the rectangle without
+        painting it would lose the update rather than report it.
+        """
+        cli = make_pump_client()
+        cli.vncProtocolError = mock.Mock()
+        cli.updateRectangle = mock.Mock()
+
+        class Formatless(decoders.PixelDecoder):
+            def decode(self, client, rect, pixel_format):
+                data = yield 4
+                return decoders.Outcome(True, data, None)
+
+        pump(cli, Formatless(), 0, 0, 2, 2)
+        cli.dataReceived(b"\x00\x00\x00\x00")
+
+        cli.vncProtocolError.assert_called_once()
+        cli.updateRectangle.assert_not_called()
+        self.assertEqual(cli.rectanglePos, [])
+
     def test_too_many_bytes_is_refused(self) -> None:
         cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp + 1))
 
@@ -512,14 +561,15 @@ class TestWholeRectLength(TestCase):
 
 
 class TestWholeRectSegmentation(TestCase):
-    """`TestSegmentation` proves this of the buffered pump. The whole-rect
-    path parks its own generator, so it has to be proved again here.
+    """`TestSegmentation` proves this against a captured Raw stream, which
+    yields once per rectangle. A decoder that yields several times has more
+    ways to mis-handle a split, so prove it against one of those too.
     """
 
     def _client(self) -> client.VNCDoToolClient:
         cli = make_client()
         decoder = FakeWholeRect()
-        cli._decoders[FakeWholeRect.ENCODING] = (decoder, cli._pumpFor(decoder))
+        cli._decoders[FakeWholeRect.ENCODING] = decoder
         cli.dataReceived(gzip.decompress((FIXTURE / "init.bin.gz").read_bytes()))
         return cli
 

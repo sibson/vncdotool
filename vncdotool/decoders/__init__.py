@@ -4,12 +4,16 @@ from typing import Dict, Type
 
 from ..const import Encoding
 from .base import (
+    CHANGED,
+    NOTHING,
     ClientDecoder,
     ControlDecoder,
     Decoder,
+    Outcome,
     PixelDecoder,
-    RectDecoder,
+    Rect,
     WholeRectDecoder,
+    painted,
 )
 from .buffer import RectBuffer
 from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
@@ -59,15 +63,19 @@ def for_connection() -> Dict[Encoding, Decoder]:
 
 
 __all__ = [
+    "CHANGED",
     "ClientDecoder",
     "ControlDecoder",
     "DECODERS",
     "DecodeError",
     "Decoder",
     "ENCODING_NAMES",
+    "NOTHING",
+    "Outcome",
     "PixelDecoder",
+    "Rect",
     "RectBuffer",
-    "RectDecoder",
     "WholeRectDecoder",
     "for_connection",
+    "painted",
 ]
