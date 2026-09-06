@@ -19,7 +19,7 @@ from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
-from . import pixelformat, rfb
+from . import decoders, pixelformat, rfb
 from .const import JPEG_QUALITY_ENCODINGS
 from .keys import KEYMAP
 
@@ -141,7 +141,6 @@ class _StableWatch:
 
 
 class VNCDoToolClient(rfb.RFBClient):
-    encoding = rfb.Encoding.RAW
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     requested_jpeg_quality: int | None = None
@@ -502,7 +501,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def vncConnectionMade(self) -> None:
         self.setImageMode()
-        encodings = list(self.requested_encodings or [self.encoding])
+        encodings = list(self.requested_encodings or decoders.DEFAULT_ENCODINGS)
         if self.factory.pseudocursor or self.factory.nocursor:
             encodings.append(rfb.Encoding.PSEUDO_CURSOR)
         if self.factory.pseudodesktop:

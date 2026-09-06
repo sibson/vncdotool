@@ -80,8 +80,7 @@ frame is further from its target than any bound can separate from a wrong
 screen. `--expect-blur RADIUS` sets that radius, or `0` turns it off:
 
 ```
-> vncdo --encodings tight --jpeg-quality 5 --expect-fuzz 64 \
-        expect somescreen.png
+> vncdo --jpeg-quality 5 --expect-fuzz 64 expect somescreen.png
 ```
 
 Before 2.0 the number after the filename was the root-mean-square difference

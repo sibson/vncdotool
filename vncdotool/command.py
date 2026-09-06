@@ -640,7 +640,11 @@ def vncdo(argv: list[str] | None = None) -> None:
         "--encodings",
         metavar="LIST",
         help="comma-separated encodings to offer the server, in preference "
-        "order (%s) [raw]" % ", ".join(decoders.ENCODING_NAMES),
+        "order (%s) [%s]"
+        % (
+            ", ".join(decoders.ENCODING_NAMES),
+            ",".join(decoders.DEFAULT_ENCODING_NAMES),
+        ),
     )
     op.add_option(
         "--pixel-format",
@@ -724,7 +728,8 @@ def vncdo(argv: list[str] | None = None) -> None:
                 f"{len(JPEG_QUALITY_ENCODINGS) - 1} (high), not "
                 f"{options.jpeg_quality}"
             )
-        if decoders.ENCODING_NAMES["tight"] not in (factory.encodings or []):
+        offered = factory.encodings or decoders.DEFAULT_ENCODINGS
+        if decoders.ENCODING_NAMES["tight"] not in offered:
             op.error("--jpeg-quality only applies to Tight; add --encodings tight")
         factory.jpeg_quality = options.jpeg_quality
 

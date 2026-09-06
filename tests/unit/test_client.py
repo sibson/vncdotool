@@ -42,6 +42,9 @@ class TestVNCDoToolClient(TestCase):
         factory = cli.factory
         factory.clientConnectionMade.assert_called_once_with(cli)
         self.client.setEncodings.assert_called_once_with([
+            client.rfb.Encoding.TIGHT,
+            client.rfb.Encoding.ZRLE,
+            client.rfb.Encoding.HEXTILE,
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
@@ -64,6 +67,33 @@ class TestVNCDoToolClient(TestCase):
 
         (offered,) = cli.setEncodings.call_args[0]
         self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
+
+    def test_requested_encodings_replace_the_default_list(self):
+        cli = self.client
+        cli.requested_encodings = [client.rfb.Encoding.RAW]
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertNotIn(client.rfb.Encoding.TIGHT, offered)
+        self.assertEqual(client.rfb.Encoding.RAW, offered[0])
+
+    def test_no_jpeg_quality_is_offered_by_default(self):
+        """Tight is now offered by default, and a JPEG quality level is what
+        tells a conforming server it may send lossy rectangles.
+        """
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertIn(client.rfb.Encoding.TIGHT, offered)
+        for quality in client.JPEG_QUALITY_ENCODINGS:
+            self.assertNotIn(quality, offered)
 
     def test_keyPress_single_alpha(self):
         cli = self.client

@@ -565,13 +565,18 @@ class TestVncdoJpegQualityOption(unittest.TestCase):
         assert connect.call_args.args[0].jpeg_quality == 9
 
     def test_a_level_without_tight_is_a_usage_error(self, reactor, connect) -> None:
-        for encodings in ([], ['--encodings', 'zrle']):
-            with self.subTest(encodings=encodings):
-                with self.assertRaises(SystemExit) as raised:
-                    command.vncdo(['-s', '127.0.0.1::5900', *encodings,
-                                   '--jpeg-quality', '9', 'key', 'a'])
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'zrle',
+                           '--jpeg-quality', '9', 'key', 'a'])
 
-                assert raised.exception.code == command.ExitStatus.USAGE
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_a_level_needs_no_encodings_flag(self, reactor, connect) -> None:
+        """Tight is on the default list, so --jpeg-quality alone applies."""
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--jpeg-quality', '9', 'key', 'a'])
+
+        assert connect.call_args.args[0].jpeg_quality == 9
 
     def test_without_the_flag_no_level_is_offered(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit):
