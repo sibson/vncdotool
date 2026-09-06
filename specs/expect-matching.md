@@ -1,9 +1,8 @@
 # What `expect` Compares — Design
 
-Status: proposed, nothing built. Replaces the histogram-RMS comparison in
-`VNCDoToolClient._expectMatch`. Retires `tests/goldens/scene-lossy.vdo`, the
-workaround described in [decoder-goldens.md](decoder-goldens.md) under
-"Sequencing a lossy capture".
+Status: built, across the five commits under Phasing. Replaced the histogram-RMS
+comparison in `VNCDoToolClient._expectMatch` and retired
+`tests/goldens/scene-lossy.vdo`.
 
 ## Problem
 
@@ -164,8 +163,8 @@ fixture captured there exercises none of what makes a lossy encoding hard --
 every claim in Measurements about why the old comparison fails, and about why
 blur is not optional, rests on bytes no committed fixture holds.
 
-It is captured and sitting in the tree, 80K against the level-9 fixture's 264K,
-and the suite is red until the rest of this lands:
+It could not land first. Captured against the old comparison, it failed the
+suite on its fourth step:
 
     FAIL: test_decodes_to_its_oracle
       (test_goldens.TestGolden_tigervnc_tight_jpeg5_bgrx8888)
@@ -271,6 +270,12 @@ bound; the patch read keeps its RGB triple, proven to work at level 0, and the
 recorded bound becomes the fuzz pair. It passes `--expect-fuzz 64 --expect-blur
 2` when `--jpeg-quality` is set and drives `scene.vdo` for every capture.
 `scene-lossy.vdo` is deleted. `servers.mk` gains the level-5 line.
+
+The `0` after each filename in `scene.vdo` goes too, and has to: a token beats
+the option by design, so the script kept demanding an exact match and timed the
+level-5 capture out at exit 40. Without it a lossless capture still gets
+exactness from its pixel format, and an rgb565 capture still gets the step its
+5-bit red cannot express.
 
 The existing level-9 fixture's `conditions.json` is migrated in place. Its
 bytes are not re-captured: they are 264K of binary that a re-capture would churn
