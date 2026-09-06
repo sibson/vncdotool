@@ -23,6 +23,11 @@ FILTER_COPY = 0
 FILTER_PALETTE = 1
 FILTER_GRADIENT = 2
 
+# The ten JPEG Quality Level pseudo-encodings (specs/tight-wire.md section 8).
+JPEG_QUALITY_LEVELS = frozenset(
+    Encoding(Encoding.JPEG_32 + level) for level in range(10)
+)
+
 # Below this height*rowSize, data arrives raw (specs/tight-wire.md section 6).
 MIN_TO_COMPRESS = 12
 
@@ -66,6 +71,10 @@ class TightDecoder(WholeRectDecoder):
     def __init__(self) -> None:
         # TigerVNC and TurboVNC use the four streams differently (section 9).
         self._streams: List[Optional["zlib._Decompress"]] = [None] * STREAMS
+        self._jpeg_offered = False
+
+    def encodingsOffered(self, encodings: frozenset[Encoding]) -> None:
+        self._jpeg_offered = bool(encodings & JPEG_QUALITY_LEVELS)
 
     def decodeRect(
         self, width: int, height: int, pixel_format: PixelFormat
@@ -88,6 +97,11 @@ class TightDecoder(WholeRectDecoder):
             )
 
         if comp_ctl == JPEG:
+            if not self._jpeg_offered:
+                raise DecodeError(
+                    "Tight JpegCompression arrived without a JPEG Quality Level "
+                    "offered; it is lossy, so the capture would not be exact"
+                )
             # No filter byte, no zlib and no MIN_TO_COMPRESS rule (specs/tight-wire.md section 4).
             length = yield from self._compactLength()
             return self._decodeJpeg(bytes((yield length)), width, height), TPIXEL_FORMAT

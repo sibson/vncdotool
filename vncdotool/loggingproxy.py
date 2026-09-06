@@ -445,6 +445,13 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
             observer.requested_pixel_format = pixel_format
             observer.setImageMode()
 
+    def handle_setEncodings(self, encodings: Sequence[int]) -> None:
+        # SetEncodings is client-to-server too, and the observer refuses a
+        # rectangle the real client never asked for unless it is told.
+        observer = self.vnclog_client
+        if observer is not None:
+            observer.encodingsOffered(frozenset(Encoding(e) for e in encodings))
+
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
 

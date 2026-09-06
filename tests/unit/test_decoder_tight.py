@@ -17,6 +17,7 @@ from typing import Optional, Sequence, Tuple
 
 from PIL import Image
 
+from vncdotool.const import Encoding
 from vncdotool.decoders import DecodeError
 from vncdotool.decoders.tight import (
     FILL, FILTER_COPY, FILTER_GRADIENT, FILTER_PALETTE, JPEG, MIN_TO_COMPRESS, TightDecoder,
@@ -372,6 +373,15 @@ def gradient_image(width: int, height: int) -> Image.Image:
     )
 
 
+def offering_jpeg(decoder: Optional[TightDecoder] = None) -> TightDecoder:
+    """A decoder told a quality level was offered, as a client asking for JPEG
+    would leave it. Without that it refuses JPEG rectangles outright.
+    """
+    decoder = decoder if decoder is not None else TightDecoder()
+    decoder.encodingsOffered(frozenset({Encoding(Encoding.JPEG_32 + 9)}))
+    return decoder
+
+
 class TestJpeg(unittest.TestCase):
     WIDTH = 16
     HEIGHT = 8
@@ -382,7 +392,7 @@ class TestJpeg(unittest.TestCase):
         self.wire = jpeg_rect(self.payload)
 
     def test_a_compact_length_then_that_many_bytes_of_jfif(self) -> None:
-        _, _, consumed = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+        _, _, consumed = decode_rect(self.wire, self.WIDTH, self.HEIGHT, offering_jpeg())
 
         self.assertEqual(self.wire[0] >> 4, 0x09)
         self.assertEqual(self.payload[:2], b"\xff\xd8", "a JFIF stream opens with SOI")
@@ -392,14 +402,15 @@ class TestJpeg(unittest.TestCase):
         tiny = jfif(gradient_image(1, 1))
         wire = jpeg_rect(tiny)
 
-        _, _, consumed = decode_rect(wire, 1, 1)
+        _, _, consumed = decode_rect(wire, 1, 1, offering_jpeg())
 
         self.assertEqual(consumed, 1 + len(compact(len(tiny))) + len(tiny))
 
     def test_it_decodes_to_24bpp_rgb_whatever_was_negotiated(self) -> None:
         self.assertEqual(PIXEL_FORMAT.bpp, 32)
 
-        pixels, output_format, _ = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+        pixels, output_format, _ = decode_rect(
+            self.wire, self.WIDTH, self.HEIGHT, offering_jpeg())
 
         self.assertEqual(output_format, TPIXEL_FORMAT)
         self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
@@ -408,13 +419,14 @@ class TestJpeg(unittest.TestCase):
         # At bgrx8888 a TPIXEL is three bytes too, so only a second format separates "JPEG is
         # always 24 bpp RGB" from a coincidence.
         pixels, output_format, _ = decode_rect(
-            self.wire, self.WIDTH, self.HEIGHT, pixel_format=PIXEL_FORMATS["rgb565"])
+            self.wire, self.WIDTH, self.HEIGHT, offering_jpeg(),
+            pixel_format=PIXEL_FORMATS["rgb565"])
 
         self.assertEqual(output_format, TPIXEL_FORMAT)
         self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
 
     def test_it_decodes_to_the_image_it_was_encoded_from(self) -> None:
-        pixels, _, _ = decode_rect(self.wire, self.WIDTH, self.HEIGHT)
+        pixels, _, _ = decode_rect(self.wire, self.WIDTH, self.HEIGHT, offering_jpeg())
 
         original = self.image.tobytes()
         worst = max(abs(a - b) for a, b in zip(pixels, original))
@@ -424,7 +436,7 @@ class TestJpeg(unittest.TestCase):
         # Reset bits apply even to a type carrying no zlib data (specs/tight-wire.md section 2).
         payload = bytes(i % 3 for i in range(12))
         palette = [RED, GREEN, BLUE]
-        decoder, stream = TightDecoder(), zlib.compressobj()
+        decoder, stream = offering_jpeg(), zlib.compressobj()
         expected, _ = decode(
             basic(payload, stream=2, filter_id=FILTER_PALETTE, palette=palette, compressor=stream),
             12, 1, decoder)
@@ -442,7 +454,7 @@ class TestJpeg(unittest.TestCase):
 
     def test_a_rectangle_whose_image_is_the_wrong_size_is_refused(self) -> None:
         with self.assertRaises(DecodeError) as caught:
-            decode_rect(self.wire, self.WIDTH + 1, self.HEIGHT)
+            decode_rect(self.wire, self.WIDTH + 1, self.HEIGHT, offering_jpeg())
 
         self.assertIn("JPEG", str(caught.exception))
 
@@ -456,7 +468,7 @@ class TestJpeg(unittest.TestCase):
         payload[offset + 5:offset + 9] = (65500).to_bytes(2, "big") * 2
 
         with self.assertRaises(DecodeError) as caught:
-            decode_rect(jpeg_rect(bytes(payload)), self.WIDTH, self.HEIGHT)
+            decode_rect(jpeg_rect(bytes(payload)), self.WIDTH, self.HEIGHT, offering_jpeg())
 
         self.assertIn("JPEG", str(caught.exception))
 
@@ -466,7 +478,7 @@ class TestJpeg(unittest.TestCase):
         self.assertEqual(len(Image.open(io.BytesIO(payload)).getbands()), 1)
 
         pixels, output_format, consumed = decode_rect(
-            jpeg_rect(payload), self.WIDTH, self.HEIGHT)
+            jpeg_rect(payload), self.WIDTH, self.HEIGHT, offering_jpeg())
 
         self.assertEqual(output_format, TPIXEL_FORMAT)
         self.assertEqual(len(pixels), self.WIDTH * self.HEIGHT * 3)
@@ -475,6 +487,53 @@ class TestJpeg(unittest.TestCase):
             all(triple[0] == triple[1] == triple[2] for triple in triples),
             "one component expanded to three must leave every pixel grey",
         )
+
+
+class TestUnsolicitedJpeg(unittest.TestCase):
+    """A conforming server sends JPEG only to a client that offered a quality
+    level (specs/tight-wire.md section 8). One that sends it anyway would make
+    a capture lossy without the user having asked for that.
+    """
+
+    WIDTH = 16
+    HEIGHT = 8
+
+    def setUp(self) -> None:
+        self.wire = jpeg_rect(jfif(gradient_image(self.WIDTH, self.HEIGHT)))
+
+    def test_it_is_refused_when_nothing_was_offered(self) -> None:
+        with self.assertRaises(DecodeError) as caught:
+            decode_rect(self.wire, self.WIDTH, self.HEIGHT, TightDecoder())
+
+        self.assertIn("JpegCompression", str(caught.exception))
+
+    def test_it_is_refused_when_the_offer_held_no_quality_level(self) -> None:
+        decoder = TightDecoder()
+        decoder.encodingsOffered(frozenset({Encoding.TIGHT, Encoding.RAW}))
+
+        with self.assertRaises(DecodeError) as caught:
+            decode_rect(self.wire, self.WIDTH, self.HEIGHT, decoder)
+
+        self.assertIn("JpegCompression", str(caught.exception))
+
+    def test_any_of_the_ten_levels_allows_it(self) -> None:
+        for level in range(10):
+            with self.subTest(level=level):
+                decoder = TightDecoder()
+                decoder.encodingsOffered(
+                    frozenset({Encoding(Encoding.JPEG_32 + level)}))
+
+                _, output_format, _ = decode_rect(
+                    self.wire, self.WIDTH, self.HEIGHT, decoder)
+
+                self.assertEqual(output_format, TPIXEL_FORMAT)
+
+    def test_a_lossless_rectangle_is_unaffected(self) -> None:
+        wire = basic(RED + GREEN + BLUE + RED)
+
+        pixels, _ = decode(wire, 4, 1)
+
+        self.assertEqual(pixels, RED + GREEN + BLUE + RED)
 
 
 class TestOversizedZlibBlock(unittest.TestCase):

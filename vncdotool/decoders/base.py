@@ -52,6 +52,12 @@ class Decoder:
         """
         raise NotImplementedError
 
+    def encodingsOffered(self, encodings: frozenset[Encoding]) -> None:
+        """Every encoding the client asked the server for, before any
+        rectangle arrives. A server may send what was never asked for, so a
+        decoder that treats an unasked-for rectangle differently reads this.
+        """
+
     def decodePixels(
         self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
