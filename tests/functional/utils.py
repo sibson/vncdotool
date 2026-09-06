@@ -25,7 +25,7 @@ import tempfile
 import time
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, NamedTuple, Optional, Tuple
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -81,6 +81,8 @@ class VNCServer(NamedTuple):
     timeout: float = CONNECT_TIMEOUT
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
+    # Honoured only off CI -- see absent_server_skips().
+    skip_when_down: bool = False
 
 
 # One constant per service in tests/servers/docker-compose.yml, named so a
@@ -121,6 +123,7 @@ def os_server(name: str, how_to_start: str, **overrides: Any) -> VNCServer:
         size=None,
         timeout=OS_SERVER_TIMEOUT,
         how_to_start=how_to_start,
+        skip_when_down=True,
         **overrides,
     )
 
@@ -172,6 +175,19 @@ def select_servers(group: str) -> List[VNCServer]:
     if group not in groups:
         raise ValueError(f"unknown server group {group!r}, expected one of {sorted(groups)} or 'all'")
     return groups[group]
+
+
+CI_ENV_VARS = ("CI", "GITHUB_ACTIONS")
+NOT_CI_VALUES = ("", "0", "false", "no")
+
+
+def running_in_ci(env: Optional[Mapping[str, str]] = None) -> bool:
+    env = os.environ if env is None else env
+    return any(env.get(name, "").strip().lower() not in NOT_CI_VALUES for name in CI_ENV_VARS)
+
+
+def absent_server_skips(server: VNCServer, env: Optional[Mapping[str, str]] = None) -> bool:
+    return server.skip_when_down and not running_in_ci(env)
 
 
 def screenshot_dir() -> Path:
@@ -398,11 +414,15 @@ class _VNCServerTestMixin:
     server: VNCServer
 
     def setUp(self) -> None:
-        if not port_open(HOST, self.server.port):
-            self.fail(
-                f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
-                f"{self.server.how_to_start}"
-            )
+        if port_open(HOST, self.server.port):
+            return
+        unreachable = (
+            f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
+            f"{self.server.how_to_start}"
+        )
+        if absent_server_skips(self.server):
+            self.skipTest(unreachable)
+        self.fail(unreachable)
 
     def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
         result = run_vncdo(self.server, *args)
