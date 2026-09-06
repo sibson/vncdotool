@@ -43,7 +43,6 @@ class TestVNCDoToolClient(TestCase):
         factory.clientConnectionMade.assert_called_once_with(cli)
         self.client.setEncodings.assert_called_once_with([
             client.rfb.Encoding.TIGHT,
-            client.rfb.Encoding.ZRLE,
             client.rfb.Encoding.HEXTILE,
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,

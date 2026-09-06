@@ -1,7 +1,7 @@
 # Offering more than Raw by default
 
-`vncdo` offers `tight,zrle,hextile,raw` unless `--encodings` says otherwise.
-This is the measurement behind that list and the reasoning behind its order.
+`vncdo` offers `tight,hextile,raw` unless `--encodings` says otherwise. This
+is the measurement behind that list and the reasoning behind its order.
 
 ## What the encodings actually cost
 
@@ -45,19 +45,23 @@ one before it does not:
 
 - **Tight** — best bandwidth and the cheapest compressed decode. Confirmed
   emitted by tigervnc; the fleet's libvncserver-example answers with Raw.
-- **ZRLE** — the same bandwidth as Tight, and in RFB 3.8 core, so it is the
-  natural second ask for a server without Tight. Expensive to decode, which is
-  survivable in a fallback and is why it is not first.
-- **Hextile** — older and in wider reach than either, and the last stop before
+- **Hextile** — older and in wider reach than Tight, and the last stop before
   giving up on compression.
 - **Raw** — mandatory, and explicit here so the list reads as the full
   preference order rather than relying on the server's fallback.
 
-Dropped: CoRRE and RRE. CoRRE is Raw in practice. RRE sends more than Hextile
-(0.458x against 0.350x), and both are old enough that a server offering RRE
-almost certainly offers Hextile too, so listing RRE would only change what
-happens on a server that has RRE and nothing else — which the fleet has no
-example of.
+Dropped: ZRLE, CoRRE and RRE. ZRLE has the same bandwidth as Tight and is in
+RFB 3.8 core, which would make it the natural second ask for a server without
+Tight — but `cpixel_bytes()` mis-sizes its CPIXELs against any server that
+declares a `depth` its encoder does not actually honour (#483), and
+libvncserver-example is exactly that server: `depth=32` declared, 3-byte
+CPIXELs sent regardless. Tight already dominates ZRLE on bandwidth and decode
+cost (below), and TPIXEL's width is fixed rather than depth-derived, so Tight
+does not share the bug. ZRLE goes back on the list once #483 is fixed. CoRRE
+is Raw in practice. RRE sends more than Hextile (0.458x against 0.350x), and
+both are old enough that a server offering RRE almost certainly offers
+Hextile too, so listing RRE would only change what happens on a server that
+has RRE and nothing else — which the fleet has no example of.
 
 The list is ordered by bytes, not by decode cost. RRE decodes far cheaper than
 Hextile (1.6x Raw against 11.4x) and Tight cheaper than both, so an ordering
@@ -80,4 +84,6 @@ The standing risk is a server that mis-implements an encoding now requested by
 default, where before everyone got Raw. CI exercises Tight against tigervnc,
 x11vnc, UltraVNC, macOS Screen Sharing and QEMU/KVM; libvncserver-example
 falls back to Raw for Tight, which is itself a useful proof that the fallback
-path works.
+path works. It is also how #483 surfaced: the CI functional suite's readiness
+probe uses the default list against every fleet server, and libvncserver-example
+does not fall back for ZRLE the way it does for Tight.
