@@ -361,13 +361,9 @@ class RFBClient(Protocol):
     def _finishRectangle(
         self, rect: tuple[int, int, int, int], outcome: decoders.Outcome
     ) -> None:
-        pixels, output_format = outcome.pixels, outcome.pixel_format
-        if (pixels is None) != (output_format is None):
-            self.abortConnection(
-                "decoder produced pixels in no format, or a format with no pixels"
-            )
-            return
-        if pixels is not None and output_format is not None:
+        paste = outcome.paste
+        if paste is not None:
+            pixels, output_format = paste
             x, y, width, height = rect
             expected = width * height * output_format.bypp
             if len(pixels) != expected:

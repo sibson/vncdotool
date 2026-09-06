@@ -161,9 +161,11 @@ What the four differ in is what the pump feeds the generator and what it does
 with the result — not how the bytes are pumped. So each base class implements
 `decode(client, rect, pixel_format)`, the one entry point the pump calls, in
 terms of the method its subclasses override, and returns an `Outcome`: whether
-the rectangle counts as a screen change, and any pixels the pump is left to
-paste. A rectangle costs one dict lookup and one call; the pump asks nothing
-about the class it holds.
+the rectangle counts as a screen change, and the `Paste` — pixels and the format
+they are in — the pump is left to make, or none. Pixels the pump cannot size
+would be a rectangle recorded but never painted, so the two travel as one value
+rather than as two fields that can disagree. A rectangle costs one dict lookup
+and one call; the pump asks nothing about the class it holds.
 
 That is what makes an encoding whose framing is new cost no `rfb.py` edit. The
 earlier design gave each base class its own pump method and picked between them
@@ -302,7 +304,7 @@ diagnosed disconnect. This is a larger user-facing win than the split itself.
 ```
 vncdotool/pixelformat.py         PixelFormat, its Pillow raw mode, CPIXEL/TPIXEL widths
 vncdotool/decoders/__init__.py   registry, built from the decoder classes
-vncdotool/decoders/base.py       Decoder and its four base classes, Outcome
+vncdotool/decoders/base.py       Decoder and its four base classes, Outcome, Paste
 vncdotool/decoders/buffer.py     RectBuffer
 vncdotool/decoders/errors.py     DecodeError
 vncdotool/decoders/{raw,rre,hextile,zrle,tight,copyrect,cursor}.py

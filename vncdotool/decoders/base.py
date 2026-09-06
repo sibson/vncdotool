@@ -10,30 +10,29 @@ from .buffer import RectBuffer
 Rect = Tuple[int, int, int, int]
 
 
-class Outcome(NamedTuple):
-    """What one rectangle did, for the pump to act on: whether it counts as a
-    screen change, and any pixels the pump is left to paste.
-    """
-
-    changed: bool
-    # Both or neither: pixels the pump cannot size are a rectangle silently
-    # lost, so there are no defaults to write one field without the other.
-    pixels: Optional[bytes]
-    pixel_format: Optional[PixelFormat]
-
-
-# Nothing reached the framebuffer, and the rectangle is not a screen change.
-NOTHING = Outcome(False, None, None)
-
-# The decoder changed the framebuffer itself; the pump has nothing to paste.
-CHANGED = Outcome(True, None, None)
-
-
-def painted(pixels: bytes, pixel_format: PixelFormat) -> Outcome:
+class Paste(NamedTuple):
     """A rectangle for the pump to paste, in the format the decoder wrote it
     in, which is not always the negotiated one.
     """
-    return Outcome(True, pixels, pixel_format)
+
+    pixels: bytes
+    pixel_format: PixelFormat
+
+
+class Outcome(NamedTuple):
+    """What one rectangle did, for the pump to act on: whether it counts as a
+    screen change, and the paste it is left to make.
+    """
+
+    changed: bool
+    paste: Optional[Paste] = None
+
+
+# Nothing reached the framebuffer, and the rectangle is not a screen change.
+NOTHING = Outcome(False)
+
+# The decoder changed the framebuffer itself; the pump has nothing to paste.
+CHANGED = Outcome(True)
 
 
 class Decoder:
@@ -82,7 +81,7 @@ class PixelDecoder(Decoder):
     ) -> Generator[int, bytes, Outcome]:
         target = client.rectBuffer(rect[2], rect[3])
         yield from self.decodePixels(target, pixel_format)
-        return painted(target.tobytes(), self.output_format(pixel_format))
+        return Outcome(True, Paste(target.tobytes(), self.output_format(pixel_format)))
 
     def output_format(self, pixel_format: PixelFormat) -> PixelFormat:
         """The layout the bytes this decoder wrote are in, which is not
@@ -103,7 +102,7 @@ class WholeRectDecoder(Decoder):
         pixels, output_format = yield from self.decodeRect(
             rect[2], rect[3], pixel_format
         )
-        return painted(pixels, output_format)
+        return Outcome(True, Paste(pixels, output_format))
 
 
 class ClientDecoder(Decoder):

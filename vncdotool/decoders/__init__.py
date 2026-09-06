@@ -10,10 +10,10 @@ from .base import (
     ControlDecoder,
     Decoder,
     Outcome,
+    Paste,
     PixelDecoder,
     Rect,
     WholeRectDecoder,
-    painted,
 )
 from .buffer import RectBuffer
 from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
@@ -72,10 +72,10 @@ __all__ = [
     "ENCODING_NAMES",
     "NOTHING",
     "Outcome",
+    "Paste",
     "PixelDecoder",
     "Rect",
     "RectBuffer",
     "WholeRectDecoder",
     "for_connection",
-    "painted",
 ]

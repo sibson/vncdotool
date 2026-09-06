@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Generator
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
-from .base import Outcome, PixelDecoder, Rect, painted
+from .base import Outcome, Paste, PixelDecoder, Rect
 
 
 class RawDecoder(PixelDecoder):
@@ -22,4 +22,4 @@ class RawDecoder(PixelDecoder):
         client.requireFits(rect[2], rect[3])
         output_format = self.output_format(pixel_format)
         data = yield rect[2] * rect[3] * output_format.bypp
-        return painted(data, output_format)
+        return Outcome(True, Paste(data, output_format))

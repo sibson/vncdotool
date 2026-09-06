@@ -523,26 +523,6 @@ class TestWholeRectLength(TestCase):
 
         self.assertEqual(cli.rectanglePos, [])
 
-    def test_pixels_without_a_format_are_refused(self) -> None:
-        """The pump cannot size them, and recording the rectangle without
-        painting it would lose the update rather than report it.
-        """
-        cli = make_pump_client()
-        cli.vncProtocolError = mock.Mock()
-        cli.updateRectangle = mock.Mock()
-
-        class Formatless(decoders.PixelDecoder):
-            def decode(self, client, rect, pixel_format):
-                data = yield 4
-                return decoders.Outcome(True, data, None)
-
-        pump(cli, Formatless(), 0, 0, 2, 2)
-        cli.dataReceived(b"\x00\x00\x00\x00")
-
-        cli.vncProtocolError.assert_called_once()
-        cli.updateRectangle.assert_not_called()
-        self.assertEqual(cli.rectanglePos, [])
-
     def test_too_many_bytes_is_refused(self) -> None:
         cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp + 1))
 
