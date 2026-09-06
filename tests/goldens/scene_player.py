@@ -79,8 +79,13 @@ class ScenePlayer:
     def keysym_to_key(keysym: int) -> str:
         """XK.keysym_to_string() returns None for plain letters and digits, whose
         keysym value is already their ASCII code.
+
+        Folded to lower case: the scenes are named for lowercase keys and
+        stamped with the uppercase glyph, so a driver that arrives shifted --
+        or a server that translates a keysym to its shifted twin -- selects
+        the scene it asked for rather than nothing at all.
         """
-        return chr(keysym) if 0x20 <= keysym < 0x7F else ""
+        return chr(keysym).lower() if 0x20 <= keysym < 0x7F else ""
 
 
 def _scene_dir() -> Path:

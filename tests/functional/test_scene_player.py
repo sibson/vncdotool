@@ -39,3 +39,7 @@ class TestScenePlayer(TestCase):
         for key in ("0", "s", "d", "g"):
             with self.subTest(key=key):
                 self.assertEqual(scenes.read_patch(self._capture("key", key)), key)
+
+    def test_a_shifted_key_selects_the_same_scene(self) -> None:
+        self.assertEqual(scenes.read_patch(self._capture("key", "0")), "0")
+        self.assertEqual(scenes.read_patch(self._capture("key", "S")), "s")
