@@ -89,7 +89,7 @@ Stated independently of how. Each design decision should trace to one.
 - **C2** Anything touching the wire is checked against RFC 6143 or rfbproto, not
   inferred from surrounding code (`CLAUDE.md`).
 - **C3** `flake8 --count --statistics vncdotool tests` is clean.
-- **C4** Every user-visible fix gets a `CHANGELOG.rst` entry under
+- **C4** Every user-visible fix gets a `CHANGELOG.md` entry under
   `(UNRELEASED)`.
 - **C5** Functional tests fail loudly rather than skipping when the fleet is
   down.

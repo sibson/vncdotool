@@ -212,7 +212,7 @@ Then `tests/goldens/scene-lossy.vdo` loses its `pause 1.5` and its throwaway
 `capture step.png` pairs, which is the change that shows whether any of this
 works.
 
-`CHANGELOG.rst` gets an entry under `(UNRELEASED)`.
+`CHANGELOG.md` gets an entry under `(UNRELEASED)`.
 
 ## Open questions
 

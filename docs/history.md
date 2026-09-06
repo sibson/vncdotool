@@ -1,3 +1,3 @@
 # Release History
 
-{% include-markdown "../CHANGELOG.rst" %}
+{% include-markdown "../CHANGELOG.md" %}

@@ -33,14 +33,14 @@ NEXT_VERSION := $(shell uv version --bump patch --bump dev=0 --dry-run --short -
 release: test-unit
 	@echo "Releasing $(VERSION)"
 	uv version --bump stable --no-sync
-	sd "^$(VERSION) \(UNRELEASED\)" "$(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.rst
-	git add pyproject.toml CHANGELOG.rst
+	sd "^## $(VERSION) \(UNRELEASED\)" "## $(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.md
+	git add pyproject.toml CHANGELOG.md
 	git commit -m "Release $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
 	uv version --bump patch --bump dev=0 --no-sync
-	printf '$(NEXT_VERSION) (UNRELEASED)\n----------------------\n\n' | cat - CHANGELOG.rst > CHANGELOG.rst.tmp && mv CHANGELOG.rst.tmp CHANGELOG.rst
-	git add pyproject.toml CHANGELOG.rst
+	printf '## $(NEXT_VERSION) (UNRELEASED)\n\n' | cat - CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+	git add pyproject.toml CHANGELOG.md
 	git commit -m "Bump version to $(NEXT_VERSION)"
 	git push origin main
 

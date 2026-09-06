@@ -246,7 +246,7 @@ The client carries `expect_fuzz` and `expect_blur` set from the factory, the way
 `requested_jpeg_quality` already is.
 
 Six tests in `tests/unit/test_client.py` assert on `cli.expected` as a
-histogram and are rewritten against the new comparison. `CHANGELOG.rst` gets the
+histogram and are rewritten against the new comparison. `CHANGELOG.md` gets the
 entry for the breaking change, under `(UNRELEASED)`.
 
 **3. The command-line surface.** `--expect-fuzz` and `--expect-blur` parsed and

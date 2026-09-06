@@ -69,7 +69,6 @@ include = [
     "vncdotool",
     "tests",
     "docs",
-    "*.rst",
     "*.md",
     "*.txt",
     "pyproject.toml",
