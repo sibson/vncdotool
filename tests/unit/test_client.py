@@ -253,6 +253,8 @@ class TestVNCDoToolClient(TestCase):
 
     def test_expectRegionRejectsARegionADesktopResizeShrankOff(self):
         cli = self._screenOf((100, 100))
+        target = client.Image.new("RGB", (100, 100), (1, 2, 3))
+        cli.expected, cli.expected_image = target.histogram(), target
         cli.updateDesktopSize(50, 50)
         with self.assertRaises(client.RegionError):
             cli._expectCompare(cli, (0, 0, 100, 100), 0)
@@ -260,7 +262,18 @@ class TestVNCDoToolClient(TestCase):
     def test_captureRegionRejectsARegionPastTheEdge(self):
         cli = self._screenOf((100, 100))
         with self.assertRaises(client.RegionError):
-            cli._captureSave(None, io.BytesIO(), 60, 60, 160, 160)
+            cli.captureRegion(io.BytesIO(), 60, 60, 100, 100)
+
+    def test_captureRegionRejectsANegativeOrigin(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.captureRegion(io.BytesIO(), -1, 0, 10, 10)
+
+    def test_captureRegionAllowsARegionFlushWithTheEdge(self):
+        cli = self._screenOf((100, 100))
+        fp = io.BytesIO()
+        cli._captureSave(None, fp, 90, 90, 100, 100, format="png")
+        assert client.Image.open(fp).size == (10, 10)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeFullScreen(self, frombytes):

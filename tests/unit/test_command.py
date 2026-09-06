@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLo
 from twisted.python.failure import Failure
 
 from vncdotool import command, pixelformat
-from vncdotool.client import AuthenticationError, ProtocolError
+from vncdotool.client import AuthenticationError, ProtocolError, RegionError
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
 
@@ -375,6 +375,11 @@ class TestVNCDoCLIFactory(unittest.TestCase):
 
     def test_command_failure(self, reactor) -> None:
         self.factory.error(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_region_off_the_screen(self, reactor) -> None:
+        self.factory.error(Failure(RegionError('region (0, 0, 1, 1) is not inside the 0x0 screen')))
 
         assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
 

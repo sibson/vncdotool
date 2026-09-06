@@ -207,6 +207,7 @@ class VNCDoToolClient(rfb.RFBClient):
     ) -> Deferred:
         """Save a region of the current display to filename"""
         log.debug("captureRegion %s", fp)
+        self._requireOnScreen((x, y, x + w, y + h))
         return self._capture(fp, incremental, x, y, x + w, y + h)
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:

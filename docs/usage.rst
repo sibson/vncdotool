@@ -67,7 +67,8 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
 The region must lie on the screen.  One that runs off an edge, or that a
 mid-session desktop resize leaves off the screen, fails with a message
-naming the region and the screen size, exiting 30.
+naming the region and the screen size, exiting 30.  The same applies to
+``expect``, whose region is the size of the target image.
 
 
 Encodings
