@@ -14,9 +14,10 @@ inspection:
 - **TPIXEL does not exist.** Phase 1 delivered CPIXEL and its two placements
   (`pixelformat.cpixel_bytes`, `cpixel_offset`) and nothing else. Tight's
   narrower, fixed-order rule is unbuilt.
-- **A decoder's output format is per-decoder, not per-rectangle.** The pump
-  calls `decoder.output_format(self.pixel_format)` once per rectangle and sizes
-  the `RectBuffer` from the *negotiated* format (`rfb._allocateBuffer`). Tight
+- **A decoder's output format is per-decoder, not per-rectangle.**
+  `PixelDecoder.decode` calls `self.output_format(pixel_format)` once per
+  rectangle and sizes the `RectBuffer` from the *negotiated* format
+  (`rfb.rectBuffer`). Tight
   varies within one update: a JPEG rectangle is 24 bpp RGB whatever was
   negotiated, a basic rectangle is TPIXEL. At a 16 bpp negotiated format a JPEG
   rectangle wants more bytes than the buffer holds.
@@ -250,6 +251,11 @@ so the honest reading is that Phase 6 discharges R1 for *registration* and
 leaves open whether R1 also intends to bar new pump shapes. An encoding whose
 framing fits neither existing path costs an `rfb.py` edit once, and the next
 whole-rectangle encoding will cost none.
+
+Since resolved the other way: the pump now has a single entry point, and a base
+class decides for itself what to feed the generator and what its `Outcome` is
+(decoder-architecture.md, "One pump path"). A new framing costs no `rfb.py`
+edit at all.
 
 ### N2, recorded
 

@@ -1,20 +1,25 @@
 """Raw encoding. RFC 6143 section 7.7.1."""
 from __future__ import annotations
 
-from typing import ClassVar, Iterator
+from typing import Any, ClassVar, Generator
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
-from .base import PixelDecoder
-from .buffer import RectBuffer
+from .base import Outcome, Paste, PixelDecoder, Rect
 
 
 class RawDecoder(PixelDecoder):
-    ENCODING: ClassVar[Encoding] = Encoding.RAW
-    buffered = False
+    """Raw's wire bytes are already its output bytes, in order, in one read,
+    so it hands them to the pump rather than filling a buffer it would only
+    copy back out. See specs/decoder-architecture.md, "Benchmark" (N1).
+    """
 
-    def decodePixels(
-        self, target: RectBuffer, pixel_format: PixelFormat
-    ) -> Iterator[int]:
-        data = yield target.width * target.height * target.bypp
-        target.blit(0, 0, target.width, target.height, data)
+    ENCODING: ClassVar[Encoding] = Encoding.RAW
+
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        client.requireFits(rect[2], rect[3])
+        output_format = self.output_format(pixel_format)
+        data = yield rect[2] * rect[3] * output_format.bypp
+        return Outcome(True, Paste(data, output_format))
