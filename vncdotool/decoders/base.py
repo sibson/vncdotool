@@ -45,11 +45,8 @@ class PixelDecoder(RectDecoder):
 
 
 class WholeRectDecoder(RectDecoder):
-    """Consumes bytes, produces the whole rectangle itself.
-
-    The format it returns need not be the negotiated one: Tight's TPIXEL is
-    three bytes where the negotiated format is four (rfbproto, Tight
-    Encoding).
+    """Consumes bytes, produces the whole rectangle itself, in whatever
+    pixel format it decoded them to -- not always the negotiated one.
     """
 
     def decodeRect(
