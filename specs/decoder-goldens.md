@@ -1,4 +1,4 @@
-# Decoder Golden Fixtures — Design
+# Decoder Golden Fixtures: Design
 
 Status: scaffold built; Raw at 32bpp against tigervnc. Later matrix values are
 TDD entry points, see Phasing. Builds the fixture half of
@@ -7,11 +7,11 @@ TDD entry points, see Phasing. Builds the fixture half of
 
 ## Problem
 
-Decoder goldens need wire bytes from a real server, produced by screen changes
-we chose, verified against something that is not our own decoder. The fleet
-offered none of the three: `draw-content.sh` painted once at start-up, nothing
-could ask a server for a particular update, and the only image to compare
-against was one our own decoder had produced.
+Decoder goldens need wire bytes from a real server, produced by deliberately
+chosen screen changes, and verified against something other than the decoder
+itself. The fleet offered none of the three: `draw-content.sh` painted once at
+start-up, nothing could ask a server for a particular update, and the only
+image to compare against was one the decoder itself had produced.
 
 ## What reproducible means here
 
@@ -23,7 +23,7 @@ A capture *run* only has to be re-derivable and labelled. It records the
 conditions that produced it so a person can rebuild an equivalent fixture when
 an image updates, re-verify it against the oracle, and commit the replacement.
 Nothing needs a byte-identical rerun, which is what lets the fixture source be a
-server we do not control.
+server outside vncdotool's control.
 
 The high-order bit is exercising the decoders with many values in a way that is
 reproducible and debuggable. Everything below serves that; where a choice made
@@ -44,18 +44,18 @@ The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
 images rather than drawing them in the container is what lets the same file be
 both what was displayed and what a golden is checked against.
 
-Keys select behaviour. There is no step counter and no notion of "next", so a
+Keys select behaviour. There is no step counter and no notion of "next," so a
 dropped or mistranslated keysym cannot silently shift every later fixture into
-the wrong label — the c2s stream names the scene that was asked for.
+the wrong label: the c2s stream names the scene that was asked for.
 
 | Key | Draws | Exercises |
 |---|---|---|
 | `0` | reset to a known base screen | isolation between cases |
-| `s` | large solid fill | RRE fill path, ZRLE single-colour palette |
+| `s` | large solid fill | RRE fill path, ZRLE single-color palette |
 | `d` | dense pseudo-random detail | raw-tile fallback, worst-case bandwidth |
 | `x` | many small scattered rects | many-rectangle updates, decode ordering |
 | `g` | smooth gradient | quantization under reduced-depth formats |
-| `p` | 2, 4 and 16-colour regions | ZRLE packed-palette branches |
+| `p` | 2, 4 and 16-color regions | ZRLE packed-palette branches |
 | `c` | scroll a region by N pixels | CopyRect, if the server emits one |
 | `f` | full-screen repaint | single large rect, encoder size chunking |
 
@@ -75,7 +75,7 @@ step at all, since the frame carries it and the c2s stream cannot be aligned
 against s2c.
 
 The patch is the key's glyph, drawn from a 5x7 table in `scenes.py` at four
-pixels a cell, black on white, in a 26x34 box at the centre of the frame.
+pixels a cell, black on white, in a 26x34 box at the center of the frame.
 `read_patch` samples one pixel per cell, thresholds it, and matches the
 bitmap against the table whole: a frame either carries a glyph or does not,
 with no tolerance anywhere.
@@ -83,7 +83,7 @@ with no tolerance anywhere.
 The table is literal rather than rendered because Pillow's default font is an
 implementation detail that has changed shape across releases, and a fixture
 labelled by a rendered glyph would be invalidated by an upgrade. The glyphs
-are the uppercase forms — 5x7 lowercase needs descenders for `g` and `p` —
+are the uppercase forms (5x7 lowercase needs descenders for `g` and `p`),
 so the player folds an incoming keysym to lower case and `C` and `c` select
 the same scene.
 
@@ -92,16 +92,16 @@ channel's extremes, and a pixel format reproduces its extremes exactly
 however few bits it keeps, so the patch reaches the client unquantized at
 rgb565 as much as at rgbx8888. The earlier patch instead carried the key as
 `ord(key)` in the red channel, which assumed an 8-bit red without saying so:
-at rgb565 `c`, `d`, `f` and `g` — 99, 100, 102 and 103 — landed on one 5-bit
+at rgb565 `c`, `d`, `f` and `g` (99, 100, 102 and 103) landed on one 5-bit
 value, and a step could only be narrowed to a set of keys and then guessed at
 by which scene the frame most resembled.
 
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
 
-The `tigervnc` service serves **256x192**. Raw at 1024x768 is 3MB per
+The `tigervnc` service serves **256x192**. Raw at 1024x768 is 3 MB per
 full-screen update, which the repository should not carry; at 256x192 it is
-192KB, about 40KB gzipped. Nothing else in the fleet needs a large desktop, so
+192 KB, about 40 KB gzipped. Nothing else in the fleet needs a large desktop, so
 this is the one service's geometry rather than a second service beside it.
 
 ## Driving
@@ -175,7 +175,7 @@ A fixture is a whole capture session, not a single update:
       conditions.json
 
 A fixture holds no images. The step filename ends in the scene key, and the
-oracle is `tests/goldens/scenes/<key>.png` — the same file the server was
+oracle is `tests/goldens/scenes/<key>.png`, the same file the server was
 shown, so there is nothing to keep in sync.
 
 Session-level is the only granularity that can test R7, the decoder
@@ -197,14 +197,14 @@ opening anything.
 ## conditions.json
 
 `--pixel-format` is required, so `pixel_format` always names a format rather
-than recording "the server's own". Nothing on the wire would correct it — the
-server never acknowledges `SetPixelFormat` — so a fixture that does not say
+than recording "the server's own." Nothing on the wire would correct it: the
+server never acknowledges `SetPixelFormat`, so a fixture that does not say
 what it asked for cannot be replayed at the format its pixels are in.
 
 Written by the harness from what happened, never from what was intended: the
-compose service, the geometry, and vnclog's own `meta` — protocol version,
+compose service, the geometry, and vnclog's own `meta` (protocol version,
 security types, the encodings the server actually used, and the capture
-timestamp. The comparison tolerance lives here too, as the three per-channel
+timestamp). The comparison tolerance lives here too, as the three per-channel
 bounds `pixelformat.channel_tolerance` computes from the requested format:
 `[0, 0, 0]` at 32bpp, `[7, 3, 7]` at rgb565.
 
@@ -214,17 +214,17 @@ already is it, and a second copy is a second thing to keep true.
 ## Oracles
 
 Ground truth is the committed PNG the scene player pushed to X. It is
-independent of our decoder and of our reading of the specification, and it
-needs no copying out of a container: the file the test compares against is the
-file the server was shown.
+independent of the decoder under test and of any reading of the specification,
+and it needs no copying out of a container: the file the test compares against
+is the file the server was shown.
 
-At reduced depth the server quantizes, so a decoded frame will not equal that
-image, and modelling the rounding ourselves would put our reading of the spec
-back into the oracle. The comparison instead allows per-channel error bounded
-by the format's step, which bounds the server's rounding without modelling it
-and still catches channel swaps, wrong shifts, endianness errors and colour-map
-misindexing — the whole defect class R3, the framebuffer not depending on the
-negotiated format, is about. Every fixture is checked this way at the format it
+At reduced depth the server quantizes, so a decoded frame does not equal that
+image, and modelling the rounding independently would put a particular reading
+of the spec back into the oracle. The comparison instead allows per-channel
+error bounded by the format's step, which bounds the server's rounding without
+modelling it and still catches channel swaps, wrong shifts, endianness errors
+and color-map misindexing: the whole defect class R3, the framebuffer not
+depending on the negotiated format, is about. Every fixture is checked this way at the format it
 was captured at, and that is where R3 is checked.
 
 The bound is `pixelformat.channel_tolerance`, and it falls out of the format
@@ -253,8 +253,8 @@ The lossy bound is not a per-channel triple at all. Nothing in the wire format
 implies one, and a per-channel maximum stops separating a correct frame from a
 wrong one as soon as the quality drops: at level 5 the correct scene sits 229
 away while the nearest wrong scene sits at 180. A `jpeg-lossy` fixture records
-a fuzz and a blur instead — the perceived-difference bound of
-[expect-matching.md](expect-matching.md), which holds from level 9 to level 0 —
+a fuzz and a blur instead: the perceived-difference bound of
+[expect-matching.md](expect-matching.md), which holds from level 9 to level 0,
 and `test_goldens.py` reads whichever pair of numbers the kind calls for.
 
 The recorded fuzz is measured from the capture itself: the furthest any of its
@@ -273,17 +273,17 @@ The quality level is recorded too, because how far a frame may sit from its
 oracle depends on it: at level 9 the worst frame is 1 from its scene, at level
 5 it is 14, at level 0 it is 46, against a nearest wrong scene of 87.
 
-The keysym patch keeps a per-channel triple, which is a different question --
+The keysym patch keeps a per-channel triple, which is a different question:
 whether a flat 48x48 block still reads back as the value that was stamped on
 it. It does, at every quality level tigervnc offers.
 
-**Cross-format self-consistency** — decode one scene at two formats, assert the
-framebuffers agree — is not used, though it reads like R3 stated directly. It
+**Cross-format self-consistency** (decode one scene at two formats, assert the
+framebuffers agree) is not used, though it reads like R3 stated directly. It
 cannot fail alone: every fixture is pinned to the PNG, so one member of a pair
 equals the PNG exactly and comparing the other against it is the comparison
-above at a looser bound. Reduced depth does not change that. The version with
-independent power — quantize the PNG onto the reduced grid, demand exact
-equality — is the rounding model this section rejects.
+described earlier at a looser bound. Reduced depth does not change that. The
+version with independent power (quantize the PNG onto the reduced grid, demand
+exact equality) is the rounding model this section rejects.
 
 ## The unit test
 
@@ -297,8 +297,8 @@ first differing pixel with coordinates and both values, and writes the decoded
 frame beside the expected one. When the bytes themselves are in doubt, the
 source archive replays through `vncdo-replay --server`.
 
-`make goldens` — bring the fleet up, run vnclog, drive the script, distill,
-write fixtures — is a manual target. It never runs in CI; the committed
+`make goldens` (bring the fleet up, run vnclog, drive the script, distill,
+write fixtures) is a manual target. It never runs in CI; the committed
 fixtures do.
 
 ## The matrix
@@ -320,7 +320,7 @@ Raw exercises as well as anything; the scene axis tests rect logic, which one
 format exercises as well as anything. The exception is CPIXEL: ZRLE and Tight
 do not use the ordinary pixel layout, and CPIXEL's byte width depends on the
 negotiated format (RFC 6143 §7.7.6). Testing them only at 32bpp exercises the
-one case where CPIXEL and pixel coincide — and that is precisely where the
+one case where CPIXEL and pixel coincide, and that is precisely where the
 known ZRLE hardcoded-layout defect lives.
 
 **Servers.** TigerVNC is primary. x11vnc is not a second copy of everything: it
@@ -349,11 +349,11 @@ the same way.
 
 Recorded so they are not rediscovered as new ideas.
 
-- The **pnm-server** — a libvncserver example that declares its own rects — and
+- The **pnm-server** (a libvncserver example that declares its own rects) and
   the rect pathologies that need it (hundreds of tiny rects, mid-session
   resize).
 - **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
-  one. We find out by reading a capture, not by asserting it in advance.
+  one. That is found out by reading a capture, not by asserting it in advance.
 
 ## Risks
 

@@ -1,11 +1,10 @@
 Usage
 ==============
 
-
 Basic Usage
 -------------
 Once installed you can use the vncdotool command to send key-presses.
-Alphanumerics are straightforward just specify the character.  For other
+Alphanumerics are straightforward just specify the character. For other
 keys longer names are used::
 
     > vncdo key a
@@ -75,17 +74,17 @@ scale, so an old one cannot be converted and has to be picked again.
 16 is a reasonable place to start for anything else.
 
 Expect the new bound to be stricter than the old number suggests. A 2x2 patch
-of the screen changing colour scores 126, where the old measurement scored
-0.4 -- histograms record that colours moved, not where or how far.
+of the screen changing color scores 126, where the old measurement scored
+0.4 -- histograms record that colors moved, not where or how far.
 
 Putting it all together you can specify multiple actions on a single
-command line.  You could automate a login with the following::
+command line. You could automate a login with the following::
 
     > vncdo type username key enter expect password_prompt.png
     > vncdo type password move 100 150 click 1 expect welcome_screen.png
 
 When you have no reference image -- because you do not yet know what the
-screen will look like -- wait for the screen to stop changing instead.
+screen looks like -- wait for the screen to stop changing instead.
 ``stable`` takes the length of the quiet window, and returns once the screen
 has gone that long without changing by more than the fuzz::
 
@@ -97,11 +96,11 @@ rather than against a file.
 
 It always takes at least the window you ask for, since there is no way to
 observe the absence of a change early, and longer whenever a late update
-restarts the window.  A screen that never goes quiet -- a clock, a blinking
+restarts the window. A screen that never goes quiet -- a clock, a blinking
 cursor -- never satisfies it, and the run ends when ``--timeout`` fires.
 
 Sometimes you only care about a portion of the screen, in which case you can
-use rcapture, rexpect and rstable. For instance, if your login window appears
+use rcapture, rexpect, and rstable. For instance, if your login window appears
 at x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
     > vncdo rcapture region.png 100 200 400 250
@@ -114,43 +113,41 @@ region that excludes whatever is animating.
 The region has to lie on the screen; :doc:`commands` says what each command
 does with its arguments and how it fails.
 
-
 Encodings
 -------------------
 By default vncdo asks the server for raw pixels: every server can send
-them, and they cost the most bandwidth.  ``--encodings`` offers others, most
+them, and they cost the most bandwidth. ``--encodings`` offers others, most
 preferred first, and the server picks from what you offered::
 
     > vncdo --encodings tight,hextile,raw capture screen.png
 
 Listing several is the usual case, since not every server speaks every
-encoding.  The order is a preference, not an instruction: a server may send
+encoding. The order is a preference, not an instruction: a server may send
 any encoding on your list, and one that has none of them sends raw::
 
     > vncdo --encodings tight capture screen.png
 
 The names are ``raw``, ``copyrect``, ``rre``, ``corre``, ``hextile``,
-``zrle`` and ``tight``.  Tight sends less than raw on ordinary screen
-content.  Three parts of tight are not implemented: the gradient filter,
-TightPNG, and Tight Encoding Without Zlib.  A rectangle using any of them
-ends the session with a message naming what arrived, exiting 20.  The tight
-*security type*, which TightVNC servers want before they will authenticate
+``zrle`` and ``tight``. Tight sends less than raw on ordinary screen
+content. Three parts of tight are not implemented: the gradient filter,
+TightPNG, and Tight Encoding Without Zlib. A rectangle using any of them
+ends the session with a message naming what arrived, exiting 20. The tight
+*security type*, which TightVNC servers want before they authenticate
 you, is not implemented either.
 
-Some tight rectangles can be JPEG, which is lossy.  vncdo decodes one only
+Some tight rectangles can be JPEG, which is lossy. vncdo decodes one only
 if it asked for a JPEG quality level; a rectangle arriving when it did not
-ends the session with a message naming it, exiting 20.  A capture is
-therefore exact unless you request otherwise.  ``--jpeg-quality`` makes the
+ends the session with a message naming it, exiting 20. A capture is
+therefore exact unless you request otherwise. ``--jpeg-quality`` makes the
 request, on the RFB scale of 0 (low) to 9 (high)::
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
-
 
 .. _exit-status:
 
 Exit Status
 -------------------
-vncdo exits 0 when every action completed.  Failures are grouped by cause, so
+vncdo exits 0 when every action completed. Failures are grouped by cause, so
 a script can tell a server that is down from one that rejected the password::
 
     > vncdo -s $HOST -p $PASSWORD type hello
@@ -170,16 +167,15 @@ Code  Meaning
 3     authentication failed, usually a wrong password
 10    could not connect: refused, unreachable, or name lookup failed
 11    connection closed before the actions finished
-20    server spoke something we could not understand
+20    server spoke something vncdo could not understand
 30    an action failed, such as writing a capture to an unwritable path
 40    ``--timeout`` elapsed before the actions finished
 ===== ==================================================================
 
-Single digits are for things you told us: the command line and the
-credentials.  Failures out on the wire are grouped in tens by cause, so
-new codes can be added to a group later.  Match on the group when you
+Single digits are for things you supplied: the command line and the
+credentials. Failures out on the wire are grouped in tens by cause, so
+new codes can be added to a group later. Match on the group when you
 only care about the category.
-
 
 Running Scripts
 -------------------
@@ -200,14 +196,13 @@ You could run it with the following command::
 
     > vncdo login.vdo
 
-
 Creating Scripts
 ------------------
 While you can create scripts by hand it can often be a time consuming process.
 To make the process easier vncdotool provides a log mode that allows a user to 
-record a VNC session to a script which is playable by vncdo.  vnclog act as a
-man-in-the-middle to record the VNC commands you issue with a client. So you
-will have your vnclog connect to your server and your viewer connect to vnclog
+record a VNC session to a script which is playable by vncdo. vnclog act as a
+man-in-the-middle to record the VNC commands you issue with a client. So your
+vnclog connects to your server, and your viewer connects to vnclog
 
     vncviewer ---> vnclog ---> vncserver
 
@@ -225,8 +220,8 @@ to the correct ports::
     > vncviewer localhost:2  # do something and then exit viewer
     > vncdo keylog.vdo
 
-By running with --file-per-client vnclog will create a new file for every
-client connection and record each clients activity.
+By running with --file-per-client, vnclog creates a new file for every
+client connection and records each clients activity.
 This can be useful for quickly recording a number of testcases.::
 
     > vnclog --file-per-client --listen 6000 /tmp

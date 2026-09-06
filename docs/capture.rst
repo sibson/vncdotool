@@ -1,8 +1,8 @@
 Capturing a session for a bug report
 =====================================
 
-vncdotool is tested against the servers we can run ourselves (see
-``tests/servers/``). If you hit a bug against a server we can't host --
+vncdotool is tested against the servers that can be run locally (see
+``tests/servers/``). If you hit a bug against a server that can't be hosted --
 RealVNC, Proxmox, a vendor's embedded VNC implementation, whatever -- the
 most useful thing you can attach to the issue is a *capture*: a recording of
 the raw bytes vncdotool exchanged with that server while reproducing the

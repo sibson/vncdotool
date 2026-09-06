@@ -1,26 +1,26 @@
 Embedding in Python Applications
 ===================================
 vncdotool is built with the Twisted_ framework, as such it best integrates with other Twisted Applications.
-Rewriting your application to use Twisted may not be an option, so vncdotool provides a compatibility layer.
+Rewriting your app to use Twisted may not be an option, so vncdotool provides a compatibility layer.
 It uses a separate thread to run the Twisted reactor and communicates with the main program using a thread-safe Queue.
 
 ..  note::
 
     The compatibility layer is designed for exactly two threads: one
-    application thread holding one client, and the single reactor thread
+    app thread holding one client, and the single reactor thread
     vncdotool starts for it.
-    Using clients from more than one application thread, or sharing one
+    Using clients from more than one app thread, or sharing one
     client between threads, is not supported -- see `issue #192
     <https://github.com/sibson/vncdotool/issues/192>`_.
 
 ..  warning::
 
-    While the Twisted reactor runs as a *daemon* thread, the reactor itself will start additional *worker threads*, which are *no daemon threads*.
+    While the Twisted reactor runs as a *daemon* thread, the reactor itself starts additional *worker threads*, which are *no daemon threads*.
     Therefore the Reactor must be shut down explicitly by calling :func:`vncdotool.api.shutdown`.
-    Otherwise your application will not terminate as those worker threads remain running in the background.
+    Otherwise your app does not stop, as those worker threads remain running in the background.
 
     This also applied when using the API as a context manager:
-    As the reactor cannot be restarted, it is a design decision to not shut it down as the end of the context.
+    as the reactor cannot be restarted, it is a design decision to not shut it down as the end of the context.
     That would prevent the API from being used multiple times in the same process.
 
 To use the synchronous API you can do the following::
@@ -41,7 +41,7 @@ For example::
     client = api.connect('myvncserver.com::5902', password=None)
 
 You can then call any of the methods available on
-:class:`vncdotool.client.VNCDoToolClient` and they will block until completion.
+:class:`vncdotool.client.VNCDoToolClient` and they block until completion.
 For example::
 
     client.captureScreen('screenshot.png')
@@ -67,8 +67,7 @@ The :class:`vncdotool.client.VNCDoToolClient` supports the context manager proto
     with api.connect('vnchost:display') as client:
         client.captureScreen('screenshot.png')
 
-
-The synchronous API can be used to automate the starting of a Virtual Machine or other application::
+The synchronous API can be used to automate the starting of a Virtual Machine or other app::
 
     vmtool.start('myvirtualmachine.img')
     client.connect('vmaddress::5950')
