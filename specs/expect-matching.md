@@ -39,9 +39,16 @@ Per pixel, the perceived colour difference in YIQ, from pixelmatch (Kotsarenko
     delta = 0.5053*dY^2 + 0.299*dI^2 + 0.1957*dQ^2
 
 normalised by 35215, the largest delta two 8-bit pixels can produce, and scaled
-to 0..255 so the number a script writes is on the same scale as a channel
-value. Luma carries most of the weight, which is where a lossy encoder spends
-least of its error budget and where the eye resolves most detail.
+to 0..255. Luma carries most of the weight, which is where a lossy encoder
+spends least of its error budget and where the eye resolves most detail.
+
+**A script writes a whole number.** The scale looks like a channel value and is
+not one, so a percentage was considered; it buys nothing, because nothing
+useful lives below 1. Shifting every pixel by one unit on every channel scores
+0.97, and the tightest bound anyone needs under that is 0, which already means
+exact. The score itself stays a float — a screen differing in one blue bit
+scores 0.44, and rounding it would make `expect FILE 0` accept a screen that is
+not the target.
 
 The screen matches when **every** pixel is within the fuzz. Not a mean, not
 a count: a mean cannot see a small change (a 16x16 patch moves the mean

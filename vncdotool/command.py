@@ -180,15 +180,22 @@ class CommandParseError(RuntimeError):
     pass
 
 
-def _trailing_fuzz(args: list[str]) -> float | None:
+def _trailing_fuzz(args: list[str]) -> int | None:
     if not args:
         return None
     try:
+        # Parsed as a float so that a script written against the old metric,
+        # which took one, says what is wrong with it rather than having its
+        # number read as the next command.
         fuzz = float(args[0])
     except ValueError:
         return None
-    args.pop(0)
-    return fuzz
+    written = args.pop(0)
+    if fuzz != int(fuzz) or not 0 <= fuzz <= 255:
+        raise CommandParseError(
+            f"expect takes a whole-number fuzz from 0 (exact) to 255, not {written}"
+        )
+    return int(fuzz)
 
 
 def build_command_list(

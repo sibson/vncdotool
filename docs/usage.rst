@@ -53,8 +53,10 @@ With Pillow_ installed, you can wait for the screen to match a known image::
     > vncdo expect somescreen.png
 
 ``expect`` blocks until every pixel of the screen is within a bound of the
-target image, measured as a perceived colour difference from 0 (identical) to
-255. Left out, the bound is whatever the negotiated pixel format cannot
+target image, measured as a perceived colour difference: a whole number from 0
+(identical) to 255, where 255 is as far apart as two pixels get. It is not a
+channel value -- a screen shifted by one unit on every channel sits under 1.
+Left out, the bound is whatever the negotiated pixel format cannot
 express: a server sending 5-bit red cannot reproduce most 8-bit values, so
 demanding an exact match of one would poll until it timed out. Write a number
 after the filename, or pass ``--expect-fuzz``, to allow more::

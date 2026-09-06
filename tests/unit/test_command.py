@@ -113,6 +113,16 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('rexpect foo.png 10 20')
         self.assertCalled(self.client.expectRegion, 'foo.png', 10, 20, None)
 
+    def test_expect_rejects_a_fractional_fuzz(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('expect foo.png 0.5')
+
+    def test_expect_rejects_a_fuzz_off_the_scale(self) -> None:
+        for fuzz in ('-1', '256'):
+            with self.subTest(fuzz=fuzz):
+                with self.assertRaises(command.CommandParseError):
+                    self.call_build_commands_list(f'expect foo.png {fuzz}')
+
     def test_expect_not_png(self) -> None:
         pass
 

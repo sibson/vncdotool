@@ -76,7 +76,7 @@ def fuzz_for_format(pixel_format: pixelformat.PixelFormat) -> int:
     return bound_for_channels(pixelformat.channel_tolerance(pixel_format))
 
 
-def matches(actual: Image.Image, expected: Image.Image, fuzz: float, blur: int = 0) -> bool:
+def matches(actual: Image.Image, expected: Image.Image, fuzz: int, blur: int = 0) -> bool:
     if actual.size != expected.size:
         return False
     worst = ImageStat.Stat(
