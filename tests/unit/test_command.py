@@ -174,6 +174,14 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
 
+    def test_drag_rejects_a_prefix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('dra 100 200')
+
+    def test_drag_rejects_an_infix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('ra 100 200')
+
     def test_insert_delay(self) -> None:
         self.call_build_commands_list('click 1 key a', delay=100)
         expected = [

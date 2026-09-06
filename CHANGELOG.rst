@@ -12,6 +12,7 @@
   - Fix ``vnclog`` reporting an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, then carrying on against a stream it had abandoned (@sibson)
   - Fix a malformed or unsupported server response (bad header, unknown security/auth type, connection refused, unknown message, unrecognized rectangle encoding) parsing further buffered bytes as if they were valid protocol data before the connection closed, instead of stopping immediately (@sibson)
   - A ``ServerFence`` no longer ends the session as an unknown message; the client answers it. The ``PSEUDO_FENCE`` encoding is not offered, so a server sends one only unprompted, and ``VNCDoToolFactory.fence = True`` opts in (@sibson, based on @TeofilisMartisius's #323)
+  - Fix any substring of ``drag`` -- ``d``, ``ra``, ``dra`` -- being accepted as the ``drag`` command and consuming its two arguments, instead of being reported as an unknown command (@sibson)
   - Fix ``self.width``/``self.height`` staying at the negotiated size after a server sends ``PSEUDO_DESKTOP_SIZE`` mid-session (@sibson)
   - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)
   - Dependency resolution ignores releases younger than a week, so a compromised upload has to survive public scrutiny before it can reach a build here (@sibson)
