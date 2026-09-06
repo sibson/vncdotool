@@ -95,6 +95,14 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('expect foo.png 10')
         self.assertCalled(self.client.expectScreen, 'foo.png', 10)
 
+    def test_stable(self) -> None:
+        self.call_build_commands_list('stable 1.5 10')
+        self.assertCalled(self.client.stableScreen, 1.5, 10)
+
+    def test_rstable(self) -> None:
+        self.call_build_commands_list('rstable 1.5 10 100 200 400 250')
+        self.assertCalled(self.client.stableRegion, 1.5, 10, 100, 200, 400, 250)
+
     def test_expect_not_png(self) -> None:
         pass
 

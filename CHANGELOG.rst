@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Add ``vncdo stable SECONDS FUZZ`` and ``rstable SECONDS FUZZ X Y W H``, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
   - Fix ``expect`` never matching, and so polling until it timed out, at a reduced-depth pixel format such as ``--pixel-format rgb565``. A target image now matches a screen that is as close to it as the negotiated format can express (@sibson)
   - Fix ``vnclog`` garbling its log and its ``--capture-raw`` metadata whenever the client asked the server for a pixel format other than the announced one, ``vncdo --pixel-format rgb565`` among them (@sibson)
   - Fix ``vnclog`` reporting an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, then carrying on against a stream it had abandoned (@sibson)

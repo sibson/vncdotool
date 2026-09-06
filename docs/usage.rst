@@ -58,12 +58,36 @@ command line.  You could automate a login with the following::
     > vncdo type username key enter expect password_prompt.png
     > vncdo type password move 100 150 click 1 expect welcome_screen.png
 
+When you have no reference image -- because you do not yet know what the
+screen will look like, or because a lossy encoding means no single fuzz
+separates the right screen from the wrong one -- wait for the screen to stop
+changing instead.  ``stable`` takes the length of the quiet window and a
+fuzz, and returns once the screen has gone that long without changing::
+
+    > vncdo key f5 stable 1.5 0 capture loaded.png
+
+It always takes at least the window you ask for, since there is no way to
+observe the absence of a change early, and longer whenever a late update
+restarts the window.  A screen that never goes quiet -- a clock, a blinking
+cursor -- never satisfies it, and the run ends when ``--timeout`` fires.
+
+The fuzz is not the quantity ``expect`` takes.  ``expect`` compares
+histograms against your reference image; ``stable`` compares successive
+frames pixel by pixel, so its fuzz is a per-channel RMS of the difference
+between them, from 0 (identical) to 255.  A small value absorbs the jitter of
+a JPEG encoding; a value carried over from a working ``expect`` means nothing
+here.
+
 Sometimes you only care about a portion of the screen, in which case you can
-use rcapture and rexpect. For instance, if your login window appears at
-x=100, y=200 and is 400 pixels wide by 250 high you could do::
+use rcapture, rexpect and rstable. For instance, if your login window appears
+at x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
     > vncdo rcapture region.png 100 200 400 250
     > vncdo rexpect region.png 100 200 0
+    > vncdo rstable 1.5 0 100 200 400 250
+
+``rstable`` is also the way past a server that never goes quiet: wait on a
+region that excludes whatever is animating.
 
 
 Encodings

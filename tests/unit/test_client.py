@@ -3,6 +3,9 @@ import io
 import struct
 import unittest
 
+from PIL import Image
+from twisted.internet.task import Clock
+
 from vncdotool import client, pixelformat, rfb
 from vncdotool.pixelformat import PIXEL_FORMATS
 from vncdotool.keys import Key
@@ -502,6 +505,126 @@ class TestRequestedJpegQuality(TestCase):
 
     def test_clients_offer_no_level_by_default(self):
         assert client.VNCDoToolFactory().buildProtocol(None).requested_jpeg_quality is None
+
+
+class TestStableScreen(TestCase):
+    """`stable` waits out a window in which nothing changed.
+
+    A `Clock` stands in for the reactor so the window can be advanced without
+    running one.
+    """
+
+    def setUp(self) -> None:
+        self.clock = Clock()
+        patcher = mock.patch("vncdotool.client.reactor", self.clock)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.client = client.VNCDoToolClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.screen = Image.new("RGB", (4, 4), "black")
+
+    def waitStable(self, seconds, maxrms, region=None):
+        d = (
+            self.client.stableRegion(seconds, maxrms, *region)
+            if region
+            else self.client.stableScreen(seconds, maxrms)
+        )
+        settled: list = []
+        d.addCallback(settled.append)
+        return settled
+
+    def paint(self, colour, at=(0, 0), size=(4, 4)) -> None:
+        """Repaint part of the screen the way updateRectangle does, then commit."""
+        assert self.client.screen is not None
+        self.client.screen.paste(Image.new("RGB", size, colour), at)
+        self.client.commitUpdate([(at[0], at[1], size[0], size[1])])
+
+    def test_settles_once_the_window_passes_with_no_change(self) -> None:
+        settled = self.waitStable(1.5, 0)
+
+        self.clock.advance(1.4)
+        assert settled == []
+
+        self.clock.advance(0.2)
+        assert settled == [self.client]
+
+    def test_a_change_restarts_the_window(self) -> None:
+        settled = self.waitStable(1.0, 0)
+
+        self.clock.advance(0.9)
+        self.paint("white")
+        self.clock.advance(0.9)
+        assert settled == []
+
+        self.clock.advance(0.2)
+        assert settled == [self.client]
+
+    def test_a_repaint_within_the_fuzz_does_not_restart_the_window(self) -> None:
+        settled = self.waitStable(1.0, 20)
+
+        self.clock.advance(0.9)
+        self.paint((5, 5, 5))
+        self.clock.advance(0.2)
+
+        assert settled == [self.client]
+
+    def test_keeps_a_request_outstanding_while_it_waits(self) -> None:
+        self.waitStable(1.0, 0)
+        self.client.framebufferUpdateRequest.reset_mock()
+
+        self.paint("white")
+
+        self.client.framebufferUpdateRequest.assert_called_once_with(incremental=True)
+
+    def test_asks_for_a_whole_screen_when_it_has_no_baseline(self) -> None:
+        self.client.screen = None
+
+        self.waitStable(1.0, 0)
+
+        self.client.framebufferUpdateRequest.assert_called_once_with(incremental=False)
+        assert not self.clock.getDelayedCalls()
+
+    def test_starts_the_window_once_a_first_frame_arrives(self) -> None:
+        self.client.screen = None
+        settled = self.waitStable(1.0, 0)
+
+        self.client.screen = Image.new("RGB", (4, 4), "black")
+        self.client.commitUpdate([(0, 0, 4, 4)])
+        self.clock.advance(1.1)
+
+        assert settled == [self.client]
+
+    def test_stops_requesting_once_it_has_settled(self) -> None:
+        self.waitStable(1.0, 0)
+        self.clock.advance(1.1)
+        self.client.framebufferUpdateRequest.reset_mock()
+
+        self.paint("white")
+
+        assert not self.client.framebufferUpdateRequest.called
+
+    def test_a_region_ignores_a_change_outside_it(self) -> None:
+        self.client.screen = Image.new("RGB", (8, 8), "black")
+        settled = self.waitStable(1.0, 0, region=(0, 0, 4, 4))
+
+        self.clock.advance(0.9)
+        self.paint("white", at=(4, 4))
+        self.clock.advance(0.2)
+
+        assert settled == [self.client]
+
+    def test_a_region_sees_a_change_inside_it(self) -> None:
+        self.client.screen = Image.new("RGB", (8, 8), "black")
+        settled = self.waitStable(1.0, 0, region=(0, 0, 4, 4))
+
+        self.clock.advance(0.9)
+        self.paint("white", at=(0, 0))
+        self.clock.advance(0.2)
+
+        assert settled == []
 
 
 def _connected(jpeg_quality):

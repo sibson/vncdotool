@@ -69,6 +69,85 @@ JPEG_QUALITY_ENCODINGS = [
 ]
 
 
+class _StableWatch:
+    """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
+
+    Waits for a trailing window of ``seconds`` in which no framebuffer update
+    changed the screen by more than ``maxrms``.  See
+    ``specs/screen-stability.md``.
+    """
+
+    def __init__(
+        self,
+        client: "VNCDoToolClient",
+        seconds: float,
+        maxrms: float,
+        box: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        self.client = client
+        self.seconds = seconds
+        self.maxrms = maxrms
+        self.box = box
+        self.baseline: Image.Image | None = None
+        self.result: Deferred = Deferred()
+        self.timer: Any = None
+        self.settled = False
+
+    def start(self) -> Deferred:
+        if self.client.screen is not None:
+            self.baseline = self._frame()
+            self._restart()
+            self._request(incremental=True)
+        else:
+            # Nothing to compare against yet; ask for the whole screen and
+            # start the window once a frame has arrived.
+            self._request(incremental=False)
+        return self.result
+
+    def _frame(self) -> Image.Image:
+        screen = self.client.screen
+        assert screen is not None
+        # updateRectangle pastes into self.screen, so an un-copied reference
+        # would change underfoot and never compare as different.
+        return screen.crop(self.box) if self.box else screen.copy()
+
+    def _request(self, incremental: bool) -> None:
+        d: Deferred = Deferred()
+        d.addCallback(self._update)
+        self.client.deferred = d
+        self.client.framebufferUpdateRequest(incremental=incremental)
+
+    def _update(self, _: object) -> None:
+        if self.settled:
+            return
+        frame = self._frame()
+        if self.baseline is None or self._changed(frame):
+            self.baseline = frame
+            self._restart()
+        self._request(incremental=True)
+
+    def _changed(self, frame: Image.Image) -> bool:
+        assert self.baseline is not None
+        if frame.size != self.baseline.size:
+            return True
+        difference = ImageChops.difference(
+            frame.convert("RGB"), self.baseline.convert("RGB")
+        )
+        rms = max(ImageStat.Stat(difference).rms)
+        log.debug("stable rms:%f maxrms:%f", rms, self.maxrms)
+        return rms > self.maxrms
+
+    def _restart(self) -> None:
+        if self.timer is not None and self.timer.active():
+            self.timer.reset(self.seconds)
+        else:
+            self.timer = reactor.callLater(self.seconds, self._settle)
+
+    def _settle(self) -> None:
+        self.settled = True
+        self.result.callback(self.client)
+
+
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
     requested_encodings: list[rfb.Encoding] | None = None
@@ -250,6 +329,26 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug("expectRegion %s (%s, %s)", filename, x, y)
         return self._expectFramebuffer(filename, x, y, maxrms)
+
+    def stableScreen(self, seconds: float, maxrms: float = 0) -> Deferred:
+        """Wait until the display stops changing
+
+        :param seconds: length of the trailing window during which the screen
+            must not have changed.  The call takes at least this long, and
+            longer whenever an update restarts the window.
+        :param maxrms: how much two frames may differ, as a per-channel RMS
+            over their pixel difference, and still count as unchanged.  Note
+            this is not the quantity :meth:`expectScreen` calls maxrms.
+        """
+        log.debug("stableScreen %f", seconds)
+        return _StableWatch(self, seconds, maxrms).start()
+
+    def stableRegion(
+        self, seconds: float, maxrms: float, x: int, y: int, w: int, h: int
+    ) -> Deferred:
+        """Wait until a region of the display stops changing"""
+        log.debug("stableRegion %f (%s, %s)", seconds, x, y)
+        return _StableWatch(self, seconds, maxrms, (x, y, x + w, y + h)).start()
 
     def _expectFramebuffer(
         self, filename: str, x: int, y: int, maxrms: float

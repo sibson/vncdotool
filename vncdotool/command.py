@@ -159,6 +159,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  click BUTTON\t\tsend a mouse BUTTON click\n"
             "  capture FILE\t\tsave current screen as FILE\n"
             "  expect FILE FUZZ\twait until screen matches FILE\n"
+            "  stable SECONDS FUZZ\twait until screen stops changing\n"
             "  pause SECONDS\t\twait SECONDS before sending next command\n"
             "\n"
             "Other Commands (CMD):\n"
@@ -170,6 +171,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  drag X Y\t\tmove the mouse to X,Y in small steps\n"
             "  rcapture FILE X Y W H\tcapture a region of the screen\n"
             "  rexpect FILE X Y FUZZ\texpect that matches a region of the screen\n"
+            "  rstable SECONDS FUZZ X Y W H\tstable for a region of the screen\n"
             "\n"
             "If a filename is given commands will be read from it, or stdin `-`\n"
         )
@@ -275,6 +277,20 @@ def build_command_list(
             y = int(args.pop(0))
             rms = float(args.pop(0))
             factory.deferred.addCallback(client.expectRegion, filename, x, y, rms)
+        elif cmd == "stable":
+            seconds = float(args.pop(0))
+            rms = float(args.pop(0))
+            factory.deferred.addCallback(client.stableScreen, seconds, rms)
+        elif cmd == "rstable":
+            seconds = float(args.pop(0))
+            rms = float(args.pop(0))
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            w = int(args.pop(0))
+            h = int(args.pop(0))
+            factory.deferred.addCallback(
+                client.stableRegion, seconds, rms, x, y, w, h
+            )
         elif cmd in ("pause", "sleep"):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)

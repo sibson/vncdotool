@@ -142,6 +142,12 @@ lands. `_expectCompare` already carries this shape.
 `incremental` argument to `captureScreen` (`command.py:254`); here the flag's
 value is dictated by correctness, not preference, so `stable` chooses its own.
 
+`--warp` does not scale SECONDS either, though it scales `pause`
+(`command.py:279`). A pause is a scripted delay and replaying it at speed is
+the point of the flag; this window is a threshold below which the screen is
+not known to have settled, and shrinking it silently reintroduces the race the
+command exists to remove.
+
 ## Timeout
 
 `--timeout` covers it: exit status 40 (`ExitStatus.TIMEOUT`, `command.py:69`),
@@ -167,7 +173,12 @@ helper the way `_expectFramebuffer` is shared.
 `refreshScreen`, `expectScreen`. It buys a 1:1 mapping from the script command,
 which is the property callers actually use when moving between `vncdo` and the
 library. `waitStableScreen` reads better in isolation and breaks that mapping.
-Worth a second opinion before it is written.
+
+State for one call lives in a `_StableWatch`, not on the client: a baseline
+frame, a timer and a settled flag outgrow the single `self.deferred` slot
+`_expectCompare` threads its state through. The flag is load-bearing — after
+the window fires, a commit can still arrive against the last armed deferred,
+and without it the watch would re-arm and request forever.
 
 ## Out of scope
 
@@ -199,9 +210,11 @@ works.
 
 ## Open questions
 
-- `stableScreen` versus `waitStableScreen` for the API name.
 - Whether `FUZZ` sharing a name with `expect`'s differently-scaled fuzz is
   worth the confusion, or whether the argument wants a different name.
+  `docs/usage.rst` warns about it; a rename would be better.
 - Whether any common server sends periodic no-op updates that a pixel
   comparison would correctly ignore but that would still churn CPU on a large
   framebuffer. Not yet checked against the fleet.
+- The functional test and the `scene-lossy.vdo` migration below are not
+  written yet; only the unit suite covers the command.
