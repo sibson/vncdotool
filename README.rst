@@ -34,8 +34,8 @@ It's under active development and seems to be working, but please report any pro
 
 Quick Start
 --------------------------------
-To use vncdotool you will need a VNC server.
-Most virtualization products include one, or use RealVNC, TightVNC or clone your Desktop using x11vnc.
+To use vncdotool you need a VNC server.
+Most virtualization products include one, or use RealVNC, TightVNC, or clone your Desktop using x11vnc.
 
 Once, you have a server running you can install vncdotool from pypi::
 

@@ -1,7 +1,7 @@
-# Screen Stability — Design
+# Screen Stability Design
 
 Status: draft, under review. Sibling of the `expect` matching design; this is
-the "Not in scope" item from it — blocking until the screen stops changing,
+the "Not in scope" item from it: blocking until the screen stops changing,
 with no reference image.
 
 ## Problem
@@ -15,12 +15,12 @@ plus throwaway `capture step.png` calls, from when no fuzz separated a JPEG
 rendering of the right scene from the wrong one. The metric that fixed that is
 in [expect-matching.md](expect-matching.md), but a pause is still a guess: too
 short and the capture tears, too long and the golden run pays for it eight
-times over — and neither is a question about a reference image.
+times over. Neither is a question about a reference image.
 
 The stronger case is outside the test suite. An agent driving `vncdo` captures
 a PNG and inspects it out of process; it cannot sit inside the reactor's
 `expect` poll loop, because each turn through that loop costs it a model call.
-What it needs before looking is "the screen has settled", which is a question
+What it needs before looking is "the screen has settled," which is a question
 `expect` cannot ask without already knowing the answer.
 
 ## Command
@@ -29,7 +29,7 @@ What it needs before looking is "the screen has settled", which is a question
     rstable SECONDS X Y W H [FUZZ]
 
 FUZZ is optional and trails, as it does for `expect FILE [FUZZ]`, and is read
-by the same `_trailing_fuzz` — a whole number in 0..255, or the next command
+by the same `_trailing_fuzz`: a whole number in 0..255, or the next command
 if it is not a number at all.
 
 `SECONDS` is **the length of the trailing window during which the framebuffer
@@ -47,8 +47,8 @@ Two properties follow, and both belong in the user documentation:
   `pause 1.5` it replaces.
 - **There is no upper bound.** Each qualifying change restarts the window, so
   the win over `pause` is at the top end, not the bottom: `pause 1.5` returns at
-  1.5s whether or not the repaint finished, where `stable 1.5` waits out however
-  long the repaint actually takes and then proves 1.5s of quiet.
+  1.5 s whether or not the repaint finished, where `stable 1.5` waits out however
+  long the repaint actually takes and then proves 1.5 s of quiet.
 
 ### Why a region variant is not speculative
 
@@ -71,7 +71,7 @@ about — `rcapture` appends its geometry after the base command's arguments,
 
 ## What "unchanged" compares
 
-`imagematch.matches(frame, baseline, fuzz, blur)` — the comparison `expect`
+`imagematch.matches(frame, baseline, fuzz, blur)` is the comparison `expect`
 uses, run against the previous frame instead of against a file. See
 [expect-matching.md](expect-matching.md) for the metric and the measurements
 behind it.
@@ -91,7 +91,7 @@ is worth more than the two or three units this gives away.
 
 ## How the window is driven
 
-Event-driven, on `commitUpdate` — the point where every rectangle of one
+Event-driven, on `commitUpdate`: the point where every rectangle of one
 `FramebufferUpdate` message has been applied (`rfb.py:338`, `client.py:456`).
 Nothing samples on a timer.
 
@@ -111,7 +111,7 @@ Rectangle-level completeness needs no work here. One update message may carry
 many rects, but `rfb.py:329` reads the count, calls `beginUpdate()`, consumes
 that many, and only then commits, so no consumer ever observes a half-applied
 message. What no message boundary marks is the end of a *logical* redraw, which
-may span several updates — that is the gap `stable` fills, and RFB offers no
+may span several updates. That is the gap `stable` fills, and RFB offers no
 marker for it.
 
 ### Keeping a request outstanding
@@ -127,7 +127,7 @@ The client holds a single `self.deferred` slot, fired by `commitUpdate`, so
 `stable` re-arms the same way `_expectCompare` does rather than holding a
 deferred of its own across rounds.
 
-With no baseline — `self.screen` is `None` on a fresh connection — the first
+With no baseline (`self.screen` is `None` on a fresh connection), the first
 request is non-incremental to establish one, and the window starts after it
 lands. `_expectCompare` already carries this shape.
 
@@ -149,9 +149,9 @@ argument.
 
 A screen that changes more often than every SECONDS never satisfies the window
 and hangs until that fires. There is deliberately **no "quietest window seen"
-fallback** — a command that sometimes returns a frame it knows to be unstable
+fallback**: a command that sometimes returns a frame it knows to be unstable
 gives the caller no way to tell the two outcomes apart, and the caller in the
-motivating case is an agent that will believe it. Fail loudly; the recovery is
+motivating case is an agent that believes it. Fail loudly; the recovery is
 `rstable` over a calmer region, or a longer `--timeout`.
 
 ## Python API
@@ -171,7 +171,7 @@ library. `waitStableScreen` reads better in isolation and breaks that mapping.
 
 State for one call lives in a `_StableWatch`, not on the client: a baseline
 frame, a timer and a settled flag outgrow the single `self.deferred` slot
-`_expectCompare` threads its state through. The flag is load-bearing — after
+`_expectCompare` threads its state through. The flag is load-bearing: after
 the window fires, a commit can still arrive against the last armed deferred,
 and without it the watch would re-arm and request forever.
 
@@ -179,7 +179,7 @@ and without it the watch would re-arm and request forever.
 
 **Fence (-312) and ContinuousUpdates (-313).** Fence is a barrier, not an idle
 detector: it reports that everything queued before it has been delivered, and
-says nothing about future updates. It could tighten the window's start — do not
+says nothing about future updates. It could tighten the window's start: do not
 begin counting until a fence returns.
 
 `rfb.py` now answers a server-initiated fence and can send a `ClientFence`, but
@@ -193,7 +193,7 @@ test could not depend on them in any case.
 Unit, `tests/unit/test_client.py`: drive the protocol class with the mocked
 transport the file already uses, and a `twisted.internet.task.Clock` for the
 window, calling `commitUpdate` directly with prepared frames. Never start the
-reactor. Cases worth one test each — window restarts on a change beyond FUZZ,
+reactor. Cases worth one test each: window restarts on a change beyond FUZZ,
 survives a repaint within FUZZ, a request stays outstanding across the window,
 no baseline means a non-incremental first request.
 

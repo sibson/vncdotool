@@ -1,4 +1,4 @@
-# Server Testing Framework — Design
+# Server Testing Framework Design
 
 Status: draft, under review. Companion to
 [server-compatibility-plan.md](server-compatibility-plan.md); this document
@@ -7,20 +7,20 @@ designs the Phase 0 framework that plan calls for.
 ## Problem
 
 vncdotool talks to many VNC server implementations and breaks against them
-invisibly: only LibVNCServer is meaningfully covered today. We need a common
-set of scenarios run against real servers, a road for evidence from servers
-we cannot host, and regression coverage that survives without any server at
-all.
+invisibly: only LibVNCServer is meaningfully covered today. This calls for a
+common set of scenarios run against real servers, a road for evidence from
+servers that cannot be hosted, and regression coverage that survives without
+any server at all.
 
 ## Principle
 
 **Unit tests are the regression layer. Live servers are for smoke and
-discovery. Captures are for discovery against servers we can't run.**
+discovery. Captures are for discovery against servers that can't be run.**
 
 Replay of recorded traffic is inherently flaky and never runs in CI. A bug
 found against a live server or a capture is *distilled* into a byte-level
 unit test (the `test_issue_90` pattern: feed crafted bytes into
-`VNCDoToolClient` with a mocked transport — no socket, no reactor,
+`VNCDoToolClient` with a mocked transport: no socket, no reactor,
 deterministic). The live tier and the capture kit are bug *sources*; the
 unit suite is where bugs stay fixed.
 
@@ -33,7 +33,7 @@ unit suite is where bugs stay fixed.
   (`tests/unit/test_rfb.py`, `test_client.py`) per existing convention;
   `test_issue_NNN.py` remains the triage staging area.
 - **Decoder golden tests**: per-encoding FBU byte sequences (raw, RRE,
-  hextile, ZRLE, Tight, ...) fed to the client, decoded framebuffer
+  hextile, ZRLE, Tight, and so on) fed to the client, decoded framebuffer
   asserted pixel-exactly. Fixture bytes are captured once (via the capture
   tool, against any server that speaks the encoding) and committed. This
   replaces the pexpect golden-PNG tests with a stronger net: deterministic
@@ -46,17 +46,17 @@ unit suite is where bugs stay fixed.
 Tier 1 = the Docker Compose fleet (`tests/servers/`). Tier 2 = OS-hosted
 servers on Windows/macOS runners (`os-servers.yml`).
 
-**Scenario grid**: a small core scenario set crossed with every server —
+**Scenario grid**: a small core scenario set crossed with every server:
 connect, key press, mouse move, screenshot (and expect where a desktop
 renders). Implemented as plain `unittest` test methods on the existing
-server-test mixin — one method per scenario, one subclass per server.
+server-test mixin, one method per scenario, one subclass per server.
 No scenario registry / NamedTuple machinery: the method grid *is* the
 matrix. A reduced capability model survives on the server descriptors
-(`renders_desktop`, `known_size`, auth fields) to drive honest skips —
-e.g. macOS Screen Sharing's black framebuffer.
+(`renders_desktop`, `known_size`, auth fields) to drive honest skips, for
+example, macOS Screen Sharing's black framebuffer.
 
-**Fleet identity**: the fleet is machine-global — fixed ports 5931-5935 and
-one compose project — while checkouts are many, and the Dockerfile bakes
+**Fleet identity**: the fleet is machine-global, fixed ports 5931-5935 and
+one compose project, while checkouts are many, and the Dockerfile bakes
 committed files (the scene PNGs, `scene_player.py`, the entrypoints) into
 its images. So a checkout that never ran `make servers-up` tests against
 whichever checkout did, reading that checkout's baked files back off the
@@ -67,7 +67,7 @@ the running container, so the mismatch fails by name in `servers-up` and in
 the tests that depend on baked content. The hash is of `HEAD`, so a fleet
 built from uncommitted edits to those files tags as the commit it sits on.
 
-**Execution model**: every fleet scenario runs the real CLI via
+**Execution model**: every fleet scenario runs the real command-line tool via
 `subprocess.run(["vncdo", ...], timeout=N)`.
 
 - One hang-containment mechanism for every hang class: the kernel reaps the
@@ -75,10 +75,11 @@ built from uncommitted edits to those files tags as the commit it sits on.
   ordering, no poisoned reactor coupling tests to each other. This is what
   lets the framework cope with a client that (pre-Phase 1) still hangs
   against hostile servers: CI fails on timeout, never hangs.
-- It exercises the CLI surface (arg parsing, exit codes, `--nocursor`, ...)
-  as a side effect, so the old pexpect CLI tests fold in here.
+- It exercises the command-line tool's surface (arg parsing, exit codes,
+  `--nocursor`, and more) as a side effect, so the old pexpect command-line
+  tests fold in here.
 
-**Input verification — event sinks, not pixels**: "did the server process
+**Input verification (event sinks, not pixels)**: "did the server process
 `type foo`" is asserted against an event log, never a screenshot.
 
 - *vncev container* (client conformance): libvncserver's `vncev` as a
@@ -89,33 +90,37 @@ built from uncommitted edits to those files tags as the commit it sits on.
 - *X-side sink* (server processing): X-based fleet containers (x11vnc/Xvfb,
   Xvnc) run `xev`/`xinput test` inside, logging to stdout or a file; tests
   read it via `docker compose logs` / `docker exec`. Verifies the server
-  translated the VNC event into a real X event — the full path. Per-server
+  translated the VNC event into a real X event, the full path. Per-server
   input quirks surface as event-log diffs.
 
 Both are poll-a-log-with-deadline. Tier 2 has no sink yet; see open
 questions.
 
 **In-process API suite** (small, separate): the library API needs live
-coverage of its *lifecycle*, not of server compatibility — `api.connect`,
-error propagation, timeouts, `api.shutdown` cleanliness — against a single
-known-good container. One reactor per process means exactly one module
-(`test_api_lifecycle.py`) may ever touch `vncdotool.api` in-process; it is
-safe inside the shared functional discover because every other module is
-subprocess-only and never touches that reactor, regardless of run order —
-`make test-api` also runs it alone. It does not fan out across the fleet:
+coverage of its *lifecycle*, not of server compatibility. That means
+`api.connect`, error propagation, timeouts, and `api.shutdown` cleanliness,
+tested against a single known-good container. One reactor per process means
+
+exactly one module (`test_api_lifecycle.py`) may ever touch `vncdotool.api`
+in-process; it is safe inside the shared functional discover because every
+other module is subprocess-only and never touches that reactor, regardless
+of run order.
+
+`make test-api` also runs it alone. It does not fan out across
+the fleet:
 server compatibility is already proven by the subprocess grid.
 
 ### 3. Capture kit (discovery for unhosted servers)
 
-For servers we cannot run (RealVNC, Proxmox, ...), contributors submit
-evidence instead of access.
+For servers that cannot be run (RealVNC, Proxmox, and others), contributors
+submit evidence instead of access.
 
 **Capture tool**: a `--capture-raw ARCHIVE.zip` flag on the existing proxy
-CLI (`vnclog`). Contributor pip-installs released vncdotool, points their
-client (or a `vncdo` script) through the proxy at their server, and gets a
-capture archive to attach to an issue. No repo checkout required.
+command-line tool (`vnclog`). Contributor pip-installs released vncdotool,
+points their client (or a `vncdo` script) through the proxy at their server,
+and gets a capture archive to attach to an issue. No repo checkout required.
 
-Capture archive format — bytes stay dumb, parsing happens at
+Capture archive format. Bytes stay dumb, and parsing happens at
 replay/distill time, so the format never needs versioning:
 
     session.vdo   # what was driven (vncdo script / logged commands)
@@ -133,34 +138,34 @@ handshake is not the credential exchange that happened; it is a synthetic
     c2s.bin:  <recorded greeting> [<chosen type: none>]
               <recorded ClientInit onwards>
 
-The bracketed steps depend on the version the original client negotiated —
-pre-3.7 has the server pick the type in a 4-byte field, and pre-3.8 `none`
+The bracketed steps depend on the version the original client negotiated.
+Pre-3.7 has the server pick the type in a 4-byte field, and pre-3.8 `none`
 carries no SecurityResult. Nothing from the real auth exchange is written:
 not zeroed, not shortened, *absent*.
 
 This replaces equal-length zero redaction, and is a stronger guarantee for
-a contributor to reason about — "the archive contains no credential bytes"
-rather than "the credential bytes are zeros". It is also what makes replay
+a contributor to reason about: "the archive contains no credential bytes"
+rather than "the credential bytes are zeros." It is also what makes replay
 a dumb byte-pusher: the archive already describes a session any client can
 connect to without a password, whatever the original server demanded.
 
 **Stripping requires following the handshake.** Skipping the auth exchange
 means knowing where it ends, which needs a grammar for it. vncdotool has
 one for `none`, VNC auth and ARD, and none for tight, vencrypt, rsa-aes or
-MS-Logon — so a session negotiating one of those still aborts the capture
-by default, exactly as the zero-redaction design did, with the reason
-restated: not "we cannot find the secret" but "we cannot find the end of
-it". The escape hatch below is the same one.
+MS-Logon. A session negotiating one of those still aborts the capture by
+default, exactly as the zero-redaction design did, with the reason restated:
+not "the secret can't be found" but "the end of it can't be found." The
+escape hatch below is the same one.
 
 **`--capture-raw-unsafe` records the handshake verbatim**, every auth type
-alike, for the bug that lives in the negotiation itself — and for ARD,
+alike, for the bug that lives in the negotiation itself, and for ARD,
 whose Diffie-Hellman exchange is now removed by stripping along with
 everything else. Its archives carry a real key exchange and whatever credentials it
 protected; the paved-road doc says so, and says to use a disposable
 password and rotate it. It supersedes `--capture-raw-unsafe-auth`, which is
 removed rather than aliased: the kit is unreleased.
 
-**Replay tool** — `vncdo-replay`, a shipped console script, two modes:
+**Replay tool**: `vncdo-replay`, a shipped console script, two modes:
 
     vncdo-replay --server capture.zip    # serve the recorded s2c.bin
     vncdo-replay capture.zip             # run the recorded session.vdo
@@ -192,8 +197,8 @@ Golden fixtures need a VNC server whose screen changes on demand.
 path and the fixtures.
 
 What it cannot do is choose the rectangles: the server decides how a screen
-change becomes rects. Dictating them needs an application that marks its own,
-and only libvncserver can be made to — measured against 0.9.14, it has no
+change becomes rects. Dictating them needs an app that marks its own,
+and only libvncserver can be made to. Measured against 0.9.14, it has no
 framebuffer comparator at all, so `rfbMarkRectAsModified` decides granularity
 exactly, while x11vnc diffs a framebuffer it merely polls. So an example off
 `pnmshow` stays the route to the cases that need a chosen layout: many
@@ -223,15 +228,15 @@ revisit only if someone asks for it.
 ## In-flight PRs
 
 - **#340** (digest pins, versions.md, image build cache): orthogonal and
-  compatible — proceed.
+  compatible; proceed.
 - **#341** (scenario registry framework): closed, superseded by this
   design. Its `Scenario`/`ScenarioContext`/`SCENARIOS` registry, the
   capability-gated `requires` matching, and the generated
   `test_<scenario>` methods all existed to serve the recorder-replay and
   Tier 3 checklist consumers that never landed; nothing else in the fleet
   reads them, so none of it carried forward. The one genuine idea inside
-  it — a server declaring what it can do, so a test can skip a capability
-  it lacks rather than weaken its own assertion — stays deferred rather
+  it (a server declaring what it can do, so a test can skip a capability
+  it lacks rather than weaken its own assertion) stays deferred rather
   than added speculatively: `renders_desktop` and `size` already gate
   inline where the plain-method grid needs it, and a `capabilities`
   property with no caller is exactly the unused abstraction this repo's
@@ -243,9 +248,9 @@ revisit only if someone asks for it.
 
 ## Phasing
 
-1. Fleet smoke grid as subprocess tests + vncev/X event sinks; fold CLI
-   tests in; retire pexpect and the native build. (Reworks #341's branch
-   terrain.)
+1. Fleet smoke grid as subprocess tests + vncev/X event sinks; fold
+   command-line tests in; retire pexpect and the native build. (Reworks
+   #341's branch terrain.)
 2. Decoder golden unit tests: capture per-encoding fixture bytes, commit,
    delete golden-PNG suite. Scaffolded at Raw and one pixel format; the
    remaining matrix values arrive with the client features that can request
@@ -273,15 +278,15 @@ and can proceed while 3–5 follow.
 - **Fleet expansion** (TightVNC, QEMU, more): follows the plan's tier
   process; this framework adds a server as one descriptor + one subclass.
 - **Input-reactive test surface**: nothing in the fleet reacts to input at
-  a known screen position — `tests/servers/draw-content.sh` paints static
-  content once at start-up — so a keyboard/mouse test can only assert "some
+  a known screen position (`tests/servers/draw-content.sh` paints static
+  content once at start-up), so a keyboard/mouse test can only assert "some
   repaint happened" or "the session didn't disconnect," never "the right
   pixels changed." Needs a deterministic reactive surface in the container
-  desktop (e.g. a full-screen `xterm` echoing keystrokes at a fixed
+  desktop (for example, a full-screen `xterm` echoing keystrokes at a fixed
   position, plus a pointer-tracking app), which is image work with real
   flakiness risk (font rendering, timing) and its own spike. The scene player
   does not cover it: it paints the image its key names, whatever that key
-  was, so it cannot answer "which keysym arrived" — which is what the KEYMAP
+  was, so it cannot answer "which keysym arrived," which is what the KEYMAP
   issues need.
 - **Phase 1 interplay**: once "fail loudly, never hang" lands in the
   client, per-test subprocess timeouts can tighten, and the in-process API
