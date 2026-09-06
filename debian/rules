@@ -1,4 +1,6 @@
 #!/usr/bin/make -f
 
+export PYBUILD_NAME=vncdotool
+
 %:
-	dh $@ --with 'python_support'
+	dh $@ --buildsystem=pybuild

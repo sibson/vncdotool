@@ -1,3 +1,16 @@
+vncdotool (0.3.0-1) unstable; urgency=low
+
+  * Rework packaging for Python 3: build with dh-python/pybuild against
+    python3-hatchling instead of python-support/python-setuptools, drop
+    the python-vncdotool-doc package (Sphinx removed upstream), and drop
+    the debian/vncdo, debian/vnclog and debian/vncdotool wrapper scripts
+    now that pyproject.toml's [project.scripts] installs those entry
+    points itself.
+  * Bump debhelper compat to 13 (declared via debhelper-compat) and
+    source format to "3.0 (quilt)".
+
+ -- Marc Sibson <sibson+vncdotool@gmail.com>  Sun, 06 Sep 2026 00:00:00 -0700
+
 vncdotool (0.3.0) lucid; urgency=low
 
   * upstream update
