@@ -19,15 +19,11 @@ class HextileDecoder(PixelDecoder):
         self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
         bypp = target.bypp
-        # IntFlag's & allocates a new flag object per test.
         raw_bit = HextileEncoding.RAW.value
         background_bit = HextileEncoding.BACKGROUND_SPECIFIED.value
         foreground_bit = HextileEncoding.FOREGROUND_SPECIFIED.value
         subrects_bit = HextileEncoding.ANY_SUBRECTS.value
         coloured_bit = HextileEncoding.SUBRECTS_COLORED.value
-        # Background and foreground carry over from the previous tile, but
-        # neither across a raw tile, and the foreground not across a
-        # coloured-subrectangle tile either.
         background = foreground = b""
 
         for ty in range(0, target.height, TILE):
