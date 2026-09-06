@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import Dict, Type
 
 from ..const import Encoding
-from .base import ClientDecoder, ControlDecoder, Decoder, PixelDecoder, RectDecoder
+from .base import (
+    ClientDecoder,
+    ControlDecoder,
+    Decoder,
+    PixelDecoder,
+    RectDecoder,
+    WholeRectDecoder,
+)
 from .buffer import RectBuffer
 from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
 from .copyrect import CopyRectDecoder
@@ -58,5 +65,6 @@ __all__ = [
     "PixelDecoder",
     "RectBuffer",
     "RectDecoder",
+    "WholeRectDecoder",
     "for_connection",
 ]

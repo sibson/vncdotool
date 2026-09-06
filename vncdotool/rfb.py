@@ -361,6 +361,8 @@ class RFBClient(Protocol):
             if not decoder.buffered:
                 return self._pumpRectangle
             return self._pumpBufferedRectangle
+        if isinstance(decoder, decoders.WholeRectDecoder):
+            return self._pumpWholeRectangle
         if isinstance(decoder, decoders.ControlDecoder):
             return self._pumpForControl
         return self._pumpForClient
@@ -382,18 +384,41 @@ class RFBClient(Protocol):
             return
         rect = (x, y, width, height)
 
-        def finish_buffered() -> None:
+        def finish_buffered(_result: Any) -> None:
             output_format = decoder.output_format(self.pixel_format)
             self._finishRectangle(target.tobytes(), output_format, rect)
 
         self._pumpGenerator(None, decoder.decodePixels(target, self.pixel_format), finish_buffered)
+
+    def _pumpWholeRectangle(
+        self, decoder: decoders.WholeRectDecoder, x: int, y: int, width: int, height: int
+    ) -> None:
+        if not self._rectFits(width, height):
+            return
+        rect = (x, y, width, height)
+
+        def finish_whole(result: Any) -> None:
+            pixels, output_format = result
+            expected = width * height * output_format.bypp
+            if len(pixels) != expected:
+                self.abortConnection(
+                    f"decoder produced {len(pixels)} bytes for a {width}x{height} "
+                    f"rectangle at {output_format.bypp} bytes per pixel, "
+                    f"which needs {expected}"
+                )
+                return
+            self._finishRectangle(pixels, output_format, rect)
+
+        self._pumpGenerator(
+            None, decoder.decodeRect(width, height, self.pixel_format), finish_whole
+        )
 
     def _pumpForClient(
         self, decoder: decoders.ClientDecoder, x: int, y: int, width: int, height: int
     ) -> None:
         rect = (x, y, width, height)
 
-        def finish_client() -> None:
+        def finish_client(_result: Any) -> None:
             self.rectanglePos.append(rect)
             self._doConnection()
 
@@ -445,15 +470,15 @@ class RFBClient(Protocol):
         self,
         block: bytes | None,
         generator: Iterator[int],
-        on_done: Callable[[], None] | None,
+        on_done: Callable[[Any], None] | None,
     ) -> None:
         try:
             size = generator.send(block)
-        except StopIteration:
+        except StopIteration as stop:
             if on_done is None:
                 self._doConnection()
             else:
-                on_done()
+                on_done(stop.value)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()

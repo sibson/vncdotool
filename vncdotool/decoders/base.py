@@ -1,7 +1,7 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import ClassVar, Iterator
+from typing import ClassVar, Generator, Iterator
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
@@ -42,6 +42,17 @@ class PixelDecoder(RectDecoder):
         always the negotiated one.
         """
         return pixel_format
+
+
+class WholeRectDecoder(RectDecoder):
+    """Consumes bytes, produces the whole rectangle itself, in whatever
+    pixel format it decoded them to -- not always the negotiated one.
+    """
+
+    def decodeRect(
+        self, width: int, height: int, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, tuple[bytes, PixelFormat]]:
+        raise NotImplementedError
 
 
 class ClientDecoder(RectDecoder):
