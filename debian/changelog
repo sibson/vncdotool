@@ -1,4 +1,4 @@
-vncdotool (0.3.0-1) unstable; urgency=low
+vncdotool (2.0.0~dev0-1) unstable; urgency=low
 
   * Rework packaging for Python 3: build with dh-python/pybuild against
     python3-hatchling instead of python-support/python-setuptools, drop

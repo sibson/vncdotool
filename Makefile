@@ -34,7 +34,8 @@ release: test-unit
 	@echo "Releasing $(VERSION)"
 	uv version --bump stable --no-sync
 	sd "^$(VERSION) \(UNRELEASED\)" "$(VERSION) ($(shell date +%Y-%m-%d))" CHANGELOG.rst
-	git add pyproject.toml CHANGELOG.rst
+	printf 'vncdotool ($(VERSION)-1) unstable; urgency=low\n\n  * New upstream release.\n\n -- Marc Sibson <sibson+vncdotool@gmail.com>  $(shell date "+%a, %d %b %Y %H:%M:%S %z")\n\n' | cat - debian/changelog > debian/changelog.tmp && mv debian/changelog.tmp debian/changelog
+	git add pyproject.toml CHANGELOG.rst debian/changelog
 	git commit -m "Release $(VERSION)"
 	git tag v$(VERSION)
 	git push origin main v$(VERSION)
