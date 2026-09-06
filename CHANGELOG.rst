@@ -1,5 +1,7 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - ZRLE rectangles decode about 12x faster: tiles are now read by index out of the decompressed block and widened in C, rather than a byte at a time through an iterator (@sibson)
+  - Fix a ZRLE palette index past the end of its palette raising ``IndexError`` past the protocol handler instead of ending the session with a reported error (@sibson)
   - Tight palette rectangles decode about 1.3x faster: expanding indices into pixels now runs in C rather than a per-pixel Python loop (@sibson)
   - Fix ``expect`` never matching, and so polling until it timed out, at a reduced-depth pixel format such as ``--pixel-format rgb565``. A target image now matches a screen that is as close to it as the negotiated format can express (@sibson)
   - Fix ``vnclog`` garbling its log and its ``--capture-raw`` metadata whenever the client asked the server for a pixel format other than the announced one, ``vncdo --pixel-format rgb565`` among them (@sibson)
