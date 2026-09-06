@@ -169,8 +169,6 @@ class TestVNCDoToolClient(TestCase):
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
 
     def test_expectCompareBlurLetsALossyFrameThrough(self):
-        """A pixel the encoder moved a long way passes once both screens are
-        blurred, which is what a JPEG capture needs."""
         target = self._swatch((0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A))
         screen = self._swatch((0x2A, 0x2A, 0x2A), (0x6A, 0x6A, 0x6A), (0x2A, 0x2A, 0x2A))
         cli = self._comparing(target, screen)
@@ -190,8 +188,8 @@ class TestVNCDoToolClient(TestCase):
         return image
 
     def test_expectCompareAllowsWhatTheFormatCannotExpress(self):
-        """`expect FILE 0` at rgb565 would otherwise poll until it timed out:
-        no 5-bit red can carry 0x2A, so an exact match never comes.
+        """`expect FILE` at rgb565 would otherwise poll until it timed out: no
+        5-bit red can carry 0x2A, so an exact match never comes.
         """
         target = self._swatch((0x2A, 0x2A, 0x2A), (0xC1, 0xC1, 0xC1))
         screen = self._swatch((0x29, 0x29, 0x29), (0xC6, 0xC3, 0xC6))

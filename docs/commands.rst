@@ -10,8 +10,8 @@ capture FILENAME.PNG
 drag X Y
 -----------
 
-expect FILENAME.PNG FUZZ
---------------------------
+expect FILENAME.PNG [FUZZ]
+----------------------------
 
 key KEY
 ---------
@@ -40,8 +40,8 @@ pause SECONDS
 rcapture FILENAME.PNG X Y W H
 ------------------------------
 
-rexpect FILENAME.PNG X Y FUZZ
-------------------------------
+rexpect FILENAME.PNG X Y [FUZZ]
+--------------------------------
 
 type STRING
 --------------

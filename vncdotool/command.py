@@ -181,11 +181,6 @@ class CommandParseError(RuntimeError):
 
 
 def _trailing_fuzz(args: list[str]) -> float | None:
-    """The bound a script may write after an expect's filename.
-
-    Optional: `docs/usage.rst` has always shown `expect FILE` without one, and
-    no command is spelled as a number, so a number here can only be this.
-    """
     if not args:
         return None
     try:

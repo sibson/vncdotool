@@ -1,8 +1,7 @@
 # What `expect` Compares — Design
 
-Status: built, across the five commits under Phasing. Replaced the histogram-RMS
-comparison in `VNCDoToolClient._expectMatch` and retired
-`tests/goldens/scene-lossy.vdo`.
+Status: built. What a `jpeg-lossy` fixture records is in
+[decoder-goldens.md](decoder-goldens.md).
 
 ## Problem
 
@@ -130,12 +129,13 @@ and then on a desktop playing video, which the option alone cannot express.
 script that copied it -- goes on meaning "exact". A script passing a large RMS
 number gets a lax match rather than the tight one it asked for; the number is
 on a different scale now. That is a breaking change, taken deliberately while
-the version is `2.0.0.dev0`, and it needs a CHANGELOG entry saying so.
+the version is `2.0.0.dev0`.
 
-The Python API takes the same two as keyword arguments:
+The Python API takes the same two as keyword arguments, each falling back to
+the run's own setting:
 
-    expectScreen(filename, fuzz=None, blur=0)
-    expectRegion(filename, x, y, fuzz=None, blur=0)
+    expectScreen(filename, fuzz=None, blur=None)
+    expectRegion(filename, x, y, fuzz=None, blur=None)
 
 `maxrms` becomes `fuzz`. It is a public keyword and the rename is a breaking
 change for API callers, taken outright with no deprecated alias: the argument
@@ -143,13 +143,6 @@ it named no longer exists, and accepting a root-mean-square number under any
 spelling would mean keeping the comparison this design removes.
 
 ## What this retires
-
-`tests/goldens/capture.py` passes `--expect-fuzz 64 --expect-blur 2` when
-`--jpeg-quality` is set, and drives `scene.vdo` for every capture.
-`scene-lossy.vdo` is deleted, along with its `pause 1.5` pacing and the
-throwaway `capture step.png` calls that existed only because `expect` could not
-be trusted. `decoder-goldens.md` loses the "Sequencing a lossy capture"
-section.
 
 The committed fixtures are recorded wire bytes and do not change. Proving the
 new path works means re-capturing against the fleet, which `make goldens`
@@ -163,15 +156,7 @@ fixture captured there exercises none of what makes a lossy encoding hard --
 every claim in Measurements about why the old comparison fails, and about why
 blur is not optional, rests on bytes no committed fixture holds.
 
-It could not land first. Captured against the old comparison, it failed the
-suite on its fourth step:
-
-    FAIL: test_decodes_to_its_oracle
-      (test_goldens.TestGolden_tigervnc_tight_jpeg5_bgrx8888)
-    tigervnc-tight-jpeg5-bgrx8888 step-03-d.bin.gz:
-      pixel (17,16) decoded (198, 202, 53), expected (200, 200, 40)
-
-That is the point of it. A fixture records how far its frames may sit from the
+It could not land first. A fixture records how far its frames may sit from the
 oracle, and `conditions.json` states that as an RGB triple -- `[8, 8, 8]` for
 the level-9 capture -- which level-5 bytes miss by a wide margin: 229 against a
 bound of 8. So `test_goldens.py` moves onto this comparison with the client,
@@ -201,10 +186,10 @@ is meant to be heading. Rejected for that.
 (`threshold` with `maxDiffPixels`), and as ImageMagick does (`-fuzz` with the
 `AE` metric, the only fuzz-affected one). The per-pixel half is what this design
 takes, name included; what it rejects is the count allowance on top. That
-survives every encoding measured,
-and it goes blind on noisy content: the count that absorbs the compression
-noise absorbs a small change with it. It suits whole-page screenshots over a
-lossless transport, which is not this.
+allowance survives every encoding measured, but it goes blind on noisy
+content, because the count absorbing the compression noise absorbs a small
+change with it. It suits whole-page screenshots over a lossless transport,
+which is not this.
 
 **A perceptual hash** (dhash, ImageMagick's `PHASH`). Cheap and robust to
 compression, blind to changes below roughly 32x32 pixels, and it already
@@ -219,16 +204,15 @@ whole-screen aggregate is where sensitivity goes to die.
 
 ## Phasing
 
-Five commits. Each leaves `make test` green and `flake8 --count --statistics
-vncdotool tests` clean, with one stated exception in phase 4. `make typecheck`
-is advisory in CI and run at the end.
+Five commits, in this order because each one leaves the suite green and the
+next depends on it.
 
 **1. The comparison, wired to nothing.** A new `vncdotool/imagematch.py`: pure
 Pillow, no Twisted, so the client and the golden suite can share one comparison
 and neither has to reach into the other.
 
     fuzz_for_format(pixel_format) -> int    the (7,3,7) -> 7.7 computation
-    worst_delta(a, b, blur=0) -> int        the largest YIQ delta, 0..255
+    worst_delta(a, b, blur=0) -> float      the largest YIQ delta, 0..255
     matches(a, b, fuzz, blur=0) -> bool     with the RGB fast path
 
 `tests/unit/test_imagematch.py` drives it on synthetic images: identical frames,
@@ -241,8 +225,8 @@ so it generates one case per format through `load_tests` rather than looping.
 `self.expected` from `image.histogram()` and keeps only `expected_image`.
 `_expectMatch` becomes a call into `imagematch.matches`. `_quantizedMatch` is
 deleted -- its rule is now the default fuzz rather than a fallback nobody
-documented. `expectScreen(filename, fuzz=None, blur=0)` and
-`expectRegion(filename, x, y, fuzz=None, blur=0)`; `maxrms` is gone from both.
+documented. `expectScreen(filename, fuzz=None, blur=None)` and
+`expectRegion(filename, x, y, fuzz=None, blur=None)`; `maxrms` is gone from both.
 The client carries `expect_fuzz` and `expect_blur` set from the factory, the way
 `requested_jpeg_quality` already is.
 
@@ -281,15 +265,14 @@ The existing level-9 fixture's `conditions.json` is migrated in place. Its
 bytes are not re-captured: they are 264K of binary that a re-capture would churn
 for no gain, and nothing about them changed.
 
-This is the phase that carries `tigervnc-tight-jpeg5-bgrx8888`, already captured
-and sitting untracked. It stays untracked until this commit, because a fixture
-recording `[8, 8, 8]` fails the suite as long as the old comparison is the one
-reading it.
+This is the phase that carries `tigervnc-tight-jpeg5-bgrx8888`, which cannot
+land before it: a fixture recording `[8, 8, 8]` fails the suite for as long as
+the old comparison is the one reading it.
 
 **5. The documents.** `decoder-goldens.md` loses "Sequencing a lossy capture"
-and points here instead; its matrix gains the level-5 row. This spec's status
-line changes. Then `make typecheck`, and `make testall` against the fleet to
-confirm nothing in the functional suite leaned on the old behaviour.
+and points here instead; its matrix gains the level-5 row. Then `make testall`
+against the fleet, which CI does not run, to confirm nothing in the functional
+suite leaned on the old behaviour.
 
 ## Not in scope
 

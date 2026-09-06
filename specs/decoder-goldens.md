@@ -244,12 +244,15 @@ a fuzz and a blur instead — the perceived-difference bound of
 and `test_goldens.py` reads whichever pair of numbers the kind calls for.
 
 A measured bound could be one that nothing can fail, so it is checked by
-mutation rather than asserted: swapping red and blue in the JPEG path, and
-reading a grayscale JPEG's single component as three, each fail the suite by
-two orders of magnitude. The quality level is recorded in `conditions.json`,
-because how far a frame may sit from its oracle depends on it: at level 9 the
-worst frame is 1 from its scene, at level 5 it is 14, at level 0 it is 46,
-against a nearest wrong scene of 86.
+mutation rather than asserted: swapping red and blue in the JPEG path fails
+the level-9 fixture at 72 against its bound of 64, and the level-5 fixture at
+127. The margin is thin at level 9 and the low-quality fixture is what makes
+it comfortable, which is a second reason to carry one.
+
+The quality level is recorded in `conditions.json`, because how far a frame
+may sit from its oracle depends on it: at level 9 the worst frame is 1 from
+its scene, at level 5 it is 14, at level 0 it is 46, against a nearest wrong
+scene of 87.
 
 The keysym patch keeps a per-channel triple, which is a different question --
 whether a flat 48x48 block still reads back as the value that was stamped on
@@ -286,11 +289,11 @@ Axes are crossed only where they interact.
 - Raw x 4 pixel formats, 4 fixtures
 - 5 further encodings x 32bpp, 5 fixtures
 - ZRLE and Tight x the 3 non-default formats, 6 fixtures
-- Tight x JPEG quality levels 9 and 5, 2 fixtures: level 9 is the only one
-  tigervnc encodes without chroma subsampling, so it exercises none of what
-  makes a lossy encoding hard
+- Tight x JPEG quality levels 9 and 5, 2 fixtures: level 9 is the only quality
+  tigervnc encodes without chroma subsampling, so level 5 is what exercises a
+  genuinely lossy encoding
 
-Fifteen fixtures at full build-out, four today. Each carries every scene in the
+Seventeen fixtures at full build-out, twelve today. Each carries every scene in the
 catalogue, so the scene axis multiplies steps rather than fixtures.
 
 The full cross is not needed. The pixel-format axis tests pixel plumbing, which

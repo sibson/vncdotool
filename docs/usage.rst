@@ -62,11 +62,10 @@ after the filename, or pass ``--expect-fuzz``, to allow more::
     > vncdo expect somescreen.png 16
     > vncdo --expect-fuzz 16 expect somescreen.png
 
-A lossy encoding needs one thing more. JPEG moves pixels far enough that no
-bound separates a correct screen from a wrong one -- at ``--jpeg-quality 0``
-the correct screen sits further away than the wrong ones do. ``--expect-blur``
-blurs both images by that radius before comparing, which leaves the difference
-that matters and drops the encoder's noise::
+A lossy encoding needs one thing more, because JPEG moves pixels far enough
+that no bound alone separates a correct screen from a wrong one.
+``--expect-blur`` blurs both images by that radius before comparing, which
+leaves the difference that matters and drops the encoder's noise::
 
     > vncdo --encodings tight --jpeg-quality 5 --expect-blur 2 --expect-fuzz 64 \
             expect somescreen.png

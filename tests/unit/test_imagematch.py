@@ -1,4 +1,3 @@
-"""The comparison behind `expect` and the golden replay."""
 from __future__ import annotations
 
 import unittest
@@ -13,7 +12,6 @@ def solid(colour: tuple[int, int, int], size: tuple[int, int] = (32, 24)) -> Ima
 
 
 def patched(base: Image.Image, colour: tuple[int, int, int], size: int = 2) -> Image.Image:
-    """`base` with a `size` square painted on it, away from the edges."""
     image = base.copy()
     ImageDraw.Draw(image).rectangle([8, 8, 8 + size - 1, 8 + size - 1], fill=colour)
     return image
@@ -41,8 +39,6 @@ class TestWorstDelta(unittest.TestCase):
         self.assertGreater(luma, chroma)
 
     def test_it_reports_the_worst_pixel_not_the_average(self) -> None:
-        """One changed square in an otherwise identical screen scores as high
-        as a screen changed all over."""
         base = solid((30, 30, 30))
         self.assertEqual(
             imagematch.worst_delta(base, patched(base, (255, 0, 0))),
@@ -103,8 +99,6 @@ class TestBoundForChannels(unittest.TestCase):
         self.assertEqual(imagematch.bound_for_channels((0, 0, 0)), 0)
 
     def test_it_bounds_whichever_way_the_channels_round(self) -> None:
-        """Signs are the server's business, so the bound has to cover the
-        worst combination rather than one of them."""
         bound = imagematch.bound_for_channels((7, 3, 7))
         for red in (-7, 7):
             for green in (-3, 3):

@@ -96,8 +96,6 @@ class TestBuildCommandList(unittest.TestCase):
         self.assertCalled(self.client.expectScreen, 'foo.png', 10)
 
     def test_expect_without_a_fuzz(self) -> None:
-        """docs/usage.rst has always shown this spelling; it used to die on an
-        IndexError."""
         self.call_build_commands_list('expect foo.png')
         self.assertCalled(self.client.expectScreen, 'foo.png', None)
 

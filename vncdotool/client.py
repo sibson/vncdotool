@@ -255,6 +255,12 @@ class VNCDoToolClient(rfb.RFBClient):
 
         The region compared is defined by the box
         (x, y), (x + image.width, y + image.height)
+
+        :param fuzz: how far any one pixel may sit from the target, 0 (exact)
+            to 255, as a perceived colour difference. Defaults to what the
+            negotiated pixel format cannot express.
+        :param blur: blur both screens by this radius before comparing, which
+            is what carries a match through a lossy encoding.
         """
         log.debug("expectRegion %s (%s, %s)", filename, x, y)
         return self._expectFramebuffer(filename, x, y, fuzz, blur)
@@ -271,10 +277,7 @@ class VNCDoToolClient(rfb.RFBClient):
         )
 
     def _expectFuzz(self, fuzz: float | None) -> float:
-        """What the caller asked for, else the run's default, else what the
-        negotiated format cannot express.
-
-        A server sending 5-bit red cannot reproduce most 8-bit values, so an
+        """A server sending 5-bit red cannot reproduce most 8-bit values, so an
         exact comparison never comes true however long it is polled for.
         """
         if fuzz is not None:

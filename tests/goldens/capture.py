@@ -27,12 +27,13 @@ CAPTURE_DEADLINE = 60.0
 # naming the image it waited for, rather than recording the one before it.
 SCENE_DEADLINE = 30.0
 
-# The keysym patch is a flat 48x48 block, which survives the encoder: this
-# reads it back at quality level 0, the worst tigervnc offers.
+# Measured, not derived from the format: the keysym patch is a flat 48x48
+# block, read back within this even at quality level 0, the worst tigervnc
+# offers.
 JPEG_PATCH_TOLERANCE = (8, 8, 8)
 
-# What `expect` is given to sequence a lossy capture, and what the fixture
-# then records as its own bound; specs/expect-matching.md.
+# What `expect` is given to sequence a lossy capture; both numbers are
+# derived in specs/expect-matching.md.
 JPEG_FUZZ = 64
 JPEG_BLUR = 2
 

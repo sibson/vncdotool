@@ -49,12 +49,6 @@ class Fixture:
         return self.conditions["tolerance_kind"]
 
     def mismatch(self, actual: Image.Image, expected: Image.Image) -> Optional[str]:
-        """Why this frame is not its oracle, or None if it is.
-
-        The two kinds are unrelated numbers: a format's quantization is a
-        per-channel step it cannot land between, while a lossy encoder's error
-        is a perceived distance that only a blur brings back under a bound.
-        """
         if self.tolerance_kind == "jpeg-lossy":
             if imagematch.matches(actual, expected, self.fuzz, self.blur):
                 return None
