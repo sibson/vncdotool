@@ -15,8 +15,8 @@ class TestVNCDoToolClient(TestCase):
 
     MSG_HANDSHAKE = b"RFB 003.003\n"
     MSG_INIT = (
-        b"\x00\x00"  # width
-        b"\x00\x00"  # height
+        b"\x03\x20"  # width
+        b"\x02\x58"  # height
         b"\x20\x18\x00\x01\x00\xff\x00\xff\x00\xff\x00\x08\x10\x00\x00\x00"  # pixel-format
         b"\x00\x00\x00\x00"  # server-name-len
     )
@@ -45,7 +45,23 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+            client.rfb.Encoding.PSEUDO_FENCE,
         ])
+
+    def test_fence_is_not_offered_by_default(self):
+        """The mocked factory above answers True to every flag, so the real
+        one is needed to see what is actually offered. A server sends fences
+        only to a client that asked for them, and nothing here waits on one.
+        """
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
 
     def test_keyPress_single_alpha(self):
         cli = self.client
@@ -207,6 +223,63 @@ class TestVNCDoToolClient(TestCase):
         screen = self._swatch((0x2B, 0x2A, 0x2A))
         result = self._expectAgainst(PIXEL_FORMATS["bgrx8888"], target, screen)
         assert result == self.client.deferred
+
+    def _screenOf(self, size):
+        cli = self.client
+        cli.width, cli.height = size
+        cli.screen = client.Image.new("RGB", size, (200, 100, 50))
+        return cli
+
+    def _expectRegionAt(self, x, y, size=(10, 10)):
+        target = client.Image.new("RGB", size, (1, 2, 3))
+        with mock.patch("PIL.Image.open", return_value=target):
+            return self.client.expectRegion("target.png", x, y)
+
+    def test_expectRegionRejectsARegionPastTheEdge(self):
+        self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError) as caught:
+            self._expectRegionAt(60, 60, (100, 100))
+        assert "(60, 60, 160, 160)" in str(caught.exception)
+        assert "100x100" in str(caught.exception)
+
+    def test_expectRegionRejectsANegativeOrigin(self):
+        self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            self._expectRegionAt(-1, 0)
+
+    def test_expectRegionAllowsARegionFlushWithTheEdge(self):
+        self._screenOf((100, 100))
+        self._expectRegionAt(90, 90)
+
+    def test_expectRegionMeasuresTheNegotiatedSizeBeforeAnyUpdateArrives(self):
+        cli = self.client
+        cli.width, cli.height = 100, 100
+        self._expectRegionAt(90, 90)
+        with self.assertRaises(client.RegionError):
+            self._expectRegionAt(95, 95)
+
+    def test_expectRegionRejectsARegionADesktopResizeShrankOff(self):
+        cli = self._screenOf((100, 100))
+        cli.expected_image = client.Image.new("RGB", (100, 100), (1, 2, 3))
+        cli.updateDesktopSize(50, 50)
+        with self.assertRaises(client.RegionError):
+            cli._expectCompare(cli, (0, 0, 100, 100), 0, 0)
+
+    def test_captureRegionRejectsARegionPastTheEdge(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.captureRegion(io.BytesIO(), 60, 60, 100, 100)
+
+    def test_captureRegionRejectsANegativeOrigin(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.captureRegion(io.BytesIO(), -1, 0, 10, 10)
+
+    def test_captureRegionAllowsARegionFlushWithTheEdge(self):
+        cli = self._screenOf((100, 100))
+        fp = io.BytesIO()
+        cli._captureSave(None, fp, 90, 90, 100, 100, format="png")
+        assert client.Image.open(fp).size == (10, 10)
 
     @mock.patch('PIL.Image.frombytes')
     def test_updateRectangeFullScreen(self, frombytes):

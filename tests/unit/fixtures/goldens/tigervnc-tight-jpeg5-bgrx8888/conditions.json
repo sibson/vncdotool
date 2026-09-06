@@ -6,7 +6,7 @@
   "jpeg_quality": 5,
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-09-06T12:34:13Z",
+    "capture_timestamp": "2026-09-06T14:57:54Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -21,7 +21,7 @@
       {
         "encoding": 7,
         "name": "tight",
-        "rectangles": 87
+        "rectangles": 83
       }
     ],
     "geometry": {

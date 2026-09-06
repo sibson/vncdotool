@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix ``rexpect`` polling until ``--timeout`` and ``rcapture`` writing black pixels when the region runs off the screen, and ``expect`` doing the same against a target image larger than the screen. All three now fail with a message naming the region and the screen size, exiting 30 (@sibson)
   - [BREAKING] ``expect`` and ``rexpect`` decide a match pixel by pixel, as a perceived colour difference, rather than by the root-mean-square difference of the two histograms. The number in ``expect FILE N`` is now that per-pixel bound, 0 (exact) to 255, on a scale unrelated to the old one; ``expectScreen`` and ``expectRegion`` take ``fuzz`` and ``blur`` in place of ``maxrms`` (@sibson)
   - Add ``vncdo --expect-fuzz N`` and ``--expect-blur RADIUS``, tuning how near the screen has to be for ``expect`` to call it a match. A blur is what lets ``expect`` match a screen a lossy encoding has moved, and ``--jpeg-quality`` turns one on (@sibson)
   - Fix ``vncdo expect FILE`` and ``rexpect FILE X Y`` crashing when no fuzz was given, the spelling the documentation shows (@sibson)
@@ -11,6 +12,8 @@
   - Fix ``vnclog`` garbling its log and its ``--capture-raw`` metadata whenever the client asked the server for a pixel format other than the announced one, ``vncdo --pixel-format rgb565`` among them (@sibson)
   - Fix ``vnclog`` reporting an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, then carrying on against a stream it had abandoned (@sibson)
   - Fix a malformed or unsupported server response (bad header, unknown security/auth type, connection refused, unknown message, unrecognized rectangle encoding) parsing further buffered bytes as if they were valid protocol data before the connection closed, instead of stopping immediately (@sibson)
+  - A ``ServerFence`` no longer ends the session as an unknown message; the client answers it. The ``PSEUDO_FENCE`` encoding is not offered, so a server sends one only unprompted, and ``VNCDoToolFactory.fence = True`` opts in (@sibson, based on @TeofilisMartisius's #323)
+  - Fix any substring of ``drag`` -- ``d``, ``ra``, ``dra`` -- being accepted as the ``drag`` command and consuming its two arguments, instead of being reported as an unknown command (@sibson)
   - Fix ``self.width``/``self.height`` staying at the negotiated size after a server sends ``PSEUDO_DESKTOP_SIZE`` mid-session (@sibson)
   - Fix ``VNCLoggingServerProxy.connectionLost`` rejecting the no-argument call ``Protocol.connectionLost`` promises callers (@sibson)
   - Dependency resolution ignores releases younger than a week, so a compromised upload has to survive public scrutiny before it can reach a build here (@sibson)

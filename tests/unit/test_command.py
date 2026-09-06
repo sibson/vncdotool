@@ -10,7 +10,7 @@ from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLo
 from twisted.python.failure import Failure
 
 from vncdotool import command, pixelformat
-from vncdotool.client import AuthenticationError, ProtocolError
+from vncdotool.client import AuthenticationError, ProtocolError, RegionError
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
 
@@ -173,6 +173,14 @@ class TestBuildCommandList(unittest.TestCase):
     def test_drag(self) -> None:
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
+
+    def test_drag_rejects_a_prefix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('dra 100 200')
+
+    def test_drag_rejects_an_infix_of_itself(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('ra 100 200')
 
     def test_insert_delay(self) -> None:
         self.call_build_commands_list('click 1 key a', delay=100)
@@ -403,6 +411,11 @@ class TestVNCDoCLIFactory(unittest.TestCase):
 
     def test_command_failure(self, reactor) -> None:
         self.factory.error(Failure(IOError('cannot write capture')))
+
+        assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
+
+    def test_region_off_the_screen(self, reactor) -> None:
+        self.factory.error(Failure(RegionError('region (0, 0, 1, 1) is not inside the 0x0 screen')))
 
         assert reactor.exit_status == command.ExitStatus.COMMAND_FAILED
 

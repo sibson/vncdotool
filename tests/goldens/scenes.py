@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
-from PIL import Image, ImageChops, ImageDraw, ImageStat
+from PIL import Image, ImageDraw
 
 OUT_DIR = Path(__file__).resolve().parent / "scenes"
 
@@ -20,9 +20,101 @@ SIZE = (256, 192)
 # step learns which key produced it only from this patch inside the frame.
 # Centred in whatever it is stamped on, so the label survives a server
 # serving a geometry these scenes were not drawn for.
-PATCH_SIZE = 48
-_PATCH_GREEN = 0x5A
-_PATCH_BLUE = 0xA5
+#
+# Black and white are every channel's extremes, and a pixel format reproduces
+# its extremes exactly however few bits it keeps: 0 stays 0 and the maximum
+# comes back as 255. A patch drawn in the two of them reaches the client
+# unquantized at rgb565 as much as at rgbx8888.
+GLYPH_INK = (0, 0, 0)
+GLYPH_PAPER = (255, 255, 255)
+GLYPH_SIZE = (5, 7)
+GLYPH_CELL = 4
+GLYPH_MARGIN = 3
+PATCH_SIZE = (
+    GLYPH_SIZE[0] * GLYPH_CELL + 2 * GLYPH_MARGIN,
+    GLYPH_SIZE[1] * GLYPH_CELL + 2 * GLYPH_MARGIN,
+)
+
+# Uppercase forms of the lowercase scene keys: at 5x7 the lowercase set needs
+# descenders for g and p, and the rest turns to mush. 0 keeps a slash so it
+# cannot be read as D.
+GLYPHS: Dict[str, Tuple[str, ...]] = {
+    "0": (
+        " ### ",
+        "#   #",
+        "#  ##",
+        "# # #",
+        "##  #",
+        "#   #",
+        " ### ",
+    ),
+    "s": (
+        " ### ",
+        "#   #",
+        "#    ",
+        " ### ",
+        "    #",
+        "#   #",
+        " ### ",
+    ),
+    "d": (
+        "###  ",
+        "#  # ",
+        "#   #",
+        "#   #",
+        "#   #",
+        "#  # ",
+        "###  ",
+    ),
+    "x": (
+        "#   #",
+        "#   #",
+        " # # ",
+        "  #  ",
+        " # # ",
+        "#   #",
+        "#   #",
+    ),
+    "g": (
+        " ### ",
+        "#   #",
+        "#    ",
+        "# ###",
+        "#   #",
+        "#   #",
+        " ### ",
+    ),
+    "p": (
+        "#### ",
+        "#   #",
+        "#   #",
+        "#### ",
+        "#    ",
+        "#    ",
+        "#    ",
+    ),
+    "c": (
+        " ### ",
+        "#   #",
+        "#    ",
+        "#    ",
+        "#    ",
+        "#   #",
+        " ### ",
+    ),
+    "f": (
+        "#####",
+        "#    ",
+        "#    ",
+        "#### ",
+        "#    ",
+        "#    ",
+        "#    ",
+    ),
+}
+
+_KEY_BY_GLYPH: Dict[Tuple[str, ...], str] = {glyph: key for key, glyph in GLYPHS.items()}
+_INK_THRESHOLD = 3 * 128
 
 
 def _seeded(key: str) -> random.Random:
@@ -129,58 +221,57 @@ def _centre(image: Image.Image) -> tuple:
     return width // 2, height // 2
 
 
-def stamp_patch(image: Image.Image, key: str) -> None:
+def _glyph_origin(image: Image.Image) -> Tuple[int, int]:
     x, y = _centre(image)
-    half = PATCH_SIZE // 2
-    colour = (ord(key), _PATCH_GREEN, _PATCH_BLUE)
-    box = [max(x - half, 0), max(y - half, 0), min(x + half - 1, image.size[0] - 1), min(y + half - 1, image.size[1] - 1)]
-    ImageDraw.Draw(image).rectangle(box, fill=colour)
+    columns, rows = GLYPH_SIZE
+    return x - columns * GLYPH_CELL // 2, y - rows * GLYPH_CELL // 2
 
 
-def patch_candidates(image: Image.Image, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> List[str]:
-    """Which scenes this frame's centre patch could belong to.
+def stamp_patch(image: Image.Image, key: str) -> None:
+    width, height = PATCH_SIZE
+    if image.size[0] < width or image.size[1] < height:
+        raise ValueError(f"a {width}x{height} patch does not fit a {image.size[0]}x{image.size[1]} screen")
 
-    ``stamp_patch`` draws a square into the middle of each scene image
-    coloured ``(ord(key), _PATCH_GREEN, _PATCH_BLUE)``, so the scene's
-    identity reaches the client as ordinary pixels and is quantized with
-    them. Scene keys sit one unit apart in red, and rgb565 keeps five bits
-    of it, which puts ``c``, ``d``, ``f`` and ``g`` on one value -- so at a
-    reduced depth the patch names a set of scenes rather than one.
+    x, y = _centre(image)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle(
+        [x - width // 2, y - height // 2, x - width // 2 + width - 1, y - height // 2 + height - 1],
+        fill=GLYPH_PAPER,
+    )
+    left, top = _glyph_origin(image)
+    for row, line in enumerate(GLYPHS[key]):
+        for column, cell in enumerate(line):
+            if cell == "#":
+                cell_left, cell_top = left + column * GLYPH_CELL, top + row * GLYPH_CELL
+                draw.rectangle(
+                    [cell_left, cell_top, cell_left + GLYPH_CELL - 1, cell_top + GLYPH_CELL - 1],
+                    fill=GLYPH_INK,
+                )
+
+
+def read_patch(image: Image.Image) -> Optional[str]:
+    """Which scene this frame's centre patch names, or None if it names none.
+
+    One sample per glyph cell, thresholded and matched against the table
+    whole. Nothing here is a tolerance: ink and paper survive every pixel
+    format exactly, so a frame either carries a glyph or does not.
     """
-    red, green, blue = image.convert("RGB").getpixel(_centre(image))
-    red_bound, green_bound, blue_bound = tolerance
-    if abs(green - _PATCH_GREEN) > green_bound or abs(blue - _PATCH_BLUE) > blue_bound:
-        return []
-    return [key for key in SCENES if abs(red - ord(key)) <= red_bound]
-
-
-def _nearest_scene(image: Image.Image, candidates: List[str]) -> str:
-    """Which of several candidate scenes the frame most resembles.
-
-    A ranking, never a threshold: "lands within the format's quantization of
-    its scene" is the golden test's own claim, and a fixture labelled by it
-    could never fail that test.
-
-    Only reachable because the patch carries the scene as a colour, which a
-    reduced depth can collapse. Stamping the key's glyph instead would name
-    the scene outright at any format and retire this.
-    """
-    frame = image.convert("RGB")
-
-    def distance(key: str) -> float:
-        scene = Image.open(OUT_DIR / f"{key}.png").convert("RGB")
-        return sum(ImageStat.Stat(ImageChops.difference(frame, scene)).sum)
-
-    return min(candidates, key=distance)
-
-
-def read_patch(image: Image.Image, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> Optional[str]:
-    candidates = patch_candidates(image, tolerance)
-    if not candidates:
+    if image.size[0] < PATCH_SIZE[0] or image.size[1] < PATCH_SIZE[1]:
         return None
-    if len(candidates) == 1:
-        return candidates[0]
-    return _nearest_scene(image, candidates)
+
+    frame = image.convert("RGB")
+    left, top = _glyph_origin(image)
+    columns, rows = GLYPH_SIZE
+
+    def cell(column: int, row: int) -> str:
+        pixel = frame.getpixel((
+            left + column * GLYPH_CELL + GLYPH_CELL // 2,
+            top + row * GLYPH_CELL + GLYPH_CELL // 2,
+        ))
+        return "#" if sum(pixel) < _INK_THRESHOLD else " "
+
+    read = tuple("".join(cell(column, row) for column in range(columns)) for row in range(rows))
+    return _KEY_BY_GLYPH.get(read)
 
 
 def apply(key: str, screen: Image.Image) -> Image.Image:

@@ -31,10 +31,6 @@ CAPTURE_DEADLINE = 60.0
 # naming the image it waited for, rather than recording the one before it.
 SCENE_DEADLINE = 30.0
 
-# Measured against tigervnc at quality level 0, the worst it offers: the flat
-# 48x48 patch reads back within this.
-JPEG_PATCH_TOLERANCE = (8, 8, 8)
-
 # Wide enough for the worst quality level, not the one being captured.
 JPEG_FUZZ = 64
 
@@ -100,10 +96,6 @@ def main() -> int:
     args = parser.parse_args()
     lossy = args.jpeg_quality is not None
     name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format}"
-    if lossy:
-        patch_tolerance = JPEG_PATCH_TOLERANCE
-    else:
-        patch_tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
@@ -129,7 +121,7 @@ def main() -> int:
             s2c = zipped.read("s2c.bin")
             meta = zipped.read("meta.json").decode()
 
-        init, steps = distill.split(s2c, args.pixel_format, patch_tolerance)
+        init, steps = distill.split(s2c, args.pixel_format)
         if not steps:
             raise SystemExit("capture holds no framebuffer updates; the stream desynced")
         for step in steps:
@@ -152,7 +144,9 @@ def main() -> int:
             conditions["fuzz"] = _measured_fuzz(steps)
             conditions["blur"] = LOSSY_EXPECT_BLUR
         else:
-            conditions["tolerance"] = list(patch_tolerance)
+            conditions["tolerance"] = list(
+                pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])
+            )
         distill.write_fixture(directory, init, steps, conditions)
 
         print(f"wrote {directory} ({len(steps)} steps)")
