@@ -74,7 +74,7 @@ class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     requested_jpeg_quality: int | None = None
-    expect_fuzz: int | None = None
+    expect_fuzz: float | None = None
     expect_blur: int = 0
     x = 0
     y = 0
@@ -234,7 +234,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self
 
     def expectScreen(
-        self, filename: str, fuzz: int | None = None, blur: int | None = None
+        self, filename: str, fuzz: float | None = None, blur: int | None = None
     ) -> Deferred:
         """Wait until the display matches a target image
 
@@ -249,7 +249,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, 0, 0, fuzz, blur)
 
     def expectRegion(
-        self, filename: str, x: int, y: int, fuzz: int | None = None, blur: int | None = None
+        self, filename: str, x: int, y: int, fuzz: float | None = None, blur: int | None = None
     ) -> Deferred:
         """Wait until a portion of the screen matches the target image
 
@@ -260,7 +260,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._expectFramebuffer(filename, x, y, fuzz, blur)
 
     def _expectFramebuffer(
-        self, filename: str, x: int, y: int, fuzz: int | None, blur: int | None
+        self, filename: str, x: int, y: int, fuzz: float | None, blur: int | None
     ) -> Deferred:
         image = Image.open(filename)
         w, h = image.size
@@ -270,7 +270,7 @@ class VNCDoToolClient(rfb.RFBClient):
             None, (x, y, x + w, y + h), self._expectFuzz(fuzz), self._expectBlur(blur)
         )
 
-    def _expectFuzz(self, fuzz: int | None) -> int:
+    def _expectFuzz(self, fuzz: float | None) -> float:
         """What the caller asked for, else the run's default, else what the
         negotiated format cannot express.
 
@@ -290,7 +290,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self.expect_blur if blur is None else blur
 
     def _expectCompare(
-        self, data: object, box: tuple[int, int, int, int], fuzz: int, blur: int
+        self, data: object, box: tuple[int, int, int, int], fuzz: float, blur: int
     ) -> Deferred:
         incremental = False
         if self.screen:
@@ -549,7 +549,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None
     jpeg_quality: int | None = None
-    expect_fuzz: int | None = None
+    expect_fuzz: float | None = None
     expect_blur: int = 0
 
     def __init__(self) -> None:
