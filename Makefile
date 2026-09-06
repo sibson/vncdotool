@@ -23,6 +23,7 @@ help:
 	@echo "bench-report:	tabulate bench.jsonl, or diff two runs' call counts"
 	@echo "coverage:	run both suites under coverage and report"
 	@echo "docs:		build documentation"
+	@echo "prose-lint:	check docs/*.rst and README.rst with vale"
 	@echo "release:	tag and push current version to trigger PyPI release"
 
 VERSION := $(shell uv version --bump stable --dry-run --short --no-sync 2>/dev/null)
@@ -72,6 +73,11 @@ test-func:
 .PHONY: typecheck
 typecheck:
 	uv run mypy vncdotool
+
+.PHONY: prose-lint
+prose-lint:
+	vale sync
+	uv run vale docs/*.rst README.rst
 
 include tests/servers/servers.mk
 

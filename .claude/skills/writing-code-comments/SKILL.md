@@ -293,6 +293,14 @@ to "why isn't it the other way" is journey, not documentation.
 Watch the line count across a branch. A doc that doubles while the code it
 describes gets simpler is recording the work, not the result.
 
+**Run `make prose-lint` first.** It checks `docs/*.rst` and `README.rst` with
+Vale — sentence mechanics a content sweep won't catch on its own: doubled
+spaces, missing Oxford commas, first-person plural ("we"/"us"), "will"-future
+tense, and a project word-list (say "app", not "application"). Fix what it
+flags before running the judgement sweep below; Vale doesn't know which facts
+are load-bearing, so it can't replace Mode B, only clear the mechanical noise
+out of its way.
+
 **A doc gets the same verdicts as a comment.** Sweep it with Mode B, including
 step 0, and read every row of the Quick reference against it: a paragraph that
 narrates the code is a delete in `specs/` exactly as it is in the file it
