@@ -31,7 +31,8 @@
   - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
   - Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update (@sibson)
   - ``--encodings zrle`` offers ZRLE, which sends substantially less than Raw on ordinary screen content (@sibson)
-  - ``--encodings tight`` offers Tight, decoding fill, copy-filter and palette-filter rectangles; a gradient-filter or JPEG rectangle ends the session with a named error (@sibson, #264)
+  - ``--encodings tight`` offers Tight, decoding fill, copy-filter and palette-filter rectangles; a gradient-filter rectangle ends the session with a named error (@sibson, #264)
+  - Tight JPEG rectangles decode, including the single-component grayscale a TurboVNC server sends under ``-subsamp gray``. Add ``vncdo --jpeg-quality LEVEL``, 0 (low) to 9 (high): a server sends JPEG only to a client that asked for a level, so captures stay lossless unless the flag is given (@sibson, #264)
 
 1.4.1 (2026-08-19)
 ----------------------

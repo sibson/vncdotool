@@ -1,0 +1,26 @@
+# scene.vdo for a lossy capture: no one `expect` maxrms separates a JPEG frame
+# from the wrong scene, so this paces the driver. specs/decoder-goldens.md.
+key 0
+pause 1.5
+capture step.png
+key s
+pause 1.5
+capture step.png
+key d
+pause 1.5
+capture step.png
+key x
+pause 1.5
+capture step.png
+key g
+pause 1.5
+capture step.png
+key p
+pause 1.5
+capture step.png
+key c
+pause 1.5
+capture step.png
+key f
+pause 1.5
+capture step.png

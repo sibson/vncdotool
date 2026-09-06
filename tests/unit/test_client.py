@@ -1,6 +1,7 @@
 from unittest import TestCase, mock
 import io
 import struct
+import unittest
 
 from vncdotool import client, pixelformat, rfb
 from vncdotool.pixelformat import PIXEL_FORMATS
@@ -489,3 +490,55 @@ class TestRequestedPixelFormat(TestCase):
 
     def test_clients_ask_for_nothing_by_default(self):
         assert client.VNCDoToolFactory().buildProtocol(None).requested_pixel_format is None
+
+
+class TestRequestedJpegQuality(TestCase):
+
+    def test_factory_hands_its_level_to_each_client(self):
+        factory = client.VNCDoToolFactory()
+        factory.jpeg_quality = 9
+
+        assert factory.buildProtocol(None).requested_jpeg_quality == 9
+
+    def test_clients_offer_no_level_by_default(self):
+        assert client.VNCDoToolFactory().buildProtocol(None).requested_jpeg_quality is None
+
+
+def _connected(jpeg_quality):
+    cli = client.VNCDoToolClient()
+    cli.transport = mock.Mock()
+    cli.factory = mock.Mock()
+    for flag in ("pseudocursor", "nocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
+        setattr(cli.factory, flag, False)
+    cli.setEncodings = mock.Mock()
+    cli.requested_jpeg_quality = jpeg_quality
+    cli.vncConnectionMade()
+    return cli.setEncodings.call_args.args[0]
+
+
+class TestJpegQualityIsOptional(TestCase):
+
+    def test_no_level_offers_no_pseudo_encoding(self):
+        offered = _connected(None)
+
+        assert not [enc for enc in offered if -32 <= enc <= -23]
+
+
+class JpegQualityLevel:
+    level: int
+
+    def test_offers_the_pseudo_encoding_that_carries_it(self) -> None:
+        # Level 0 is -32 (low) up to level 9 at -23 (specs/tight-wire.md section 8).
+        offered = _connected(self.level)
+
+        assert offered[-1] == -32 + self.level  # type: ignore[attr-defined]
+
+
+def load_tests(loader, tests, pattern):
+    suite = unittest.TestSuite()
+    suite.addTests(tests)
+    for level in range(len(client.JPEG_QUALITY_ENCODINGS)):
+        name = f"TestJpegQualityLevel_{level}"
+        case = type(name, (JpegQualityLevel, TestCase), {"level": level})
+        suite.addTest(case("test_offers_the_pseudo_encoding_that_carries_it"))
+    return suite
