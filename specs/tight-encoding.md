@@ -200,11 +200,11 @@ regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in
 the catalogue, worst case 0.68x on the gradient.
 
 **Render time is recorded, not compared against Raw.** Replaying
-`tigervnc-tight-bgrx8888` costs 1773 us over the same 87 rectangles, against
-Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. The cost is the
-per-rectangle pump plus `_unpalette`'s per-pixel loop, which is where to look if
-it wants optimising. `bench.jsonl` carries the row; N2 asks that it not regress
-against itself.
+`tigervnc-tight-bgrx8888` costs 1446 us over the same 87 rectangles, against
+Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. It cost 1773 us until
+`_unpalette` stopped expanding palette indices a pixel at a time; what is left is
+the per-rectangle pump and zlib, which is where to look next. `bench.jsonl`
+carries both rows; N2 asks that it not regress against itself.
 
 Two things the plan had wrong, found here. `TestNegotiation` did not test
 negotiation: it searched the client's own log for `repr(Encoding.X)`, which only
