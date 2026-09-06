@@ -8,6 +8,7 @@ from vncdotool import rfb
 from vncdotool.pixelformat import (
     TPIXEL_FORMAT,
     UnsupportedPixelFormat,
+    channel_tolerance,
     cpixel_bytes,
     cpixel_offset,
     raw_mode,
@@ -268,3 +269,44 @@ class TestTPixel(TestCase):
     def test_the_three_bytes_decode_as_red_green_blue(self):
         image = Image.frombytes("RGB", (1, 1), bytes([0x20, 0x40, 0x60]), "raw", raw_mode(TPIXEL_FORMAT))
         self.assertEqual(image.getpixel((0, 0)), (0x20, 0x40, 0x60))
+
+
+class TestChannelTolerance(TestCase):
+    """The bound a reduced-depth golden fixture is compared within."""
+
+    def test_an_8_bit_channel_loses_nothing(self):
+        for pixel_format in (BGRX8888, RGBX8888, RGB24, BGR24):
+            with self.subTest(pixel_format=pixel_format):
+                self.assertEqual(channel_tolerance(pixel_format), (0, 0, 0))
+
+    def test_565_tolerates_less_on_its_wider_green(self):
+        self.assertEqual(channel_tolerance(BGR565), (7, 3, 7))
+        self.assertEqual(channel_tolerance(RGB565), (7, 3, 7))
+
+    def test_555_tolerates_the_same_on_every_channel(self):
+        self.assertEqual(channel_tolerance(BGR555), (7, 7, 7))
+
+    def test_a_channel_wider_than_8_bits_loses_nothing(self):
+        pixel_format = rfb.PixelFormat(32, 30, False, True, 0x3FF, 0x3FF, 0x3FF, 0, 10, 20)
+        self.assertEqual(channel_tolerance(pixel_format), (0, 0, 0))
+
+    def test_a_colour_map_has_no_step(self):
+        pixel_format = rfb.PixelFormat(8, 8, False, False, 0, 0, 0, 0, 0, 0)
+        with self.assertRaises(UnsupportedPixelFormat):
+            channel_tolerance(pixel_format)
+
+    def test_no_8_bit_value_lands_further_than_the_tolerance_from_the_grid(self):
+        """The claim the bound rests on, put to Pillow rather than to arithmetic.
+
+        Whichever neighbour a server rounds to, the value we unpack is one of
+        these, so no 8-bit value can be further away than the tolerance.
+        """
+        for pixel_format, channel in ((BGR565, 0), (BGR565, 1), (BGR555, 2)):
+            shift = (pixel_format.redshift, pixel_format.greenshift, pixel_format.blueshift)[channel]
+            maximum = (pixel_format.redmax, pixel_format.greenmax, pixel_format.bluemax)[channel]
+            words = b"".join((value << shift).to_bytes(2, "little") for value in range(maximum + 1))
+            unpacked = Image.frombytes("RGB", (maximum + 1, 1), words, "raw", raw_mode(pixel_format))
+            grid = {unpacked.getpixel((value, 0))[channel] for value in range(maximum + 1)}
+            worst = max(min(abs(value - near) for near in grid) for value in range(256))
+            with self.subTest(pixel_format=pixel_format, channel=channel):
+                self.assertLessEqual(worst, channel_tolerance(pixel_format)[channel])

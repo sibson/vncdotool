@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import random
 from pathlib import Path
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageStat
 
 OUT_DIR = Path(__file__).resolve().parent / "scenes"
 
@@ -137,12 +137,50 @@ def stamp_patch(image: Image.Image, key: str) -> None:
     ImageDraw.Draw(image).rectangle(box, fill=colour)
 
 
-def read_patch(image: Image.Image) -> Optional[str]:
+def patch_candidates(image: Image.Image, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> List[str]:
+    """Which scenes this frame's centre patch could belong to.
+
+    ``stamp_patch`` draws a square into the middle of each scene image
+    coloured ``(ord(key), _PATCH_GREEN, _PATCH_BLUE)``, so the scene's
+    identity reaches the client as ordinary pixels and is quantized with
+    them. Scene keys sit one unit apart in red, and rgb565 keeps five bits
+    of it, which puts ``c``, ``d``, ``f`` and ``g`` on one value -- so at a
+    reduced depth the patch names a set of scenes rather than one.
+    """
     red, green, blue = image.convert("RGB").getpixel(_centre(image))
-    if (green, blue) != (_PATCH_GREEN, _PATCH_BLUE):
+    red_bound, green_bound, blue_bound = tolerance
+    if abs(green - _PATCH_GREEN) > green_bound or abs(blue - _PATCH_BLUE) > blue_bound:
+        return []
+    return [key for key in SCENES if abs(red - ord(key)) <= red_bound]
+
+
+def _nearest_scene(image: Image.Image, candidates: List[str]) -> str:
+    """Which of several candidate scenes the frame most resembles.
+
+    A ranking, never a threshold: "lands within the format's quantization of
+    its scene" is the golden test's own claim, and a fixture labelled by it
+    could never fail that test.
+
+    Only reachable because the patch carries the scene as a colour, which a
+    reduced depth can collapse. Stamping the key's glyph instead would name
+    the scene outright at any format and retire this.
+    """
+    frame = image.convert("RGB")
+
+    def distance(key: str) -> float:
+        scene = Image.open(OUT_DIR / f"{key}.png").convert("RGB")
+        return sum(ImageStat.Stat(ImageChops.difference(frame, scene)).sum)
+
+    return min(candidates, key=distance)
+
+
+def read_patch(image: Image.Image, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> Optional[str]:
+    candidates = patch_candidates(image, tolerance)
+    if not candidates:
         return None
-    key = chr(red)
-    return key if key in SCENES else None
+    if len(candidates) == 1:
+        return candidates[0]
+    return _nearest_scene(image, candidates)
 
 
 def apply(key: str, screen: Image.Image) -> Image.Image:

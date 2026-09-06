@@ -146,6 +146,20 @@ def raw_mode(pixel_format: PixelFormat) -> str:
     raise UnsupportedPixelFormat(f"bpp={pixel_format.bpp} is not supported")
 
 
+def channel_tolerance(pixel_format: PixelFormat) -> tuple[int, int, int]:
+    """Per-channel 8-bit error this format's quantization can cost, red first.
+
+    A channel of *n* bits can express only every 2**(8-n)th 8-bit value, so an
+    8-bit value sits at most one short of the next one the channel can reach:
+    7 at 5 bits, 3 at 6 bits, 0 at 8. Which of the two neighbouring values a
+    server picks is its own business, and this bounds either choice.
+    """
+    if not pixel_format.truecolor:
+        raise UnsupportedPixelFormat("a colour map has no per-channel step")
+    red, green, blue = _channel_widths(pixel_format)
+    return 255 >> red, 255 >> green, 255 >> blue
+
+
 def _cpixel_placement(pixel_format: PixelFormat) -> str | None:
     widths = _channel_widths(pixel_format)
     shifts = (pixel_format.redshift, pixel_format.greenshift, pixel_format.blueshift)

@@ -112,6 +112,7 @@ class PixelFormat: ...                                   # RFC 6143 §7.4
 def raw_mode(pixel_format: PixelFormat) -> str: ...      # raises UnsupportedPixelFormat
 def cpixel_bytes(pixel_format: PixelFormat) -> int: ...  # 3 or bypp
 def cpixel_offset(pixel_format: PixelFormat) -> int: ... # 0 or bypp - 3
+def channel_tolerance(pf: PixelFormat) -> tuple[int, int, int]:  # 8-bit error per channel
 ```
 
 `raw_mode` ignores `depth` — it does not affect where the channels sit.
@@ -260,14 +261,13 @@ document covers it; a capture will.
 
 ## Deferred
 
-- **`rgb565` golden and fleet coverage.** The format is in the registry and
-  reachable from `--pixel-format`, but nothing has captured
-  `tigervnc-raw-rgb565` or run a fleet case against it — R3 doesn't need it,
-  and no server has been found that requires it over the two 32 bpp formats
-  already verified. Capturing it needs a per-format `maxrms` in the driving
-  script (`scene.vdo`'s exact-histogram `expect` can't pass at 5-bit
-  quantization) and the tolerance bound noted under Risks below, whenever
-  someone wants the second format actually exercised end-to-end.
+- **`rgb565` fleet coverage.** `tigervnc-tight-rgb565` is captured, so the
+  golden half is done; no fleet case runs at the format yet. The diagnosis
+  recorded here — that `scene.vdo`'s exact-histogram `expect` cannot pass at
+  5-bit quantization — held, but the prescription did not: a per-format
+  `maxrms` is the hand-tuned constant [decoder-goldens.md](decoder-goldens.md)
+  warns against, and what it actually needed was for `expect` to read the
+  tolerance off the format it negotiated.
 - The four layouts Pillow cannot unpack, each waiting for a capture from a
   server that sends one and ignores `SetPixelFormat`.
 - Colour map: `P` plus a palette, and the `SetColourMapEntries` ordering above.
@@ -282,8 +282,10 @@ document covers it; a capture will.
   [decoder-goldens.md](decoder-goldens.md). What hides is narrower than the
   whole class: a channel swap moves a coloured pixel much further than 255/31,
   so the tolerant comparison still fails on it, and what survives is a shift or
-  rounding error smaller than one quantization step. Applies once the
-  deferred `rgb565` golden above is captured.
+  rounding error smaller than one quantization step. Measured against the
+  captured `tigervnc-tight-rgb565`: swapping the decoder's red and blue fails
+  it on the first pixel of the first step, as does forcing TPIXEL to three
+  bytes at a 16 bpp format.
 - Tagging moves the trust from our arithmetic to Pillow's mode strings. A mode
   meaning something other than we think decodes silently wrong, where a bad
   shift would at least be ours to read — hence unit tests asserting Pillow's

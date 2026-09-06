@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -49,7 +50,7 @@ class _Recorder(client.VNCDoToolClient):
         super().commitUpdate(rectangles)
         self.update_ends.append(self.consumed)
 
-    def split(self, s2c: bytes) -> Tuple[bytes, List[Step]]:
+    def split(self, s2c: bytes, tolerance: Tuple[int, int, int] = (0, 0, 0)) -> Tuple[bytes, List[Step]]:
         screens: List[Optional[Image.Image]] = []
         for offset in range(len(s2c)):
             self.consumed = offset + 1
@@ -72,7 +73,7 @@ class _Recorder(client.VNCDoToolClient):
             start = end
             if screen is None:
                 continue
-            key = scenes.read_patch(screen)
+            key = scenes.read_patch(screen, tolerance)
             if steps and key == steps[-1].key:
                 steps[-1].data += pending
             else:
@@ -104,7 +105,19 @@ def _make_client(pixel_format: str) -> _Recorder:
 
 
 def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
-    return _make_client(pixel_format).split(s2c)
+    tolerance = pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[pixel_format])
+    return _make_client(pixel_format).split(s2c, tolerance)
+
+
+_NUMBER_ARRAY = re.compile(r"\[\s+((?:-?\d+,\s+)*-?\d+)\s+\]")
+
+
+def render_conditions(conditions: Dict[str, Any]) -> str:
+    """Indented, but with arrays of numbers on one line: a geometry or a
+    per-channel tolerance reads as a row, not as a column of digits.
+    """
+    indented = json.dumps(conditions, indent=2, sort_keys=True)
+    return _NUMBER_ARRAY.sub(lambda m: "[" + " ".join(m.group(1).split()) + "]", indented) + "\n"
 
 
 def write_fixture(directory: Path, init: bytes, steps: List[Step], conditions: Dict[str, Any]) -> None:
@@ -113,4 +126,4 @@ def write_fixture(directory: Path, init: bytes, steps: List[Step], conditions: D
     for step in steps:
         stem = f"step-{step.index:02d}-{step.key or 'unknown'}"
         (directory / f"{stem}.bin.gz").write_bytes(gzip.compress(step.data))
-    (directory / "conditions.json").write_text(json.dumps(conditions, indent=2, sort_keys=True) + "\n")
+    (directory / "conditions.json").write_text(render_conditions(conditions))
