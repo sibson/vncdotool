@@ -112,7 +112,13 @@ on a smooth screen reads 20 against a noise floor of 7.
 them, alongside `--jpeg-quality` and the rest:
 
     --expect-fuzz N   per-pixel bound, 0..255 [derived from the format]
-    --expect-blur R   box blur radius applied to both images [0]
+    --expect-blur R   box blur radius applied to both images [2 with
+                      --jpeg-quality, 0 without]
+
+**Asking for JPEG asks for the blur.** A lossy frame does not match at any
+bound that still rejects a wrong screen, so `--jpeg-quality` without a blur
+would be a flag that quietly stops `expect` working. `--expect-blur 0` turns
+it back off for anyone who wants the strictness.
 
 **Fuzz, not tolerance.** `fuzz` is already the word in vncdo's own help text
 (`expect FILE FUZZ`) and ImageMagick's for the same quantity, a per-pixel

@@ -52,24 +52,20 @@ With Pillow_ installed, you can wait for the screen to match a known image::
 
     > vncdo expect somescreen.png
 
-``expect`` blocks until every pixel of the screen is within a bound of the
-target image, measured as a perceived colour difference: a whole number from 0
-(identical) to 255, where 255 is as far apart as two pixels get. It is not a
-channel value -- a screen shifted by one unit on every channel sits under 1.
-Left out, the bound is whatever the negotiated pixel format cannot
-express: a server sending 5-bit red cannot reproduce most 8-bit values, so
-demanding an exact match of one would poll until it timed out. Write a number
-after the filename, or pass ``--expect-fuzz``, to allow more::
+Every pixel has to be within a bound of the target, a whole number from 0
+(identical) to 255. Left out, the bound is whatever the pixel format cannot
+express, so a 5-bit-red server does not poll forever waiting to reproduce an
+8-bit value. To allow more, write it after the filename or pass
+``--expect-fuzz``::
 
     > vncdo expect somescreen.png 16
     > vncdo --expect-fuzz 16 expect somescreen.png
 
-A lossy encoding needs one thing more, because JPEG moves pixels far enough
-that no bound alone separates a correct screen from a wrong one.
-``--expect-blur`` blurs both images by that radius before comparing, which
-leaves the difference that matters and drops the encoder's noise::
+``--jpeg-quality`` also blurs both images before comparing, because a JPEG
+frame is further from its target than any bound can separate from a wrong
+screen. ``--expect-blur RADIUS`` sets that radius, or ``0`` turns it off::
 
-    > vncdo --encodings tight --jpeg-quality 5 --expect-blur 2 --expect-fuzz 64 \
+    > vncdo --encodings tight --jpeg-quality 5 --expect-fuzz 64 \
             expect somescreen.png
 
 Before 2.0 the number after the filename was the root-mean-square difference

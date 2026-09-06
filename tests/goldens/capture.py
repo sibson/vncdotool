@@ -20,6 +20,7 @@ from PIL import Image
 from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
 from vncdotool import decoders, imagematch, pixelformat
+from vncdotool.command import LOSSY_EXPECT_BLUR
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
@@ -30,16 +31,12 @@ CAPTURE_DEADLINE = 60.0
 # naming the image it waited for, rather than recording the one before it.
 SCENE_DEADLINE = 30.0
 
-# Measured, not derived from the format: the keysym patch is a flat 48x48
-# block, read back within this even at quality level 0, the worst tigervnc
-# offers.
+# Measured against tigervnc at quality level 0, the worst it offers: the flat
+# 48x48 patch reads back within this.
 JPEG_PATCH_TOLERANCE = (8, 8, 8)
 
-# What `expect` is given to sequence a lossy capture, which has to cover the
-# worst quality level rather than the one being captured; derived in
-# specs/expect-matching.md.
+# Wide enough for the worst quality level, not the one being captured.
 JPEG_FUZZ = 64
-JPEG_BLUR = 2
 
 # Headroom over what this capture measured, for the decode drifting a little
 # under another libjpeg.
@@ -68,14 +65,9 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
 
 
 def _measured_fuzz(steps: list[distill.Step]) -> int:
-    """How far this capture's own frames landed from their scenes.
-
-    Recording the bound the driver ran under instead would assert only that
-    the frames are somewhere inside a bound wide enough for quality level 0.
-    """
     worst = max(
         imagematch.worst_delta(
-            step.screen, Image.open(scenes.OUT_DIR / f"{step.key}.png"), JPEG_BLUR
+            step.screen, Image.open(scenes.OUT_DIR / f"{step.key}.png"), LOSSY_EXPECT_BLUR
         )
         for step in steps
     )
@@ -126,7 +118,6 @@ def main() -> int:
                 [
                     "--jpeg-quality", str(args.jpeg_quality),
                     "--expect-fuzz", str(JPEG_FUZZ),
-                    "--expect-blur", str(JPEG_BLUR),
                 ] if lossy else []
             )
             + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
@@ -159,7 +150,7 @@ def main() -> int:
         if lossy:
             conditions["jpeg_quality"] = args.jpeg_quality
             conditions["fuzz"] = _measured_fuzz(steps)
-            conditions["blur"] = JPEG_BLUR
+            conditions["blur"] = LOSSY_EXPECT_BLUR
         else:
             conditions["tolerance"] = list(patch_tolerance)
         distill.write_fixture(directory, init, steps, conditions)

@@ -570,6 +570,20 @@ class TestVncdoExpectOptions(unittest.TestCase):
         assert factory.expect_fuzz is None
         assert factory.expect_blur == 0
 
+    def test_a_jpeg_quality_blurs_without_being_asked(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
+                           '--jpeg-quality', '5', 'key', 'a'])
+
+        assert connect.call_args.args[0].expect_blur == command.LOSSY_EXPECT_BLUR
+
+    def test_an_explicit_blur_beats_the_jpeg_default(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
+                           '--jpeg-quality', '5', '--expect-blur', '0', 'key', 'a'])
+
+        assert connect.call_args.args[0].expect_blur == 0
+
     def test_a_fuzz_off_the_scale_is_a_usage_error(self, reactor, connect) -> None:
         for fuzz in ('-1', '256'):
             with self.subTest(fuzz=fuzz):

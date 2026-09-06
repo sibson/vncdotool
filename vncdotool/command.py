@@ -45,6 +45,10 @@ log = logging.getLogger()
 
 SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif", "bmp")
 
+# A JPEG frame is further from its target than any per-pixel bound can
+# separate from a wrong screen; asking for a quality level asks for this too.
+LOSSY_EXPECT_BLUR = 2
+
 
 class TimeoutError(RuntimeError):
     pass
@@ -648,9 +652,9 @@ def vncdo(argv: list[str] | None = None) -> None:
         "--expect-blur",
         type="int",
         metavar="RADIUS",
-        default=0,
         help="blur both screens by RADIUS before expect compares them, which "
-        "is what carries a match through a lossy encoding [0]",
+        "is what carries a match through a lossy encoding [%d with "
+        "--jpeg-quality, 0 without]" % LOSSY_EXPECT_BLUR,
     )
     op.add_option(
         "-i",
@@ -716,9 +720,12 @@ def vncdo(argv: list[str] | None = None) -> None:
             )
         factory.expect_fuzz = options.expect_fuzz
 
-    if options.expect_blur < 0:
+    if options.expect_blur is None:
+        factory.expect_blur = LOSSY_EXPECT_BLUR if options.jpeg_quality is not None else 0
+    elif options.expect_blur < 0:
         op.error(f"--expect-blur takes a radius of 0 or more, not {options.expect_blur}")
-    factory.expect_blur = options.expect_blur
+    else:
+        factory.expect_blur = options.expect_blur
 
     if options.timeout:
         message = "TIMEOUT Exceeded (%ss)" % options.timeout
