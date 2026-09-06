@@ -35,6 +35,14 @@ dependencies = [
     "cryptography",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs",
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-include-markdown-plugin",
+]
+
 [project.urls]
 Homepage = "http://github.com/sibson/vncdotool"
 
@@ -50,7 +58,7 @@ dev = [
     "flake8",
     "mypy",
     "mypy-zope",  # understands zope.interface, which Twisted is built on
-    "sphinx",
+    "vncdotool[docs]",
 ]
 
 [tool.hatch.build.targets.wheel]

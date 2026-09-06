@@ -45,7 +45,7 @@ release: test-unit
 
 .PHONY: docs
 docs:
-	uv run $(MAKE) -C docs/ html
+	uv run mkdocs build
 
 .PHONY: test testall test-unit
 test: test-unit
