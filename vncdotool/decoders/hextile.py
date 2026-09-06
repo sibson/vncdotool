@@ -19,6 +19,13 @@ class HextileDecoder(PixelDecoder):
         self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
         bypp = target.bypp
+        # Plain ints: IntFlag's & builds a new flag object per test, and
+        # these are tested seven times per 16x16 tile.
+        raw_bit = HextileEncoding.RAW.value
+        background_bit = HextileEncoding.BACKGROUND_SPECIFIED.value
+        foreground_bit = HextileEncoding.FOREGROUND_SPECIFIED.value
+        subrects_bit = HextileEncoding.ANY_SUBRECTS.value
+        coloured_bit = HextileEncoding.SUBRECTS_COLORED.value
         # Both carry over from the previous tile, but not across a raw tile,
         # and the foreground not across a coloured-subrectangle one either.
         background = foreground = b""
@@ -28,37 +35,37 @@ class HextileDecoder(PixelDecoder):
             for tx in range(0, target.width, TILE):
                 tw = min(TILE, target.width - tx)
 
-                subencoding = HextileEncoding((yield 1)[0])
-                if subencoding & HextileEncoding.RAW:
+                subencoding = (yield 1)[0]
+                if subencoding & raw_bit:
                     target.blit(tx, ty, tw, th, (yield tw * th * bypp))
                     background = foreground = b""
                     continue
 
                 wanted = 0
-                if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
+                if subencoding & background_bit:
                     wanted += bypp
-                if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
+                if subencoding & foreground_bit:
                     wanted += bypp
-                if subencoding & HextileEncoding.ANY_SUBRECTS:
+                if subencoding & subrects_bit:
                     wanted += 1
                 block = (yield wanted) if wanted else b""
 
                 pos = 0
-                if subencoding & HextileEncoding.BACKGROUND_SPECIFIED:
+                if subencoding & background_bit:
                     background = block[:bypp]
                     pos = bypp
                 if not background:
                     raise DecodeError(f"tile at ({tx},{ty}) has no background, and no tile before it set one")
                 target.fill(tx, ty, tw, th, background)
 
-                if subencoding & HextileEncoding.FOREGROUND_SPECIFIED:
+                if subencoding & foreground_bit:
                     foreground = block[pos:pos + bypp]
                     pos += bypp
-                if not (subencoding & HextileEncoding.ANY_SUBRECTS):
+                if not subencoding & subrects_bit:
                     continue
 
                 count = block[pos]
-                coloured = bool(subencoding & HextileEncoding.SUBRECTS_COLORED)
+                coloured = bool(subencoding & coloured_bit)
                 # A tile may set AnySubrects and then declare none, which
                 # needs no foreground however many tiles came before it.
                 if count and not coloured and not foreground:
