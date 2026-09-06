@@ -593,6 +593,27 @@ round-trips becoming one — not measurement. Readability and testability justif
 the change on their own; if the benchmark comes back flat we should know it from
 a number.
 
+**Where ZRLE's cost was.** ZRLE decoded at 33,000 us against
+`tigervnc-zrle-bgrx8888` while Tight, at bandwidth identical to a tenth of a
+percent, decoded at 1,500. Both are zlib-based, so compression could not be the
+difference, and profiling confirmed it was not: `zlib.decompress` was 0.5% of
+the run. The decoder walked the decompressed block one byte at a time through
+`iter(data)`, so every CPIXEL, palette index and run length cost a Python-level
+`next()`. `cpixel` alone was 55% of the run and 132,496 of its 132,759 calls came
+from the raw-tile branch, which expanded one pixel per iteration.
+
+Reading by index and widening whole runs of CPIXELs with one strided slice
+assignment per byte lane took the fixture to 2,900 us, about 12x. The packed
+palette went the same way Tight's `_unpalette` had: a cached 256-entry table per
+`(palette, bits)`, one `bytes.join` per row. After it, no single line dominates —
+`zlib.decompress` is the second-largest at 10% — so this is now spread cost
+rather than a hot spot.
+
+The fixture contains no RLE tiles at all: TigerVNC encoded it as 70 solid, 39
+packed-palette and 67 raw tiles. The RLE branches were rewritten off the iterator
+on the same reasoning rather than on a measurement, and no committed fixture
+covers them.
+
 ## Protocol validation
 
 C2 requires wire claims to come from the specifications rather than the
