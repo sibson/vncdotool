@@ -42,6 +42,13 @@ write them has swept the diff, since re-reading your own comment supplies the
 load that makes it read as load-bearing. `COMMENT_LINT_OK=1` and
 `COMMENT_SWEPT=1` are the escapes.
 
+It also scores how much of a comment's vocabulary the code beneath already
+holds, which finds a blunt paraphrase and orders the sweep by where one is
+likeliest. That score only warns. It cannot see a restatement written in
+synonyms, and a wire-format comment shares vocabulary with the fields it
+describes while carrying the byte widths they do not -- across this repo's
+comments the one it picks out is a keep.
+
 That is the whole policy at the point of writing one. The
 `writing-code-comments` skill in `.claude/skills/` is the long form, for
 sweeping and for the CHANGELOG, PR-body and docs cases; invoke it for those.
