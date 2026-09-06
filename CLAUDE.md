@@ -32,7 +32,9 @@ anything in-process. See `specs/testing-framework.md` and
 `tests/functional/utils.py`.
 
 A comment carries one fact from outside this file -- a server's behaviour, a
-constraint the language does not express, a bound another system imposes.
+constraint the language does not express, a bound another system imposes --
+not a pointer to where that fact lives. A doc findable from `specs/` needs no
+signpost in the source.
 Why the design is this rather than something else goes in the commit body.
 Sweep the diff before committing, not the branch before opening a PR.
 
