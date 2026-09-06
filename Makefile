@@ -77,7 +77,7 @@ typecheck:
 .PHONY: prose-lint
 prose-lint:
 	vale sync
-	uv run vale docs/*.rst README.rst specs/*.md
+	uv run vale docs/*.md README.md specs/*.md
 
 include tests/servers/servers.mk
 
