@@ -4,7 +4,9 @@ Tests are stdlib `unittest`, not pytest. Run the unit suite with `make test`
 (`python -m unittest discover tests/unit`) -- note the path: discovery over
 plain `tests` also collects `tests/functional/`, whose tests need the Docker
 Compose test server fleet (`make servers-up`) and fail loudly without it --
-they never skip, so a down fleet can't pass as green.
+they never skip, so a down fleet can't pass as green. The one exception is
+the OS-hosted servers of `test_server_compat_native.py`, which CI alone sets
+up: those skip off CI and fail on it (`utils.absent_server_skips`).
 Unit tests need no VNC server: protocol classes are driven directly with a
 mocked Twisted transport (see `tests/unit/test_rfb.py` and `test_client.py`
 for the patterns).
@@ -33,6 +35,10 @@ A comment carries one fact from outside this file -- a server's behaviour, a
 constraint the language does not express, a bound another system imposes.
 Why the design is this rather than something else goes in the commit body.
 Sweep the diff before committing, not the branch before opening a PR.
+
+`~/.claude/hooks/comment-lint.sh` enforces what of that needs no judgement,
+and asks a subagent to sweep a diff adding more than ten comment lines. Its
+refusals carry their own reasons and escapes.
 
 That is the whole policy at the point of writing one. The
 `writing-code-comments` skill in `.claude/skills/` is the long form, for
@@ -77,10 +83,12 @@ looping the other.
 
 A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
-changed, what a reviewer would not guess from the diff, and what was tested.
-Under ~15 lines. The commit bodies already carry the full rationale, and
-restaging them in the description only makes the reviewer read it twice.
-Findings outside the diff get a line and a pointer, not a section.
+changed, what a reviewer would not guess from the diff, and what was tested
+that CI does not run. Under 150 words, written with the Write tool and passed
+as `--body-file`. The commit bodies
+already carry the full rationale, and restaging them in the description only
+makes the reviewer read it twice. Findings outside the diff get a line and a
+pointer, not a section.
 
 # Release Process
 

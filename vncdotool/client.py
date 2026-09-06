@@ -8,7 +8,6 @@ Twisted based VNC client protocol and factory.
 from __future__ import annotations
 
 import logging
-import math
 import socket
 from pathlib import Path
 from struct import pack
@@ -32,12 +31,14 @@ log = logging.getLogger(__name__)
 # won't work but at least we can still offer key, type, press and
 # move.
 try:
-    from PIL import Image, ImageChops, ImageStat
+    from PIL import Image
 
     # Init PIL to make sure it will not try to import plugin libraries
     # in a thread.
     Image.preinit()
     Image.init()
+
+    from . import imagematch
 except ImportError:
     # If there is no PIL, raise ImportError where someone tries to use
     # it.
@@ -46,8 +47,7 @@ except ImportError:
             raise ImportError("PIL")
 
     Image = _RuntimeImportError()  # type: ignore[assignment]
-    ImageChops = _RuntimeImportError()  # type: ignore[assignment]
-    ImageStat = _RuntimeImportError()  # type: ignore[assignment]
+    imagematch = _RuntimeImportError()  # type: ignore[assignment]
     PIL = _RuntimeImportError()
 
 
@@ -74,6 +74,8 @@ class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     requested_jpeg_quality: int | None = None
+    expect_fuzz: int | None = None
+    expect_blur: int = 0
     x = 0
     y = 0
     buttons = 0
@@ -231,74 +233,78 @@ class VNCDoToolClient(rfb.RFBClient):
 
         return self
 
-    def expectScreen(self, filename: str, maxrms: float = 0) -> Deferred:
+    def expectScreen(
+        self, filename: str, fuzz: int | None = None, blur: int | None = None
+    ) -> Deferred:
         """Wait until the display matches a target image
 
         :param filename: an image file to read and compare against.
-        :param maxrms: the maximum root mean square between histograms of the screen and target image.
+        :param fuzz: how far any one pixel may sit from the target, a whole
+            number from 0 (exact) to 255, as a perceived colour difference
+            where 255 is the furthest apart two pixels can be. Defaults to
+            what the negotiated pixel format cannot express.
+        :param blur: blur both screens by this radius before comparing, which
+            is what carries a match through a lossy encoding.
         """
         log.debug("expectScreen %s", filename)
-        return self._expectFramebuffer(filename, 0, 0, maxrms)
+        return self._expectFramebuffer(filename, 0, 0, fuzz, blur)
 
     def expectRegion(
-        self, filename: str, x: int, y: int, maxrms: float = 0
+        self, filename: str, x: int, y: int, fuzz: int | None = None, blur: int | None = None
     ) -> Deferred:
         """Wait until a portion of the screen matches the target image
 
         The region compared is defined by the box
         (x, y), (x + image.width, y + image.height)
+
+        :param fuzz: how far any one pixel may sit from the target, a whole
+            number from 0 (exact) to 255, as a perceived colour difference
+            where 255 is the furthest apart two pixels can be. Defaults to
+            what the negotiated pixel format cannot express.
+        :param blur: blur both screens by this radius before comparing, which
+            is what carries a match through a lossy encoding.
         """
         log.debug("expectRegion %s (%s, %s)", filename, x, y)
-        return self._expectFramebuffer(filename, x, y, maxrms)
+        return self._expectFramebuffer(filename, x, y, fuzz, blur)
 
     def _expectFramebuffer(
-        self, filename: str, x: int, y: int, maxrms: float
+        self, filename: str, x: int, y: int, fuzz: int | None, blur: int | None
     ) -> Deferred:
         image = Image.open(filename)
         w, h = image.size
-        self.expected = image.histogram()
         self.expected_image = image.convert("RGB")
 
-        return self._expectCompare(None, (x, y, x + w, y + h), maxrms)
+        return self._expectCompare(
+            None, (x, y, x + w, y + h), self._expectFuzz(fuzz), self._expectBlur(blur)
+        )
 
-    def _quantizedMatch(self, image: Image.Image) -> bool:
-        """Whether the screen is as near the target as the negotiated format
-        can get.
-
-        A server sending 5-bit red cannot reproduce most 8-bit values, so an
+    def _expectFuzz(self, fuzz: int | None) -> int:
+        """A server sending 5-bit red cannot reproduce most 8-bit values, so an
         exact comparison never comes true however long it is polled for.
         """
+        if fuzz is not None:
+            return fuzz
+        if self.expect_fuzz is not None:
+            return self.expect_fuzz
         try:
-            tolerance = pixelformat.channel_tolerance(self.pixel_format)
+            return imagematch.fuzz_for_format(self.pixel_format)
         except pixelformat.UnsupportedPixelFormat:
-            return False
-        if not any(tolerance) or image.size != self.expected_image.size:
-            return False
-        difference = ImageChops.difference(image.convert("RGB"), self.expected_image)
-        worst = ImageStat.Stat(difference).extrema
-        return all(high <= bound for (_, high), bound in zip(worst, tolerance))
+            return 0
 
-    def _expectMatch(self, image: Image.Image, maxrms: float) -> bool:
-        hist = image.histogram()
-        if len(hist) == len(self.expected):
-            sum_ = sum((h - e) ** 2 for h, e in zip(hist, self.expected))
-            rms = math.sqrt(sum_ / len(hist))
+    def _expectBlur(self, blur: int | None) -> int:
+        return self.expect_blur if blur is None else blur
 
-            log.debug("rms:%f maxrms:%f", rms, maxrms)
-            if rms <= maxrms:
-                return True
-
-        return self._quantizedMatch(image)
-
-    def _expectCompare(self, data: object, box: tuple[int, int, int, int], maxrms: float) -> Deferred:
+    def _expectCompare(
+        self, data: object, box: tuple[int, int, int, int], fuzz: int, blur: int
+    ) -> Deferred:
         incremental = False
         if self.screen:
             incremental = True
-            if self._expectMatch(self.screen.crop(box), maxrms):
+            if imagematch.matches(self.screen.crop(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()
-        self.deferred.addCallback(self._expectCompare, box, maxrms)
+        self.deferred.addCallback(self._expectCompare, box, fuzz, blur)
         self.framebufferUpdateRequest(
             incremental=incremental
         )  # use box ~(x, y, w - x, h - y)?
@@ -548,6 +554,8 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None
     jpeg_quality: int | None = None
+    expect_fuzz: int | None = None
+    expect_blur: int = 0
 
     def __init__(self) -> None:
         self.deferred = Deferred()
@@ -558,6 +566,8 @@ class VNCDoToolFactory(rfb.RFBFactory):
         protocol.requested_pixel_format = self.pixel_format
         protocol.requested_encodings = self.encodings
         protocol.requested_jpeg_quality = self.jpeg_quality
+        protocol.expect_fuzz = self.expect_fuzz
+        protocol.expect_blur = self.expect_blur
         return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:

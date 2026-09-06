@@ -1,10 +1,12 @@
 {
+  "blur": 2,
   "encoding": "tight",
+  "fuzz": 6,
   "geometry": [256, 192],
   "jpeg_quality": 9,
   "meta": {
     "auth": "stripped",
-    "capture_timestamp": "2026-09-06T14:08:56Z",
+    "capture_timestamp": "2026-09-06T14:57:53Z",
     "encodings_seen": [
       {
         "encoding": -258,
@@ -19,7 +21,7 @@
       {
         "encoding": 7,
         "name": "tight",
-        "rectangles": 68
+        "rectangles": 83
       }
     ],
     "geometry": {
@@ -35,6 +37,5 @@
   },
   "pixel_format": "bgrx8888",
   "server": "tigervnc",
-  "tolerance": [8, 8, 8],
   "tolerance_kind": "jpeg-lossy"
 }

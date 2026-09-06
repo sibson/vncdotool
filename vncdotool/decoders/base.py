@@ -1,20 +1,56 @@
 """specs/decoder-architecture.md is the design."""
 from __future__ import annotations
 
-from typing import ClassVar, Generator, Iterator
+from typing import Any, ClassVar, Generator, Iterator, NamedTuple, Optional, Tuple
 
 from ..const import Encoding
 from ..pixelformat import PixelFormat
 from .buffer import RectBuffer
 
+Rect = Tuple[int, int, int, int]
+
+
+class Paste(NamedTuple):
+    """A rectangle for the pump to paste, in the format the decoder wrote it
+    in, which is not always the negotiated one.
+    """
+
+    pixels: bytes
+    pixel_format: PixelFormat
+
+
+class Outcome(NamedTuple):
+    """What one rectangle did, for the pump to act on: whether it counts as a
+    screen change, and the paste it is left to make.
+    """
+
+    changed: bool
+    paste: Optional[Paste] = None
+
+
+# Nothing reached the framebuffer, and the rectangle is not a screen change.
+NOTHING = Outcome(False)
+
+# The decoder changed the framebuffer itself; the pump has nothing to paste.
+CHANGED = Outcome(True)
+
 
 class Decoder:
     """One encoding: a subclass overrides the one method its base class names,
-    and the pump calls that method alone.
+    and `decode` -- which that base class implements -- is the only entry
+    point the pump calls.
     """
 
     # The encoding-type this decoder reads, RFC 6143 section 7.6.1.
     ENCODING: ClassVar[Encoding]
+
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        """Yield the byte counts this rectangle needs, each satisfied in full,
+        and return what the pump is to do with the result.
+        """
+        raise NotImplementedError
 
     def decodePixels(
         self, target: RectBuffer, pixel_format: PixelFormat
@@ -22,20 +58,30 @@ class Decoder:
         raise NotImplementedError
 
     def decodeForClient(
-        self, client: object, rect: tuple[int, int, int, int], pixel_format: PixelFormat
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
     ) -> Iterator[int]:
         raise NotImplementedError
 
+    def decodeRect(
+        self, width: int, height: int, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Tuple[bytes, PixelFormat]]:
+        raise NotImplementedError
 
-class RectDecoder(Decoder):
-    """Its rectangle is a real screen change, recorded as one."""
+    def decodeForControl(self, client: Any, width: int, height: int) -> None:
+        raise NotImplementedError
 
 
-class PixelDecoder(RectDecoder):
-    """Consumes bytes, fills a rect buffer."""
+class PixelDecoder(Decoder):
+    """Consumes bytes, fills a rect buffer the pump allocates and pastes --
+    unless, like Raw, it overrides `decode` to hand its own bytes over.
+    """
 
-    # False when the decoder's wire bytes are already its output bytes, in order.
-    buffered: ClassVar[bool] = True
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        target = client.rectBuffer(rect[2], rect[3])
+        yield from self.decodePixels(target, pixel_format)
+        return Outcome(True, Paste(target.tobytes(), self.output_format(pixel_format)))
 
     def output_format(self, pixel_format: PixelFormat) -> PixelFormat:
         """The layout the bytes this decoder wrote are in, which is not
@@ -44,27 +90,38 @@ class PixelDecoder(RectDecoder):
         return pixel_format
 
 
-class WholeRectDecoder(RectDecoder):
+class WholeRectDecoder(Decoder):
     """Consumes bytes, produces the whole rectangle itself, in whatever
     pixel format it decoded them to -- not always the negotiated one.
     """
 
-    def decodeRect(
-        self, width: int, height: int, pixel_format: PixelFormat
-    ) -> Generator[int, bytes, tuple[bytes, PixelFormat]]:
-        raise NotImplementedError
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        client.requireFits(rect[2], rect[3])
+        pixels, output_format = yield from self.decodeRect(
+            rect[2], rect[3], pixel_format
+        )
+        return Outcome(True, Paste(pixels, output_format))
 
 
-class ClientDecoder(RectDecoder):
-    """Consumes bytes, calls a client method."""
+class ClientDecoder(Decoder):
+    """Consumes bytes, changes the framebuffer through a client method."""
+
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        yield from self.decodeForClient(client, rect, pixel_format)
+        return CHANGED
 
 
 class ControlDecoder(Decoder):
     """Calls a client method as a side effect; its rectangle is never
     recorded as a screen change."""
 
-    def decodeForControl(self, client: object, width: int, height: int) -> None:
-        """Unlike decodePixels/decodeForClient, not a generator: this
-        consumes no bytes, so there is nothing to yield for.
-        """
-        raise NotImplementedError
+    def decode(
+        self, client: Any, rect: Rect, pixel_format: PixelFormat
+    ) -> Generator[int, bytes, Outcome]:
+        yield from ()  # consumes no bytes, so there is nothing to yield for
+        self.decodeForControl(client, rect[2], rect[3])
+        return NOTHING
