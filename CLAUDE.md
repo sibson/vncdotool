@@ -34,6 +34,10 @@ constraint the language does not express, a bound another system imposes.
 Why the design is this rather than something else goes in the commit body.
 Sweep the diff before committing, not the branch before opening a PR.
 
+`~/.claude/hooks/comment-lint.sh` enforces what of that needs no judgement,
+and asks a subagent to sweep a diff adding more than ten comment lines. Its
+refusals carry their own reasons and escapes.
+
 That is the whole policy at the point of writing one. The
 `writing-code-comments` skill in `.claude/skills/` is the long form, for
 sweeping and for the CHANGELOG, PR-body and docs cases; invoke it for those.
@@ -77,10 +81,12 @@ looping the other.
 
 A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
-changed, what a reviewer would not guess from the diff, and what was tested.
-Under ~15 lines. The commit bodies already carry the full rationale, and
-restaging them in the description only makes the reviewer read it twice.
-Findings outside the diff get a line and a pointer, not a section.
+changed, what a reviewer would not guess from the diff, and what was tested
+that CI does not run. Under 150 words, written with the Write tool and passed
+as `--body-file`. The commit bodies
+already carry the full rationale, and restaging them in the description only
+makes the reviewer read it twice. Findings outside the diff get a line and a
+pointer, not a section.
 
 # Release Process
 
