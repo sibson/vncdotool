@@ -77,10 +77,12 @@ looping the other.
 
 A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
-changed, what a reviewer would not guess from the diff, and what was tested.
-Under ~15 lines. The commit bodies already carry the full rationale, and
-restaging them in the description only makes the reviewer read it twice.
-Findings outside the diff get a line and a pointer, not a section.
+changed, what a reviewer would not guess from the diff, and what was tested
+that CI does not run. Under 150 words, written with the Write tool and passed
+as `--body-file` -- an inline `--body` cannot be measured. The commit bodies
+already carry the full rationale, and restaging them in the description only
+makes the reviewer read it twice. Findings outside the diff get a line and a
+pointer, not a section.
 
 # Release Process
 
