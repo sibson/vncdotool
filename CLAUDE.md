@@ -52,7 +52,7 @@ is about here: a 2003-era import, added whole.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
-carries no copy of the spec; `DEVELOP.rst` says which of RFC 6143 and
+carries no copy of the spec; `DEVELOP.md` says which of RFC 6143 and
 rfbproto covers what. Guessing a message layout from the surrounding code
 produces something that works against one server and no other.
 
@@ -69,7 +69,7 @@ Lint is plain flake8, configured in `setup.cfg`: line length 127,
 `extend-ignore = E203`. CI runs `flake8 --count --statistics vncdotool tests`,
 so run that before pushing. No black, no isort.
 
-Every user-visible fix gets a `CHANGELOG.rst` entry under the current
+Every user-visible fix gets a `CHANGELOG.md` entry under the current
 `(UNRELEASED)` heading, in the form `- <description> (@author, #NNN)`.
 
 Tests live in topical files -- `test_rfb.py` (wire protocol),
@@ -106,6 +106,6 @@ pointer, not a section.
 Version lives in `[project] version` in `pyproject.toml`; `vncdotool.__version__`
 reads it back from the installed distribution's metadata. Always release from
 `main`; the target runs the unit tests, bumps the version with `uv version`,
-stamps `CHANGELOG.rst`, tags `vX.Y.Z`, and pushes:
+stamps `CHANGELOG.md`, tags `vX.Y.Z`, and pushes:
 
     make release

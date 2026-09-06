@@ -6,12 +6,11 @@ build:
   tools:
     python: "3.11"
 
-sphinx:
-  configuration: docs/conf.py
+mkdocs:
+  configuration: mkdocs.yml
 
-# docs/conf.py reads the version from the installed distribution's metadata.
 python:
   install:
     - method: pip
       path: .
-      extra_requirements: []
+      extra_requirements: [docs]

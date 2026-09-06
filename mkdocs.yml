@@ -1,0 +1,53 @@
+site_name: VNCDoTool
+site_description: Command line VNC client
+repo_url: https://github.com/sibson/vncdotool
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - Introduction: index.md
+  - Installation: install.md
+  - Usage: usage.md
+  - Embedding in Python Applications: library.md
+  - Command Reference: commands.md
+  - Capturing a Session: capture.md
+  - Release History: history.md
+  - Contributing: contributing.md
+  - Code Documentation: api.md
+
+markdown_extensions:
+  - admonition
+  - tables
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            docstring_style: sphinx
+  - include-markdown
+
+exclude_docs: |
+  rfbproto/
