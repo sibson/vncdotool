@@ -91,10 +91,8 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
     > vncdo rcapture region.png 100 200 400 250
     > vncdo rexpect region.png 100 200
 
-The region must lie on the screen.  One that runs off an edge, or that a
-mid-session desktop resize leaves off the screen, fails with a message
-naming the region and the screen size, exiting 30.  The same applies to
-``expect``, whose region is the size of the target image.
+The region has to lie on the screen; :doc:`commands` says what each command
+does with its arguments and how it fails.
 
 
 Encodings
@@ -121,6 +119,8 @@ default, so a capture is exact unless you request otherwise.
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
 
+
+.. _exit-status:
 
 Exit Status
 -------------------
