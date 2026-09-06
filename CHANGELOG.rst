@@ -28,6 +28,7 @@
   - Fix: ``api.ThreadedVNCClientProxy.disconnect()`` hanging forever after a failed command (e.g. ``captureScreen`` to a missing directory) left the client's deferred errored, so ``disconnect()``'s success-only callback never ran (@sibson, #146)
   - Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update (@sibson)
   - ``--encodings zrle`` offers ZRLE, which sends substantially less than Raw on ordinary screen content (@sibson)
+  - ``--encodings tight`` offers Tight, decoding fill, copy-filter and palette-filter rectangles; a gradient-filter or JPEG rectangle ends the session with a named error (@sibson, #264)
 
 1.4.1 (2026-08-19)
 ----------------------

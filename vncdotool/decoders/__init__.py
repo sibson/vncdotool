@@ -19,6 +19,7 @@ from .errors import DecodeError
 from .hextile import HextileDecoder
 from .raw import RawDecoder
 from .rre import CoRREDecoder, RREDecoder
+from .tight import TightDecoder
 from .zrle import ZRLEDecoder
 
 # Classes, not instances: ZRLE and Tight own a zlib stream that lives for
@@ -33,6 +34,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         CoRREDecoder,
         HextileDecoder,
         ZRLEDecoder,
+        TightDecoder,
         CursorDecoder,
         DesktopSizeDecoder,
         QemuExtendedKeyDecoder,
@@ -48,6 +50,7 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "corre": Encoding.CORRE,
     "hextile": Encoding.HEXTILE,
     "zrle": Encoding.ZRLE,
+    "tight": Encoding.TIGHT,
 }
 
 
