@@ -117,20 +117,20 @@ Two additions:
 ## Build order
 
 A stack: each stage is a branch on the one below it, reviewed and merged on its
-own, and the next rebases onto what landed. Every stage is green on `make test`,
-`flake8 --count --statistics vncdotool tests` and `make typecheck` before it is
-offered for review.
+own, and the next rebases onto what landed. Every stage is green on `make test`
+and on `flake8 --count --statistics vncdotool tests`, and adds no new
+`make typecheck` error, before it is offered for review.
 
 **Stage 0 — wire brief. Done**, committed as [tight-wire.md](tight-wire.md).
 
-**Stage 1 — TPIXEL.** `pixelformat.tpixel_bytes` and the 24 bpp RGB output
+**Stage 1 — TPIXEL. Done.** `pixelformat.tpixel_bytes` and the 24 bpp RGB output
 format a 3-byte TPIXEL implies, with unit tests beside the CPIXEL ones in
 `test_pixelformat.py`. The condition is narrow and exact — true colour, 32 bpp,
 depth 24, three 8-bit channels — and the byte order is a fixed R, G, B that
 ignores the big-endian flag and the channel shifts, which is what makes it
 unlike CPIXEL. Touches no decoder.
 
-**Stage 2 — the whole-rectangle pump path.** A `WholeRectDecoder` base beside
+**Stage 2 — the whole-rectangle pump path. Done.** A `WholeRectDecoder` base beside
 `PixelDecoder`, `_pumpFor` dispatching to it, and its own `test_pump.py` cases
 including the one-byte-at-a-time segmentation case, since this path does not go
 through the existing one. A Tight rectangle carries one compression type for the
@@ -139,7 +139,7 @@ whole rectangle, so the decoder returns `(bytes, PixelFormat)` and no
 from being written into a buffer sized for a 4-byte negotiated format. Touches
 no decoder; independent of stage 1 in content, stacked on it in git.
 
-**Stage 3 — the decoder, against real bytes.** Registration
+**Stage 3 — the decoder, against real bytes. Done.** Registration
 (`DECODERS`, `ENCODING_NAMES["tight"]`) lands first so `--encodings tight` can be
 offered at all, then `vnclog --capture-raw` against `tigervnc` produces the bytes
 the implementation is written against. In order: the control byte and its reset
@@ -155,11 +155,22 @@ by the decoder from `height * rowSize` and never signalled on the wire; a
 check exempts Fill, because TigerVNC servers before 1.16.0 sent wider Fill
 rectangles and its own decoder exempts them.
 
-**Stage 4 — goldens.** `tests/goldens/capture.py --encoding tight
+**Stage 4 — goldens. Done.** `tests/goldens/capture.py --encoding tight
 --pixel-format bgrx8888`, committed as `tigervnc-tight-bgrx8888`, plus the
 non-default formats the matrix asks for: TPIXEL width varies with the negotiated
 format, and 32 bpp is exactly the case that hides it. `test_goldens.py` walks the
 tree and needs no edit.
+
+**No single scene is the palette scene for Tight**, which the Testing section
+below assumed there would be. Palette coverage at bgrx8888 arrives spread across
+the catalogue — 24 basic/palette rectangles at palette sizes 2, 3, 4, 5, 8 and
+16 — and which rectangles come out palette is a function of the negotiated
+format as much as of the content: at rgb565, quantizing to 5/6/5 collapses the
+dense and scattered scenes far enough that TigerVNC sends palettes of 37, 40 and
+204 colours where at bgrx8888 it sent the same rectangles as a raw copy. Which
+filter a fixture reaches is therefore a property of the (scene, format) pair, not
+of the scene; the capture is read back afterwards to find out what it got, and
+what each one got is recorded in the commit that added it.
 
 **Stage 5 — JPEG. Done.** `--jpeg-quality N` offering one of -23..-32, the
 Pillow decode path in the decoder, and a `tigervnc-tight-jpeg-bgrx8888`
@@ -181,15 +192,128 @@ one. And `expect` could not sequence a lossy capture at all, which is why
 `scene-lossy.vdo` existed; it does now, and the script is gone, see
 [expect-matching.md](expect-matching.md).
 
-**Stage 6 — live and measured.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
+**Stage 6 — live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves
-from `ENCODING_NAMES`. N2 lands as a bandwidth case in `test_bandwidth.py`
-beside Hextile's, plus a render-time comparison against Raw.
+from `ENCODING_NAMES` and render both scenes byte for byte. N2's bandwidth half
+lands as two cases in `test_bandwidth.py`, one per content class, and is met
+with room to spare against Raw at 256x192: 820 bytes against 196,899 on flat
+regions, 69,174 against 196,803 on dense noise. Tight wins on every scene in
+the catalogue, worst case 0.68x on the gradient.
 
-**Stage 7 — docs, CHANGELOG, and the R1 check.** `git diff main` over `rfb.py`
-and `const.py` across the whole stack is empty. If it is not, the PR says so
-rather than quietly carrying the edit: that is the architecture failing the test
-Phase 6 exists to be.
+**Render time is recorded, not compared against Raw.** Replaying
+`tigervnc-tight-bgrx8888` costs 1446 us over the same 87 rectangles, against
+Hextile's 6.4 ms and ZRLE's 31 ms on the same machine. It cost 1773 us until
+`_unpalette` stopped expanding palette indices a pixel at a time; what is left is
+the per-rectangle pump and zlib, which is where to look next. `bench.jsonl`
+carries both rows; N2 asks that it not regress against itself.
+
+Two things the plan had wrong, found here. `TestNegotiation` did not test
+negotiation: it searched the client's own log for `repr(Encoding.X)`, which only
+the "Offering" line carries, so adding any name to `EMITTED_BY_TIGERVNC` passed.
+The witness is `vnclog --capture-raw`'s `encodings_seen`. And `benchmark.py`
+replayed every fixture as if it were captured at the server's native format,
+which is invisible until a fixture is narrower than four bytes: the rgb565
+fixture desynchronised, aborted, and reported 112 us as if it were a win.
+
+**Stage 7 — docs, CHANGELOG, and the R1 check. Done.** `--encodings tight` and
+`--jpeg-quality` are documented under Encodings in `docs/usage.rst`, beside the
+other flags; the CHANGELOG entries the stages wrote independently are
+consolidated.
+
+### The R1 result
+
+`git diff main` across the whole stack, measured per file:
+
+| file | insertions | deletions | which stage |
+|---|---|---|---|
+| `vncdotool/const.py` | 0 | 0 | — |
+| `vncdotool/rfb.py` | 30 | 5 | stage 2 alone |
+| `vncdotool/decoders/__init__.py` | 12 | 1 | stages 2 and 3 |
+
+Of the fifteen commits in the stack, exactly one touches `rfb.py` and none
+touches `const.py`.
+
+**`const.py` is a literal zero and `rfb.py`'s encoding tables are untouched** —
+neither `SUPPORTED_ENCODINGS` nor `_UNMIGRATED_ENCODINGS` appears anywhere in
+the stack's `rfb.py` diff, and `Encoding.TIGHT` was already in `const.py`. That
+is R1's actual claim, and it holds: **adding the encoding needed no `rfb.py`
+edit at all.** Stage 3, which is the encoding, changed three lines in
+`decoders/__init__.py` — an import, a `DECODERS` entry, an `ENCODING_NAMES`
+entry — and nothing else outside `decoders/`.
+
+**The 30 lines in `rfb.py` are real and are not the encoding.** Every one of
+them is stage 2's `_pumpWholeRectangle`: a third pump path, plus threading a
+generator's return value out through `_pumpGenerator`'s `on_done`. A pump path
+is `rfb.py`'s own subject matter, not an encoding's, and the architecture's
+registry claim — "nothing tells `rfb.py` the encoding exists" — survives it
+intact. But R1 as written says `rfb.py` is unchanged, and this stack changed it,
+so the honest reading is that Phase 6 discharges R1 for *registration* and
+leaves open whether R1 also intends to bar new pump shapes. An encoding whose
+framing fits neither existing path costs an `rfb.py` edit once, and the next
+whole-rectangle encoding will cost none.
+
+### N2, recorded
+
+Stage 6 found N2's render-time half unmet. Re-measured at stage 7 on this
+machine (Apple M4 Pro, CPython 3.13.12), `make bench` against each committed
+golden, 8 updates x 200 replays, best microseconds:
+
+| fixture | best us | x Raw | rectangles |
+|---|---|---|---|
+| `tigervnc-raw-bgrx8888` | 576 | 1.00 | 87 |
+| `tigervnc-corre-bgrx8888` | 573 | 0.99 | 87 |
+| `tigervnc-rre-bgrx8888` | 911 | 1.58 | 87 |
+| `tigervnc-tight-bgrx8888` | 1778 | 3.09 | 87 |
+| `tigervnc-tight-jpeg-bgrx8888` | 2679 | — | 68 |
+| `tigervnc-hextile-bgrx8888` | 6428 | 11.2 | 87 |
+| `tigervnc-zrle-bgrx8888` | 31448 | 54.6 | 87 |
+
+The JPEG fixture has no x-Raw column: it is a different capture with 68
+rectangles, so it is comparable to the other Tight rows and not to Raw.
+
+These rows are not in `bench.jsonl`: its newest rows are stage 6's and it holds
+no Hextile row at all, so this table and the profile below are a stage-7 run
+that survives only here. The replacement proposed below would require recording
+it.
+
+**Tight fails N2's render-time half, and so does every encoding measured here
+except CoRRE**, which alone lands inside the noise against Raw. What the slow
+rows share is per-rectangle Python decode work, not decompression: only Tight
+and ZRLE decompress at all, and RRE at 1.58x and Hextile at 11.2x reach those
+figures without zlib — Hextile's cost is per-subrectangle Python. Hextile and
+ZRLE shipped in phases 4 and 5 with N2 stated and unmet at 11x and 55x, so this
+is a requirement almost nothing has ever met, not a regression Tight introduced.
+
+The profile says why. Over 20 profiled replays of `tigervnc-tight-bgrx8888`,
+0.068 s total: `_unpalette` 0.012 s of self time (the per-pixel Python loop that
+expands palette indices), `zlib.Decompress.decompress` 0.010 s, then the pump —
+427 `_pumpGenerator` sends per replay of 87 rectangles, against Raw's zero. Raw
+is fast because it takes none of these: it enters `_pumpRectangle`, reads
+`width * height * bypp` bytes straight off the wire in the negotiated layout, and
+pastes them. Its profile has no decoder frame in the top twenty-five at all.
+Doing any per-pixel work in Python therefore cannot be free, and a bar measured
+against the one encoding that does none asks for exactly that.
+
+### Proposed replacement for N2 — not applied
+
+`decoder-architecture.md` is not edited here: amending a standing architectural
+requirement is the repository owner's call. This is the case, for them to accept
+or reject.
+
+> **N2** Each encoding added after Raw demonstrates fewer bytes over the wire
+> than Raw on the content class it is designed for, measured. Render time is
+> measured and recorded in `bench.jsonl` for every encoding at every committed
+> pixel format, and no encoding regresses against its own previous recorded
+> figure on the same machine; there is no bar against Raw, because Raw does no
+> per-pixel work and everything that does is slower than it in Python. An
+> encoding whose render time would make a scripted session slower end to end
+> than Raw over the same link is the thing to refuse, and that is a wire-time
+> and render-time question together, not render time alone.
+
+If the owner prefers to keep an absolute bar, the alternative is to state it as
+a budget rather than a comparison — "no encoding costs more than N ms per
+full-screen update at 1920x1080" — and to accept that ZRLE fails it today and
+needs the `cpixel` loop replaced before it can pass.
 
 ## Testing
 
@@ -197,9 +321,9 @@ Tier 1 is `test_goldens.py` against the captured fixture, and per-branch unit
 tests in `tests/unit/test_decoder_tight.py` driven from captured bytes — never
 from bytes assembled out of the specification, per `decoder-goldens.md`. Tier 2
 is `test_encodings.py` against the fleet. Tier 3 is the existing scene
-catalogue, which already covers the content classes the filters split on: solid
-fills (fill compression), dense detail (JPEG or raw copy), palette regions
-(palette filter), gradient (gradient filter).
+catalogue, which covers the content classes the filters split on: solid fills
+(fill compression), dense detail (JPEG or raw copy) and palette regions
+(palette filter).
 
 The scene catalogue was built before Tight was in view. If a filter turns out
 unreachable with the scenes we have, the fix is a scene, not a hand-built

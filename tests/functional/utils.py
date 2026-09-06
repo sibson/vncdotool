@@ -15,12 +15,15 @@ per-server test body, the screenshot gallery -- is shared rather than
 written twice.
 """
 
+import json
 import os
+import select
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 from unittest import TestCase
@@ -48,6 +51,8 @@ VNCDO_REPLAY = str(_SCRIPTS / f"vncdo-replay{_EXE_SUFFIX}")
 VNCLOG = str(_SCRIPTS / f"vnclog{_EXE_SUFFIX}")
 # Added to the server's response budget for interpreter start-up and handshake.
 SUBPROCESS_TIMEOUT_HEADROOM = 10.0
+VNCLOG_STARTUP_DEADLINE = 10.0
+VNCLOG_CAPTURE_DEADLINE = 60.0
 
 DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "screenshots"
 
@@ -300,6 +305,46 @@ def run_vncdo(
         raise AssertionError(
             f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"
         ) from exc
+
+
+class Capture(NamedTuple):
+    s2c: bytes
+    meta: Dict[str, Any]
+
+
+def capture_through_vnclog(
+    testcase: TestCase, server: VNCServer, port: int, *args: str
+) -> Capture:
+    """Run `vncdo *args` against `server` through a vnclog proxy on `port`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        archive = Path(tmp) / "capture.zip"
+        proxy = subprocess.Popen(
+            [VNCLOG, "-s", f"{HOST}::{server.port}", "--listen", str(port),
+             "--capture-raw", str(archive)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
+        )
+        with proxy.stdout, proxy.stderr:
+            deadline = time.monotonic() + VNCLOG_STARTUP_DEADLINE
+            ready = False
+            while time.monotonic() < deadline and not ready:
+                if proxy.poll() is not None:
+                    break
+                rlist, _, _ = select.select([proxy.stderr], [], [], 0.2)
+                if rlist and "accepting connections" in proxy.stderr.readline():
+                    ready = True
+            if not ready:
+                proxy.kill()
+                proxy.wait(timeout=VNCLOG_STARTUP_DEADLINE)
+                testcase.fail(f"vnclog never listened on {port}")
+
+            result = run_vncdo(server._replace(port=port), *args)
+            proxy.wait(timeout=VNCLOG_CAPTURE_DEADLINE)
+
+        if result.returncode != 0:
+            testcase.fail(f"`vncdo {' '.join(args)}` through vnclog failed: {result.stderr}")
+
+        with zipfile.ZipFile(archive) as zipped:
+            return Capture(zipped.read("s2c.bin"), json.loads(zipped.read("meta.json")))
 
 
 def _terminate(process: subprocess.Popen, timeout: float = 5.0) -> None:
