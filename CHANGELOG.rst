@@ -3,6 +3,7 @@
   - [BREAKING] ``expect`` and ``rexpect`` decide a match pixel by pixel, as a perceived colour difference, rather than by the root-mean-square difference of the two histograms. The number in ``expect FILE N`` is now that per-pixel bound, 0 (exact) to 255, on a scale unrelated to the old one; ``expectScreen`` and ``expectRegion`` take ``fuzz`` and ``blur`` in place of ``maxrms`` (@sibson)
   - Add ``vncdo --expect-fuzz N`` and ``--expect-blur RADIUS``, tuning how near the screen has to be for ``expect`` to call it a match. A blur is what lets ``expect`` match a screen a lossy encoding has moved, and ``--jpeg-quality`` turns one on (@sibson)
   - Fix ``vncdo expect FILE`` and ``rexpect FILE X Y`` crashing when no fuzz was given, the spelling the documentation shows (@sibson)
+  - Hextile rectangles decode about 1.5x faster: the subencoding byte is tested as a plain int rather than through ``IntFlag``, which built a new flag object for each of the seven tests per tile (@sibson)
   - ZRLE rectangles decode about 12x faster: tiles are now read by index out of the decompressed block and widened in C, rather than a byte at a time through an iterator (@sibson)
   - Fix a ZRLE palette index past the end of its palette raising ``IndexError`` past the protocol handler instead of ending the session with a reported error (@sibson)
   - Tight palette rectangles decode about 1.3x faster: expanding indices into pixels now runs in C rather than a per-pixel Python loop (@sibson)
