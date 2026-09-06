@@ -1,10 +1,3 @@
-"""Unit coverage for the vnclog --capture-raw kit.
-
-Drives HandshakeScrubber/CaptureWriter directly, and the two proxy protocol
-classes through a scripted handshake on mocked transports, so both raw
-streams and the challenge/response scrub are covered without a reactor.
-"""
-
 from __future__ import annotations
 
 import json
@@ -143,8 +136,8 @@ class TestHandshakeScrubber(TestCase):
         watches the wrong 16 bytes and lets the real ones through.
         """
         s = HandshakeScrubber()
-        s.s2c.feed(VERSION_38)  # server greets 3.8
-        s.c2s.feed(VERSION_33)  # client downgrades to 3.3
+        s.s2c.feed(VERSION_38)
+        s.c2s.feed(VERSION_33)
         self.assertEqual(s.negotiated_version, (3, 3))
 
         # pre-3.7 path: a direct 4-byte auth type announcement, no
@@ -554,7 +547,6 @@ class TestCaptureWriter(TestCase):
         cw.write_archive(self.archive, cw.meta("9.9.9"))  # connectionLost fires right now
 
         s2c = self.read_archive("s2c.bin")
-        # the 6 partial challenge bytes must never land on disk
         self.assertNotIn(CHALLENGE[:6], s2c)
         self.assertEqual(s2c, VERSION_33 + NONE_AUTH_33)
 
@@ -642,7 +634,6 @@ class TestProxyCaptureWiring(TestCase):
         sp.transport.write.assert_any_call(VERSION_33)
         cp.transport.write.assert_any_call(RESPONSE)
 
-        # the client-init handoff still happened
         cp.startLogging.assert_called_once_with(sp)
 
     def test_no_capture_configured_is_a_no_op(self) -> None:
@@ -672,8 +663,6 @@ class TestProxyCaptureWiring(TestCase):
         self.assertEqual(bytes(sp.capture.c2s), VERSION_38 + NONE_CHOICE + b"\x01")
         self.assertEqual(bytes(sp.capture.s2c), VERSION_38 + NONE_OFFER + SECURITY_RESULT_OK)
 
-        # ClientInit was reached (not desynced into _handle_protocol on the
-        # response bytes), so the client-init handoff fired normally.
         cp.startLogging.assert_called_once_with(sp)
 
     def test_unstrippable_auth_aborts_and_writes_nothing(self) -> None:

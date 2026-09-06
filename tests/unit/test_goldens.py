@@ -22,10 +22,6 @@ TOLERANCE_KINDS = ("format-quantization", "jpeg-lossy")
 
 
 class Fixture:
-    """One committed capture: the bytes, what they were captured at, and a
-    client that replays them the way they were recorded.
-    """
-
     def __init__(self, path: Path) -> None:
         self.path = path
         self.name = path.name
@@ -117,10 +113,6 @@ class TestGoldens(unittest.TestCase):
 
 
 class GoldenReplay:
-    """The body of a per-fixture case. Not a TestCase itself, so the loader
-    collects it only through the subclasses load_tests builds.
-    """
-
     fixture: Fixture
 
     def test_says_which_kind_of_tolerance_it_carries(self) -> None:
@@ -157,9 +149,6 @@ class GoldenReplay:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """unittest's own hook for building a suite: one case per fixture, named
-    after it, so a failure's test id says which fixture failed.
-    """
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(TestGoldens))
     for fixture in fixtures():

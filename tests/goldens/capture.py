@@ -27,15 +27,9 @@ SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
 PROXY_PORT = 5999
 PROXY_STARTUP_DEADLINE = 10.0
 CAPTURE_DEADLINE = 60.0
-# Budget for the whole scene script. A scene that never arrives fails here
-# naming the image it waited for, rather than recording the one before it.
 SCENE_DEADLINE = 30.0
 
-# Wide enough for the worst quality level, not the one being captured.
 JPEG_FUZZ = 64
-
-# Headroom over what this capture measured, for the decode drifting a little
-# under another libjpeg.
 JPEG_FUZZ_MARGIN = 4
 
 

@@ -65,9 +65,6 @@ bench-record:
 bench-report:
 	uv run python -m tests.goldens.report $(ARGS)
 
-# Needs `make servers-up`: an unreachable server fails its tests rather
-# than skipping them, so a down fleet cannot pass as green. The OS-hosted
-# servers are the exception: CI alone sets them up, so off CI they skip.
 .PHONY: test-func
 test-func:
 	uv run python -m unittest discover -s tests/functional -t .
@@ -78,8 +75,6 @@ typecheck:
 
 include tests/servers/servers.mk
 
-# Coverage, kept off the plain `test` targets because measuring costs
-# runtime not worth paying on every edit-run loop. See DEVELOP.rst.
 .PHONY: coverage coverage-unit coverage-func coverage-report
 coverage: coverage-unit coverage-func coverage-report
 

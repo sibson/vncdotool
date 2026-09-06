@@ -1,6 +1,3 @@
-# See tests/servers/servers.mk for the make targets that drive this file and
-# tests/functional/test_server_compat_docker.py for the tests that exercise it.
-#
 # The two TigerVNC services differ only by VNC_PASSWORD but share one image
 # name, so they build once rather than twice. The build context is tests/,
 # not tests/servers/, so the Dockerfile can also pull in the committed scene
@@ -43,7 +40,6 @@ services:
       - "127.0.0.1:5933:5900"
 
   # Event sink, not a smoke target: prints events, renders no desktop.
-  # Used by tests/functional/test_events.py.
   vncev:
     build:
       context: ..
@@ -53,7 +49,6 @@ services:
     ports:
       - "127.0.0.1:5934:5900"
 
-  # LibVNCServer's "example" demo, replacing the old libvncserver.mk build.
   libvncserver-example:
     build:
       context: ..

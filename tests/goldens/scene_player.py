@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Fullscreen X client that blits a committed scene PNG per keypress.
-
-Each PNG under the scene directory already is the oracle a golden fixture is
-checked against -- this process composes nothing itself.
-"""
+"""Fullscreen X client that blits a committed scene PNG per keypress."""
 from __future__ import annotations
 
 import os
@@ -39,8 +35,7 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask,
         )
-        # Without this, key events never reach the container's `xev -root`
-        # sink and tests/functional/test_events.py fails.
+        # Without this, key events never reach the container's `xev -root` sink.
         screen.root.change_attributes(event_mask=X.KeyPressMask)
         self.gc = self.window.create_gc()
         self.window.map()
@@ -80,10 +75,9 @@ class ScenePlayer:
         """XK.keysym_to_string() returns None for plain letters and digits, whose
         keysym value is already their ASCII code.
 
-        Folded to lower case: the scenes are named for lowercase keys and
-        stamped with the uppercase glyph, so a driver that arrives shifted --
-        or a server that translates a keysym to its shifted twin -- selects
-        the scene it asked for rather than nothing at all.
+        Folded to lower case: a server that translates a keysym to its
+        shifted twin still selects the scene it asked for, rather than none
+        at all.
         """
         return chr(keysym).lower() if 0x20 <= keysym < 0x7F else ""
 

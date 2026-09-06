@@ -29,7 +29,6 @@ class TestVNCDoToolClient(TestCase):
         self.client.transport = mock.Mock()
         self.client.factory = mock.Mock()
 
-        # mock out a bunch of base class functions
         self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
         self.client.pointerEvent = mock.Mock()  # type: ignore[method-assign]
         self.client.keyEvent = mock.Mock()  # type: ignore[method-assign]
@@ -605,7 +604,6 @@ class TestStableScreen(TestCase):
         return settled
 
     def paint(self, colour, at=(0, 0), size=(4, 4)) -> None:
-        """Repaint part of the screen the way updateRectangle does, then commit."""
         assert self.client.screen is not None
         self.client.screen.paste(Image.new("RGB", size, colour), at)
         self.client.commitUpdate([(at[0], at[1], size[0], size[1])])

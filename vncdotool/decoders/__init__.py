@@ -45,8 +45,9 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
     )
 }
 
-# The names --encodings accepts. Registered encodings only: an encoding still
-# on rfb.py's own path decodes, but is not offered.
+# The names --encodings accepts. Cursor, DesktopSize and QemuExtendedKey are
+# registered decoders too, but client.py offers them from its own pseudocursor
+# / pseudodesktop / qemu_extended_key flags rather than by name here.
 ENCODING_NAMES: Dict[str, Encoding] = {
     "raw": Encoding.RAW,
     "copyrect": Encoding.COPY_RECTANGLE,

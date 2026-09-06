@@ -36,10 +36,6 @@ def raw_update(x: int, y: int, w: int, h: int, pixels: bytes) -> bytes:
 
 
 class ProxyPair(TestCase):
-    """A connected pair of proxy halves, taken through the handshake to the
-    point where the observer client is decoding the server stream.
-    """
-
     def setUp(self) -> None:
         self.factory = VNCLoggingServerFactory("localhost", 5900)
         self.factory.password_required = False
@@ -69,7 +65,6 @@ class ProxyPair(TestCase):
         assert self.observer is not None
 
     def setPixelFormat(self, pixel_format: pixelformat.PixelFormat) -> None:
-        """Send SetPixelFormat from the real client, through the proxy."""
         self.server_proxy.dataReceived(
             pack("!Bxxx16s", MsgC2S.SET_PIXEL_FORMAT, pixel_format.to_bytes())
         )
@@ -116,7 +111,6 @@ class TestObserverPixelFormat(ProxyPair):
 class TestObserverEncodingsOffered(ProxyPair):
 
     def setEncodings(self, *encodings: int) -> None:
-        """Send SetEncodings from the real client, through the proxy."""
         self.server_proxy.dataReceived(
             pack("!BxH", MsgC2S.SET_ENCODING, len(encodings))
             + b"".join(pack("!i", e) for e in encodings)

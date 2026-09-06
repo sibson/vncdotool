@@ -18,17 +18,14 @@ from tests.unit.utils import (
 
 
 def _cpixel(r: int, g: int, b: int) -> bytes:
-    """One CPIXEL: 3 bytes, no pad. Matches the default test PixelFormat's
-    low placement (redshift=0, greenshift=8, blueshift=16), so the buffer
-    a ZRLE tile fills is byte-identical to a Raw tile of the same pixels.
+    """Matches the default test PixelFormat's low placement (redshift=0,
+    greenshift=8, blueshift=16), so the buffer a ZRLE tile fills is
+    byte-identical to a Raw tile of the same pixels.
     """
     return bytes((r, g, b))
 
 
 def zrle_run(pixel: bytes, run_length: int) -> bytes:
-    """RLE run: a pixel followed by (run_length - 1) as one byte plus as
-    many 255-continuation bytes as needed.
-    """
     n = run_length - 1
     out = bytearray()
     while n >= 255:

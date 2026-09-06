@@ -39,8 +39,8 @@ class TestRRE(unittest.TestCase):
         handshake(self.cli, width, height)
 
         bg = (0, 0, 255)
-        fg = (255, 0, 0)  # off-origin, interior
-        fg2 = (0, 255, 0)  # touches the right and bottom edge
+        fg = (255, 0, 0)
+        fg2 = (0, 255, 0)
         subrects = (
             pack("!4sHHHH", _pixel(*fg), 1, 1, 1, 1)
             + pack("!4sHHHH", _pixel(*fg2), 3, 3, 1, 1)
@@ -59,10 +59,8 @@ class TestRRE(unittest.TestCase):
         assert_pixels(self, self.cli.screen, expected)
 
     def test_rre_subrect_coordinates_are_rectangle_local(self) -> None:
-        # A 2x2 RRE rectangle placed at (2, 2) of a 4x4 screen. Its
-        # subrectangle sits at rect-local (1, 0), i.e. screen (3, 2) -- a
-        # decoder that read subrect coordinates as screen-absolute would
-        # instead paint (1, 0) or crash on an out-of-bounds fill.
+        # A decoder that read subrect coordinates as screen-absolute would
+        # instead paint the wrong pixel or crash on an out-of-bounds fill.
         screen_width = screen_height = 4
         handshake(self.cli, screen_width, screen_height)
 
@@ -92,7 +90,7 @@ class TestRRE(unittest.TestCase):
 
         bg = (0, 0, 255)
         first = (255, 0, 0)
-        second = (0, 255, 0)  # overlaps `first`, drawn after it
+        second = (0, 255, 0)
         subrects = (
             pack("!4sHHHH", _pixel(*first), 0, 0, 3, 3)
             + pack("!4sHHHH", _pixel(*second), 1, 1, 3, 3)
@@ -160,8 +158,6 @@ class TestCoRRE(unittest.TestCase):
         assert_pixels(self, self.cli.screen, expected)
 
     def test_corre_decodes_a_background_and_several_subrects(self) -> None:
-        # Two subrects: with one, a decoder that reads only the first still
-        # produces the right picture.
         width = height = 4
         handshake(self.cli, width, height)
 
@@ -213,7 +209,7 @@ class TestCoRRE(unittest.TestCase):
 
         bg = (0, 0, 255)
         first = (255, 0, 0)
-        second = (0, 255, 0)  # overlaps `first`, drawn after it
+        second = (0, 255, 0)
         subrects = (
             pack("!4sBBBB", _pixel(*first), 0, 0, 3, 3)
             + pack("!4sBBBB", _pixel(*second), 1, 1, 3, 3)

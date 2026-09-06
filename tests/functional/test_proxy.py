@@ -175,8 +175,6 @@ class TestVNCLOGCapture(TestCase):
             self.assertGreater(seen["rectangles"], 0)
 
     def test_capture_refuses_existing_target(self) -> None:
-        # A second vnclog pointed at a capture that already exists must
-        # refuse rather than overwrite it.
         proxied = VNCEV._replace(port=CAPTURE_PROXY_PORT)
         run_vncdo(proxied, "key", "z")
         _await_capture(self.capture).close()

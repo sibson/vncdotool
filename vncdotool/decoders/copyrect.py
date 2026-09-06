@@ -19,9 +19,9 @@ class CopyRectDecoder(ClientDecoder):
         block = yield 4
         srcx, srcy = unpack("!HH", block)
         x, y, width, height = rect
-        # A crop running off the framebuffer is zero-filled rather than
-        # refused, so an unchecked source pastes black and the screenshot
-        # lies about what the server sent.
+        # copyRectangle pastes through Pillow, which zero-fills a source crop
+        # that runs off the image instead of raising; refuse it here so a
+        # server's bad copy doesn't silently paste black into the screenshot.
         if srcx + width > client.width or srcy + height > client.height:
             raise DecodeError(
                 f"copy source ({srcx},{srcy},{width},{height}) is outside a "

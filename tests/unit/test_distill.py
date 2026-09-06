@@ -20,7 +20,7 @@ SIZE = (64, 64)
 
 
 def handshake_bytes(pixel_format: rfb.PixelFormat = PIXEL_FORMAT) -> bytes:
-    """RFB 3.3, no auth, ServerInit -- what vnclog records before any update."""
+    """What vnclog records before the first framebuffer update."""
     return b"RFB 003.003\n" + pack("!I", AuthTypes.NONE) + pack(
         "!HH16sI", SIZE[0], SIZE[1], pixel_format.to_bytes(), len(b"golden")
     ) + b"golden"
