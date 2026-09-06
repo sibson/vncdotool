@@ -302,7 +302,7 @@ def build_command_list(
         elif cmd in ("pause", "sleep"):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
-        elif cmd in "drag":
+        elif cmd == "drag":
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseDrag, x, y)
         elif os.path.isfile(cmd):
