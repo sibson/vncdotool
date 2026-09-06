@@ -28,10 +28,6 @@ def _comparable(row: Row, previous: Row) -> bool:
     return all(row.get(k) == previous.get(k) for k in ("python", "implementation", "pillow"))
 
 
-def _fixture(row: Row) -> str:
-    return str(row.get("fixture") or "-")
-
-
 def _delta(row: Row, previous: Optional[Row]) -> str:
     if previous is None:
         return ""
@@ -52,13 +48,13 @@ def _table(rows: List[Row]) -> None:
         where = " (CI)" if head.get("ci") else ""
         print(f"machine {machine}  {head.get('cpu')}, {head.get('cores')} cores, "
               f"{head.get('system')}{where}")
-        width = max([len("fixture")] + [len(_fixture(r)) for r in group])
+        width = max([len("fixture")] + [len(str(r["fixture"])) for r in group])
         print(f"  {'commit':9} {'date':11} {'fixture':{width}} {'python':8} {'pillow':8} "
               f"{'best_us':>9} {'delta':>7} {'calls':>7}")
         previous: Dict[str, Row] = {}
         for row in group:
             commit = str(row.get("commit") or "-")[:7]
-            fixture = _fixture(row)
+            fixture = str(row["fixture"])
             print(f"  {commit:9} {str(row['timestamp'])[:10]:11} {fixture:{width}} "
                   f"{str(row.get('python') or '-'):8} {str(row.get('pillow') or '-'):8} "
                   f"{row['best_us']:9.1f} {_delta(row, previous.get(fixture)):>7} "
