@@ -1,12 +1,12 @@
 """Fence against a real TigerVNC, the server that motivated #322/#323.
 
-The socket-level test is what makes the client-level ones meaningful:
 TigerVNC sends a ServerFence only to a client that offered
-``PSEUDO_FENCE``, so vncdotool's own decision to offer it is what puts
-message 248 on the wire. Before the fence handler existed that byte
-reached ``_handleConnection``'s unknown-message branch and ended the
-session, which is why offering the encoding and answering the message
-have to land together.
+``PSEUDO_FENCE``, and ``VNCDoToolFactory.fence`` is False, so ``vncdo``
+never sees one: the handler's own behaviour is covered by unit tests
+against a mocked transport, not from here. What is worth checking
+against a real server is the pair of facts that decision rests on --
+that offering the encoding is what summons a fence, and that another
+client's fencing on a shared session reaches nobody but itself.
 """
 
 import socket
@@ -115,9 +115,9 @@ class TestFenceOnTheWire(TestCase):
         )
 
     def test_not_offering_fence_keeps_tigervnc_quiet(self) -> None:
-        """The counterpart: a client that stays silent about the encoding is
-        never sent a fence, so the handler is only load-bearing because
-        VNCDoToolFactory.fence defaults to True.
+        """The counterpart, and the reason VNCDoToolFactory.fence is False:
+        a client that stays silent about the encoding is never sent a fence,
+        so the message costs a default session nothing.
         """
         peer = _Peer(BASE_ENCODINGS)
         self.addCleanup(peer.close)
@@ -150,9 +150,6 @@ class TestFenceThroughTheClient(TestCase):
             has_expected_content(TIGERVNC, colours),
             "capture is a single flat colour, no screen content was decoded",
         )
-
-    def test_capture_survives_the_fences_it_asks_for(self) -> None:
-        self._assert_captures(screenshot_dir() / f"{TIGERVNC.name}-fence.png")
 
     def test_capture_survives_another_client_fencing(self) -> None:
         """#322's shape: a second client on an -AlwaysShared session, with the

@@ -546,7 +546,9 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
-    fence = True
+    # Nothing here initiates a fence or waits on one, so offering the encoding
+    # would only invite traffic the client discards.
+    fence = False
     force_caps = False
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None

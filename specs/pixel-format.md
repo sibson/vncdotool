@@ -175,7 +175,7 @@ not** have an outstanding request when it sends `SetPixelFormat`, since the next
 update would be undecidable between formats. There is no acknowledgement and no
 fence, so `--pixel-format` is connect-time only — a later switch needs the
 request drained, or a `SyncNext` fence around it. The client answers fences
-but never sends one of its own, so nothing yet drives that.
+but does not offer the encoding or send one, so nothing yet drives that.
 
 1. `--pixel-format NAME` given: send it.
 2. Otherwise, if `raw_mode` resolves the native: send nothing.
