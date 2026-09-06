@@ -5,4 +5,14 @@ export PYBUILD_NAME=vncdotool
 %:
 	dh $@ --buildsystem=pybuild
 
+override_dh_installman:
+	mkdir -p debian/man
+	for script in vncdo vncdotool vnclog vncdo-replay; do \
+		PYTHONPATH=$$(echo debian/vncdotool/usr/lib/python3*/dist-packages) \
+			help2man --no-info --name="command line VNC client" \
+			--output=debian/man/$$script.1 \
+			"python3 debian/vncdotool/usr/bin/$$script"; \
+	done
+	dh_installman debian/man/*.1
+
 override_dh_auto_test:

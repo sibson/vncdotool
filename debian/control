@@ -1,24 +1,26 @@
 Source: vncdotool
 Maintainer: Marc Sibson <sibson+vncdotool@gmail.com>
-Section: python
+Section: utils
 Priority: optional
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-python3,
+ help2man,
  pybuild-plugin-pyproject,
  python3-all,
+ python3-cryptography,
  python3-hatchling,
-Standards-Version: 4.6.2
+ python3-pil,
+ python3-twisted,
+Standards-Version: 4.7.4
 Rules-Requires-Root: no
+Homepage: https://github.com/sibson/vncdotool
+Vcs-Git: https://github.com/sibson/vncdotool.git
+Vcs-Browser: https://github.com/sibson/vncdotool
 
-Package: python3-vncdotool
+Package: vncdotool
 Architecture: all
 Depends: ${misc:Depends}, ${python3:Depends}, python3-twisted, python3-pil, python3-cryptography
 Description: Command line VNC client
  It comes in handy when automating interactions with virtual machines or
  some hardware devices that are otherwise difficult to control.
-
-Package: vnclogd
-Architecture: all
-Depends: python3-vncdotool
-Description: Daemon to record VNC sessions for playback with vncdotool
