@@ -398,6 +398,8 @@ class VNCDoToolClient(rfb.RFBClient):
             encodings.append(rfb.Encoding.PSEUDO_LAST_RECT)
         if self.factory.qemu_extended_key:
             encodings.append(rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT)
+        if self.factory.fence:
+            encodings.append(rfb.Encoding.PSEUDO_FENCE)
         if self.requested_jpeg_quality is not None:
             encodings.append(JPEG_QUALITY_ENCODINGS[self.requested_jpeg_quality])
         self.setEncodings(encodings)
@@ -550,6 +552,9 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
+    # Nothing here initiates a fence or waits on one, so offering the encoding
+    # would only invite traffic the client discards.
+    fence = False
     force_caps = False
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None

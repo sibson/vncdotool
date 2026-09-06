@@ -45,7 +45,23 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
+            client.rfb.Encoding.PSEUDO_FENCE,
         ])
+
+    def test_fence_is_not_offered_by_default(self):
+        """The mocked factory above answers True to every flag, so the real
+        one is needed to see what is actually offered. A server sends fences
+        only to a client that asked for them, and nothing here waits on one.
+        """
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
 
     def test_keyPress_single_alpha(self):
         cli = self.client
