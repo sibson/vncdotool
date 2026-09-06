@@ -34,20 +34,9 @@ constraint the language does not express, a bound another system imposes.
 Why the design is this rather than something else goes in the commit body.
 Sweep the diff before committing, not the branch before opening a PR.
 
-`~/.claude/hooks/comment-lint.sh` catches the part of that needing no
-judgement -- a comment narrating the change, citing an issue, drawing a
-banner, holding code -- warning as the line is written and refusing the
-commit. Past ten added comment lines it refuses until a subagent that did not
-write them has swept the diff, since re-reading your own comment supplies the
-load that makes it read as load-bearing. `COMMENT_LINT_OK=1` and
-`COMMENT_SWEPT=1` are the escapes.
-
-It also scores how much of a comment's vocabulary the code beneath already
-holds, which finds a blunt paraphrase and orders the sweep by where one is
-likeliest. That score only warns. It cannot see a restatement written in
-synonyms, and a wire-format comment shares vocabulary with the fields it
-describes while carrying the byte widths they do not -- across this repo's
-comments the one it picks out is a keep.
+`~/.claude/hooks/comment-lint.sh` enforces what of that needs no judgement,
+and asks a subagent to sweep a diff adding more than ten comment lines. Its
+refusals carry their own reasons and escapes.
 
 That is the whole policy at the point of writing one. The
 `writing-code-comments` skill in `.claude/skills/` is the long form, for
@@ -94,7 +83,7 @@ A pull request description is read by someone deciding where to spend their
 attention, not by the archive: a title plus a few sentences saying what
 changed, what a reviewer would not guess from the diff, and what was tested
 that CI does not run. Under 150 words, written with the Write tool and passed
-as `--body-file` -- an inline `--body` cannot be measured. The commit bodies
+as `--body-file`. The commit bodies
 already carry the full rationale, and restaging them in the description only
 makes the reviewer read it twice. Findings outside the diff get a line and a
 pointer, not a section.
