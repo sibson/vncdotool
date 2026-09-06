@@ -20,6 +20,7 @@ from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
 from . import pixelformat, rfb
+from .const import JPEG_QUALITY_ENCODINGS
 from .keys import KEYMAP
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
@@ -65,12 +66,6 @@ class ProtocolError(VNCDoException):
 
 class RegionError(VNCDoException):
     """A region to compare or capture is not on the screen"""
-
-
-# Level 0 is -32 (low) up to level 9 at -23; no offer means no JPEG (specs/tight-wire.md section 8).
-JPEG_QUALITY_ENCODINGS = [
-    rfb.Encoding(rfb.Encoding.JPEG_32 + level) for level in range(10)
-]
 
 
 class _StableWatch:

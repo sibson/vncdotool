@@ -75,6 +75,10 @@ class Fixture:
         cli.factory.last_rect = False
         cli.factory.qemu_extended_key = False
         cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[self.conditions["pixel_format"]]
+        # The replay runs the handshake, so it offers what it is configured to
+        # offer. A lossy fixture was captured by a client asking for JPEG, and
+        # the decoder refuses a JPEG rectangle nobody asked for.
+        cli.requested_jpeg_quality = self.conditions.get("jpeg_quality")
         cli.dataReceived(gzip.decompress((self.path / "init.bin.gz").read_bytes()))
         return cli
 

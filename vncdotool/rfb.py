@@ -528,6 +528,11 @@ class RFBClient(Protocol):
         for encoding in list_of_encodings:
             log.msg(f"Offering {encoding!r}")
             self.transport.write(pack("!i", encoding))
+        self.encodingsOffered(frozenset(list_of_encodings))
+
+    def encodingsOffered(self, encodings: frozenset[Encoding]) -> None:
+        for decoder in self._decoders.values():
+            decoder.encodingsOffered(encodings)
 
     def framebufferUpdateRequest(
         self,

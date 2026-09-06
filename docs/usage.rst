@@ -137,11 +137,11 @@ ends the session with a message naming what arrived, exiting 20.  The tight
 *security type*, which TightVNC servers want before they will authenticate
 you, is not implemented either.
 
-Some tight rectangles can be JPEG, which is lossy.  vncdo decodes them
-whether or not it asked for them; a conforming server sends them only to a
-client that asked for a JPEG quality level, and vncdo asks for none by
-default, so a capture is exact unless you request otherwise.
-``--jpeg-quality`` asks for one, on the RFB scale of 0 (low) to 9 (high)::
+Some tight rectangles can be JPEG, which is lossy.  vncdo decodes one only
+if it asked for a JPEG quality level; a rectangle arriving when it did not
+ends the session with a message naming it, exiting 20.  A capture is
+therefore exact unless you request otherwise.  ``--jpeg-quality`` makes the
+request, on the RFB scale of 0 (low) to 9 (high)::
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
 

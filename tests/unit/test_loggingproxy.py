@@ -113,6 +113,39 @@ class TestObserverPixelFormat(ProxyPair):
         self.assertTrue(self.observer._aborted)
 
 
+class TestObserverEncodingsOffered(ProxyPair):
+
+    def setEncodings(self, *encodings: int) -> None:
+        """Send SetEncodings from the real client, through the proxy."""
+        self.server_proxy.dataReceived(
+            pack("!BxH", MsgC2S.SET_ENCODING, len(encodings))
+            + b"".join(pack("!i", e) for e in encodings)
+        )
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.observer.encodingsOffered = mock.Mock()
+
+    def test_a_pseudo_encoding_reaches_the_observer(self) -> None:
+        """Encoding types are signed on the wire and every pseudo-encoding is
+        negative, so reading them unsigned puts SetEncodings past the end of
+        the enum and takes the proxy down with it.
+        """
+        self.setEncodings(Encoding.TIGHT, Encoding.PSEUDO_CURSOR)
+
+        self.observer.encodingsOffered.assert_called_once_with(
+            frozenset({Encoding.TIGHT, Encoding.PSEUDO_CURSOR})
+        )
+
+    def test_an_encoding_with_no_name_is_dropped_not_raised(self) -> None:
+        """A client may offer a vendor encoding this enum has never heard of."""
+        self.setEncodings(Encoding.RAW, 0x12345678)
+
+        self.observer.encodingsOffered.assert_called_once_with(
+            frozenset({Encoding.RAW})
+        )
+
+
 class TestObserverFailureIsReported(ProxyPair):
 
     def test_an_unreadable_server_message_is_reported_not_raised(self) -> None:
