@@ -66,7 +66,8 @@ bench-report:
 	uv run python -m tests.goldens.report $(ARGS)
 
 # Needs `make servers-up`: an unreachable server fails its tests rather
-# than skipping them, so a down fleet cannot pass as green.
+# than skipping them, so a down fleet cannot pass as green. The OS-hosted
+# servers are the exception: CI alone sets them up, so off CI they skip.
 .PHONY: test-func
 test-func:
 	uv run python -m unittest discover -s tests/functional -t .
