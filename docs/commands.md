@@ -41,7 +41,7 @@ FUZZ is how far any one pixel may sit from the target, a whole number from 0
 (exact, the common case) to 255, measured as a perceived color difference
 where 255 is the furthest two pixels can be apart. Left out, the bound is
 whatever the negotiated pixel format cannot express, so a server sending
-5-bit red is not waited on to reproduce an 8-bit value. `--expect-fuzz`
+5-bit red is not waited on to reproduce an 8-bit value. `--fuzz`
 sets the same bound for every `expect`. A FUZZ that is not a whole number
 in 0..255 exits 2; a trailing argument that is not a number at all is read as
 the next command rather than reported.
@@ -135,8 +135,8 @@ update is compared against the one before it, and one that differs by more
 than FUZZ starts the wait again.
 
 FUZZ uses the same scale and default as `expect`, measured here between
-successive frames rather than against a file; `--expect-fuzz` and
-`--expect-blur` apply to both.
+successive frames rather than against a file; `--fuzz` and
+`--blur` apply to both.
 
 The wait takes at least SECONDS, because the absence of a change cannot be
 observed before the window has passed, and longer whenever a late update

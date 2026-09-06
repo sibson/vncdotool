@@ -227,7 +227,7 @@ class TestVNCDoToolClient(TestCase):
     def _expectAgainst(self, pixel_format, target, screen):
         cli = self._comparing(target, screen)
         cli.pixel_format = pixel_format
-        return cli._expectCompare(cli, (0, 0) + target.size, cli._expectFuzz(None), 0)
+        return cli._expectCompare(cli, (0, 0) + target.size, cli._fuzz(None), 0)
 
     @staticmethod
     def _swatch(*pixels):

@@ -144,8 +144,8 @@ class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
     requested_jpeg_quality: int | None = None
-    expect_fuzz: int | None = None
-    expect_blur: int = 0
+    fuzz: int | None = None
+    blur: int = 0
     x = 0
     y = 0
     buttons = 0
@@ -360,7 +360,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug("stableScreen %f", seconds)
         return _StableWatch(
-            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur)
+            self, seconds, self._fuzz(fuzz), self._blur(blur)
         ).start()
 
     def stableRegion(
@@ -378,7 +378,7 @@ class VNCDoToolClient(rfb.RFBClient):
         box = (x, y, x + w, y + h)
         self._requireOnScreen(box)
         return _StableWatch(
-            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur), box
+            self, seconds, self._fuzz(fuzz), self._blur(blur), box
         ).start()
 
     def _expectFramebuffer(
@@ -389,24 +389,24 @@ class VNCDoToolClient(rfb.RFBClient):
         self.expected_image = image.convert("RGB")
 
         return self._expectCompare(
-            None, (x, y, x + w, y + h), self._expectFuzz(fuzz), self._expectBlur(blur)
+            None, (x, y, x + w, y + h), self._fuzz(fuzz), self._blur(blur)
         )
 
-    def _expectFuzz(self, fuzz: int | None) -> int:
+    def _fuzz(self, fuzz: int | None) -> int:
         """A server sending 5-bit red cannot reproduce most 8-bit values, so an
         exact comparison never comes true however long it is polled for.
         """
         if fuzz is not None:
             return fuzz
-        if self.expect_fuzz is not None:
-            return self.expect_fuzz
+        if self.fuzz is not None:
+            return self.fuzz
         try:
             return imagematch.fuzz_for_format(self.pixel_format)
         except pixelformat.UnsupportedPixelFormat:
             return 0
 
-    def _expectBlur(self, blur: int | None) -> int:
-        return self.expect_blur if blur is None else blur
+    def _blur(self, blur: int | None) -> int:
+        return self.blur if blur is None else blur
 
     def _expectCompare(
         self, data: object, box: tuple[int, int, int, int], fuzz: int, blur: int
@@ -670,8 +670,8 @@ class VNCDoToolFactory(rfb.RFBFactory):
     pixel_format: rfb.PixelFormat | None = None
     encodings: list[rfb.Encoding] | None = None
     jpeg_quality: int | None = None
-    expect_fuzz: int | None = None
-    expect_blur: int = 0
+    fuzz: int | None = None
+    blur: int = 0
 
     def __init__(self) -> None:
         self.deferred = Deferred()
@@ -682,8 +682,8 @@ class VNCDoToolFactory(rfb.RFBFactory):
         protocol.requested_pixel_format = self.pixel_format
         protocol.requested_encodings = self.encodings
         protocol.requested_jpeg_quality = self.jpeg_quality
-        protocol.expect_fuzz = self.expect_fuzz
-        protocol.expect_blur = self.expect_blur
+        protocol.fuzz = self.fuzz
+        protocol.blur = self.blur
         return protocol
 
     def clientConnectionLost(self, connector: IConnector, reason: Failure) -> None:

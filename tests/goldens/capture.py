@@ -20,7 +20,7 @@ from PIL import Image
 from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
 from tests.goldens import distill, scenes
 from vncdotool import decoders, imagematch, pixelformat
-from vncdotool.command import LOSSY_EXPECT_BLUR
+from vncdotool.command import LOSSY_BLUR
 
 FIXTURE_ROOT = Path(__file__).resolve().parent.parent / "unit" / "fixtures" / "goldens"
 SCENE_VDO = Path(__file__).resolve().parent / "scene.vdo"
@@ -57,7 +57,7 @@ def _start_vnclog(archive: Path) -> subprocess.Popen:
 def _measured_fuzz(steps: list[distill.Step]) -> int:
     worst = max(
         imagematch.worst_delta(
-            step.screen, Image.open(scenes.OUT_DIR / f"{step.key}.png"), LOSSY_EXPECT_BLUR
+            step.screen, Image.open(scenes.OUT_DIR / f"{step.key}.png"), LOSSY_BLUR
         )
         for step in steps
     )
@@ -103,7 +103,7 @@ def main() -> int:
             + (
                 [
                     "--jpeg-quality", str(args.jpeg_quality),
-                    "--expect-fuzz", str(JPEG_FUZZ),
+                    "--fuzz", str(JPEG_FUZZ),
                 ] if lossy else []
             )
             + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
@@ -136,7 +136,7 @@ def main() -> int:
         if lossy:
             conditions["jpeg_quality"] = args.jpeg_quality
             conditions["fuzz"] = _measured_fuzz(steps)
-            conditions["blur"] = LOSSY_EXPECT_BLUR
+            conditions["blur"] = LOSSY_BLUR
         else:
             conditions["tolerance"] = list(
                 pixelformat.channel_tolerance(pixelformat.PIXEL_FORMATS[args.pixel_format])

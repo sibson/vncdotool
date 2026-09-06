@@ -599,46 +599,46 @@ class TestVncdoExpectOptions(unittest.TestCase):
 
     def test_both_reach_the_factory(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit):
-            command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', '64',
-                           '--expect-blur', '2', 'key', 'a'])
+            command.vncdo(['-s', '127.0.0.1::5900', '--fuzz', '64',
+                           '--blur', '2', 'key', 'a'])
 
         factory = connect.call_args.args[0]
-        assert factory.expect_fuzz == 64
-        assert factory.expect_blur == 2
+        assert factory.fuzz == 64
+        assert factory.blur == 2
 
     def test_without_the_flags_the_format_decides(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit):
             command.vncdo(['-s', '127.0.0.1::5900', 'key', 'a'])
 
         factory = connect.call_args.args[0]
-        assert factory.expect_fuzz is None
-        assert factory.expect_blur == 0
+        assert factory.fuzz is None
+        assert factory.blur == 0
 
     def test_a_jpeg_quality_blurs_without_being_asked(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit):
             command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
                            '--jpeg-quality', '5', 'key', 'a'])
 
-        assert connect.call_args.args[0].expect_blur == command.LOSSY_EXPECT_BLUR
+        assert connect.call_args.args[0].blur == command.LOSSY_BLUR
 
     def test_an_explicit_blur_beats_the_jpeg_default(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit):
             command.vncdo(['-s', '127.0.0.1::5900', '--encodings', 'tight',
-                           '--jpeg-quality', '5', '--expect-blur', '0', 'key', 'a'])
+                           '--jpeg-quality', '5', '--blur', '0', 'key', 'a'])
 
-        assert connect.call_args.args[0].expect_blur == 0
+        assert connect.call_args.args[0].blur == 0
 
     def test_a_fuzz_off_the_scale_is_a_usage_error(self, reactor, connect) -> None:
         for fuzz in ('-1', '256'):
             with self.subTest(fuzz=fuzz):
                 with self.assertRaises(SystemExit) as raised:
-                    command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', fuzz, 'key', 'a'])
+                    command.vncdo(['-s', '127.0.0.1::5900', '--fuzz', fuzz, 'key', 'a'])
 
                 assert raised.exception.code == command.ExitStatus.USAGE
 
     def test_a_negative_blur_is_a_usage_error(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit) as raised:
-            command.vncdo(['-s', '127.0.0.1::5900', '--expect-blur', '-1', 'key', 'a'])
+            command.vncdo(['-s', '127.0.0.1::5900', '--blur', '-1', 'key', 'a'])
 
         assert raised.exception.code == command.ExitStatus.USAGE
 
