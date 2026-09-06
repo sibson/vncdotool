@@ -69,8 +69,14 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
 Encodings
 -------------------
 By default vncdo asks the server for raw pixels: every server can send
-them, and they cost the most bandwidth.  ``--encodings`` offers others, in
-preference order, and the server sends whichever of them it has::
+them, and they cost the most bandwidth.  ``--encodings`` offers others, most
+preferred first, and the server picks from what you offered::
+
+    > vncdo --encodings tight,hextile,raw capture screen.png
+
+Listing several is the usual case, since not every server speaks every
+encoding.  The order is a preference, not an instruction: a server may send
+any encoding on your list, and one that has none of them sends raw::
 
     > vncdo --encodings tight capture screen.png
 
