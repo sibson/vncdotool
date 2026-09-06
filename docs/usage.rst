@@ -50,7 +50,26 @@ captures::
 
 With Pillow_ installed, you can wait for the screen to match a known image::
 
-    > vncdo expect somescreen.png 0
+    > vncdo expect somescreen.png
+
+``expect`` blocks until every pixel of the screen is within a bound of the
+target image, measured as a perceived colour difference from 0 (identical) to
+255. Left out, the bound is whatever the negotiated pixel format cannot
+express: a server sending 5-bit red cannot reproduce most 8-bit values, so
+demanding an exact match of one would poll until it timed out. Write a number
+after the filename, or pass ``--expect-fuzz``, to allow more::
+
+    > vncdo expect somescreen.png 16
+    > vncdo --expect-fuzz 16 expect somescreen.png
+
+A lossy encoding needs one thing more. JPEG moves pixels far enough that no
+bound separates a correct screen from a wrong one -- at ``--jpeg-quality 0``
+the correct screen sits further away than the wrong ones do. ``--expect-blur``
+blurs both images by that radius before comparing, which leaves the difference
+that matters and drops the encoder's noise::
+
+    > vncdo --encodings tight --jpeg-quality 5 --expect-blur 2 --expect-fuzz 64 \
+            expect somescreen.png
 
 Putting it all together you can specify multiple actions on a single
 command line.  You could automate a login with the following::
@@ -63,7 +82,7 @@ use rcapture and rexpect. For instance, if your login window appears at
 x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
     > vncdo rcapture region.png 100 200 400 250
-    > vncdo rexpect region.png 100 200 0
+    > vncdo rexpect region.png 100 200
 
 
 Exit Status

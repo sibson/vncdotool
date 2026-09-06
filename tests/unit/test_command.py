@@ -95,6 +95,26 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('expect foo.png 10')
         self.assertCalled(self.client.expectScreen, 'foo.png', 10)
 
+    def test_expect_without_a_fuzz(self) -> None:
+        """docs/usage.rst has always shown this spelling; it used to die on an
+        IndexError."""
+        self.call_build_commands_list('expect foo.png')
+        self.assertCalled(self.client.expectScreen, 'foo.png', None)
+
+    def test_expect_without_a_fuzz_before_another_command(self) -> None:
+        self.call_build_commands_list('expect foo.png key enter')
+        call = self.factory.deferred.addCallback
+        call.assert_any_call(self.client.expectScreen, 'foo.png', None)
+        call.assert_any_call(self.client.keyPress, 'enter')
+
+    def test_rexpect(self) -> None:
+        self.call_build_commands_list('rexpect foo.png 10 20 30')
+        self.assertCalled(self.client.expectRegion, 'foo.png', 10, 20, 30)
+
+    def test_rexpect_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('rexpect foo.png 10 20')
+        self.assertCalled(self.client.expectRegion, 'foo.png', 10, 20, None)
+
     def test_expect_not_png(self) -> None:
         pass
 
@@ -519,6 +539,42 @@ class TestVncdoJpegQualityOption(unittest.TestCase):
                     command.vncdo(['-s', '127.0.0.1::5900', '--jpeg-quality', level, 'key', 'a'])
 
                 assert raised.exception.code == command.ExitStatus.USAGE
+
+
+@mock.patch('vncdotool.command.factory_connect')
+@mock.patch('vncdotool.command.reactor', new_callable=mock.MagicMock)
+class TestVncdoExpectOptions(unittest.TestCase):
+
+    def test_both_reach_the_factory(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', '64',
+                           '--expect-blur', '2', 'key', 'a'])
+
+        factory = connect.call_args.args[0]
+        assert factory.expect_fuzz == 64
+        assert factory.expect_blur == 2
+
+    def test_without_the_flags_the_format_decides(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit):
+            command.vncdo(['-s', '127.0.0.1::5900', 'key', 'a'])
+
+        factory = connect.call_args.args[0]
+        assert factory.expect_fuzz is None
+        assert factory.expect_blur == 0
+
+    def test_a_fuzz_off_the_scale_is_a_usage_error(self, reactor, connect) -> None:
+        for fuzz in ('-1', '256'):
+            with self.subTest(fuzz=fuzz):
+                with self.assertRaises(SystemExit) as raised:
+                    command.vncdo(['-s', '127.0.0.1::5900', '--expect-fuzz', fuzz, 'key', 'a'])
+
+                assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_a_negative_blur_is_a_usage_error(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['-s', '127.0.0.1::5900', '--expect-blur', '-1', 'key', 'a'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
 
 
 class TestReplayClient(unittest.TestCase):
