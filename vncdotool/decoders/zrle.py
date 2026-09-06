@@ -16,13 +16,7 @@ TILE = 64
 
 
 def _expand_cpixels(raw: bytes, count: int, cbytes: int, bypp: int, coffset: int) -> bytes:
-    """``count`` consecutive CPIXELs widened to PIXELs.
-
-    One strided slice assignment per CPIXEL byte, so the widening runs at
-    C speed. The bytes a CPIXEL does not carry stay zero, and which three
-    of the PIXEL's bytes it does carry is ``coffset``'s business (RFC 6143
-    7.7.5 gives the rule two placements).
-    """
+    """``count`` consecutive CPIXELs widened to PIXELs at ``coffset``."""
     if cbytes == bypp:
         return raw
     out = bytearray(count * bypp)
@@ -37,10 +31,9 @@ def _index_tables(
 ) -> Tuple[Tuple[bytes, ...], Optional[Tuple[bytes, ...]]]:
     """Each of the 256 bytes a packed-index row can hold, as its pixels.
 
-    The second table marks the same pixels with one byte apiece, set where
-    the index behind a pixel is one the palette does not define. It is None
-    when the palette fills the index space, where no byte can hold a bad
-    index.
+    The second table flags the same pixels, one byte apiece, where the index
+    behind one is undefined. It is None when the palette fills the index
+    space, where no byte can hold a bad index.
     """
     per_byte = 8 // bits
     mask = (1 << bits) - 1
@@ -145,21 +138,23 @@ class ZRLEDecoder(PixelDecoder):
                                 num_pixels += 1
                                 continue
 
-                        # A run length is a sum: every 255 says another byte
-                        # follows, and the total is one less than the run.
+                        # RFC 6143 7.7.6: the length arrives as bytes summing
+                        # to one less than the run, each 255 saying another
+                        # byte follows.
                         if pos >= end:
                             raise short(tx, ty)
                         part = data[pos]
                         pos += 1
-                        run_length = part
+                        run_minus_one = part
                         while part == 255:
                             if pos >= end:
                                 raise short(tx, ty)
                             part = data[pos]
                             pos += 1
-                            run_length += part
-                        pixel_data += pixel * (run_length + 1)
-                        num_pixels += run_length + 1
+                            run_minus_one += part
+                        run = run_minus_one + 1
+                        pixel_data += pixel * run
+                        num_pixels += run
 
                     if num_pixels != pixels_in_tile:
                         raise DecodeError(

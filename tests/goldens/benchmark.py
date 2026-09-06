@@ -140,11 +140,6 @@ def _machine() -> Dict[str, object]:
     """
     cpu = _cpu_model()
     ci = os.environ.get("GITHUB_ACTIONS") == "true" or os.environ.get("CI") == "true"
-    # Only what identifies the hardware. The OS release is reported beside
-    # the digest rather than inside it: a point update is not a different
-    # machine, and digesting it orphans every earlier row on this one.
-    # Python and Pillow versions move these timings further and are already
-    # recorded outside the digest.
     fields: Dict[str, object] = {
         "cpu": cpu,
         "cores": os.cpu_count(),
@@ -153,6 +148,8 @@ def _machine() -> Dict[str, object]:
     }
     digest = json.dumps(fields, sort_keys=True).encode()
     fields["machine"] = hashlib.sha256(digest).hexdigest()[:12]
+    # Recorded after the digest, not in the dict above: a machine keeps its
+    # identity across an OS point update.
     fields["release"] = platform.release()
     return fields
 
