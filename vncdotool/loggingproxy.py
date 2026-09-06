@@ -120,7 +120,8 @@ class RFBServer(Protocol):
         elif ptype == MsgC2S.SET_ENCODING:
             (nencodings,) = unpack("!xH", block)
             nbytes = 4 * nencodings
-            encodings = unpack_from("!" + "I" * nencodings, self.buffer)
+            # Signed: every pseudo-encoding is negative (:rfc:`6143` 7.5.2).
+            encodings = unpack_from("!" + "i" * nencodings, self.buffer)
             del self.buffer[:nbytes]
             for encoding in encodings:
                 log.debug(f"Client announces {Encoding.lookup(encoding)!r}")
@@ -447,10 +448,14 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 
     def handle_setEncodings(self, encodings: Sequence[int]) -> None:
         # SetEncodings is client-to-server too, and the observer refuses a
-        # rectangle the real client never asked for unless it is told.
+        # rectangle the real client never asked for unless it is told. A
+        # client may offer an encoding this enum has no name for.
         observer = self.vnclog_client
         if observer is not None:
-            observer.encodingsOffered(frozenset(Encoding(e) for e in encodings))
+            named = (Encoding.lookup(e) for e in encodings)
+            observer.encodingsOffered(
+                frozenset(e for e in named if isinstance(e, Encoding))
+            )
 
     def handle_keyEvent(self, key: int, down: bool) -> None:
         now = time.time()
