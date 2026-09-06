@@ -123,6 +123,32 @@ class TestBuildCommandList(unittest.TestCase):
                 with self.assertRaises(command.CommandParseError):
                     self.call_build_commands_list(f'expect foo.png {fuzz}')
 
+    def test_stable(self) -> None:
+        self.call_build_commands_list('stable 1.5 10')
+        self.assertCalled(self.client.stableScreen, 1.5, 10)
+
+    def test_stable_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('stable 1.5')
+        self.assertCalled(self.client.stableScreen, 1.5, None)
+
+    def test_stable_without_a_fuzz_before_another_command(self) -> None:
+        self.call_build_commands_list('stable 1.5 key enter')
+        call = self.factory.deferred.addCallback
+        call.assert_any_call(self.client.stableScreen, 1.5, None)
+        call.assert_any_call(self.client.keyPress, 'enter')
+
+    def test_rstable(self) -> None:
+        self.call_build_commands_list('rstable 1.5 100 200 400 250 10')
+        self.assertCalled(self.client.stableRegion, 1.5, 100, 200, 400, 250, 10)
+
+    def test_rstable_without_a_fuzz(self) -> None:
+        self.call_build_commands_list('rstable 1.5 100 200 400 250')
+        self.assertCalled(self.client.stableRegion, 1.5, 100, 200, 400, 250, None)
+
+    def test_stable_rejects_a_fuzz_off_the_scale(self) -> None:
+        with self.assertRaises(command.CommandParseError):
+            self.call_build_commands_list('stable 1.5 256')
+
     def test_expect_not_png(self) -> None:
         pass
 

@@ -84,12 +84,32 @@ command line.  You could automate a login with the following::
     > vncdo type username key enter expect password_prompt.png
     > vncdo type password move 100 150 click 1 expect welcome_screen.png
 
+When you have no reference image -- because you do not yet know what the
+screen will look like -- wait for the screen to stop changing instead.
+``stable`` takes the length of the quiet window, and returns once the screen
+has gone that long without changing by more than the fuzz::
+
+    > vncdo key f5 stable 1.5 capture loaded.png
+
+The fuzz is the one ``expect`` takes, on the same scale and with the same
+default, because it is the same comparison run against the previous frame
+rather than against a file.
+
+It always takes at least the window you ask for, since there is no way to
+observe the absence of a change early, and longer whenever a late update
+restarts the window.  A screen that never goes quiet -- a clock, a blinking
+cursor -- never satisfies it, and the run ends when ``--timeout`` fires.
+
 Sometimes you only care about a portion of the screen, in which case you can
-use rcapture and rexpect. For instance, if your login window appears at
-x=100, y=200 and is 400 pixels wide by 250 high you could do::
+use rcapture, rexpect and rstable. For instance, if your login window appears
+at x=100, y=200 and is 400 pixels wide by 250 high you could do::
 
     > vncdo rcapture region.png 100 200 400 250
     > vncdo rexpect region.png 100 200
+    > vncdo rstable 1.5 100 200 400 250
+
+``rstable`` is also the way past a server that never goes quiet: wait on a
+region that excludes whatever is animating.
 
 The region has to lie on the screen; :doc:`commands` says what each command
 does with its arguments and how it fails.

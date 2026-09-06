@@ -54,6 +54,15 @@ carries no copy of the spec; `DEVELOP.rst` says which of RFC 6143 and
 rfbproto covers what. Guessing a message layout from the surrounding code
 produces something that works against one server and no other.
 
+Keep rfbproto cloned. `docs/rfbproto/` is git-ignored, so a fresh checkout or
+a new worktree starts without it -- clone it as soon as you need the spec,
+without asking:
+
+    git clone --depth 1 https://github.com/rfbproto/rfbproto.git docs/rfbproto
+
+`docs/rfbproto/rfbproto.rst` is then greppable, which beats fetching the
+rendered page a section at a time.
+
 Lint is plain flake8, configured in `setup.cfg`: line length 127,
 `extend-ignore = E203`. CI runs `flake8 --count --statistics vncdotool tests`,
 so run that before pushing. No black, no isort.

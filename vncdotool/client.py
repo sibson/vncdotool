@@ -73,6 +73,80 @@ JPEG_QUALITY_ENCODINGS = [
 ]
 
 
+class _StableWatch:
+    """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
+
+    Waits for a trailing window of ``seconds`` in which no framebuffer update
+    moved the screen further than ``fuzz`` from the frame before it.  See
+    ``specs/screen-stability.md``.
+    """
+
+    def __init__(
+        self,
+        client: "VNCDoToolClient",
+        seconds: float,
+        fuzz: int,
+        blur: int,
+        box: tuple[int, int, int, int] | None = None,
+    ) -> None:
+        self.client = client
+        self.seconds = seconds
+        self.fuzz = fuzz
+        self.blur = blur
+        self.box = box
+        self.baseline: Image.Image | None = None
+        self.result: Deferred = Deferred()
+        self.timer: Any = None
+        self.settled = False
+
+    def start(self) -> Deferred:
+        if self.client.screen is not None:
+            self.baseline = self._frame()
+            self._restart()
+            self._request(incremental=True)
+        else:
+            # Nothing to compare against yet; ask for the whole screen and
+            # start the window once a frame has arrived.
+            self._request(incremental=False)
+        return self.result
+
+    def _frame(self) -> Image.Image:
+        screen = self.client.screen
+        assert screen is not None
+        # updateRectangle pastes into self.screen, so an un-copied reference
+        # would change underfoot and never compare as different.
+        return screen.crop(self.box) if self.box else screen.copy()
+
+    def _request(self, incremental: bool) -> None:
+        d: Deferred = Deferred()
+        d.addCallback(self._update)
+        self.client.deferred = d
+        self.client.framebufferUpdateRequest(incremental=incremental)
+
+    def _update(self, _: object) -> None:
+        if self.settled:
+            return
+        frame = self._frame()
+        if self.baseline is None or self._changed(frame):
+            self.baseline = frame
+            self._restart()
+        self._request(incremental=True)
+
+    def _changed(self, frame: Image.Image) -> bool:
+        assert self.baseline is not None
+        return not imagematch.matches(frame, self.baseline, self.fuzz, self.blur)
+
+    def _restart(self) -> None:
+        if self.timer is not None and self.timer.active():
+            self.timer.reset(self.seconds)
+        else:
+            self.timer = reactor.callLater(self.seconds, self._settle)
+
+    def _settle(self) -> None:
+        self.settled = True
+        self.result.callback(self.client)
+
+
 class VNCDoToolClient(rfb.RFBClient):
     encoding = rfb.Encoding.RAW
     requested_encodings: list[rfb.Encoding] | None = None
@@ -283,6 +357,42 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug("expectRegion %s (%s, %s)", filename, x, y)
         return self._expectFramebuffer(filename, x, y, fuzz, blur)
+
+    def stableScreen(
+        self, seconds: float, fuzz: int | None = None, blur: int | None = None
+    ) -> Deferred:
+        """Wait until the display stops changing
+
+        :param seconds: length of the trailing window during which the screen
+            must not have changed.  The call takes at least this long, and
+            longer whenever an update restarts the window.
+        :param fuzz: how far any one pixel may sit from where it was in the
+            previous frame and still count as unchanged, on the scale
+            :meth:`expectScreen` takes, and with the same default.
+        :param blur: blur both frames by this radius before comparing.
+        """
+        log.debug("stableScreen %f", seconds)
+        return _StableWatch(
+            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur)
+        ).start()
+
+    def stableRegion(
+        self,
+        seconds: float,
+        x: int,
+        y: int,
+        w: int,
+        h: int,
+        fuzz: int | None = None,
+        blur: int | None = None,
+    ) -> Deferred:
+        """Wait until a region of the display stops changing"""
+        log.debug("stableRegion %f (%s, %s)", seconds, x, y)
+        box = (x, y, x + w, y + h)
+        self._requireOnScreen(box)
+        return _StableWatch(
+            self, seconds, self._expectFuzz(fuzz), self._expectBlur(blur), box
+        ).start()
 
     def _expectFramebuffer(
         self, filename: str, x: int, y: int, fuzz: int | None, blur: int | None

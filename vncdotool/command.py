@@ -163,6 +163,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  click BUTTON\t\tsend a mouse BUTTON click\n"
             "  capture FILE\t\tsave current screen as FILE\n"
             "  expect FILE [FUZZ]\twait until screen matches FILE\n"
+            "  stable SECONDS [FUZZ]\twait until screen stops changing\n"
             "  pause SECONDS\t\twait SECONDS before sending next command\n"
             "\n"
             "Other Commands (CMD):\n"
@@ -174,6 +175,7 @@ class VNCDoToolOptionParser(optparse.OptionParser):
             "  drag X Y\t\tmove the mouse to X,Y in small steps\n"
             "  rcapture FILE X Y W H\tcapture a region of the screen\n"
             "  rexpect FILE X Y [FUZZ]\texpect that matches a region of the screen\n"
+            "  rstable SECONDS X Y W H [FUZZ]\tstable for a region of the screen\n"
             "\n"
             "If a filename is given commands will be read from it, or stdin `-`\n"
         )
@@ -184,7 +186,7 @@ class CommandParseError(RuntimeError):
     pass
 
 
-def _trailing_fuzz(args: list[str]) -> int | None:
+def _trailing_fuzz(args: list[str], cmd: str = "expect") -> int | None:
     if not args:
         return None
     try:
@@ -197,7 +199,7 @@ def _trailing_fuzz(args: list[str]) -> int | None:
     written = args.pop(0)
     if fuzz != int(fuzz) or not 0 <= fuzz <= 255:
         raise CommandParseError(
-            f"expect takes a whole-number fuzz from 0 (exact) to 255, not {written}"
+            f"{cmd} takes a whole-number fuzz from 0 (exact) to 255, not {written}"
         )
     return int(fuzz)
 
@@ -298,6 +300,20 @@ def build_command_list(
             y = int(args.pop(0))
             factory.deferred.addCallback(
                 client.expectRegion, filename, x, y, _trailing_fuzz(args)
+            )
+        elif cmd == "stable":
+            seconds = float(args.pop(0))
+            factory.deferred.addCallback(
+                client.stableScreen, seconds, _trailing_fuzz(args, cmd)
+            )
+        elif cmd == "rstable":
+            seconds = float(args.pop(0))
+            x = int(args.pop(0))
+            y = int(args.pop(0))
+            w = int(args.pop(0))
+            h = int(args.pop(0))
+            factory.deferred.addCallback(
+                client.stableRegion, seconds, x, y, w, h, _trailing_fuzz(args, cmd)
             )
         elif cmd in ("pause", "sleep"):
             duration = float(args.pop(0)) / warp

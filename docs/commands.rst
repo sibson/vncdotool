@@ -132,6 +132,33 @@ The region is the size of that image, so only X and Y are given.  FUZZ, the
 default bound and the timeout behaviour are as for ``expect``, and an
 off-screen region fails as for ``rcapture``, exit 30.  Needs Pillow_.
 
+rstable SECONDS X Y W H [FUZZ]
+------------------------------------
+
+Wait until the W by H region of the screen at X,Y stops changing.  SECONDS,
+FUZZ and the timeout behaviour are as for ``stable``, and an off-screen
+region fails as for ``rcapture``, exit 30.  Needs Pillow_.
+
+Waiting on a region is the way past a server that never goes quiet: exclude
+the clock or the blinking cursor, and the rest of the screen can settle.
+
+stable SECONDS [FUZZ]
+---------------------------
+
+Wait until the screen has gone SECONDS without changing.  Each framebuffer
+update is compared against the one before it, and one that differs by more
+than FUZZ starts the wait again.
+
+FUZZ is the bound ``expect`` takes, on the same scale and with the same
+default, measured here between successive frames rather than against a file;
+``--expect-fuzz`` and ``--expect-blur`` apply to both.
+
+The wait takes at least SECONDS, because the absence of a change cannot be
+observed before the window has passed, and longer whenever a late update
+restarts it.  A screen that changes more often than that never settles: with
+``--timeout`` the run ends at ``TIMEOUT`` seconds, exit 40, and without one it
+waits forever.  Needs Pillow_.
+
 type TEXT
 --------------
 

@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Add ``vncdo stable SECONDS [FUZZ]`` and ``rstable SECONDS X Y W H [FUZZ]``, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
   - Fix ``rexpect`` polling until ``--timeout`` and ``rcapture`` writing black pixels when the region runs off the screen, and ``expect`` doing the same against a target image larger than the screen. All three now fail with a message naming the region and the screen size, exiting 30 (@sibson)
   - [BREAKING] ``expect`` and ``rexpect`` decide a match pixel by pixel, as a perceived colour difference, rather than by the root-mean-square difference of the two histograms. The number in ``expect FILE N`` is now that per-pixel bound, 0 (exact) to 255, on a scale unrelated to the old one; ``expectScreen`` and ``expectRegion`` take ``fuzz`` and ``blur`` in place of ``maxrms`` (@sibson)
   - Add ``vncdo --expect-fuzz N`` and ``--expect-blur RADIUS``, tuning how near the screen has to be for ``expect`` to call it a match. A blur is what lets ``expect`` match a screen a lossy encoding has moved, and ``--jpeg-quality`` turns one on (@sibson)
