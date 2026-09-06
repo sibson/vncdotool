@@ -91,6 +91,9 @@ x=100, y=200 and is 400 pixels wide by 250 high you could do::
     > vncdo rcapture region.png 100 200 400 250
     > vncdo rexpect region.png 100 200
 
+The region has to lie on the screen; :doc:`commands` says what each command
+does with its arguments and how it fails.
+
 
 Encodings
 -------------------
@@ -116,6 +119,8 @@ default, so a capture is exact unless you request otherwise.
 
     > vncdo --encodings tight --jpeg-quality 8 capture screen.png
 
+
+.. _exit-status:
 
 Exit Status
 -------------------
