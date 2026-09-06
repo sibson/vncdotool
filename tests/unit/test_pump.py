@@ -10,7 +10,7 @@ from unittest import TestCase, mock
 
 from vncdotool import client, decoders, rfb
 from vncdotool.const import Encoding
-from vncdotool.pixelformat import PixelFormat
+from vncdotool.pixelformat import TPIXEL_FORMAT
 
 FIXTURE = (
     Path(__file__).resolve().parent
@@ -52,10 +52,6 @@ def raw_update(x: int, y: int, width: int, height: int, pixels: bytes) -> bytes:
     return header + rect_header + pixels
 
 
-# Tight's TPIXEL: three bytes, red-green-blue order (rfbproto, Tight Encoding).
-TPIXEL = PixelFormat(24, 24, False, True, 255, 255, 255, 0, 8, 16)
-
-
 class FakeWholeRect(decoders.WholeRectDecoder):
     """Fills the rectangle with one TPIXEL colour, in two reads so the pump
     has to resume the generator.
@@ -68,11 +64,11 @@ class FakeWholeRect(decoders.WholeRectDecoder):
         (invert,) = yield 1
         if invert:
             colour = bytes(byte ^ 0xFF for byte in colour)
-        return colour * (width * height), TPIXEL
+        return colour * (width * height), TPIXEL_FORMAT
 
 
 def whole_rect_update(*rects: tuple[int, int, int, int, bytes]) -> bytes:
-    """A FramebufferUpdate of `FakeWholeRect` rectangles. RFC 6143 7.6.1."""
+    """RFC 6143 7.6.1."""
     out = pack("!BxH", 0, len(rects))
     for x, y, width, height, payload in rects:
         out += pack("!HHHHi", x, y, width, height, FakeWholeRect.ENCODING) + payload
@@ -388,10 +384,6 @@ class TestUnbufferedDecoders(TestCase):
 
 
 class TestWholeRectPump(TestCase):
-    """A `WholeRectDecoder` hands back the whole rectangle's bytes and the
-    format they are in, having filled no `RectBuffer`.
-    """
-
     def setUp(self) -> None:
         self.cli = make_pump_client()
 
@@ -403,9 +395,9 @@ class TestWholeRectPump(TestCase):
         cli.dataReceived(b"\x10\x20\x30\x00")
 
         cli.updateRectangle.assert_called_once_with(
-            3, 4, 2, 2, b"\x10\x20\x30" * 4, TPIXEL
+            3, 4, 2, 2, b"\x10\x20\x30" * 4, TPIXEL_FORMAT
         )
-        self.assertNotEqual(TPIXEL.bypp, cli.pixel_format.bypp)
+        self.assertNotEqual(TPIXEL_FORMAT.bypp, cli.pixel_format.bypp)
 
     def test_no_buffer_is_allocated(self) -> None:
         cli = self.cli
@@ -429,7 +421,7 @@ class TestWholeRectPump(TestCase):
         cli.dataReceived(b"\x01")
 
         cli.updateRectangle.assert_called_once_with(
-            0, 0, 2, 2, b"\xef\xdf\xcf" * 4, TPIXEL
+            0, 0, 2, 2, b"\xef\xdf\xcf" * 4, TPIXEL_FORMAT
         )
 
     def test_the_rectangle_is_recorded_and_the_update_continues(self) -> None:
@@ -489,21 +481,21 @@ class TestWholeRectLength(TestCase):
         class WrongLength(decoders.WholeRectDecoder):
             def decodeRect(self, width, height, pixel_format):
                 yield 1
-                return produced, TPIXEL
+                return produced, TPIXEL_FORMAT
 
         pump(cli, WrongLength(), 0, 0, 2, 2)
         cli.dataReceived(b"\x00")
         return cli
 
     def test_too_few_bytes_is_refused(self) -> None:
-        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp - 1))
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp - 1))
 
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
         cli.updateRectangle.assert_not_called()
 
     def test_too_many_bytes_is_refused(self) -> None:
-        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp + 1))
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp + 1))
 
         cli.vncProtocolError.assert_called_once()
         cli.transport.loseConnection.assert_called_once()
@@ -513,7 +505,7 @@ class TestWholeRectLength(TestCase):
         """The refusals above pass just as well against a check that
         rejects everything.
         """
-        cli = self._abort_for(bytes(2 * 2 * TPIXEL.bypp))
+        cli = self._abort_for(bytes(2 * 2 * TPIXEL_FORMAT.bypp))
 
         cli.vncProtocolError.assert_not_called()
         cli.updateRectangle.assert_called_once()
