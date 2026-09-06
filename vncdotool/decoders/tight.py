@@ -7,7 +7,7 @@ from typing import ClassVar, Generator, List, Optional, Tuple
 
 from PIL import Image
 
-from ..const import Encoding
+from ..const import JPEG_QUALITY_ENCODINGS, Encoding
 from ..pixelformat import TPIXEL_FORMAT, PixelFormat, tpixel_bytes
 from .base import WholeRectDecoder
 from .errors import DecodeError
@@ -23,10 +23,7 @@ FILTER_COPY = 0
 FILTER_PALETTE = 1
 FILTER_GRADIENT = 2
 
-# The ten JPEG Quality Level pseudo-encodings (specs/tight-wire.md section 8).
-JPEG_QUALITY_LEVELS = frozenset(
-    Encoding(Encoding.JPEG_32 + level) for level in range(10)
-)
+JPEG_QUALITY_LEVELS = frozenset(JPEG_QUALITY_ENCODINGS)
 
 # Below this height*rowSize, data arrives raw (specs/tight-wire.md section 6).
 MIN_TO_COMPRESS = 12

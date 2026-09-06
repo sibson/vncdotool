@@ -136,6 +136,13 @@ class Encoding(IntEnumLookup):
     SESSION = 0xFFFF8003
 
 
+# The ten JPEG Quality Level pseudo-encodings, indexed by RFB level: 0 is low
+# at -32, 9 is high at -23 (specs/tight-wire.md section 8).
+JPEG_QUALITY_ENCODINGS = tuple(
+    Encoding(Encoding.JPEG_32 + level) for level in range(10)
+)
+
+
 class HextileEncoding(IntFlag):
     """:rfc:`6143` §7.7.4. Hextile Encoding."""
 
