@@ -177,8 +177,6 @@ class TestApiLifecycle(unittest.TestCase):
             )
 
         self.assertIn("exception", outcome, f"expected an exception, got: {outcome}")
-        # The family, not the exact class: any prompt, clear connection
-        # failure satisfies the lifecycle guarantee.
         self.assertIsInstance(outcome["exception"], ConnectError)
 
 

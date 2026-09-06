@@ -20,7 +20,6 @@ class TestRectBuffer(unittest.TestCase):
 
     def test_sub_rect_blit_multirow(self):
         buf = RectBuffer(3, 3, 1)
-        # 2x2 block at (1, 0): rows "AB" / "CD"
         buf.blit(1, 0, 2, 2, b"ABCD")
         expected = b"\x00AB\x00CD\x00\x00\x00"
         self.assertEqual(buf.tobytes(), expected)

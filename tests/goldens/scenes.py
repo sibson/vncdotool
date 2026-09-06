@@ -1,8 +1,7 @@
 """Screen content for golden capture, as pure functions of the prior screen.
 
-Committed to PNGs by this module's own main(), played back by
-scene_player.py and used directly by distillation and the unit suite -- it
-must import nothing X-specific.
+Distillation and the unit suite import this module directly, without an X
+display, so it must import nothing X-specific.
 """
 from __future__ import annotations
 
@@ -16,15 +15,6 @@ OUT_DIR = Path(__file__).resolve().parent / "scenes"
 
 SIZE = (256, 192)
 
-# A capture archive keeps the two stream directions apart, so a distilled
-# step learns which key produced it only from this patch inside the frame.
-# Centred in whatever it is stamped on, so the label survives a server
-# serving a geometry these scenes were not drawn for.
-#
-# Black and white are every channel's extremes, and a pixel format reproduces
-# its extremes exactly however few bits it keeps: 0 stays 0 and the maximum
-# comes back as 255. A patch drawn in the two of them reaches the client
-# unquantized at rgb565 as much as at rgbx8888.
 GLYPH_INK = (0, 0, 0)
 GLYPH_PAPER = (255, 255, 255)
 GLYPH_SIZE = (5, 7)
@@ -35,9 +25,7 @@ PATCH_SIZE = (
     GLYPH_SIZE[1] * GLYPH_CELL + 2 * GLYPH_MARGIN,
 )
 
-# Uppercase forms of the lowercase scene keys: at 5x7 the lowercase set needs
-# descenders for g and p, and the rest turns to mush. 0 keeps a slash so it
-# cannot be read as D.
+# 0 keeps a slash so it cannot be read as D.
 GLYPHS: Dict[str, Tuple[str, ...]] = {
     "0": (
         " ### ",
@@ -250,12 +238,7 @@ def stamp_patch(image: Image.Image, key: str) -> None:
 
 
 def read_patch(image: Image.Image) -> Optional[str]:
-    """Which scene this frame's centre patch names, or None if it names none.
-
-    One sample per glyph cell, thresholded and matched against the table
-    whole. Nothing here is a tolerance: ink and paper survive every pixel
-    format exactly, so a frame either carries a glyph or does not.
-    """
+    """Which scene this frame's centre patch names, or None if it names none."""
     if image.size[0] < PATCH_SIZE[0] or image.size[1] < PATCH_SIZE[1]:
         return None
 

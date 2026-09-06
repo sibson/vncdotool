@@ -46,7 +46,7 @@ vncdo-replay = "vncdotool.command:vncdo_replay"
 
 [dependency-groups]
 dev = [
-    "coverage>=7.10",  # 7.10 for `patch = subprocess`, which measures the vncdo subprocesses
+    "coverage>=7.10",
     "flake8",
     "mypy",
     "mypy-zope",  # understands zope.interface, which Twisted is built on
@@ -71,7 +71,6 @@ plugins = ["mypy_zope:plugin"]
 
 [tool.coverage.run]
 branch = true
-# Each `vncdo` subprocess writes its own data file.
 parallel = true
 patch = ["subprocess"]
 concurrency = ["thread"]

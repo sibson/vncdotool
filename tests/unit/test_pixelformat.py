@@ -33,12 +33,7 @@ RGB444 = rfb.PixelFormat(16, 12, False, True, 15, 15, 15, 0, 4, 8)
 
 
 def every_layout() -> Iterator[rfb.PixelFormat]:
-    """Every channel arrangement of the widths a server may negotiate.
-
-    Both endiannesses throughout, including the arrangements that have no
-    Pillow mode: what they must do is raise, and a generated case cannot be
-    forgotten the way a listed one can.
-    """
+    """Every channel arrangement of the widths a server may negotiate, in both endiannesses."""
     for bpp, depth, maxima, slots in (
         (32, 24, (255, 255, 255), (0, 8, 16, 24)),
         (24, 24, (255, 255, 255), (0, 8, 16)),
@@ -52,11 +47,7 @@ def every_layout() -> Iterator[rfb.PixelFormat]:
 
 
 def every_colour(maxima: tuple[int, int, int]) -> Iterator[tuple[int, int, int]]:
-    """Primaries, black, white, and a mid value per channel.
-
-    Mid values are what separate a correct shift from one that happens to
-    look right at full intensity, where every bit of the channel is set.
-    """
+    """Primaries, black, white, and a mid value per channel."""
     yield (0, 0, 0)
     yield maxima
     for channel, maximum in enumerate(maxima):

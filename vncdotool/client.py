@@ -41,8 +41,6 @@ try:
 
     from . import imagematch
 except ImportError:
-    # If there is no PIL, raise ImportError where someone tries to use
-    # it.
     class _RuntimeImportError:
         def __getattr__(self, _: str) -> Any:
             raise ImportError("PIL")
@@ -257,18 +255,13 @@ class VNCDoToolClient(rfb.RFBClient):
     def captureScreen(
         self, fp: TFile, incremental: bool = False, format: str | None = None
     ) -> Deferred:
-        """
-        Capture and save the current VNC screen display to a file.
+        """Capture and save the current VNC screen display to a file.
 
-        Parameters:
-            fp (TFile): The destination where the screenshot will be saved.
-                        It can be a string path, a `pathlib.Path` object, or a file-like object opened in binary mode.
-            incremental (bool, optional):
-                - `False` (default): Captures the entire screen.
-                - `True`: Captures only the regions of the screen that have changed since the last capture.
-            format (str | None, optional):
-                - See Pillow's list of image formats: https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html
-                - If set to `None`, Pillow will determine the format based on the provided file name.
+        :param incremental: if True, only wait for regions that have changed
+            since the last capture, rather than the whole screen.
+        :param format: a Pillow image format; see Pillow's list of `image
+            file formats <https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html>`_.
+            Defaults to whatever Pillow infers from ``fp``'s file name.
         """
         log.debug("captureScreen %s", fp)
         return self._capture(fp, incremental, format=format)
@@ -430,7 +423,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.deferred.addCallback(self._expectCompare, box, fuzz, blur)
         self.framebufferUpdateRequest(
             incremental=incremental
-        )  # use box ~(x, y, w - x, h - y)?
+        )
 
         return self.deferred
 
@@ -488,9 +481,6 @@ class VNCDoToolClient(rfb.RFBClient):
         self.setPixelFormat(pixel_format)
         self._image_mode = image_mode
 
-    #
-    # base customizations
-    #
     def vncRequestPassword(self) -> None:
         if self.factory.password is None:
             self.transport.loseConnection()
@@ -547,7 +537,6 @@ class VNCDoToolClient(rfb.RFBClient):
         data: bytes,
         pixel_format: rfb.PixelFormat,
     ) -> None:
-        # ignore empty updates
         if not data:
             return
 

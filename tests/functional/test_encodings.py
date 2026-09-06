@@ -22,9 +22,9 @@ SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
 PROXY_PORT = 5997
 
-# tigervnc answers a CoRRE request with Raw: measured against the fleet's
-# 1.12.0 in #417, and upstream's EncodeManager::supported() accepts Raw, RRE,
-# Hextile, ZRLE and Tight only. Offering CoRRE here would prove the fallback
+# tigervnc answers a CoRRE request with Raw, observed against the fleet's
+# TigerVNC 1.12.0; upstream's EncodeManager::supported() accepts only Raw,
+# RRE, Hextile, ZRLE and Tight. Offering CoRRE here would prove the fallback
 # renders, not that CoRRE does.
 EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile", "zrle", "tight"}
 

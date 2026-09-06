@@ -103,8 +103,6 @@ class JpegRoundTrip:
 
 
 class PatchRoundTrip:
-    """One scene's glyph, read back off the screen a given format rebuilds."""
-
     key: str
     pixel_format_name: str
 
@@ -115,9 +113,6 @@ class PatchRoundTrip:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """unittest's own hook for building a suite: one case per scene and format
-    pair, so a failure's test id says which pair collapsed.
-    """
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(TestScenes))
     for name in pixelformat.PIXEL_FORMATS:

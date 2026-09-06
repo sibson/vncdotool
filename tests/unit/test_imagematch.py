@@ -110,10 +110,6 @@ class TestBoundForChannels(unittest.TestCase):
 
 
 class FormatFuzz:
-    """One case per pixel format. Not a TestCase itself, so the loader
-    collects it only through the subclasses load_tests builds.
-    """
-
     name: str
 
     @property
@@ -141,9 +137,6 @@ class FormatFuzz:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """One case per pixel format, named after it, so a failure's test id says
-    which format failed.
-    """
     suite = unittest.TestSuite()
     for case in (TestWorstDelta, TestMatches, TestBoundForChannels):
         suite.addTests(loader.loadTestsFromTestCase(case))

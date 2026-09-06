@@ -90,8 +90,8 @@ class TestVNCEVSink(TestCase):
         with the keysyms KEYMAP says they should.
 
         Wire-level only. Whether a server then turns those keysyms into the
-        right input is a separate, layout-sensitive question -- see the
-        design doc's "Special keys across servers" TODO.
+        right input is a separate, layout-sensitive question -- see
+        specs/testing-framework.md's "Special keys across servers" TODO.
         """
         offset = len(_compose_logs("vncev"))
         result = run_vncdo(VNCEV, "key", "enter", "key", "f1", "key", "ctrl-c")

@@ -55,7 +55,6 @@ class TestStable(TestCase):
         self.run_ok("stable", "1.5", "0")
         elapsed = time.monotonic() - started
 
-        # The window cannot be observed to have passed before it has.
         self.assertGreaterEqual(elapsed, 1.5)
 
     def test_a_capture_behind_stable_still_shows_the_scene(self) -> None:

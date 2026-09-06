@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
 """Compute the ``passwd=`` value ultravnc.ini needs for a given password.
 
-Run as a script it writes that hex to the file named as its second
-argument, for the os-server action to read back into the ini.
-
-UltraVNC refuses every incoming connection until a password is set, and it
-stores that password in ultravnc.ini using the classic VNC password-*file*
-obfuscation -- the one behind ~/.vnc/passwd across the whole VNC family,
-originally AT&T's vncauth.c: the password, null padded to 8 bytes, DES
-encrypted under a fixed well-known key.
+UltraVNC stores the password in ultravnc.ini using the classic VNC
+password-*file* obfuscation -- the one behind ~/.vnc/passwd across the whole
+VNC family, originally AT&T's vncauth.c: the password, null padded to 8
+bytes, DES encrypted under a fixed well-known key.
 
 Note this is the opposite pairing to the RFB authentication challenge
 response in vncdotool.rfb, where the *password* derives the key and the
@@ -28,7 +24,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 from vncdotool.rfb import des_encrypt, reverse_bits  # noqa: E402
 
-# The fixed key from vncauth.c, shared by every VNC password file.
 VNCAUTH_KEY = bytes([23, 82, 107, 6, 35, 78, 88, 7])
 
 

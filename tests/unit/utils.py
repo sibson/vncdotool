@@ -24,7 +24,6 @@ if BYPP != 4:  # every fixture below hard-codes 4-byte pixels
 
 
 def _pixel(r: int, g: int, b: int) -> bytes:
-    """One RGBX pixel on the wire, in the client's negotiated format."""
     return bytes((r, g, b, 0))
 
 
@@ -59,7 +58,6 @@ def rect(x: int, y: int, w: int, h: int, encoding: Encoding, body: bytes = b"") 
 
 
 def framebuffer_update(rects: list[bytes]) -> bytes:
-    """A full FramebufferUpdate server message, msgid included."""
     header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, len(rects))
     return header + b"".join(rects)
 

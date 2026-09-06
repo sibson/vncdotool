@@ -64,10 +64,6 @@ class _Recorder(client.VNCDoToolClient):
 
         steps: List[Step] = []
         start = self.init_end
-        # A driver polling for a scene draws empty updates in reply, and a
-        # scene can arrive across several. The patch says where one ends;
-        # every byte between still belongs to a step, so the stream a
-        # fixture replays is the stream that was recorded.
         pending = b""
         for end, screen in zip(self.update_ends, screens):
             pending += s2c[start:end]

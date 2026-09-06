@@ -36,7 +36,6 @@ class TestCopyRect(unittest.TestCase):
         copy_rect = rect(2, 2, 2, 2, Encoding.COPY_RECTANGLE, copy_body)
         self.cli.dataReceived(framebuffer_update([raw_rect, copy_rect]))
 
-        # Whole framebuffer, so the source region has to survive the copy too.
         expected = list(self.GRID_4X4)
         for sy in range(2):
             for sx in range(2):

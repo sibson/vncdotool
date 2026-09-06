@@ -61,9 +61,7 @@ def basic(
     produces: TPIXELs for the copy filter, palette indices for the palette one.
 
     Under MIN_TO_COMPRESS payload bytes the wire carries them raw, with no
-    compact length and no zlib (specs/tight-wire.md section 6). The two
-    threshold cases below assert that shape directly, so they still fail if
-    the constant moves.
+    compact length and no zlib (specs/tight-wire.md section 6).
     """
     kind = stream | (0x04 if filter_id is not None else 0)
     wire = bytearray([(kind << 4) | reset])
@@ -87,8 +85,7 @@ def decode_rect(
     pixel_format: PixelFormat = PIXEL_FORMAT,
 ) -> Tuple[bytes, PixelFormat, int]:
     """The pixels one ``decodeRect`` produced, the format they are in, and how
-    many bytes it took. A framing bug shows up as the wrong count long before
-    it shows up as the wrong image.
+    many bytes it took.
     """
     generator = (decoder or TightDecoder()).decodeRect(width, height, pixel_format)
     consumed, block = 0, None

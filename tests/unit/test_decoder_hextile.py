@@ -17,7 +17,6 @@ from tests.unit.utils import (
 
 
 def hextile_subrect(x: int, y: int, w: int, h: int) -> bytes:
-    """A non-coloured Hextile subrect: x/y packed into one byte, w-1/h-1 into another."""
     return bytes(((x << 4) | y, ((w - 1) << 4) | (h - 1)))
 
 
@@ -29,7 +28,6 @@ def hextile_tile(
     subrects: bytes = b"",
     raw: bytes = b"",
 ) -> bytes:
-    """One Hextile tile: subencoding byte + whatever fields it flags."""
     if subencoding & HextileEncoding.RAW:
         return pack("!B", int(subencoding)) + raw
     body = background + foreground
@@ -39,7 +37,6 @@ def hextile_tile(
 
 
 def hextile_rect(x: int, y: int, w: int, h: int, tiles: list[bytes]) -> bytes:
-    """A Hextile-encoded rectangle: tiles concatenated with no padding between them."""
     return rect(x, y, w, h, Encoding.HEXTILE, b"".join(tiles))
 
 
@@ -146,8 +143,6 @@ class TestHextile(unittest.TestCase):
         assert_pixels(self, self.cli.screen, expected)
 
     def test_hextile_tile_with_no_colours_specified_reuses_the_previous_tile(self) -> None:
-        # Two 16x16 tiles side by side. The second sets neither background
-        # nor foreground, so it has to fall back to the first tile's colours.
         width, height = 32, 16
         handshake(self.cli, width, height)
 
@@ -247,8 +242,8 @@ class TestHextile(unittest.TestCase):
         assert_pixels(self, self.cli.screen, [background] * (width * height))
 
     def test_hextile_rectangle_not_a_multiple_of_16_has_partial_edge_tiles(self) -> None:
-        # 20x20: tiles are 16x16, 4x16, 16x4, 4x4 -- a decoder that assumes
-        # square 16x16 tiles will misplace or crash on the last row/column.
+        # A decoder that assumes square 16x16 tiles will misplace or crash
+        # on the last row/column.
         width = height = 20
         handshake(self.cli, width, height)
 
@@ -326,7 +321,7 @@ class TestHextile(unittest.TestCase):
             | HextileEncoding.FOREGROUND_SPECIFIED
             | HextileEncoding.ANY_SUBRECTS
         )
-        # tile is 8x8 (rectangle smaller than one full tile); x+w = 7+2 = 9 > 8
+        # x+w = 7+2 = 9 > 8
         tile = hextile_tile(
             subencoding,
             background=_pixel(*bg),
@@ -346,8 +341,6 @@ class TestHextile(unittest.TestCase):
         handshake(self.cli, width, height)
         self.cli.vncProtocolError = mock.Mock()
 
-        # No BACKGROUND_SPECIFIED bit anywhere, and no earlier tile to
-        # inherit one from.
         tile = hextile_tile(HextileEncoding(0))
         self.cli.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])

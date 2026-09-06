@@ -1,4 +1,4 @@
-"""Fence against a real TigerVNC, the server that motivated #322/#323.
+"""Fence against a real TigerVNC.
 
 TigerVNC sends a ServerFence only to a client that offered
 ``PSEUDO_FENCE``, and ``VNCDoToolFactory.fence`` is False, so ``vncdo``
@@ -152,11 +152,9 @@ class TestFenceThroughTheClient(TestCase):
         )
 
     def test_capture_survives_another_client_fencing(self) -> None:
-        """#322's shape: a second client on an -AlwaysShared session, with the
-        first one fencing hard throughout. A fence is addressed to one
-        connection, so the noise this makes must not reach or stall the
-        capture; that it does not is the reason a fence the other client sent
-        cannot be what #322 saw arrive.
+        """A second client on an -AlwaysShared session, fencing hard
+        throughout. A fence is addressed to one connection, so the noise
+        this makes must not reach or stall the other client's capture.
         """
         other = _Peer([*BASE_ENCODINGS, Encoding.PSEUDO_FENCE])
         self.addCleanup(other.close)
