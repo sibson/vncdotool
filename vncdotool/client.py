@@ -63,6 +63,10 @@ class ProtocolError(VNCDoException):
     """VNC Server sent something we cannot handle"""
 
 
+class RegionError(VNCDoException):
+    """A region to compare or capture is not on the screen"""
+
+
 # Level 0 is -32 (low) up to level 9 at -23; no offer means no JPEG (specs/tight-wire.md section 8).
 JPEG_QUALITY_ENCODINGS = [
     rfb.Encoding(rfb.Encoding.JPEG_32 + level) for level in range(10)
@@ -218,12 +222,24 @@ class VNCDoToolClient(rfb.RFBClient):
         d.addCallback(self._captureSave, fp, *args, **kwargs)
         return d
 
+    def _requireOnScreen(self, box: tuple[int, int, int, int]) -> None:
+        """Raise unless a region to crop lies on the screen.
+
+        ``Image.crop`` pads whatever falls outside the image with black
+        rather than failing, so an off-screen region compares against black
+        and captures it.
+        """
+        width, height = self.screen.size if self.screen else (self.width, self.height)
+        if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
+            raise RegionError(f"region {box} is not inside the {width}x{height} screen")
+
     def _captureSave(
         self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
     ) -> TClient:
         log.debug("captureSave %s", fp)
         assert self.screen is not None
         if args:
+            self._requireOnScreen(args)  # type: ignore[arg-type]
             capture = self.screen.crop(args)  # type: ignore[arg-type]
         else:
             capture = self.screen
@@ -291,6 +307,7 @@ class VNCDoToolClient(rfb.RFBClient):
         return self._quantizedMatch(image)
 
     def _expectCompare(self, data: object, box: tuple[int, int, int, int], maxrms: float) -> Deferred:
+        self._requireOnScreen(box)
         incremental = False
         if self.screen:
             incremental = True

@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - Fix ``rexpect`` polling until ``--timeout`` and ``rcapture`` writing black pixels when the region runs off the screen. Both now fail with a message naming the region and the screen size, exiting 30 (@sibson)
   - Hextile rectangles decode about 1.5x faster: the subencoding byte is tested as a plain int rather than through ``IntFlag``, which built a new flag object for each of the seven tests per tile (@sibson)
   - ZRLE rectangles decode about 12x faster: tiles are now read by index out of the decompressed block and widened in C, rather than a byte at a time through an iterator (@sibson)
   - Fix a ZRLE palette index past the end of its palette raising ``IndexError`` past the protocol handler instead of ending the session with a reported error (@sibson)
