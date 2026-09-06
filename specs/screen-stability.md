@@ -199,8 +199,16 @@ reactor. Cases worth one test each — window restarts on a change beyond FUZZ,
 survives a repaint within FUZZ, a request stays outstanding across the window,
 no baseline means a non-incremental first request.
 
-Functional, against the fleet: `stable` returns only after a scripted animation
-finishes, and times out with exit 40 on a server painting continuously.
+Functional, against the fleet (`tests/functional/test_stable.py`): the window
+is really waited out, and a window longer than `--timeout` exits 40.
+
+What that suite cannot show is `stable` closing a race, because the fleet has
+no race to close. `test_scene_player.py` captures behind a `pause 0.3` for a
+repaint that is asynchronous to the key event, but a capture taken with no
+wait at all reads the right scene every time — `capture` already blocks for a
+whole-screen update. Proving the settling behaviour end to end needs a fixture
+that animates and then stops, which the scene player is not. The two scene
+tests in the suite are therefore smoke over a live server, and say so.
 
 Then `tests/goldens/scene-lossy.vdo` loses its `pause 1.5` and its throwaway
 `capture step.png` pairs, which is the change that shows whether any of this
@@ -216,5 +224,7 @@ works.
 - Whether any common server sends periodic no-op updates that a pixel
   comparison would correctly ignore but that would still churn CPU on a large
   framebuffer. Not yet checked against the fleet.
-- The functional test and the `scene-lossy.vdo` migration below are not
-  written yet; only the unit suite covers the command.
+- A fixture that animates and then stops, so the settling behaviour can be
+  asserted end to end rather than only in unit tests.
+- The `scene-lossy.vdo` migration below is not done; it needs the goldens
+  regenerated, which is its own change.
