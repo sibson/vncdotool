@@ -52,7 +52,7 @@ is about here: a 2003-era import, added whole.
 
 Check the protocol documents before implementing anything that touches the
 wire -- a new encoding, security type, message or client command. The repo
-carries no copy of the spec; `DEVELOP.rst` says which of RFC 6143 and
+carries no copy of the spec; `DEVELOP.md` says which of RFC 6143 and
 rfbproto covers what. Guessing a message layout from the surrounding code
 produces something that works against one server and no other.
 

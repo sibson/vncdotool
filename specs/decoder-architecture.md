@@ -673,7 +673,7 @@ CPIXEL, fixed in red-green-blue order — and its four zlib streams; CPIXEL's
 tie-break at depth ≤ 16, absent from RFC 6143; and that *bits-per-pixel* must be
 8, 16 or 32. Detail in [pixel-format.md](pixel-format.md).
 
-Per `DEVELOP.rst`, rfbproto is a living document with no releases, so any comment
+Per `DEVELOP.md`, rfbproto is a living document with no releases, so any comment
 or test depending on its wording cites a commit permalink rather than `master`.
 
 ## Deliberate non-goals

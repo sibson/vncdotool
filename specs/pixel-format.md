@@ -242,7 +242,7 @@ Golden and functional coverage at a second, reduced-precision format
 
 ## Validated against the specs
 
-C2. Read from a local rfbproto clone (`DEVELOP.rst` says where) and RFC 6143.
+C2. Read from a local rfbproto clone (`DEVELOP.md` says where) and RFC 6143.
 
 - **Format fields** (rfbproto §ServerInit, RFC 6143 §7.4): bpp must be 8, 16 or
   32 and ≥ depth; big-endian is meaningless at 8 bpp; each max is 2^n - 1, each
