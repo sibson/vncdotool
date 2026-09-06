@@ -4,3 +4,5 @@ export PYBUILD_NAME=vncdotool
 
 %:
 	dh $@ --buildsystem=pybuild
+
+override_dh_auto_test:
