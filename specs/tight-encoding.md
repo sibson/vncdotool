@@ -189,8 +189,8 @@ work off the other branches rather than adding to it: TigerVNC sends JPEG
 where it would have sent a full-colour copy rectangle, so the lossy capture
 reaches no copy filter, no implicit filter and nothing under the 12-byte
 threshold, and it carries its own coverage contract rather than the lossless
-one. And `expect` cannot sequence a lossy capture at all, which is why
-`scene-lossy.vdo` exists.
+one. And `expect` could not sequence a lossy capture at all, which
+[expect-matching.md](expect-matching.md) went on to fix.
 
 **Stage 6 — live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves

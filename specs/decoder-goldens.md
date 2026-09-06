@@ -68,19 +68,33 @@ whatever was on screen, so `d` after `s` and `d` after `x` are different wire
 bytes, and CopyRect exists only because of prior content. `0` makes any case
 reachable in isolation.
 
-Every scene image carries a small patch encoding its own key. It is fontless,
-it costs one harmless rect, and it turns a dropped key into a wrong patch
-rather than a mislabelled fixture. It is not merely a check: it is how
-distillation labels a step at all, since the frame carries it and the c2s
-stream cannot be aligned against s2c.
+Every scene image carries a small patch naming its own key. It costs one
+harmless rect, and it turns a dropped key into a wrong patch rather than a
+mislabelled fixture. It is not merely a check: it is how distillation labels a
+step at all, since the frame carries it and the c2s stream cannot be aligned
+against s2c.
 
-The key rides in the patch's red channel one unit per key, which assumed an
-8-bit red without saying so. At rgb565 `c`, `d` and `f` — 99, 100 and 102 —
-land on one 5-bit value, so the patch narrows a step to a *set* of keys and
-the frame breaks the tie by which scene it most resembles. That tie-break is
-deliberately a ranking over the candidates and not a threshold: a label chosen
-by "lands within the format's quantization of its scene" is the golden test's
-own claim, and a fixture labelled by it could never fail that test.
+The patch is the key's glyph, drawn from a 5x7 table in `scenes.py` at four
+pixels a cell, black on white, in a 26x34 box at the centre of the frame.
+`read_patch` samples one pixel per cell, thresholds it, and matches the
+bitmap against the table whole: a frame either carries a glyph or does not,
+with no tolerance anywhere.
+
+The table is literal rather than rendered because Pillow's default font is an
+implementation detail that has changed shape across releases, and a fixture
+labelled by a rendered glyph would be invalidated by an upgrade. The glyphs
+are the uppercase forms — 5x7 lowercase needs descenders for `g` and `p` —
+so the player folds an incoming keysym to lower case and `C` and `c` select
+the same scene.
+
+Black and white are what make this hold at any depth. They are every
+channel's extremes, and a pixel format reproduces its extremes exactly
+however few bits it keeps, so the patch reaches the client unquantized at
+rgb565 as much as at rgbx8888. The earlier patch instead carried the key as
+`ord(key)` in the red channel, which assumed an 8-bit red without saying so:
+at rgb565 `c`, `d`, `f` and `g` — 99, 100, 102 and 103 — landed on one 5-bit
+value, and a step could only be narrowed to a set of keys and then guessed at
+by which scene the frame most resembled.
 
 The base screen is non-black so the existing screenshot smoke tests, which only
 assert that a capture is not flat, stay green.
@@ -235,32 +249,33 @@ fields: `tolerance_kind` is `format-quantization` or `jpeg-lossy`, and
 `test_goldens.py` requires one of them and re-derives the first from the
 format, so a chosen number cannot be filed under the computed one.
 
-The lossy bound is measured, not computed, because nothing in the wire format
-implies it. It is `[8, 8, 8]`: two independent encoders put the worst case at
-3, 3, 4 — TigerVNC 1.12.0's own rectangles at quality level 9, and Pillow
-re-encoding the same scene PNGs at libjpeg quality 100 without chroma
-subsampling, which is what that level selects — and the bound is doubled so a
-libjpeg or server version does not turn the suite red. It is flat across the
-three channels, unlike the format-derived one, because JPEG's error lives in
-YCbCr and does not respect a channel boundary.
+The lossy bound is not a per-channel triple at all. Nothing in the wire format
+implies one, and a per-channel maximum stops separating a correct frame from a
+wrong one as soon as the quality drops: at level 5 the correct scene sits 229
+away while the nearest wrong scene sits at 180. A `jpeg-lossy` fixture records
+a fuzz and a blur instead — the perceived-difference bound of
+[expect-matching.md](expect-matching.md), which holds from level 9 to level 0 —
+and `test_goldens.py` reads whichever pair of numbers the kind calls for.
 
-A measured bound could be one that nothing can fail, so it is checked by
-mutation rather than asserted: swapping red and blue in the JPEG path, and
-reading a grayscale JPEG's single component as three, each fail the suite by
-two orders of magnitude. The bound only holds at a high quality level. At
-level 5 the same scenes reach a per-channel maximum of 229 and a whole-frame
-RMSE of 43 on dense noise, which no useful bound survives; a fixture at a low
-level would need a different oracle, and the level is recorded in
-`conditions.json` for that reason.
+The recorded fuzz is measured from the capture itself: the furthest any of its
+own frames landed from its scene, plus a margin of 4 for the decode drifting
+under another libjpeg. It is deliberately not the bound the driver ran under,
+which has to be wide enough for the worst quality level anyone captures and so
+asserts almost nothing about the frames in front of it. Level 9 records 6 and
+level 5 records 19, against the 64 they were driven at.
 
-**Sequencing a lossy capture is a separate problem.** `expect` polls until the
-screen matches the scene within the format's tolerance, which a JPEG frame
-never does, so it polls until the timeout. Histogram RMS cannot replace it
-either: replaying the committed level-9 fixture, the worst correct match is
-274 while the `d` frame sits 178 from the wrong scene `x`, so no threshold
-separates them. `scene-lossy.vdo` paces the driver instead, and the step is still
-labelled by the keysym patch in the frame — read within the same lossy bound,
-which at level 9 moves the patch by at most one unit per channel.
+A measured bound could still be one that nothing can fail, so it is checked by
+mutation rather than asserted: swapping red and blue in the JPEG path fails the
+level-9 fixture at 72 against its 6 and the level-5 fixture at 56 against its
+19.
+
+The quality level is recorded too, because how far a frame may sit from its
+oracle depends on it: at level 9 the worst frame is 1 from its scene, at level
+5 it is 14, at level 0 it is 46, against a nearest wrong scene of 87.
+
+The keysym patch keeps a per-channel triple, which is a different question --
+whether a flat 48x48 block still reads back as the value that was stamped on
+it. It does, at every quality level tigervnc offers.
 
 **Cross-format self-consistency** — decode one scene at two formats, assert the
 framebuffers agree — is not used, though it reads like R3 stated directly. It
@@ -293,8 +308,11 @@ Axes are crossed only where they interact.
 - Raw x 4 pixel formats, 4 fixtures
 - 5 further encodings x 32bpp, 5 fixtures
 - ZRLE and Tight x the 3 non-default formats, 6 fixtures
+- Tight x JPEG quality levels 9 and 5, 2 fixtures: level 9 is the only quality
+  tigervnc encodes without chroma subsampling, so level 5 is what exercises a
+  genuinely lossy encoding
 
-Fifteen fixtures at full build-out, four today. Each carries every scene in the
+Seventeen fixtures at full build-out, twelve today. Each carries every scene in the
 catalogue, so the scene axis multiplies steps rather than fixtures.
 
 The full cross is not needed. The pixel-format axis tests pixel plumbing, which
