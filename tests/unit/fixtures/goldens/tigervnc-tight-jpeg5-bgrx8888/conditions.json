@@ -1,7 +1,7 @@
 {
   "blur": 2,
   "encoding": "tight",
-  "fuzz": 64,
+  "fuzz": 19,
   "geometry": [256, 192],
   "jpeg_quality": 5,
   "meta": {

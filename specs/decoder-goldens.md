@@ -243,16 +243,21 @@ a fuzz and a blur instead — the perceived-difference bound of
 [expect-matching.md](expect-matching.md), which holds from level 9 to level 0 —
 and `test_goldens.py` reads whichever pair of numbers the kind calls for.
 
-A measured bound could be one that nothing can fail, so it is checked by
-mutation rather than asserted: swapping red and blue in the JPEG path fails
-the level-9 fixture at 72 against its bound of 64, and the level-5 fixture at
-127. The margin is thin at level 9 and the low-quality fixture is what makes
-it comfortable, which is a second reason to carry one.
+The recorded fuzz is measured from the capture itself: the furthest any of its
+own frames landed from its scene, plus a margin of 4 for the decode drifting
+under another libjpeg. It is deliberately not the bound the driver ran under,
+which has to be wide enough for the worst quality level anyone captures and so
+asserts almost nothing about the frames in front of it. Level 9 records 6 and
+level 5 records 19, against the 64 they were driven at.
 
-The quality level is recorded in `conditions.json`, because how far a frame
-may sit from its oracle depends on it: at level 9 the worst frame is 1 from
-its scene, at level 5 it is 14, at level 0 it is 46, against a nearest wrong
-scene of 87.
+A measured bound could still be one that nothing can fail, so it is checked by
+mutation rather than asserted: swapping red and blue in the JPEG path fails the
+level-9 fixture at 72 against its 6 and the level-5 fixture at 56 against its
+19.
+
+The quality level is recorded too, because how far a frame may sit from its
+oracle depends on it: at level 9 the worst frame is 1 from its scene, at level
+5 it is 14, at level 0 it is 46, against a nearest wrong scene of 87.
 
 The keysym patch keeps a per-channel triple, which is a different question --
 whether a flat 48x48 block still reads back as the value that was stamped on

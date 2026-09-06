@@ -248,11 +248,16 @@ unhandled `IndexError` from `float(args.pop(0))`. Help text at
 fixture keeps its RGB triple, which is the format's own number and unchanged.
 `test_goldens.py` compares through `imagematch` for the lossy kind.
 
-`capture.py` stops using one number for two jobs. `JPEG_TOLERANCE` currently
-serves both the keysym-patch read in `distill.split` and the fixture's recorded
-bound; the patch read keeps its RGB triple, proven to work at level 0, and the
-recorded bound becomes the fuzz pair. It passes `--expect-fuzz 64 --expect-blur
-2` when `--jpeg-quality` is set and drives `scene.vdo` for every capture.
+`capture.py` stops using one number for three jobs. `JPEG_TOLERANCE` served the
+keysym-patch read in `distill.split`, the bound the driver runs under, and the
+fixture's recorded bound; those are three different questions. The patch read
+keeps its RGB triple, proven to work at level 0. The driver runs at a fuzz of
+64, which has to be wide enough for the worst quality level anyone captures.
+The recorded bound is measured from the capture itself — the furthest any of
+its own frames landed from its scene, plus a margin of 4 for the decode
+drifting under another libjpeg. Level 9 records 6 and level 5 records 19,
+against the 64 they were driven at.
+
 `scene-lossy.vdo` is deleted. `servers.mk` gains the level-5 line.
 
 The `0` after each filename in `scene.vdo` goes too, and has to: a token beats
