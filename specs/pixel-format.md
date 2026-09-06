@@ -1,4 +1,4 @@
-# Pixel Format — Design
+# Pixel Format: Design
 
 Status: draft, under review. The first slice of
 [decoder-architecture.md](decoder-architecture.md) Phase 1, and the `rgb565`
@@ -8,9 +8,9 @@ entry point [decoder-goldens.md](decoder-goldens.md) names in its phasing.
 
 `client.PF2IM` is a five-entry dict keyed on the whole
 `PixelFormat` dataclass, valued with a Pillow raw mode. A format outside those
-five raises `LookupError`, and `setImageMode` guesses —
-`BGR16` if the server announced 3.889, `RGB32` otherwise — sends
-`SetPixelFormat`, and assumes it was obeyed. A server that ignores it keeps
+five raises `LookupError`, and `setImageMode` guesses (`BGR16` if the server
+announced 3.889, `RGB32` otherwise), sends `SetPixelFormat`, and assumes it
+was obeyed. A server that ignores it keeps
 sending its own format, decoded as the requested one: #90 and #275.
 
 Nothing can request a format from the command line (#167, #168), so the golden
@@ -22,7 +22,7 @@ The `pixelformat.py` machinery: computing a Pillow mode from any byte-aligned
 truecolor `PixelFormat` instead of a five-entry lookup table, plus the CPIXEL
 functions ZRLE needs at Phase 5. `rgb565` is in the registry as a second
 requestable format, but verifying it end-to-end is deferred (see below).
-Colour map, and the layouts Pillow cannot unpack, wait for a server that
+Color map, and the layouts Pillow cannot unpack, wait for a server that
 needs them.
 
 ## What servers actually send
@@ -33,13 +33,13 @@ Tier 2 from run
 which ran a probe test that has since been removed: this table is the record, and
 nothing re-derives it. It goes stale when a runner image changes its display
 depth, and `vncdo -v` against any server reprints both the native format and the
-one we request.
+one requested.
 
 | Server | ServerInit format | Wire | In `PF2IM`? |
 |---|---|---|---|
 | tigervnc, x11vnc, ultravnc, screen-sharing | 32 bpp, depth 24, LE, max 255, shifts 16/8/0 | BGRX | yes |
 | libvncserver-example | 32 bpp, **depth 32**, LE, max 255, shifts 0/8/16 | RGBX | **no** |
-| vncev | 8 bpp, depth 8, **colour-mapped** | index | **no** |
+| vncev | 8 bpp, depth 8, **color-mapped** | index | **no** |
 
 The two misses are libvncserver's example programs, in the fleet because they
 are scriptable, not because anyone runs them. **Every server anyone runs sends
@@ -51,9 +51,9 @@ Three consequences:
 
 - **`PF2IM` misses on `depth`, which does not affect byte layout.**
   libvncserver-example's format *is* the layout `PF2IM` calls `RGBX`, differing
-  only by declaring depth 32 — the historical quirk rfbproto warns about — so we
-  renegotiate to a format byte-identical to the one already arriving. Computing
-  the mode from the fields removes the failure mode.
+  only by declaring depth 32 (the historical quirk rfbproto warns about), so
+  vncdotool renegotiates to a format byte-identical to the one already
+  arriving. Computing the mode from the fields removes the failure mode.
 - **The version-3.889 special case (request `BGR;16` for Apple Remote
   Desktop) is dropped, not carried forward.** It traced to PR #243 fixing
   issue #205, a generic 16bpp black-screen report with no confirmation the
@@ -72,12 +72,12 @@ A decoder returns bytes in the layout it produced them, tagged with the
 `PixelFormat` describing that layout. `client.py` resolves the tag with
 `raw_mode()` and materializes each rectangle with one `Image.frombytes(...,
 "raw", mode)`. Raw, RRE, CoRRE, Hextile and ZRLE tag the negotiated format;
-Tight's JPEG and TPIXEL tag 24 bpp RGB; a colour-mapped decoder tags the
-colour-mapped format and the client resolves indices through the palette it
+Tight's JPEG and TPIXEL tag 24 bpp RGB; a color-mapped decoder tags the
+color-mapped format and the client resolves indices through the palette it
 already holds.
 
 The tag is a `PixelFormat` and not a Pillow mode string so that decoders speak
-only RFB — they implement a specification written in shifts and maxima, and
+only RFB: they implement a specification written in shifts and maxima, and
 naming `BGRX` there would put the rendering library inside code that has no
 other reason to know it exists. Pillow stays in `client.py` and in `raw_mode`,
 which is also the single place to change if the unsupported layouts below
@@ -89,14 +89,14 @@ does not permit on the wire. Internally that is the honest description of three
 packed bytes, and the negotiation registry still refuses to ask a server for it.
 
 Converting inside each decoder to one canonical layout was designed first and
-dropped. It materializes every rectangle twice — bytes, image, bytes, image, for
-~1.2 ms per 1080p frame of copying — and forces JPEG, TPIXEL and colour map to
+dropped. It materializes every rectangle twice (bytes, image, bytes, image, for
+~1.2 ms per 1080p frame of copying) and forces JPEG, TPIXEL, and color map to
 produce a layout that then has to be undone.
 
-Tagging means **a decoder never interprets a pixel**. A background colour, a
+Tagging means **a decoder never interprets a pixel**. A background color, a
 Hextile foreground, a ZRLE palette entry are opaque `bypp`-sized byte strings,
 and a fill is one repeated. No shifts, no masks, no endianness in any decoder,
-so that class of bug cannot be written — including the live one, ZRLE's
+so that class of bug cannot be written, including the live one, ZRLE's
 `cpixel()` reading three bytes least-significant-first and appending `0xFF`
 (`rfb.py`).
 
@@ -115,14 +115,14 @@ def cpixel_offset(pixel_format: PixelFormat) -> int: ... # 0 or bypp - 3
 def channel_tolerance(pf: PixelFormat) -> tuple[int, int, int]:  # 8-bit error per channel
 ```
 
-`raw_mode` ignores `depth` — it does not affect where the channels sit.
+`raw_mode` ignores `depth`: it does not affect where the channels sit.
 `cpixel_bytes` must obey it, since the encoder used the same declaration.
 
 `UnsupportedPixelFormat` rather than a guess, though under the policy below a
-caller only reaches it when a server ignores what we asked for.
+caller only reaches it when a server ignores what was requested.
 
-**CPIXEL** (RFC 6143 §7.7.5) is three bytes when true colour, 32 bpp, depth ≤ 24
-and every colour bit sits in either the low or the high three bytes; which
+**CPIXEL** (RFC 6143 §7.7.5) is three bytes when true color, 32 bpp, depth ≤ 24
+and every color bit sits in either the low or the high three bytes; which
 placement is a function of the shifts. rfbproto adds a tie-break the RFC omits:
 at depth ≤ 16 both placements fit, and the low three bytes are sent.
 
@@ -130,8 +130,8 @@ Placement is in value space and `cpixel_offset` is in byte space, so big-endian
 reverses which end of the pixel they sit at. Slicing at the wrong end takes the
 pad byte and drops a channel.
 
-**TPIXEL** is narrower and fixed — depth exactly 24, all channels exactly 8
-bits, bytes red, green, blue — so a Tight rect tags 24 bpp RGB whatever was
+**TPIXEL** is narrower and fixed (depth exactly 24, all channels exactly 8
+bits, bytes red, green, blue), so a Tight rect tags 24 bpp RGB whatever was
 negotiated. It arrives with Tight at decoder Phase 6.
 
 This pass writes the CPIXEL functions and their tests; ZRLE keeps its current
@@ -150,16 +150,16 @@ Probed by feeding known words through each mode:
 
 `rgb565` is `BGR;16`: `0x00F8` little-endian yields `(255, 0, 0)`, so it is
 red-in-the-high-bits 565, matching `PixelFormat(16, 16, False, True, 31, 63, 31,
-11, 5, 0)` — the constant `client.py` calls `BGR16`.
+11, 5, 0)`, the constant `client.py` calls `BGR16`.
 
 Five layouts fall outside: **big-endian 16 bpp** (big-endian 32 bpp is another
 byte permutation, covered); **channel widths outside 8/8/8, 5/6/5, 5/5/5,
 4/4/4**; **non-byte-aligned shifts at 32 bpp**; **444 with red in the high
-nibble**, since Pillow has `RGB;4B` and no mirror of it; and **colour-mapped**,
+nibble**, since Pillow has `RGB;4B` and no mirror of it; and **color-mapped**,
 which is `P` plus `putpalette` rather than a raw mode.
 
 None needs a converter, because none is reachable while a server honours
-`SetPixelFormat` — an unreadable native means we ask for `bgrx8888`. A converter
+`SetPixelFormat`: an unreadable native means requesting `bgrx8888`. A converter
 is for a server that sends an exotic native *and* ignores the request, which no
 capture has shown. Measured for whenever one does: a 2^16-entry lookup table
 converts a 1080p frame in 23.7 ms, per-pixel Python in 160 ms.
@@ -173,7 +173,7 @@ The replacement runs at `vncConnectionMade`, before the first
 `FramebufferUpdateRequest`. Required, not tidy: rfbproto states a client **must
 not** have an outstanding request when it sends `SetPixelFormat`, since the next
 update would be undecidable between formats. There is no acknowledgement and no
-fence, so `--pixel-format` is connect-time only — a later switch needs the
+fence, so `--pixel-format` is connect-time only: a later switch needs the
 request drained, or a `SyncNext` fence around it. The client answers fences
 but does not offer the encoding or send one, so nothing yet drives that.
 
@@ -188,28 +188,28 @@ need not send one. #90 and #275 are servers that keep sending native after being
 asked otherwise; a client that never asked cannot be bitten by them. Step 3 has
 no measured caller.
 
-Nothing detects a server ignoring the request — the protocol offers no way. What
+Nothing detects a server ignoring the request: the protocol offers no way. What
 changes is that an unreadable native is a diagnosed error rather than a silent
 guess.
 
-A colour-mapped request leaves the map empty until `SetColourMapEntries`
-arrives, whatever the server set before; that lands with the colour-map slice.
+A color-mapped request leaves the map empty until `SetColourMapEntries`
+arrives, whatever the server set before; that lands with the color-map slice.
 
 ## Command line
 
     vncdo --pixel-format rgb565 capture screen.png
 
 Names from a registry, not a ten-field tuple: `bgrx8888`, `rgbx8888`, `rgb565`.
-Channel order as the bytes arrive, per-channel widths, `x` for a pad byte —
+Channel order as the bytes arrive, per-channel widths, `x` for a pad byte,
 naming the pad because it distinguishes the 32 bpp formats every server sends
 from the 24 bpp ones the specification does not allow. Fixtures use the same
 vocabulary, which is why `tigervnc-raw-rgb888` became `tigervnc-raw-bgrx8888`:
 a fixture is named for the format it holds, never for how that format was
 chosen.
 
-Every requestable name is 8, 16 or 32 bpp, all the specification permits. The
-24 bpp modes stay reachable by `raw_mode` and out of the registry — reading one
-is tolerance for an out-of-spec server, never something we ask for.
+Every requestable name is 8, 16, or 32 bpp, all the specification permits. The
+24 bpp modes stay reachable by `raw_mode` and out of the registry: reading one
+is tolerance for an out-of-spec server, never something vncdotool requests.
 
 `api.connect` gains a `pixel_format=` keyword taking the same names. `vnclog`
 gets no flag: the client negotiates, the proxy records what it saw.
@@ -219,16 +219,16 @@ gets no flag: the client negotiates, the proxy records what it saw.
 **Unit.** `raw_mode` over a table of formats, including pairs differing only by
 `depth` and only by endianness, plus `UnsupportedPixelFormat` for each uncovered
 layout. Then, per mode, known bytes through `Image.frombytes` to
-known RGB pixels — the mode string is a claim about Pillow, and that is the
+known RGB pixels: the mode string is a claim about Pillow, and that is the
 claim that can be wrong. CPIXEL gets both placements, the depth ≤ 16 tie-break,
 and the negative cases falling back to PIXEL width.
 
 **Negotiation.** Mocked transport asserting the `SetPixelFormat` bytes, or their
 absence, which is step 2 and the case a test would otherwise skip.
 
-`conditions.json` grows the pixel format, both the ServerInit one and any we
-requested. They are different facts and the interesting fixtures are where they
-differ.
+`conditions.json` grows the pixel format, both the ServerInit one and any that
+was requested. They are different facts and the interesting fixtures are where
+they differ.
 
 Golden and functional coverage at a second, reduced-precision format
 (`rgb565`) is deferred (see below).
@@ -243,7 +243,6 @@ Golden and functional coverage at a second, reduced-precision format
 ## Validated against the specs
 
 C2. Read from a local rfbproto clone (`DEVELOP.rst` says where) and RFC 6143.
-
 - **Format fields** (rfbproto §ServerInit, RFC 6143 §7.4): bpp must be 8, 16 or
   32 and ≥ depth; big-endian is meaningless at 8 bpp; each max is 2^n - 1, each
   shift brings its channel to the least significant bit. Also that "some servers
@@ -251,47 +250,48 @@ C2. Read from a local rfbproto clone (`DEVELOP.rst` says where) and RFC 6143.
 - **SetPixelFormat** (rfbproto §SetPixelFormat and §Client to Server Messages,
   RFC 6143 §7.5.1): optional for clients, mandatory for servers to support;
   absent it the ServerInit format applies; no acknowledgement; no outstanding
-  `FramebufferUpdateRequest` when sent; colour map empty immediately after.
+  `FramebufferUpdateRequest` when sent; color map empty immediately after.
 - **CPIXEL** (rfbproto §ZRLE, RFC 6143 §7.7.5): the four conditions, both
   placements, the low-three-bytes tie-break at depth ≤ 16.
 - **TPIXEL** (rfbproto §Tight): narrower, fixed RGB order. Corrects a "believed
   to follow the same rule" note in `decoder-architecture.md`.
 
 Unverified: how a real server behaves when asked for a format it dislikes. No
-document covers it; a capture will.
+document covers it; only a capture settles it.
 
 ## Deferred
 
 - **`rgb565` fleet coverage.** `tigervnc-tight-rgb565` is captured, so the
   golden half is done; no fleet case runs at the format yet. The diagnosis
-  recorded here — that `scene.vdo`'s exact-histogram `expect` cannot pass at
-  5-bit quantization — held, but the prescription did not: a per-format
+  recorded here (that `scene.vdo`'s exact-histogram `expect` cannot pass at
+  5-bit quantization) held, but the prescription did not: a per-format
   `maxrms` is the hand-tuned constant [decoder-goldens.md](decoder-goldens.md)
   warns against, and what it actually needed was for `expect` to read the
   tolerance off the format it negotiated.
 - The four layouts Pillow cannot unpack, each waiting for a capture from a
   server that sends one and ignores `SetPixelFormat`.
-- Colour map: `P` plus a palette, and the `SetColourMapEntries` ordering above.
-  vncev is the server to build it against once a real one turns up behind it.
+- Color map: `P` plus a palette, and the `SetColourMapEntries` ordering
+  described earlier. vncev is the server to build it against once a real one
+  turns up behind it.
 - The CPIXEL functions' use, which lands with ZRLE at decoder Phase 5.
 - A raw-tuple form of `--pixel-format`.
 
 ## Risks
 
 - A tolerance wide enough for 5-bit quantization can hide a real defect, and
-  nothing compensates — a cross-format comparison does not, for the reason in
+  nothing compensates: a cross-format comparison does not, for the reason in
   [decoder-goldens.md](decoder-goldens.md). What hides is narrower than the
-  whole class: a channel swap moves a coloured pixel much further than 255/31,
+  whole class: a channel swap moves a colored pixel much further than 255/31,
   so the tolerant comparison still fails on it, and what survives is a shift or
   rounding error smaller than one quantization step. Measured against the
   captured `tigervnc-tight-rgb565`: swapping the decoder's red and blue fails
   it on the first pixel of the first step, as does forcing TPIXEL to three
   bytes at a 16 bpp format.
-- Tagging moves the trust from our arithmetic to Pillow's mode strings. A mode
-  meaning something other than we think decodes silently wrong, where a bad
-  shift would at least be ours to read — hence unit tests asserting Pillow's
-  behaviour per mode, not only which mode we picked.
+- Tagging moves the trust from decoder arithmetic to Pillow's mode strings. A
+  mode meaning something other than expected decodes silently wrong, where a
+  bad shift would at least be visible on inspection, hence unit tests
+  asserting Pillow's behaviour per mode, not only which mode was picked.
 - Dropping the version-3.889 special case rests on one macOS version on a
   hosted runner. If an older ARD server announces something unreadable, it
-  now gets a `SetPixelFormat` for `rgbx8888` — the correct fallback, untested
+  now gets a `SetPixelFormat` for `rgbx8888`, the correct fallback, untested
   against that server.

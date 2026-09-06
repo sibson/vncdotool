@@ -1,4 +1,4 @@
-# Tight Encoding — Build Plan
+# Tight Encoding: Build Plan
 
 Status: draft, under review. Executes
 [decoder-architecture.md](decoder-architecture.md) Phase 6 and the Tight half of
@@ -7,7 +7,7 @@ Status: draft, under review. Executes
 
 ## What Phase 6 assumed, and what is actually missing
 
-Phase 6 reads as "a new encoding as new files plus tests", with the registry
+Phase 6 reads as "a new encoding as new files plus tests," with the registry
 already able to carry it. Three things it does not account for turned up on
 inspection:
 
@@ -53,19 +53,18 @@ rfbproto alone here.
 
 **JPEG is in scope, and Pillow decodes it inside the decoder**, which emits
 24 bpp RGB. This is the one place the architecture's "a decoder unit test needs
-no rendering library" (R2) does not hold; Pillow is already a hard dependency,
-and the alternative — passing JPEG bytes through to `client.py` — changes
-`updateRectangle`'s `(bytes, PixelFormat)` contract for every encoding to serve
-one.
+no rendering library" (R2) does not hold; Pillow is already a hard dependency. The alternative, passing JPEG bytes
+through to `client.py`, changes `updateRectangle`'s `(bytes, PixelFormat)`
+contract for every encoding to serve one.
 
 The decode path is unconditional: nothing in the wire format stops a
 non-conforming server from sending `0x9_`, and a client that cannot read it
-fails in the field. What is conditional is whether we *invite* JPEG.
+fails in the field. What is conditional is whether the client *invites* JPEG.
 
 **`--jpeg-quality N` offers a quality level; the default offers none.** A
 conforming server sends JPEG only to a client that advertised -23..-32, so the
 default keeps captures lossless, which is what a screenshot tool should do, and
-the flag is what makes a JPEG rectangle capturable at all — which is what makes
+the flag is what makes a JPEG rectangle capturable at all: that is what makes
 the decode path testable rather than dead. The level is the RFB quality level
 0–9 the wire carries, not a percentage: the protocol has ten values and every
 viewer's own control is that same 0–9 scale, so a percentage would invent a
@@ -81,7 +80,7 @@ bound, where it came from and the mutations that show it can still fail.
 **The gradient filter raises `DecodeError`, naming what arrived.** No encoder in
 the fleet emits one, so no fixture can cover it, and the brief records an
 unresolved disagreement between LibVNCServer and TigerVNC about its behaviour at
-non-888 formats — precisely because there is no live encoder to settle it
+non-888 formats, precisely because there is no live encoder to settle it
 against. Failing loudly beats shipping a branch that is a guess at a spec
 ambiguity.
 
@@ -89,7 +88,7 @@ ambiguity.
 one compression type covering the whole rectangle, so Tight never writes a
 partial rectangle and never needs the shared `RectBuffer`. Its generator returns
 `(bytes, PixelFormat)` and the pump hands both straight to `updateRectangle`.
-No buffer is allocated, so the format mismatch above cannot arise, and
+No buffer is allocated, so the preceding format mismatch cannot arise, and
 `output_format` stays a per-decoder answer for the decoders that have one.
 Rejected: repacking every pixel into the negotiated layout in the decoder
 (per-pixel Python on JPEG rectangles, against N2), and letting `RectBuffer`
@@ -117,30 +116,30 @@ Two additions:
 
 ## Build order
 
-A stack: each stage is a branch on the one below it, reviewed and merged on its
-own, and the next rebases onto what landed. Every stage is green on `make test`
+A stack: each stage is a branch on the one below it, reviewed, and merged on
+its own, and the next rebases onto what landed. Every stage is green on `make test`
 and on `flake8 --count --statistics vncdotool tests`, and adds no new
 `make typecheck` error, before it is offered for review.
 
-**Stage 0 — wire brief. Done**, committed as [tight-wire.md](tight-wire.md).
+**Stage 0: wire brief. Done**, committed as [tight-wire.md](tight-wire.md).
 
-**Stage 1 — TPIXEL. Done.** `pixelformat.tpixel_bytes` and the 24 bpp RGB output
+**Stage 1: TPIXEL. Done.** `pixelformat.tpixel_bytes` and the 24 bpp RGB output
 format a 3-byte TPIXEL implies, with unit tests beside the CPIXEL ones in
-`test_pixelformat.py`. The condition is narrow and exact — true colour, 32 bpp,
-depth 24, three 8-bit channels — and the byte order is a fixed R, G, B that
+`test_pixelformat.py`. The condition is narrow and exact: true color, 32 bpp,
+depth 24, three 8-bit channels. The byte order is a fixed R, G, B that
 ignores the big-endian flag and the channel shifts, which is what makes it
 unlike CPIXEL. Touches no decoder.
 
-**Stage 2 — the whole-rectangle pump path. Done.** A `WholeRectDecoder` base beside
+**Stage 2: the whole-rectangle pump path. Done.** A `WholeRectDecoder` base beside
 `PixelDecoder`, `_pumpFor` dispatching to it, and its own `test_pump.py` cases
 including the one-byte-at-a-time segmentation case, since this path does not go
 through the existing one. A Tight rectangle carries one compression type for the
 whole rectangle, so the decoder returns `(bytes, PixelFormat)` and no
-`RectBuffer` is allocated — which is also what keeps a 3-byte TPIXEL rectangle
+`RectBuffer` is allocated, which is also what keeps a 3-byte TPIXEL rectangle
 from being written into a buffer sized for a 4-byte negotiated format. Touches
 no decoder; independent of stage 1 in content, stacked on it in git.
 
-**Stage 3 — the decoder, against real bytes. Done.** Registration
+**Stage 3: the decoder, against real bytes. Done.** Registration
 (`DECODERS`, `ENCODING_NAMES["tight"]`) lands first so `--encodings tight` can be
 offered at all, then `vnclog --capture-raw` against `tigervnc` produces the bytes
 the implementation is written against. In order: the control byte and its reset
@@ -148,15 +147,15 @@ bits over four independent streams, fill, basic/copy, basic/palette. Gradient
 raises `DecodeError`; JPEG is stage 5. Unit tests in
 `tests/unit/test_decoder_tight.py`, every case driven from captured bytes.
 
-Framing details that desynchronise the stream rather than merely producing a
+Framing details that desynchronize the stream rather than merely producing a
 wrong image, so each gets a test: the filter byte exists only when bit 6 is set;
 palette size is stored minus one; the 12-byte uncompressed threshold is computed
 by the decoder from `height * rowSize` and never signalled on the wire; a
-2-colour palette packs 1-bit rows padded to a byte boundary. The 2048-pixel width
+2-color palette packs 1-bit rows padded to a byte boundary. The 2048-pixel width
 check exempts Fill, because TigerVNC servers before 1.16.0 sent wider Fill
 rectangles and its own decoder exempts them.
 
-**Stage 4 — goldens. Done.** `tests/goldens/capture.py --encoding tight
+**Stage 4: goldens. Done.** `tests/goldens/capture.py --encoding tight
 --pixel-format bgrx8888`, committed as `tigervnc-tight-bgrx8888`, plus the
 non-default formats the matrix asks for: TPIXEL width varies with the negotiated
 format, and 32 bpp is exactly the case that hides it. `test_goldens.py` walks the
@@ -164,35 +163,35 @@ tree and needs no edit.
 
 **No single scene is the palette scene for Tight**, which the Testing section
 below assumed there would be. Palette coverage at bgrx8888 arrives spread across
-the catalogue — 24 basic/palette rectangles at palette sizes 2, 3, 4, 5, 8 and
-16 — and which rectangles come out palette is a function of the negotiated
+the catalogue: 24 basic/palette rectangles at palette sizes 2, 3, 4, 5, 8, and
+16. Which rectangles come out palette is a function of the negotiated
 format as much as of the content: at rgb565, quantizing to 5/6/5 collapses the
-dense and scattered scenes far enough that TigerVNC sends palettes of 37, 40 and
-204 colours where at bgrx8888 it sent the same rectangles as a raw copy. Which
+dense and scattered scenes far enough that TigerVNC sends palettes of 37, 40, and
+204 colors where at bgrx8888 it sent the same rectangles as a raw copy. Which
 filter a fixture reaches is therefore a property of the (scene, format) pair, not
 of the scene; the capture is read back afterwards to find out what it got, and
 what each one got is recorded in the commit that added it.
 
-**Stage 5 — JPEG. Done.** `--jpeg-quality N` offering one of -23..-32, the
+**Stage 5: JPEG. Done.** `--jpeg-quality N` offering one of -23..-32, the
 Pillow decode path in the decoder, and a `tigervnc-tight-jpeg-bgrx8888`
 fixture captured with the flag set, carrying a lossy-encoding tolerance and
 the quality level it was taken at. Also the grayscale case: TurboVNC under
 `-subsamp gray` emits 1-component JPEG, so the decoder converts whatever
 components arrive to RGB rather than assuming three. That one has no captured
-fixture — no fleet server emits it — so its unit case re-encodes a captured
+fixture, since no fleet server emits it, so its unit case re-encodes a captured
 rectangle's own pixels with one component and splices them into that
 rectangle's framing, and the PR says the branch is taken on the brief's
 authority alone.
 
 Two things the plan had wrong, found here. Offering a quality level *moves*
 work off the other branches rather than adding to it: TigerVNC sends JPEG
-where it would have sent a full-colour copy rectangle, so the lossy capture
+where it would have sent a full-color copy rectangle, so the lossy capture
 reaches no copy filter, no implicit filter and nothing under the 12-byte
 threshold, and it carries its own coverage contract rather than the lossless
 one. And `expect` could not sequence a lossy capture at all, which
 [expect-matching.md](expect-matching.md) went on to fix.
 
-**Stage 6 — live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
+**Stage 6: live and measured. Done.** `"tight"` joins `EMITTED_BY_TIGERVNC` in
 `tests/functional/test_encodings.py`; the per-encoding cases generate themselves
 from `ENCODING_NAMES` and render both scenes byte for byte. N2's bandwidth half
 lands as two cases in `test_bandwidth.py`, one per content class, and is met
@@ -213,9 +212,9 @@ the "Offering" line carries, so adding any name to `EMITTED_BY_TIGERVNC` passed.
 The witness is `vnclog --capture-raw`'s `encodings_seen`. And `benchmark.py`
 replayed every fixture as if it were captured at the server's native format,
 which is invisible until a fixture is narrower than four bytes: the rgb565
-fixture desynchronised, aborted, and reported 112 us as if it were a win.
+fixture desynchronized, aborted, and reported 112 us as if it were a win.
 
-**Stage 7 — docs, CHANGELOG, and the R1 check. Done.** `--encodings tight` and
+**Stage 7: docs, CHANGELOG, and the R1 check. Done.** `--encodings tight` and
 `--jpeg-quality` are documented under Encodings in `docs/usage.rst`, beside the
 other flags; the CHANGELOG entries the stages wrote independently are
 consolidated.
@@ -233,24 +232,24 @@ consolidated.
 Of the fifteen commits in the stack, exactly one touches `rfb.py` and none
 touches `const.py`.
 
-**`const.py` is a literal zero and `rfb.py`'s encoding tables are untouched** —
+**`const.py` is a literal zero and `rfb.py`'s encoding tables are untouched**:
 neither `SUPPORTED_ENCODINGS` nor `_UNMIGRATED_ENCODINGS` appears anywhere in
 the stack's `rfb.py` diff, and `Encoding.TIGHT` was already in `const.py`. That
 is R1's actual claim, and it holds: **adding the encoding needed no `rfb.py`
 edit at all.** Stage 3, which is the encoding, changed three lines in
-`decoders/__init__.py` — an import, a `DECODERS` entry, an `ENCODING_NAMES`
-entry — and nothing else outside `decoders/`.
+`decoders/__init__.py`: an import, a `DECODERS` entry, and an `ENCODING_NAMES`
+entry, and nothing else outside `decoders/`.
 
 **The 30 lines in `rfb.py` are real and are not the encoding.** Every one of
 them is stage 2's `_pumpWholeRectangle`: a third pump path, plus threading a
 generator's return value out through `_pumpGenerator`'s `on_done`. A pump path
 is `rfb.py`'s own subject matter, not an encoding's, and the architecture's
-registry claim — "nothing tells `rfb.py` the encoding exists" — survives it
+registry claim, "nothing tells `rfb.py` the encoding exists," survives it
 intact. But R1 as written says `rfb.py` is unchanged, and this stack changed it,
 so the honest reading is that Phase 6 discharges R1 for *registration* and
 leaves open whether R1 also intends to bar new pump shapes. An encoding whose
 framing fits neither existing path costs an `rfb.py` edit once, and the next
-whole-rectangle encoding will cost none.
+whole-rectangle encoding costs none.
 
 Since resolved the other way: the pump now has a single entry point, and a base
 class decides for itself what to feed the generator and what its `Outcome` is
@@ -285,13 +284,13 @@ it.
 except CoRRE**, which alone lands inside the noise against Raw. What the slow
 rows share is per-rectangle Python decode work, not decompression: only Tight
 and ZRLE decompress at all, and RRE at 1.58x and Hextile at 11.2x reach those
-figures without zlib — Hextile's cost is per-subrectangle Python. Hextile and
+figures without zlib; Hextile's cost is per-subrectangle Python. Hextile and
 ZRLE shipped in phases 4 and 5 with N2 stated and unmet at 11x and 55x, so this
 is a requirement almost nothing has ever met, not a regression Tight introduced.
 
 The profile says why. Over 20 profiled replays of `tigervnc-tight-bgrx8888`,
 0.068 s total: `_unpalette` 0.012 s of self time (the per-pixel Python loop that
-expands palette indices), `zlib.Decompress.decompress` 0.010 s, then the pump —
+expands palette indices), `zlib.Decompress.decompress` 0.010 s, then the pump:
 427 `_pumpGenerator` sends per replay of 87 rectangles, against Raw's zero. Raw
 is fast because it takes none of these: it enters `_pumpRectangle`, reads
 `width * height * bypp` bytes straight off the wire in the negotiated layout, and
@@ -299,7 +298,7 @@ pastes them. Its profile has no decoder frame in the top twenty-five at all.
 Doing any per-pixel work in Python therefore cannot be free, and a bar measured
 against the one encoding that does none asks for exactly that.
 
-### Proposed replacement for N2 — not applied
+### Proposed replacement for N2: not applied
 
 `decoder-architecture.md` is not edited here: amending a standing architectural
 requirement is the repository owner's call. This is the case, for them to accept
@@ -316,14 +315,14 @@ or reject.
 > and render-time question together, not render time alone.
 
 If the owner prefers to keep an absolute bar, the alternative is to state it as
-a budget rather than a comparison — "no encoding costs more than N ms per
-full-screen update at 1920x1080" — and to accept that ZRLE fails it today and
-needs the `cpixel` loop replaced before it can pass.
+a budget rather than a comparison: "no encoding costs more than N ms per
+full-screen update at 1920x1080." That requires accepting that ZRLE fails it
+today and needs the `cpixel` loop replaced before it can pass.
 
 ## Testing
 
 Tier 1 is `test_goldens.py` against the captured fixture, and per-branch unit
-tests in `tests/unit/test_decoder_tight.py` driven from captured bytes — never
+tests in `tests/unit/test_decoder_tight.py` driven from captured bytes, never
 from bytes assembled out of the specification, per `decoder-goldens.md`. Tier 2
 is `test_encodings.py` against the fleet. Tier 3 is the existing scene
 catalogue, which covers the content classes the filters split on: solid fills
@@ -331,7 +330,7 @@ catalogue, which covers the content classes the filters split on: solid fills
 (palette filter).
 
 The scene catalogue was built before Tight was in view. If a filter turns out
-unreachable with the scenes we have, the fix is a scene, not a hand-built
+unreachable with the available scenes, the fix is a scene, not a hand-built
 fixture.
 
 ## Deferred
@@ -340,15 +339,15 @@ fixture.
   Nothing measurable rides on it until someone has a bandwidth complaint.
 - **The gradient filter.** No encoder in the fleet emits it, and the brief
   records an unresolved disagreement between LibVNCServer and TigerVNC about how
-  it behaves at non-888 formats. Revisit when a server that emits it turns up —
-  and start by finding that server, exactly as `decoder-architecture.md` says of
+  it behaves at non-888 formats. Revisit when a server that emits it turns up,
+  starting by finding that server, exactly as `decoder-architecture.md` says of
   TRLE.
 - **Tight security type 16**, which TightVNC requires before falling back to VNC
   auth (server-compatibility-plan Phase 2.1). Decoding Tight and authenticating
   to TightVNC are separate; this one needs a TightVNC server in the fleet.
 - **Tight Encoding Without Zlib (-317)**, which is what makes the `0xA0`/`0xE0`
-  control bytes legal. We do not advertise it, so those bytes are a protocol
-  error.
+  control bytes legal. vncdotool does not advertise it, so those bytes are a
+  protocol error.
 - **TightPNG (-260)**. No fleet server emits it, so under the captured-fixture
   rule it cannot be tested.
 

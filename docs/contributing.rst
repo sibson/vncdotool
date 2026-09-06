@@ -1,7 +1,7 @@
 Contributing
 =============
 
-Code and Issue tracking is provided by Github_.  There is also a mailing list setup via `Google Groups`_.
+Code and Issue tracking is provided by Github_. There is also a mailing list setup via `Google Groups`_.
 
 
 .. _Github: https://github.com/sibson/vncdotool

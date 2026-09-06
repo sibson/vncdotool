@@ -1,4 +1,4 @@
-# What `expect` Compares — Design
+# What `expect` Compares: Design
 
 Status: built. What a `jpeg-lossy` fixture records is in
 [decoder-goldens.md](decoder-goldens.md).
@@ -32,7 +32,7 @@ not mention. The documented metric serves the exact-match case alone.
 
 ## The comparison
 
-Per pixel, the perceived colour difference in YIQ, from pixelmatch (Kotsarenko
+Per pixel, the perceived color difference in YIQ, from pixelmatch (Kotsarenko
 & Ramos 2010):
 
     dY, dI, dQ  from the usual RGB -> YIQ matrix
@@ -46,7 +46,7 @@ spends least of its error budget and where the eye resolves most detail.
 not one, so a percentage was considered; it buys nothing, because nothing
 useful lives below 1. Shifting every pixel by one unit on every channel scores
 0.97, and the tightest bound anyone needs under that is 0, which already means
-exact. The score itself stays a float — a screen differing in one blue bit
+exact. The score itself stays a float: a screen differing in one blue bit
 scores 0.44, and rounding it would make `expect FILE 0` accept a screen that is
 not the target.
 
@@ -80,7 +80,7 @@ exact-match case, which is most of them, never enters the float path.
 ## Measurements
 
 Worst accepted (a settled frame against its own scene) against best rejected (a
-settled frame against the seven other scenes, plus every partially-drawn frame
+settled frame against the seven other scenes, plus every partially drawn frame
 against the scene it was still drawing). Partial frames come from feeding each
 step's bytes in 4 KB chunks and sampling the framebuffer between them; they are
 the "do not unblock on a half-painted screen" case. Every candidate rejected
@@ -122,7 +122,7 @@ it back off for anyone who wants the strictness.
 
 **Fuzz, not tolerance.** `fuzz` is already the word in vncdo's own help text
 (`expect FILE FUZZ`) and ImageMagick's for the same quantity, a per-pixel
-colour-distance allowance. `tolerance` is spoken for in this repository: it is
+color-distance allowance. `tolerance` is spoken for in this repository: it is
 the RGB quantization triple in `pixelformat.channel_tolerance` and in a
 fixture's `conditions.json`, a different number on a different scale, and
 overloading it would leave `tolerance_kind` ambiguous.
@@ -139,7 +139,7 @@ default; the token tunes one wait. One script can wait on a smooth login dialog
 and then on a desktop playing video, which the option alone cannot express.
 
 `expect somescreen.png 0` -- the spelling in `docs/usage.rst` and in every
-script that copied it -- goes on meaning "exact". A script passing a large RMS
+script that copied it -- goes on meaning "exact." A script passing a large RMS
 number gets a lax match rather than the tight one it asked for; the number is
 on a different scale now. That is a breaking change, taken deliberately while
 the version is `2.0.0.dev0`.
@@ -198,7 +198,9 @@ is meant to be heading. Rejected for that.
 **Per-pixel threshold plus a count allowance**, as Playwright and pixelmatch do
 (`threshold` with `maxDiffPixels`), and as ImageMagick does (`-fuzz` with the
 `AE` metric, the only fuzz-affected one). The per-pixel half is what this design
-takes, name included; what it rejects is the count allowance on top. That
+takes, name included; what it rejects is the count allowance on top.
+
+That
 allowance survives every encoding measured, but it goes blind on noisy
 content, because the count absorbing the compression noise absorbs a small
 change with it. It suits whole-page screenshots over a lossless transport,
@@ -247,7 +249,7 @@ Six tests in `tests/unit/test_client.py` assert on `cli.expected` as a
 histogram and are rewritten against the new comparison. `CHANGELOG.rst` gets the
 entry for the breaking change, under `(UNRELEASED)`.
 
-**3. The CLI surface.** `--expect-fuzz` and `--expect-blur` parsed and
+**3. The command-line surface.** `--expect-fuzz` and `--expect-blur` parsed and
 validated (fuzz 0..255, blur non-negative), onto the factory. `expect` and
 `rexpect` take their trailing number only when the next token parses as one,
 which incidentally fixes a live bug: `docs/usage.rst` documents `expect
@@ -266,7 +268,7 @@ keysym-patch read in `distill.split`, the bound the driver runs under, and the
 fixture's recorded bound; those are three different questions. The patch read
 keeps its RGB triple, proven to work at level 0. The driver runs at a fuzz of
 64, which has to be wide enough for the worst quality level anyone captures.
-The recorded bound is measured from the capture itself — the furthest any of
+The recorded bound is measured from the capture itself: the furthest any of
 its own frames landed from its scene, plus a margin of 4 for the decode
 drifting under another libjpeg. Level 9 records 6 and level 5 records 19,
 against the 64 they were driven at.
