@@ -1,5 +1,6 @@
 2.0.0.dev0 (UNRELEASED)
 ----------------------
+  - [BREAKING] ``expect`` and ``rexpect`` decide a match pixel by pixel, as a perceived colour difference, rather than by the root-mean-square difference of the two histograms. The old comparison could not see a change smaller than the encoding's own noise, and no threshold separated a correct screen from a wrong one under either JPEG or a reduced pixel format. The number in ``expect FILE N`` is now that per-pixel bound, 0 (exact) to 255, on a scale unrelated to the old one; ``expectScreen`` and ``expectRegion`` take ``fuzz`` and ``blur`` in place of ``maxrms`` (@sibson)
   - Fix ``expect`` polling until it timed out at a reduced-depth pixel format: 5-bit red cannot carry most 8-bit values, so no screen ever matched an 8-bit target image exactly. It now also matches when the screen is as close as the negotiated format can express (@sibson)
   - Fix ``vnclog`` decoding the session at the pixel format ServerInit announced even after the client asked the server for another one, which desynchronised its log and its ``--capture-raw`` metadata at any non-native format, ``vncdo --pixel-format rgb565`` among them (@sibson)
   - Fix ``vnclog`` logging an ``AttributeError`` traceback in place of the reason its own decoder gave up on a session, and then carrying on decoding a stream it had already abandoned (@sibson)

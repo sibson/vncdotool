@@ -116,75 +116,72 @@ class TestVNCDoToolClient(TestCase):
 
         image_open.assert_called_once_with(fname)
 
-        assert cli.expected == client.Image.open.return_value.histogram.return_value
-        Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5)
+        assert cli.expected_image == client.Image.open.return_value.convert.return_value
+        Deferred.return_value.addCallback.assert_called_once_with(cli._expectCompare, region, 5, 0)
 
-    def test_expectCompareSuccess(self) -> None:
+    def _comparing(self, target, screen):
         cli = self.client
         cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 2, 3]
-        cli.screen.crop.return_value = cli.screen
-        result = cli._expectCompare(cli, None, 5)
+        cli.framebufferUpdateRequest = mock.Mock()
+        cli.expected_image = target
+        cli.screen = screen
+        return cli
+
+    def test_expectCompareSuccess(self) -> None:
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, self._swatch((0x2C, 0x2A, 0x2A)))
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 5, 0)
         assert result == cli
 
     def test_expectCompareExactSuccess(self) -> None:
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [2, 2, 2]
-        cli.screen.crop.return_value = cli.screen
-        result = cli._expectCompare(cli, None, 0)
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, target.copy())
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 0, 0)
         assert result == cli
 
     @mock.patch('vncdotool.client.Deferred')
     def test_expectCompareFails(self, Deferred):
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2, 2]
-        cli.framebufferUpdateRequest = mock.Mock()
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 1, 1]
-        cli.screen.crop.return_value = cli.screen
+        target = self._swatch((0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, self._swatch((0x2B, 0x2A, 0x2A)))
 
-        result = cli._expectCompare(cli, None, 0)
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 0, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
+        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, (0, 0, 1, 1), 0, 0)
 
     @mock.patch('vncdotool.client.Deferred')
     def test_expectCompareMismatch(self, Deferred):
-        cli = self.client
-        cli.deferred = mock.Mock()
-        cli.expected = [2, 2]
-        cli.framebufferUpdateRequest = mock.Mock()
-        cli.screen = mock.Mock()
-        cli.screen.histogram.return_value = [1, 1, 1]
-        cli.screen.crop.return_value = cli.screen
+        """A target the screen is not the size of never matches, however lax
+        the fuzz."""
+        cli = self._comparing(self._swatch((0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A)),
+                              self._swatch((0x2A, 0x2A, 0x2A)))
 
-        result = cli._expectCompare(cli, None, 0)
+        result = cli._expectCompare(cli, (0, 0, 1, 1), 255, 0)
 
         assert result != cli
         assert result == cli.deferred
         assert not cli.deferred.callback.called
 
         cli.framebufferUpdateRequest.assert_called_once_with(incremental=1)
-        cli.deferred.addCallback.assert_called_once_with(cli._expectCompare, None, 0)
+
+    def test_expectCompareBlurLetsALossyFrameThrough(self):
+        """A pixel the encoder moved a long way passes once both screens are
+        blurred, which is what a JPEG capture needs."""
+        target = self._swatch((0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A), (0x2A, 0x2A, 0x2A))
+        screen = self._swatch((0x2A, 0x2A, 0x2A), (0x6A, 0x6A, 0x6A), (0x2A, 0x2A, 0x2A))
+        cli = self._comparing(target, screen)
+        assert cli._expectCompare(cli, (0, 0, 3, 1), 20, 0) == cli.deferred
+        cli.deferred = mock.Mock()
+        assert cli._expectCompare(cli, (0, 0, 3, 1), 20, 2) == cli
 
     def _expectAgainst(self, pixel_format, target, screen):
-        cli = self.client
-        cli.deferred = mock.Mock()
+        cli = self._comparing(target, screen)
         cli.pixel_format = pixel_format
-        cli.expected = target.histogram()
-        cli.expected_image = target
-        cli.screen = screen
-        return cli._expectCompare(cli, (0, 0) + target.size, 0)
+        return cli._expectCompare(cli, (0, 0) + target.size, cli._expectFuzz(None), 0)
 
     @staticmethod
     def _swatch(*pixels):
