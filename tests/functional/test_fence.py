@@ -11,11 +11,12 @@ have to land together.
 
 import socket
 import struct
+import threading
 from unittest import TestCase
 
 from PIL import Image
 
-from vncdotool.const import Encoding, MsgS2C
+from vncdotool.const import Encoding, FenceFlags, MsgC2S, MsgS2C
 
 from .utils import (
     HOST,
@@ -81,6 +82,11 @@ class _Peer:
     def first_message_id(self):
         (msgid,) = struct.unpack("!B", self.recv(1))
         return msgid
+
+    def send_fence(self, flags, payload=b"\xaa"):
+        self.sock.sendall(
+            struct.pack("!BxxxIB", MsgC2S.CLIENT_FENCE, flags, len(payload)) + payload
+        )
 
 
 BASE_ENCODINGS = [
@@ -148,13 +154,32 @@ class TestFenceThroughTheClient(TestCase):
     def test_capture_survives_the_fences_it_asks_for(self) -> None:
         self._assert_captures(screenshot_dir() / f"{TIGERVNC.name}-fence.png")
 
-    def test_capture_survives_alongside_another_client(self) -> None:
-        """#322's shape: a second client on an -AlwaysShared session. TigerVNC
-        fences each client over its own connection, so the other client's
-        presence changes nothing, but the report is about this arrangement.
+    def test_capture_survives_another_client_fencing(self) -> None:
+        """#322's shape: a second client on an -AlwaysShared session, with the
+        first one fencing hard throughout. A fence is addressed to one
+        connection, so the noise this makes must not reach or stall the
+        capture; that it does not is the reason a fence the other client sent
+        cannot be what #322 saw arrive.
         """
         other = _Peer([*BASE_ENCODINGS, Encoding.PSEUDO_FENCE])
         self.addCleanup(other.close)
         other.request_update()
+
+        stop = threading.Event()
+
+        def fence_until_stopped():
+            other.sock.settimeout(0.3)
+            while not stop.is_set():
+                try:
+                    other.send_fence(FenceFlags.REQUEST | FenceFlags.BLOCK_BEFORE)
+                    other.send_fence(FenceFlags.REQUEST | FenceFlags.SYNC_NEXT)
+                except OSError:
+                    return
+                stop.wait(0.1)
+
+        noise = threading.Thread(target=fence_until_stopped, daemon=True)
+        noise.start()
+        self.addCleanup(noise.join, 5.0)
+        self.addCleanup(stop.set)
 
         self._assert_captures(screenshot_dir() / f"{TIGERVNC.name}-fence-shared.png")
