@@ -185,6 +185,10 @@ def _anonymous_options() -> Any:
     class AnonymousTLSContextFactory:
         def __init__(self) -> None:
             self._context = SSL.Context(SSL.TLS_CLIENT_METHOD)
+            # Pinned to exactly TLS 1.2: 1.3 defines no anonymous suite, and
+            # SECLEVEL=0 below lifts the floor that would otherwise keep
+            # OpenSSL from negotiating 1.0 or 1.1.
+            self._context.set_min_proto_version(SSL.TLS1_2_VERSION)
             self._context.set_max_proto_version(SSL.TLS1_2_VERSION)
             self._context.set_cipher_list(_ANONYMOUS_CIPHERS)
 
