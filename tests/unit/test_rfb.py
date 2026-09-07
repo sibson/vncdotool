@@ -175,13 +175,13 @@ class TestRFB(TestCase):
 class TestRFBClientSubclassWarning(TestCase):
 
     def test_overriding_updateRectangle_warns(self):
-        with self.assertWarns(FutureWarning):
+        with self.assertWarnsRegex(FutureWarning, r"updateRectangle changed in 2\.0.*issues/385"):
             class Sub(rfb.RFBClient):
                 def updateRectangle(self, x, y, width, height, data):
                     pass
 
     def test_overriding_fillRectangle_warns(self):
-        with self.assertWarns(FutureWarning):
+        with self.assertWarnsRegex(FutureWarning, r"fillRectangle changed in 2\.0.*issues/385"):
             class Sub(rfb.RFBClient):
                 def fillRectangle(self, x, y, width, height, color):
                     pass
