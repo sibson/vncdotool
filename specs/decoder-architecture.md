@@ -380,13 +380,15 @@ which is the failure mode being detected.
 `self.image_mode` is the one break `__init_subclass__` cannot see, since reading
 an attribute overrides nothing. It becomes a property that warns on access and
 returns the mode the negotiated format resolves to, which stays truthful under
-the new design for as long as one session has one format; `setImageMode` becomes
-a warning no-op.
+the new design for as long as one session has one format; `setImageMode` keeps
+working unchanged.
 
 **This machinery is temporary.** Once the contracts have actually changed the
-warnings are false, and they are removed. If the survey turns up nobody, they are
-removed having cost one release. If it turns up someone, there is a named user
-to design compatibility with rather than a hypothetical one.
+warnings are reworded to past tense, since the audience for the survey is the
+people upgrading across the change and they arrive at that moment; they are
+removed after 2.0 ships, having cost one release if the survey turns up
+nobody. If it turns up someone, there is a named user to design compatibility
+with rather than a hypothetical one.
 
 ## Build order
 
