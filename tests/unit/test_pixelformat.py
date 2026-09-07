@@ -36,6 +36,7 @@ def every_layout() -> Iterator[rfb.PixelFormat]:
     """Every channel arrangement of the widths a server may negotiate, in both endiannesses."""
     for bpp, depth, maxima, slots in (
         (32, 24, (255, 255, 255), (0, 8, 16, 24)),
+        (32, 32, (255, 255, 255), (0, 8, 16, 24)),
         (24, 24, (255, 255, 255), (0, 8, 16)),
         (16, 16, (31, 63, 31), (0, 5, 11)),
         (16, 15, (31, 31, 31), (0, 5, 10)),
@@ -210,13 +211,19 @@ class TestCPixel(TestCase):
         self.assertEqual(cpixel_bytes(BGR565), BGR565.bypp)
         self.assertEqual(cpixel_offset(BGR565), 0)
 
-    def test_depth_32_is_never_a_cpixel(self):
-        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
-        self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
-        self.assertEqual(cpixel_offset(pixel_format), 0)
+    def test_depth_32_with_narrow_channels_is_still_a_cpixel(self):
+        """libvncserver-example declares depth 32 but narrows anyway (#483)."""
+        self.assertEqual(cpixel_bytes(BGRX8888_DEPTH32), 3)
+        self.assertEqual(cpixel_offset(BGRX8888_DEPTH32), 0)
 
     def test_colour_bits_straddling_the_middle_fall_back_to_pixel_width(self):
         pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 4, 12, 20)
+        self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
+        self.assertEqual(cpixel_offset(pixel_format), 0)
+
+    def test_colour_bits_straddling_the_middle_at_depth_32_still_falls_back(self):
+        """The fallback fires on placement, not depth, at either depth."""
+        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 4, 12, 20)
         self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
         self.assertEqual(cpixel_offset(pixel_format), 0)
 

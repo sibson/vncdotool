@@ -95,6 +95,27 @@ class TestZRLE(unittest.TestCase):
 
         assert_pixels(self, self.cli.screen, self.GRID_4X4)
 
+    def test_zrle_leftover_bytes_after_a_tile_is_a_protocol_error(self) -> None:
+        """A server actually sending wider PIXELs than cpixel_bytes assumed
+        leaves bytes unconsumed at the end of the rectangle's zlib chunk --
+        caught here rather than silently misreading the next tile or, for a
+        rectangle that is only one tile, going unnoticed altogether.
+        """
+        width = height = 2
+        handshake(self.cli, width, height)
+        self.cli.vncProtocolError = mock.Mock()
+
+        # A real 4-bytes-per-pixel encoder's raw tile, decoded as if it were
+        # the usual 3: the low 3 bytes of each pixel look like valid CPIXELs,
+        # leaving one whole pixel's worth of bytes over at the end.
+        body = pack("!B", 0) + bytes(range(width * height * 4))
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        self.cli.vncProtocolError.assert_called_once()
+        self.cli.transport.loseConnection.assert_called_once()
+
     def test_zrle_solid_tile_fills_the_tile(self) -> None:
         width = height = 4
         handshake(self.cli, width, height)
@@ -299,6 +320,26 @@ class TestZRLE(unittest.TestCase):
         self.cli.dataReceived(server_init)
 
         colour = (5, 6, 7)
+        body = pack("!B", 1) + _cpixel(*colour)
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+
+    def test_zrle_depth_32_still_narrows_to_three_bytes(self) -> None:
+        """libvncserver-example declares depth 32 in ServerInit but its ZRLE
+        encoder narrows CPIXELs to 3 bytes regardless (#483); depth must not
+        gate ``cpixel_bytes``, only channel placement.
+        """
+        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
+        width = height = 2
+        self.cli.dataReceived(b"RFB 003.003\n")
+        self.cli.dataReceived(pack("!I", rfb.AuthTypes.NONE))
+        server_init = pack("!HH16sI", width, height, pixel_format.to_bytes(), 0)
+        self.cli.dataReceived(server_init)
+
+        colour = (11, 22, 33)
         body = pack("!B", 1) + _cpixel(*colour)
         self.cli.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])

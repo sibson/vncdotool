@@ -175,11 +175,16 @@ def _cpixel_placement(pixel_format: PixelFormat) -> str | None:
 
 
 def cpixel_bytes(pixel_format: PixelFormat) -> int:
-    """3 for a CPIXEL-eligible format, otherwise ``bypp`` (a PIXEL)."""
+    """3 for a CPIXEL-eligible format, otherwise ``bypp`` (a PIXEL).
+
+    Ignores ``depth``, like ``raw_mode``: some servers report depth ==
+    bits-per-pixel regardless of their actual encoder output (rfbproto
+    §ServerInit), and placement already refuses any layout that genuinely
+    needs all 4 bytes.
+    """
     if (
         pixel_format.truecolor
         and pixel_format.bpp == 32
-        and pixel_format.depth <= 24
         and _cpixel_placement(pixel_format) is not None
     ):
         return 3

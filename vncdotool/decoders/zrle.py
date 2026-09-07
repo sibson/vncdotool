@@ -198,3 +198,13 @@ class ZRLEDecoder(PixelDecoder):
                             )
                         rows.append(b"".join(map(expanded.__getitem__, packed))[:stride])
                     target.blit(tx, ty, tw, th, b"".join(rows))
+
+        if pos != end:
+            # Every subencoding consumes exactly the bytes RFC 6143 7.7.6
+            # says it does, so a rectangle's tiles exhaust its zlib chunk
+            # exactly -- bytes left over mean cpixel_bytes guessed a width
+            # this server isn't actually using.
+            raise DecodeError(
+                f"ZRLE rectangle left {end - pos} bytes unconsumed after its tiles; "
+                f"cpixel_bytes={cbytes} does not match what the server sent"
+            )
