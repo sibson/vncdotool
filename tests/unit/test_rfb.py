@@ -128,6 +128,64 @@ class TestRFB(TestCase):
             b"\xf8\x00\x00\x00\x00\x00\x00\x04\x03abc"
         )
 
+    def test_setDesktopSize(self):
+        """The request bytes TigerVNC 1.12 granted on a raw socket, not bytes
+        read back off this client.
+        """
+        screen = rfb.Screen(0x6B8B4567, 0, 0, 320, 240, 0)
+        self.client.setDesktopSize(320, 240, [screen])
+        self.client.transport.write.assert_called_once_with(
+            b"\xfb"  # SET_DESKTOP_SIZE
+            b"\x00"  # padding
+            b"\x01\x40"  # width 320
+            b"\x00\xf0"  # height 240
+            b"\x01"  # number-of-screens
+            b"\x00"  # padding
+            b"\x6b\x8b\x45\x67"  # screen id
+            b"\x00\x00\x00\x00"  # x-position, y-position
+            b"\x01\x40\x00\xf0"  # width, height
+            b"\x00\x00\x00\x00"  # flags
+        )
+
+    def test_setDesktopSize_with_no_screens(self):
+        self.client.setDesktopSize(320, 240, [])
+        self.client.transport.write.assert_called_once_with(
+            b"\xfb\x00\x01\x40\x00\xf0\x00\x00"
+        )
+
+    def test_updateExtendedDesktopSize_applies_a_granted_resize(self):
+        self.client.updateDesktopSize = mock.Mock()
+        self.client.updateExtendedDesktopSize(
+            rfb.DesktopSizeReason.THIS_CLIENT,
+            rfb.DesktopSizeResult.SUCCESS,
+            320,
+            240,
+            [rfb.Screen(0x6B8B4567, 0, 0, 320, 240, 0)],
+        )
+        self.client.updateDesktopSize.assert_called_once_with(320, 240)
+
+    def test_updateExtendedDesktopSize_ignores_a_refused_resize(self):
+        self.client.updateDesktopSize = mock.Mock()
+        self.client.updateExtendedDesktopSize(
+            rfb.DesktopSizeReason.THIS_CLIENT,
+            rfb.DesktopSizeResult.INVALID_LAYOUT,
+            256,
+            192,
+            [rfb.Screen(0x6B8B4567, 0, 0, 256, 192, 0)],
+        )
+        self.client.updateDesktopSize.assert_not_called()
+
+    def test_updateExtendedDesktopSize_applies_another_clients_resize(self):
+        self.client.updateDesktopSize = mock.Mock()
+        self.client.updateExtendedDesktopSize(
+            rfb.DesktopSizeReason.OTHER_CLIENT,
+            rfb.DesktopSizeResult.SUCCESS,
+            800,
+            600,
+            [],
+        )
+        self.client.updateDesktopSize.assert_called_once_with(800, 600)
+
     def test_auth_none38(self):
         self.client._packet += (
             b"RFB 003.008\n"  # header

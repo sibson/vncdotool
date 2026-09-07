@@ -25,6 +25,7 @@ from typing import (
     Callable,
     Collection,
     Generator,
+    Sequence,
     Tuple,
 )
 
@@ -41,7 +42,16 @@ from twisted.python import log, usage
 from twisted.python.failure import Failure
 
 from . import decoders, messages
-from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C
+from .const import (
+    Encoding,
+    AuthTypes,
+    DesktopSizeReason,
+    DesktopSizeResult,
+    FenceFlags,
+    MsgC2S,
+    MsgS2C,
+    Screen,
+)
 from .keys import Key
 from .pixelformat import PixelFormat
 
@@ -548,6 +558,18 @@ class RFBClient(Protocol):
         """Request, or respond to, a Fence synchronisation of the data stream."""
         self.transport.write(pack("!BxxxIB", MsgC2S.CLIENT_FENCE, flags, len(payload)) + payload)
 
+    def setDesktopSize(self, width: int, height: int, screens: Sequence[Screen]) -> None:
+        """Ask the server for a framebuffer of `width` x `height` laid out as
+        `screens`.
+
+        Only legal once the server has sent an ExtendedDesktopSize rectangle
+        (rfbproto, SetDesktopSize).
+        """
+        message = pack("!BxHHBx", MsgC2S.SET_DESKTOP_SIZE, width, height, len(screens))
+        for screen in screens:
+            message += pack("!IHHHHI", *screen)
+        self.transport.write(message)
+
     # ------------------------------------------------------
     # callbacks
     # override these in your application
@@ -630,6 +652,25 @@ class RFBClient(Protocol):
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         """New desktop size of width*height."""
+
+    def updateExtendedDesktopSize(
+        self,
+        reason: DesktopSizeReason,
+        result: DesktopSizeResult,
+        width: int,
+        height: int,
+        screens: Sequence[Screen],
+    ) -> None:
+        """New desktop size and screen layout.
+
+        A rectangle answering this client's own SetDesktopSize reports
+        whether it was granted in `result`, and leaves every other field
+        undefined when it was not; every other rectangle describes a layout
+        already in force.
+        """
+        if reason == DesktopSizeReason.THIS_CLIENT and result != DesktopSizeResult.SUCCESS:
+            return
+        self.updateDesktopSize(width, height)
 
     def set_color_map(self, first: int, colors: list[tuple[int, int, int]]) -> None:
         """The server is using a new color map."""

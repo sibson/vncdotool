@@ -173,6 +173,7 @@ class VNCDoToolArgumentParser(argparse.ArgumentParser):
             "  mousemove X Y\t\talias for move\n"
             "  mouseup BUTTON\tsend BUTTON up\n"
             "  drag X Y\t\tmove the mouse to X,Y in small steps\n"
+            "  resize W H\t\task the server for a W x H desktop\n"
             "  rcapture FILE X Y W H\tcapture a region of the screen\n"
             "  rexpect FILE X Y [FUZZ]\texpect that matches a region of the screen\n"
             "  rstable SECONDS X Y W H [FUZZ]\tstable for a region of the screen\n"
@@ -318,6 +319,9 @@ def build_command_list(
         elif cmd in ("pause", "sleep"):
             duration = float(args.pop(0)) / warp
             factory.deferred.addCallback(client.pause, duration)
+        elif cmd == "resize":
+            width, height = int(args.pop(0)), int(args.pop(0))
+            factory.deferred.addCallback(client.resize, width, height)
         elif cmd == "drag":
             x, y = int(args.pop(0)), int(args.pop(0))
             factory.deferred.addCallback(client.mouseDrag, x, y)
