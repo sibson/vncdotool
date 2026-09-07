@@ -19,6 +19,8 @@ docs/vale/styles/
 #*
 tests/servers/screenshots/
 tests/servers/qemu-tls/
+tests/servers/vencrypt-certs/
+tests/servers/wayvnc-certs/
 
 .DS_Store
 .tool-versions

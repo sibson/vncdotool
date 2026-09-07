@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tigervnc-standalone-server \
         tigervnc-common \
         tigervnc-tools \
+        openssl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY servers/tigervnc-entrypoint.sh /entrypoint.sh
@@ -208,6 +209,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY servers/kasmvnc-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+
+
+# wayvnc drives wlroots compositors only -- not Gnome, KDE or Weston -- so
+# sway supplies one. Debian's build links gnutls, without which wayvnc offers
+# no VeNCrypt at all.
+FROM base AS wayvnc
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        wayvnc \
+        sway \
+        openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY servers/wayvnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]

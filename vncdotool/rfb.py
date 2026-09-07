@@ -33,12 +33,12 @@ from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector, ITransport
-from twisted.internet.protocol import Protocol
+from twisted.internet.protocol import Protocol, connectionDone
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
-from . import decoders, messages, security
-from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C
+from . import decoders, messages, security, vencrypt
+from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C, VeNCryptSubtypes
 from .keys import Key
 from .pixelformat import PixelFormat
 
@@ -107,6 +107,8 @@ class RFBClient(Protocol):
         self._aborted = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
+        self._vencrypt_subtype = VeNCryptSubtypes.PLAIN
+        self._tls_handshake_pending = False
         self.negotiated_encodings = {
             Encoding.RAW,
         }
@@ -386,8 +388,23 @@ class RFBClient(Protocol):
     def dataReceived(self, data: bytes) -> None:
         if self._aborted:
             return
+        # The TLS layer delivers only decrypted bytes, so the first arrival
+        # proves the handshake finished.
+        self._tls_handshake_pending = False
         self._packet.extend(data)
         self._handler()
+
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
+        if self._tls_handshake_pending and not self._aborted:
+            # A failed handshake arrives as an OpenSSL error on
+            # connectionLost, with no RFB message attached.
+            self._tls_handshake_pending = False
+            self.vncProtocolError(
+                f"TLS handshake for {self._vencrypt_subtype!r} failed "
+                f"({reason.getErrorMessage()}); an untrusted certificate "
+                f"needs --tls-ca-cert or {vencrypt.INSECURE_FLAG}"
+            )
+        super().connectionLost(reason)
 
     def _handleExpected(self) -> None:
         if len(self._packet) >= self._expected_len:
@@ -586,6 +603,10 @@ class RFBFactory(protocol.ClientFactory):
     protocol = RFBClient
 
     username: str | None = None
+
+    tls_hostname: str | None = None
+    tls_ca_certs: str | None = None
+    tls_allow_unverified: bool = False
 
     def __init__(self, password: str | None = None, shared: bool = False) -> None:
         self.password = password

@@ -207,6 +207,23 @@ class AuthTypes(IntEnumLookup):
     REALVNC_192 = 192
 
 
+class VeNCryptSubtypes(IntEnumLookup):
+    """rfbproto: VeNCrypt subtypes."""
+
+    PLAIN = 256
+    TLS_NONE = 257
+    TLS_VNC = 258
+    TLS_PLAIN = 259
+    X509_NONE = 260
+    X509_VNC = 261
+    X509_PLAIN = 262
+    TLS_SASL = 263
+    X509_SASL = 264
+    IDENT = 265
+    TLS_IDENT = 266
+    X509_IDENT = 267
+
+
 class MsgS2C(IntEnumLookup):
     """:rfc:`6143` §7.6. Server-to-Client Messages."""
 

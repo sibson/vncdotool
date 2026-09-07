@@ -195,6 +195,30 @@ request, on the RFB scale of 0 (low) to 9 (high):
 > vncdo --encodings tight --jpeg-quality 8 capture screen.png
 ```
 
+## TLS, with VeNCrypt
+
+Servers that wrap the session in TLS offer the VeNCrypt *security type*.
+vncdo negotiates the subtypes `X509None`, `X509Vnc`, `X509Plain`,
+`TLSNone`, `TLSVnc` and `TLSPlain`, every one of which builds a TLS tunnel
+first. The bare `Plain` subtype puts the username and password on an
+unencrypted socket, so vncdo refuses it rather than offering a flag for it.
+SASL and Ident are not implemented. A server offering only subtypes vncdo
+declines ends the session naming each one and why.
+
+An X509 certificate is verified against the system trust store and must be
+issued for the address you dialled. A private CA goes in a PEM file:
+
+```
+> vncdo --tls-ca-cert /etc/ssl/vnc-ca.pem -s $HOST -p $PASSWORD capture screen.png
+```
+
+The `TLS*` subtypes carry no certificate at all. vncdo refuses them, and
+refuses a certificate it cannot verify, unless you say so:
+
+```
+> vncdo --tls-insecure-skip-verify -s $HOST -p $PASSWORD capture screen.png
+```
+
 ## Exit Status
 
 vncdo exits 0 when every action completed. Failures are grouped by cause, so

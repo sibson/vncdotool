@@ -17,6 +17,7 @@ from twisted.internet import reactor
 from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
 from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
+from twisted.internet.protocol import connectionDone
 from twisted.python.failure import Failure
 
 from . import decoders, pixelformat, rfb, websocket
@@ -167,7 +168,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if isinstance(self.transport, ITCPTransport):
             self.transport.setTcpNoDelay(True)
 
-    def connectionLost(self, reason: Failure) -> None:
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self, reason)
 
@@ -711,6 +712,9 @@ def factory_connect(
         # host carries the whole URL: the path and query select the session.
         conn = websocket.connect(reactor, factory, host)
     elif family in {socket.AF_UNSPEC, socket.AF_INET, socket.AF_INET6}:
+        # A connected transport keeps only the resolved address, so the name
+        # an X509 certificate must be issued for is recorded before dialling.
+        factory.tls_hostname = host
         conn = HostnameEndpoint(reactor, host, port).connect(factory)
     elif hasattr(socket, "AF_UNIX") and family == socket.AF_UNIX:
         conn = UNIXClientEndpoint(reactor, host).connect(factory)

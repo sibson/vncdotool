@@ -12,10 +12,10 @@ phased plan to close them.
 | Area | Supported | Notes |
 |---|---|---|
 | Protocol versions | 3.3, 3.7, 3.8 + quirks: 3.889 (Apple ARD), 4.0 (Intel AMT), 4.1/5.0 (RealVNC) | Unknown versions are logged but negotiation picks the highest known version ≤ server's |
-| Security types | None (1), VNC Authentication (2), ARD Diffie-Hellman (30) | Anything else → "unknown security types" and disconnect |
+| Security types | None (1), VNC Authentication (2), VeNCrypt (19), ARD Diffie-Hellman (30) | VeNCrypt covers every TLS-backed subtype; bare Plain is refused as cleartext, SASL and Ident are unimplemented. Anything else → "unknown security types" and disconnect |
 | Encodings | Raw, CopyRect, RRE, CoRRE, Hextile, ZRLE | No Tight, no TRLE, no JPEG quality/compression level pseudo-encodings |
 | Pseudo-encodings | Cursor, DesktopSize, LastRect, QEMU Extended Key Event | Fence is answered but not offered, and never initiated; no ExtendedDesktopSize, ContinuousUpdates, Extended Clipboard |
-| Transports | TCP, Unix socket, WebSocket (`ws://`, `wss://`) | No VeNCrypt or AnonTLS over a plain TCP connection |
+| Transports | TCP, Unix socket, WebSocket (`ws://`, `wss://`), TLS via VeNCrypt | An X509 certificate is verified against the address dialled, so VeNCrypt over a WebSocket URL has no hostname to check and is refused |
 
 **Test coverage:** unit tests with hand-crafted byte strings; functional
 tests against LibVNCServer example servers (in CI since #330) and an
@@ -24,9 +24,11 @@ installed. No other server implementation is exercised anywhere.
 
 ## What actually breaks, per the issue tracker
 
-- **Unsupported security types**: RealVNC-flavoured servers (Raspberry Pi
-  OS default) offer only RA2/RA2ne/etc.: #310. Proxmox and other
-  TLS-fronted servers need VeNCrypt: #138.
+- **Unsupported security types**: #310 reports `(19, 129, 5)`, so that
+  server offers VeNCrypt alongside RA2 rather than RA2 alone, and picking
+  19 is enough — the fleet's wayvnc proves the case. Proxmox and other
+  TLS-fronted servers need VeNCrypt: #138. RA2 itself is still
+  unsupported, so a server offering only 5/129 fails.
 - **Unsupported encodings**: servers that assume Tight support: #264.
 - **Pixel-format assumptions**: black or corrupted captures when a server
   ignores the client's `SetPixelFormat` or uses a format outside what
@@ -140,10 +142,11 @@ and TLS-fronted servers work out of the box. Ordered by expected impact:
 1. **Tight encoding** (decode; plus Tight auth type 16 negotiation, which
    TightVNC requires before falling back to VNC auth). Default encoding
    for the largest cluster of servers. (#264)
-2. **VeNCrypt security type (19)** with the TLSNone/TLSVnc/X509None/
-   X509Vnc/Plain subtypes, built on Twisted's TLS support. Unlocks
-   Proxmox (#138), TigerVNC with TLS, vino, and the "Plain" subtype some
-   headless servers use. (#310 partially)
+2. ~~**VeNCrypt security type (19)**~~: done, every TLS-backed subtype.
+   Bare Plain is refused by design, SASL and Ident are unimplemented.
+   The wayvnc case in #310 is measured, not inferred: the fleet runs one,
+   and it is the only server there offering `X509Plain`. Still open:
+   whether it covers Proxmox (#138).
 3. **Pixel-format correctness pass**: generalize the ZRLE compressed-pixel
    reader for bpp/endianness, implement Raw/RRE/Hextile conversion from
    any server-native true-color format to the client's working format,

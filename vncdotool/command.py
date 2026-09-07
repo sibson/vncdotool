@@ -334,6 +334,8 @@ def build_command_list(
 
 def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
     factory = VNCDoCLIFactory()
+    factory.tls_ca_certs = options.tls_ca_cert
+    factory.tls_allow_unverified = options.tls_insecure_skip_verify
 
     if options.verbose:
         factory.deferred.addCallbacks(log_connected)
@@ -701,6 +703,21 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="blur both screens by RADIUS before expect or stable compares "
         "them, which is what carries a match through a lossy encoding "
         "[%d with --jpeg-quality, 0 without]" % LOSSY_BLUR,
+    )
+    parser.add_argument(
+        "--tls-ca-cert",
+        metavar="FILE",
+        help="verify a VeNCrypt X509 server certificate against the PEM trust "
+        "roots in FILE instead of the system trust store",
+    )
+    parser.add_argument(
+        "--tls-insecure-skip-verify",
+        action="store_true",
+        default=False,
+        help="INSECURE: accept a VeNCrypt server whose identity cannot be "
+        "established -- an unverifiable certificate, or an anonymous TLS "
+        "subtype that carries none. Traffic is encrypted but a "
+        "man-in-the-middle cannot be detected",
     )
     parser.add_argument(
         "-i",

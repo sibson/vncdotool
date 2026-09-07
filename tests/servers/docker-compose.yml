@@ -1,7 +1,7 @@
-# The two TigerVNC services differ only by VNC_PASSWORD but share one image
-# name, so they build once rather than twice. The build context is tests/,
-# not tests/servers/, so the Dockerfile can also pull in the committed scene
-# PNGs from tests/goldens/scenes/.
+# The TigerVNC services share one image name, so the image builds once rather
+# than once per service. The build context is tests/, not tests/servers/, so
+# the Dockerfile can also pull in the committed scene PNGs from
+# tests/goldens/scenes/.
 
 name: vncdo-test-servers
 
@@ -29,6 +29,50 @@ services:
       VNC_PASSWORD: vncdotool
     ports:
       - "127.0.0.1:5932:5900"
+
+  tigervnc-vencrypt:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: tigervnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-tigervnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 256x192
+      VNC_PASSWORD: vncdotool
+      VNC_SECURITY_TYPES: X509Vnc,X509None,TLSVnc,TLSNone
+      VNC_X509_DIR: /certs
+    volumes:
+      - ./vencrypt-certs:/certs
+    ports:
+      - "127.0.0.1:5941:5900"
+
+  tigervnc-vencrypt-anon:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: tigervnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-tigervnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 256x192
+      VNC_PASSWORD: vncdotool
+      VNC_SECURITY_TYPES: TLSVnc,TLSNone
+    ports:
+      - "127.0.0.1:5951:5900"
+
+  wayvnc:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: wayvnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-wayvnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 1024x768
+      VNC_USERNAME: vncdotool
+      VNC_PASSWORD: vncdotool
+    volumes:
+      - ./wayvnc-certs:/certs
+    ports:
+      - "127.0.0.1:5952:5900"
 
   x11vnc:
     build:
