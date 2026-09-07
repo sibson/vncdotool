@@ -2,6 +2,9 @@ import warnings
 from struct import pack
 from unittest import TestCase, mock
 
+from twisted.internet.error import ConnectionDone
+from twisted.python.failure import Failure
+
 from vncdotool import rfb
 
 
@@ -276,3 +279,180 @@ class TestDesEncrypt(TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             rfb.des_encrypt(b"12345678", b"87654321")
+
+
+VENCRYPT_HEADER = (
+    b"RFB 003.008\n"
+    b"\x01"  # num-auth-types
+    b"\x13"  # AuthTypes.VENCRYPT
+)
+
+
+def vencrypt_offer(*subtypes, version=b"\x00\x02", ack=b"\x00"):
+    return (
+        VENCRYPT_HEADER
+        + version
+        + ack
+        + pack("!B", len(subtypes))
+        + pack(f"!{len(subtypes)}I", *subtypes)
+    )
+
+
+class TestVeNCrypt(TestCase):
+    """The mocked transport's startTLS records the call and encrypts nothing,
+    so what a real server would send inside the tunnel is fed straight in.
+    """
+
+    def setUp(self) -> None:
+        self.client = rfb.RFBClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = rfb.RFBFactory(password="s3kr1t")
+        self.client.factory.username = "alice"
+        self.client.factory.tls_hostname = "vnc.example.com"
+        self.client.vncProtocolError = mock.Mock()
+        self.client.vncAuthFailed = mock.Mock()
+
+    def feed(self, data: bytes) -> None:
+        self.client._packet += data
+        self.client._handler()
+
+    def written(self) -> bytes:
+        return b"".join(
+            call.args[0] for call in self.client.transport.write.call_args_list
+        )
+
+    def test_selects_x509_vnc_and_echoes_the_version_it_can_speak(self):
+        self.feed(vencrypt_offer(261, 260, 258, 257))
+
+        assert self.written() == (
+            b"RFB 003.008\n"
+            b"\x13"  # AuthTypes.VENCRYPT
+            b"\x00\x02"  # VeNCrypt version the client speaks
+            b"\x00\x00\x01\x05"  # VeNCryptSubtypes.X509_VNC
+        )
+        self.client.vncProtocolError.assert_not_called()
+
+    def test_x509_starts_tls_then_answers_the_challenge_inside_it(self):
+        self.feed(vencrypt_offer(261))
+        self.feed(b"\x01")  # TLS go-ahead
+        self.client.transport.startTLS.assert_called_once()
+
+        self.feed(b"\x00" * 16)  # VNC authentication challenge
+
+        assert self.written().endswith(
+            rfb.des_encrypt(rfb._vnc_des("s3kr1t"), b"\x00" * 16)
+        )
+        self.client.vncProtocolError.assert_not_called()
+
+    def test_x509_none_finishes_at_the_security_result(self):
+        self.client.factory.password = None
+        self.feed(vencrypt_offer(261, 260))
+        self.feed(b"\x01")  # TLS go-ahead
+        self.feed(b"\x00\x00\x00\x00")  # SecurityResult OK
+
+        assert self.written().endswith(
+            b"\x00\x00\x01\x04"  # VeNCryptSubtypes.X509_NONE
+            b"\x00"  # ClientInit shared flag
+        )
+
+    def test_plain_sends_the_credentials_with_no_tls_handshake(self):
+        self.feed(vencrypt_offer(256))
+
+        self.client.transport.startTLS.assert_not_called()
+        assert self.written().endswith(
+            b"\x00\x00\x01\x00"  # VeNCryptSubtypes.PLAIN
+            b"\x00\x00\x00\x05"  # username length
+            b"\x00\x00\x00\x06"  # password length
+            b"alices3kr1t"
+        )
+
+    def test_anonymous_tls_is_refused_without_the_insecure_flag(self):
+        self.feed(vencrypt_offer(258, 257))
+
+        assert "--tls-insecure-skip-verify" in self.reason()
+        assert self.client._aborted
+
+    def test_anonymous_tls_is_accepted_with_the_insecure_flag(self):
+        self.client.factory.tls_allow_unverified = True
+
+        self.feed(vencrypt_offer(258))
+        self.feed(b"\x01")  # TLS go-ahead
+
+        self.client.transport.startTLS.assert_called_once()
+        self.client.vncProtocolError.assert_not_called()
+
+    def test_a_vnc_subtype_is_refused_when_no_password_was_given(self):
+        self.client.factory.password = None
+
+        self.feed(vencrypt_offer(261))
+
+        assert "no password given" in self.reason()
+
+    def test_only_subtypes_we_do_not_implement_is_a_named_refusal(self):
+        self.feed(vencrypt_offer(263, 264, 267))
+
+        reason = self.reason()
+        assert "X509_SASL" in reason and "not implemented" in reason
+        assert self.client._aborted
+
+    def test_an_empty_subtype_list_is_a_protocol_error(self):
+        self.feed(VENCRYPT_HEADER + b"\x00\x02" + b"\x00" + b"\x00")
+
+        assert self.client._aborted
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_vencrypt_0_1_is_a_protocol_error(self):
+        self.feed(VENCRYPT_HEADER + b"\x00\x01")
+
+        assert "0.1" in self.reason()
+        assert self.client._aborted
+
+    def test_a_refused_version_is_a_protocol_error(self):
+        self.feed(VENCRYPT_HEADER + b"\x00\x02" + b"\x01")
+
+        assert self.client._aborted
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_a_refused_subtype_is_a_protocol_error(self):
+        self.feed(vencrypt_offer(261))
+        self.feed(b"\x00")  # anything but 1 refuses
+
+        self.client.transport.startTLS.assert_not_called()
+        assert self.client._aborted
+
+    def test_bytes_arriving_before_the_tls_handshake_are_a_protocol_error(self):
+        self.feed(vencrypt_offer(261) + b"\x01" + b"unexpected")
+
+        self.client.transport.startTLS.assert_not_called()
+        assert self.client._aborted
+
+    def test_a_failed_tls_handshake_is_reported_rather_than_waited_on(self):
+        self.feed(vencrypt_offer(261))
+        self.feed(b"\x01")  # TLS go-ahead
+
+        self.client.connectionLost(Failure(ConnectionDone("certificate verify failed")))
+
+        assert "TLS handshake" in self.reason()
+
+    def test_failed_inner_authentication_is_reported(self):
+        self.feed(vencrypt_offer(261))
+        self.feed(b"\x01")  # TLS go-ahead
+        self.feed(b"\x00" * 16)  # challenge
+        self.feed(b"\x00\x00\x00\x01" + pack("!I", 6) + b"denied")
+
+        self.client.vncAuthFailed.assert_called_once_with(b"denied")
+
+    def test_vnc_authentication_wins_when_the_tls_extra_is_missing(self):
+        with mock.patch.object(rfb.vencrypt, "tls_available", return_value=False):
+            self.feed(
+                b"RFB 003.008\n"
+                b"\x02"  # num-auth-types
+                b"\x02\x13"  # VNC_AUTHENTICATION, VENCRYPT
+            )
+
+        assert self.written().endswith(b"\x02")
+        assert self.client._expected_handler == self.client._handleVNCAuth
+
+    def reason(self) -> str:
+        self.client.vncProtocolError.assert_called_once()
+        return self.client.vncProtocolError.call_args.args[0]
