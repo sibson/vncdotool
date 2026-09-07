@@ -7,6 +7,7 @@ from .ard import DiffieHellmanHandler
 from .base import SecurityHandler, security_result
 from .errors import SecurityError
 from .none import NoneHandler
+from .vencrypt import VeNCryptHandler
 from .vncauth import VNCAuthenticationHandler
 
 HANDLERS: Dict[AuthTypes, Type[SecurityHandler]] = {
@@ -14,6 +15,7 @@ HANDLERS: Dict[AuthTypes, Type[SecurityHandler]] = {
     for cls in (
         NoneHandler,
         VNCAuthenticationHandler,
+        VeNCryptHandler,
         DiffieHellmanHandler,
     )
 }

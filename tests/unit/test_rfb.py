@@ -454,7 +454,8 @@ class TestVeNCrypt(TestCase):
             )
 
         assert self.written().endswith(b"\x02")
-        assert self.client._expected_handler == self.client._handleVNCAuth
+        # the 16-byte VNC authentication challenge, not a VeNCrypt version
+        assert self.client._expected_len == 16
 
     def reason(self) -> str:
         self.client.vncProtocolError.assert_called_once()

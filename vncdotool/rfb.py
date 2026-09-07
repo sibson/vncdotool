@@ -26,14 +26,13 @@ from typing import (
     Collection,
     Generator,
     Tuple,
-    cast,
 )
 
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from twisted.application import internet, service
 from twisted.internet import protocol
-from twisted.internet.interfaces import IConnector, ITLSTransport, ITransport
+from twisted.internet.interfaces import IConnector, ITransport
 from twisted.internet.protocol import Protocol, connectionDone
 from twisted.python import log, usage
 from twisted.python.failure import Failure
@@ -64,8 +63,7 @@ class RFBClient(Protocol):
         (5, 0),  # RealVNC 5.3
     }
     MAX_CLIENT_VERSION = (3, 8)
-    SUPPORTED_AUTHS = set(security.HANDLERS) | {AuthTypes.VENCRYPT}
-    MAX_VENCRYPT_VERSION = (0, 2)
+    SUPPORTED_AUTHS = set(security.HANDLERS)
     _UNMIGRATED_ENCODINGS = {
         Encoding.ZRLE,
         Encoding.PSEUDO_LAST_RECT,
@@ -109,7 +107,6 @@ class RFBClient(Protocol):
         self._aborted = False
         self._version: Ver = (0, 0)
         self._version_server: Ver = (0, 0)
-        self._vencrypt_version: Ver = (0, 0)
         self._vencrypt_subtype = VeNCryptSubtypes.PLAIN
         self._tls_handshake_pending = False
         self.negotiated_encodings = {
@@ -173,10 +170,7 @@ class RFBClient(Protocol):
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
-            if sec_type == AuthTypes.VENCRYPT:
-                self.expect(self._handleVeNCryptVersion, 2)
-            else:
-                self._startSecurity(sec_type)
+            self._startSecurity(sec_type)
         else:
             self.abortConnection(f"unknown security types: {types!r}")
 
@@ -224,95 +218,6 @@ class RFBClient(Protocol):
 
     def _handleConnMessage(self, block: bytes) -> None:
         self.abortConnection(f"Connection refused: {block!r}")
-
-    def _tlsPolicy(self) -> vencrypt.TLSPolicy:
-        return vencrypt.TLSPolicy(
-            hostname=self.factory.tls_hostname,
-            ca_certs=self.factory.tls_ca_certs,
-            allow_unverified=self.factory.tls_allow_unverified,
-        )
-
-    def _credentials(self) -> vencrypt.Credentials:
-        return vencrypt.Credentials(
-            username=self.factory.username, password=self.factory.password
-        )
-
-    def _handleVeNCryptVersion(self, block: bytes) -> None:
-        version = unpack("!BB", block)
-        log.msg("Server offers VeNCrypt %d.%d" % version)
-        if version < (0, 2):
-            self.abortConnection("VeNCrypt %d.%d is not supported" % version)
-            return
-        self._vencrypt_version = min(version, self.MAX_VENCRYPT_VERSION)
-        self.transport.write(pack("!BB", *self._vencrypt_version))
-        self.expect(self._handleVeNCryptVersionAck, 1)
-
-    def _handleVeNCryptVersionAck(self, block: bytes) -> None:
-        (ack,) = unpack("!B", block)
-        if ack:
-            self.abortConnection(
-                "server refused VeNCrypt %d.%d" % self._vencrypt_version
-            )
-            return
-        self.expect(self._handleVeNCryptSubtypeCount, 1)
-
-    def _handleVeNCryptSubtypeCount(self, block: bytes) -> None:
-        (count,) = unpack("!B", block)
-        if not count:
-            self.abortConnection("server offered no VeNCrypt subtypes")
-            return
-        self.expect(self._handleVeNCryptSubtypes, 4 * count)
-
-    def _handleVeNCryptSubtypes(self, block: bytes) -> None:
-        subtypes = unpack(f"!{len(block) // 4}I", block)
-        for subtype in subtypes:
-            log.msg(f"Offered {VeNCryptSubtypes.lookup(subtype)!r}")
-        policy, credentials = self._tlsPolicy(), self._credentials()
-        chosen = vencrypt.choose(subtypes, policy, credentials)
-        if chosen is None:
-            self.abortConnection(vencrypt.refusal(subtypes, policy, credentials))
-            return
-        log.msg(f"Requesting {chosen!r}")
-        self._vencrypt_subtype = chosen
-        self.transport.write(pack("!I", chosen))
-        # The ack is sent for TLS and X509 subtypes only, which is every
-        # subtype this client will choose.
-        self.expect(self._handleVeNCryptTLSAck, 1)
-
-    def _handleVeNCryptTLSAck(self, block: bytes) -> None:
-        (ack,) = unpack("!B", block)
-        if ack != 1:
-            self.abortConnection(f"server refused {self._vencrypt_subtype!r}")
-            return
-        if self._packet:
-            # The TLS layer takes the socket over from here and has not sent
-            # its ClientHello yet, so nothing can legitimately have arrived.
-            self.abortConnection("server spoke before the TLS handshake")
-            return
-        try:
-            options = vencrypt.client_options(
-                self._vencrypt_subtype, self._tlsPolicy()
-            )
-        except Exception as exc:
-            self.abortConnection(f"cannot start TLS for VeNCrypt: {exc}")
-            return
-        self._tls_handshake_pending = True
-        cast("ITLSTransport", self.transport).startTLS(options)
-        self._startVeNCryptSubAuth()
-
-    def _startVeNCryptSubAuth(self) -> None:
-        if self._vencrypt_subtype in vencrypt.VNC_AUTH_SUBTYPES:
-            self.expect(self._handleVNCAuth, 16)
-            return
-        if self._vencrypt_subtype in vencrypt.PLAIN_AUTH_SUBTYPES:
-            self._sendVeNCryptPlain()
-        self.expect(self._handleVNCAuthResult, 4)
-
-    def _sendVeNCryptPlain(self) -> None:
-        username = (self.factory.username or "").encode("utf-8")
-        password = (self.factory.password or "").encode("utf-8")
-        self.transport.write(pack("!II", len(username), len(password)))
-        self.transport.write(username + password)
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
