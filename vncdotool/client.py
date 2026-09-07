@@ -712,7 +712,8 @@ def factory_connect(
         # host carries the whole URL: the path and query select the session.
         conn = websocket.connect(reactor, factory, host)
     elif family in {socket.AF_UNSPEC, socket.AF_INET, socket.AF_INET6}:
-        # HostnameEndpoint is the last thing that still knows the name dialled.
+        # A connected transport keeps only the resolved address, so the name
+        # an X509 certificate must be issued for is recorded before dialling.
         factory.tls_hostname = host
         conn = HostnameEndpoint(reactor, host, port).connect(factory)
     elif hasattr(socket, "AF_UNIX") and family == socket.AF_UNIX:

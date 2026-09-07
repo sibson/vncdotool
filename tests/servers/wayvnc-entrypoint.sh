@@ -1,8 +1,6 @@
 #!/bin/sh
-# wayvnc serves a wlroots compositor, so sway runs headless underneath it.
-# Auth is configured in a file rather than on the command line, and setting
-# certificate_file is what makes wayvnc offer VeNCrypt at all -- with a
-# username and password it settles on the X509Plain subtype.
+# Setting certificate_file is what makes wayvnc offer VeNCrypt at all, and
+# with a username and password it settles on the X509Plain subtype.
 set -e
 
 # sway refuses to run as root: it cannot drop privileges it could restore.

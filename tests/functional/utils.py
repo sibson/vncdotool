@@ -115,9 +115,7 @@ TIGERVNC_VENCRYPT_ANON = VNCServer(
 VENCRYPT_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "vencrypt-certs" / "cert.pem"
 )
-# Out of DOCKER_SERVERS for the same reason as the two above. Offers
-# VeNCrypt alone, and X509Plain as its only subtype, which no other server
-# in the fleet offers.
+# Out of DOCKER_SERVERS for the same reason as the two above.
 WAYVNC = VNCServer(
     "wayvnc", 5952, username="vncdotool", password="vncdotool", size=(1024, 768)
 )

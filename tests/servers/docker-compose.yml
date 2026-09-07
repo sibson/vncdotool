@@ -1,7 +1,7 @@
-# The TigerVNC services differ only by environment and share one image
-# name, so they build once rather than once each. The build context is tests/,
-# not tests/servers/, so the Dockerfile can also pull in the committed scene
-# PNGs from tests/goldens/scenes/.
+# The TigerVNC services share one image name, so the image builds once rather
+# than once per service. The build context is tests/, not tests/servers/, so
+# the Dockerfile can also pull in the committed scene PNGs from
+# tests/goldens/scenes/.
 
 name: vncdo-test-servers
 
@@ -30,8 +30,6 @@ services:
     ports:
       - "127.0.0.1:5932:5900"
 
-  # X509* present a certificate a client can verify; TLS* negotiate
-  # anonymous ciphersuites and cannot be verified.
   tigervnc-vencrypt:
     build:
       context: ..
@@ -61,8 +59,6 @@ services:
     ports:
       - "127.0.0.1:5951:5900"
 
-  # Offers VeNCrypt alone, and settles on X509Plain because the credentials
-  # are a username and password.
   wayvnc:
     build:
       context: ..

@@ -214,10 +214,9 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 
-# wayvnc, the VNC server Raspberry Pi OS ships. It drives wlroots
-# compositors only -- not Gnome, KDE or Weston -- so sway supplies one,
-# headless. Debian's build links gnutls, without which wayvnc offers no
-# VeNCrypt at all.
+# wayvnc drives wlroots compositors only -- not Gnome, KDE or Weston -- so
+# sway supplies one. Debian's build links gnutls, without which wayvnc offers
+# no VeNCrypt at all.
 FROM base AS wayvnc
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

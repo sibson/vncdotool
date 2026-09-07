@@ -7,7 +7,6 @@ from typing import Any, Iterable, NamedTuple, Sequence
 
 from .const import VeNCryptSubtypes
 
-#: TLS with an anonymous ciphersuite: the server sends no certificate.
 ANONYMOUS_SUBTYPES = frozenset(
     {
         VeNCryptSubtypes.TLS_NONE,
@@ -30,8 +29,6 @@ VNC_AUTH_SUBTYPES = frozenset(
     {VeNCryptSubtypes.TLS_VNC, VeNCryptSubtypes.X509_VNC}
 )
 
-#: Inner authentication is a username and password with no transform, so
-#: these carry both in the clear inside whatever the outer subtype built.
 PLAIN_AUTH_SUBTYPES = frozenset(
     {
         VeNCryptSubtypes.TLS_PLAIN,
@@ -56,17 +53,15 @@ MISSING_TLS_SUPPORT = (
     "VeNCrypt's TLS subtypes need pyOpenSSL; install vncdotool[tls]"
 )
 
-# TLS 1.3 defines no anonymous ciphersuite, hence the 1.2 cap; OpenSSL
-# withholds the ones that remain until the security level is lowered.
+# OpenSSL offers no anonymous ciphersuite at all until the security level is
+# lowered.
 _ANONYMOUS_CIPHERS = b"AECDH:ADH:@SECLEVEL=0"
 
 _PEM_END = b"-----END CERTIFICATE-----"
 
 
 class TLSPolicy(NamedTuple):
-    #: Name the certificate must be issued for; the address that was dialled.
     hostname: str | None = None
-    #: PEM file of trust roots, replacing the platform trust store.
     ca_certs: str | None = None
     allow_unverified: bool = False
 

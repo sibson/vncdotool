@@ -1,5 +1,3 @@
-"""VeNCrypt subtype preference and TLS policy."""
-
 import datetime
 import tempfile
 from pathlib import Path

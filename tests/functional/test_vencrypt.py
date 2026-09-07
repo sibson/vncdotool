@@ -97,8 +97,6 @@ class TestVeNCryptAnonymous(_VeNCryptTestMixin, TestCase):
 
 
 class TestWayvnc(_VeNCryptTestMixin, TestCase):
-    """wayvnc offers VeNCrypt alone, and X509Plain as its only subtype."""
-
     server = WAYVNC
 
     def test_x509_plain_captures_a_screen(self) -> None:

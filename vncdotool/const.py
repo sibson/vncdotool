@@ -208,7 +208,7 @@ class AuthTypes(IntEnumLookup):
 
 
 class VeNCryptSubtypes(IntEnumLookup):
-    """rfbproto §7.2.19. VeNCrypt subtypes."""
+    """rfbproto: VeNCrypt subtypes."""
 
     PLAIN = 256
     TLS_NONE = 257
