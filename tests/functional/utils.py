@@ -374,6 +374,24 @@ def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool
         return False
 
 
+SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
+
+
+def awaiting(key: str) -> Tuple[str, ...]:
+    """`vncdo` arguments that block until the scene `key` selects is on screen.
+
+    x11vnc polls the X display rather than tracking damage, so how long a
+    repaint takes to reach a client is not a constant a delay can name: at
+    0.3s one capture in eight arrived still showing the previous scene.
+    `expect` polls until the screen matches instead.
+
+    No fuzz, so `expect` derives one from the negotiated pixel format. An
+    explicit 0 overrides that, and at a reduced depth the comparison then
+    never comes true however long it polls.
+    """
+    return ("expect", str(SCENES_DIR / f"{key}.png"))
+
+
 _SEEN_UP: Set[Tuple[str, int]] = set()
 
 

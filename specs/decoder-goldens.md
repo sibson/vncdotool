@@ -110,9 +110,9 @@ this is the one service's geometry rather than a second service beside it.
 The scene is `tests/goldens/scene.vdo`, a committed `vncdo` script:
 
     key 0
-    expect scenes/0.png 0
+    expect scenes/0.png
     key s
-    expect scenes/s.png 0
+    expect scenes/s.png
 
 `expect` polls with incremental FramebufferUpdateRequests until the screen
 matches, so the driver waits on the scene arriving rather than on a duration.

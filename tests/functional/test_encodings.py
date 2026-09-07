@@ -18,7 +18,7 @@ from PIL import Image
 
 from vncdotool import decoders
 
-from .utils import SCENE_SERVERS, VNCServer, run_vncdo, server_is_up
+from .utils import SCENE_SERVERS, VNCServer, awaiting, run_vncdo, server_is_up
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
@@ -45,7 +45,7 @@ def capture(test: TestCase, server: VNCServer, encodings: str, key: str) -> Imag
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
             server, "--encodings", encodings,
-            "key", key, "pause", "0.3", "capture", str(path),
+            "key", key, *awaiting(key), "capture", str(path),
         )
         if result.returncode != 0:
             test.fail(
@@ -103,7 +103,7 @@ class EmitsTheEncoding:
         with tempfile.TemporaryDirectory() as tmp:
             result = run_vncdo(
                 self.server, "-v", "-v", "--encodings", self.encoding,
-                "key", self.scene, "pause", "0.3",
+                "key", self.scene, *awaiting(self.scene),
                 "capture", str(Path(tmp) / "screen.png"),
             )
         if result.returncode != 0:

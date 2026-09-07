@@ -18,7 +18,7 @@ from PIL import Image
 from vncdotool import pixelformat
 
 from .imagediff import assert_images_match
-from .utils import SCENE_SERVERS, VNCServer, run_vncdo, server_is_up
+from .utils import SCENE_SERVERS, VNCServer, awaiting, run_vncdo, server_is_up
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
@@ -38,7 +38,7 @@ def capture(
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
             server, "-v", "--pixel-format", pixel_format,
-            "key", key, "pause", "0.3", "capture", str(path),
+            "key", key, *awaiting(key), "capture", str(path),
         )
         if result.returncode != 0:
             test.fail(
