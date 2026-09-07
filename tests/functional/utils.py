@@ -87,8 +87,6 @@ class VNCServer(NamedTuple):
     # The default suits a container on loopback; an OS-hosted server sharing
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
-    # What to pass `vncdo -s`, where host and port do not say it: a ws:// or
-    # wss:// URL.
     address: Optional[str] = None
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
@@ -109,29 +107,12 @@ LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
 DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
 
-# websockify serves every path, so the path and query in these URLs name no
-# session on the server; they are there to test what vncdotool passes on.
-WEBSOCKIFY = VNCServer(
-    "websockify", 5942, size=(256, 192),
-    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
-)
-WEBSOCKIFY_TLS = VNCServer(
-    "websockify-tls", 5943, size=(256, 192),
-    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
-)
-
-# QEMU answers 404 to any request-URI but exactly "/", so neither address
-# carries a path or a query.
 QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
 QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
 # QEMU presents a leaf signed by a CA rather than a self-signed certificate,
 # so the trust anchor cannot be read off the connection. Its service writes
 # the CA here at start-up.
 QEMU_TLS_CA = Path(__file__).resolve().parent.parent / "servers" / "qemu-tls" / "ca-cert.pem"
-KASMVNC = VNCServer(
-    "kasmvnc", 5947, size=(256, 192),
-    address="ws://127.0.0.1:5947/?password=vncdotool",
-)
 
 # Selenoid keys the session off the URL path, so this address only resolves
 # while a WebDriver session with this id is open.
@@ -141,7 +122,21 @@ SELENOID = VNCServer(
     address=f"ws://127.0.0.1:5946/vnc/{SELENOID_SESSION_ID}?password=vncdotool",
 )
 
-WEBSOCKET_SERVERS = [WEBSOCKIFY, WEBSOCKIFY_TLS, QEMU, QEMU_TLS, SELENOID, KASMVNC]
+KASMVNC = VNCServer(
+    "kasmvnc", 5947, size=(256, 192),
+    address="ws://127.0.0.1:5947/?password=vncdotool",
+)
+
+WEBSOCKIFY = VNCServer(
+    "websockify", 5942, size=(256, 192),
+    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
+)
+WEBSOCKIFY_TLS = VNCServer(
+    "websockify-tls", 5943, size=(256, 192),
+    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
+)
+
+WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC, WEBSOCKIFY, WEBSOCKIFY_TLS]
 
 
 @contextlib.contextmanager

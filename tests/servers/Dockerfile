@@ -152,8 +152,6 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 
-# QEMU's built-in VNC server, which speaks WebSocket itself rather than
-# through a proxy.
 FROM base AS qemu
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -192,8 +190,6 @@ HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
 ENTRYPOINT ["/entrypoint.sh"]
 
 
-# KasmVNC, whose X server serves WebSocket itself; its `rfbport` default of
-# 0 means there is no RFB port to map.
 FROM base AS kasmvnc
 
 ARG KASMVNC_VERSION=1.5.0

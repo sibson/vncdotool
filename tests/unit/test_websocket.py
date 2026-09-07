@@ -2,7 +2,6 @@
 
 The live half is tests/functional/test_websocket.py, against websockify.
 """
-import sys
 import unittest
 from unittest import mock
 
@@ -83,7 +82,7 @@ class TestConnect(unittest.TestCase):
         endpoint.return_value.connect.assert_called_once()
 
     def test_wss_verifies_the_certificate_against_the_hostname(self, endpoint, wrap_tls) -> None:
-        with mock.patch("twisted.internet.ssl.optionsForClientTLS") as options:
+        with mock.patch.object(websocket, "optionsForClientTLS") as options:
             websocket.connect(mock.Mock(), mock.Mock(), "wss://host:5943/vnc/s")
 
         options.assert_called_once_with("host")
@@ -126,26 +125,6 @@ class TestHandshakeOffer(unittest.TestCase):
 
     def test_wss_origin_is_https(self) -> None:
         assert self.build("wss://h:5943/vnc/s").origin == "https://h:5943"
-
-
-class TestExtraMissing(unittest.TestCase):
-    """Everything but connecting has to work without the websocket extra."""
-
-    def setUp(self) -> None:
-        websocket._wrapping_factory_class.cache_clear()
-        self.addCleanup(websocket._wrapping_factory_class.cache_clear)
-        patch = mock.patch.dict(sys.modules, {"autobahn.twisted.websocket": None})
-        patch.start()
-        self.addCleanup(patch.stop)
-
-    def test_connecting_names_the_extra_to_install(self) -> None:
-        with self.assertRaises(websocket.WebSocketUnavailable) as raised:
-            websocket.connect(mock.Mock(), mock.Mock(), "ws://host:5942/")
-
-        assert "vncdotool[websocket]" in str(raised.exception)
-
-    def test_parsing_a_url_still_works(self) -> None:
-        assert websocket.parse_url("ws://host:5942/vnc")[1] == 5942
 
 
 class TestFactoryConnectDispatch(unittest.TestCase):

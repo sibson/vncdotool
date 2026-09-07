@@ -145,31 +145,19 @@ does with its arguments and how it fails.
 > vncdo -s /run/user/1000/vnc.sock capture screen.png
 ```
 
-It also takes a `ws://` or `wss://` URL, which is how noVNC, websockify,
-Proxmox and Selenoid publish a VNC server. The path and query string are
-part of the address -- they usually name the session -- and are sent as
-given:
+It also takes a `ws://` or `wss://` URL, as QEMU, Selenoid, noVNC and Proxmox
+publish one. Quote it, and keep any path and query -- they name the session:
 
 ```
 > vncdo -s 'ws://localhost:4444/vnc/c2ec57a?password=selenoid' capture screen.png
 ```
 
-This needs the optional `websocket` extra:
-
-```
-pip install 'vncdotool[websocket]'
-```
-
-`wss://` verifies the server's certificate against your system trust store,
-and there is no option to turn that off. A server with a private or
-self-signed certificate needs its CA in `SSL_CERT_FILE`, the same variable
-any other OpenSSL client reads:
+`wss://` always verifies the certificate. Point `SSL_CERT_FILE` at a private
+CA to trust one:
 
 ```
 > SSL_CERT_FILE=/etc/ssl/my-ca.pem vncdo -s wss://vnc.example.com/websockify capture screen.png
 ```
-
-Quote the URL: a shell otherwise reads `?` and `&` as its own.
 
 ## Encodings
 

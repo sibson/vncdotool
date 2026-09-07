@@ -9,17 +9,16 @@ from __future__ import annotations
 import enum
 import socket
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Union
+from typing import Any, Union
 from urllib.parse import urlsplit, urlunsplit
 
+from twisted.internet.defer import Deferred
 from twisted.internet.endpoints import HostnameEndpoint, wrapClientTLS
 from twisted.internet.error import ConnectionDone, ConnectionLost
+from twisted.internet.interfaces import IReactorCore, IStreamClientEndpoint
+from twisted.internet.protocol import ClientFactory
+from twisted.internet.ssl import optionsForClientTLS
 from twisted.python.failure import Failure
-
-if TYPE_CHECKING:
-    from twisted.internet.defer import Deferred
-    from twisted.internet.interfaces import IReactorCore, IStreamClientEndpoint
-    from twisted.internet.protocol import ClientFactory
 
 
 class Transport(enum.Enum):
@@ -34,11 +33,6 @@ AddressFamily = Union[socket.AddressFamily, Transport]
 
 DEFAULT_PORTS = {"ws": 80, "wss": 443}
 
-INSTALL_HINT = (
-    "ws:// and wss:// addresses need the autobahn WebSocket library, "
-    "which is not installed: pip install 'vncdotool[websocket]'"
-)
-
 REDACTED = "?<redacted>"
 
 # RFB is a byte stream, so the payload is always binary. Offering "base64"
@@ -48,10 +42,6 @@ REDACTED = "?<redacted>"
 BINARY_SUBPROTOCOL = "binary"
 
 ORIGIN_SCHEMES = {"ws": "http", "wss": "https"}
-
-
-class WebSocketUnavailable(ImportError):
-    """Raised for a ws:// address when the websocket extra is not installed."""
 
 
 def is_websocket_url(server: str) -> bool:
@@ -95,15 +85,11 @@ def redact(address: str) -> str:
 @lru_cache(maxsize=None)
 def _wrapping_factory_class() -> type:
     """The autobahn factory that tunnels a stream factory over a WebSocket."""
-    try:
-        from autobahn.twisted.websocket import (
-            WrappingWebSocketClientFactory,
-            WrappingWebSocketClientProtocol,
-        )
-    except ImportError as exc:
-        raise WebSocketUnavailable(INSTALL_HINT) from exc
-
     import txaio
+    from autobahn.twisted.websocket import (
+        WrappingWebSocketClientFactory,
+        WrappingWebSocketClientProtocol,
+    )
 
     # autobahn logs the whole handshake, request-URI and query string included,
     # at debug. A logger given an explicit level is skipped by any later
@@ -162,12 +148,6 @@ def connect(reactor: IReactorCore, factory: ClientFactory, url: str) -> Deferred
 
     endpoint: IStreamClientEndpoint = HostnameEndpoint(reactor, host, port)
     if scheme == "wss":
-        try:
-            # twisted.internet.ssl needs pyOpenSSL, which Twisted[tls] carries.
-            from twisted.internet.ssl import optionsForClientTLS
-        except ImportError as exc:
-            raise WebSocketUnavailable(INSTALL_HINT) from exc
-
         # Verified against the platform trust store; SSL_CERT_FILE is how
         # OpenSSL is pointed at a private CA.
         endpoint = wrapClientTLS(optionsForClientTLS(host), endpoint)

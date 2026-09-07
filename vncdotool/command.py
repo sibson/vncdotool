@@ -354,11 +354,7 @@ def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
     # no outcome decided yet; set before connecting so a synchronous
     # connection failure has somewhere to record itself
     reactor.exit_status = None
-    try:
-        factory_connect(factory, options.host, options.port, options.address_family)
-    except websocket.WebSocketUnavailable as exc:
-        print(exc, file=sys.stderr)
-        sys.exit(ExitStatus.USAGE)
+    factory_connect(factory, options.host, options.port, options.address_family)
 
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
     factory.deferred.addCallback(lambda _: factory.done(ExitStatus.SUCCESS))

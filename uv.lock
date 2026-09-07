@@ -12,7 +12,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-08-31T15:10:26.642989Z"
+exclude-newer = "2026-08-31T16:12:23.503288Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -1862,9 +1862,11 @@ name = "vncdotool"
 version = "2.0.0.dev0"
 source = { editable = "." }
 dependencies = [
+    { name = "autobahn", version = "24.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
+    { name = "autobahn", version = "26.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "cryptography" },
     { name = "pillow" },
-    { name = "twisted" },
+    { name = "twisted", extra = ["tls"] },
 ]
 
 [package.optional-dependencies]
@@ -1874,11 +1876,6 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
-websocket = [
-    { name = "autobahn", version = "24.4.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
-    { name = "autobahn", version = "26.7.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
-    { name = "twisted", extra = ["tls"] },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -1886,22 +1883,21 @@ dev = [
     { name = "flake8" },
     { name = "mypy" },
     { name = "mypy-zope" },
-    { name = "vncdotool", extra = ["docs", "websocket"] },
+    { name = "vncdotool", extra = ["docs"] },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "autobahn", marker = "extra == 'websocket'" },
+    { name = "autobahn" },
     { name = "cryptography", specifier = ">=43" },
     { name = "mkdocs", marker = "extra == 'docs'" },
     { name = "mkdocs-include-markdown-plugin", marker = "extra == 'docs'" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'" },
     { name = "pillow" },
-    { name = "twisted" },
-    { name = "twisted", extras = ["tls"], marker = "extra == 'websocket'" },
+    { name = "twisted", extras = ["tls"] },
 ]
-provides-extras = ["websocket", "docs"]
+provides-extras = ["docs"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1909,7 +1905,7 @@ dev = [
     { name = "flake8" },
     { name = "mypy" },
     { name = "mypy-zope" },
-    { name = "vncdotool", extras = ["docs", "websocket"] },
+    { name = "vncdotool", extras = ["docs"] },
 ]
 
 [[package]]
