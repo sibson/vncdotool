@@ -30,6 +30,19 @@ services:
     ports:
       - "127.0.0.1:5932:5900"
 
+  # A resize test changes the framebuffer geometry out from under itself, so
+  # it needs a server no other test reads a size from.
+  tigervnc-resize:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: tigervnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-tigervnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 256x192
+    ports:
+      - "127.0.0.1:5940:5900"
+
   x11vnc:
     build:
       context: ..
