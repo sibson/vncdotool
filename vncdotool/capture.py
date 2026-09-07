@@ -14,8 +14,7 @@ from typing import Any, Generator, NamedTuple
 
 from .const import AuthTypes, Encoding
 
-# AES-ECB over a fixed 64-byte username + 64-byte password struct; see
-# RFBClient._encryptArd().
+# AES-ECB over a fixed 64-byte username + 64-byte password struct.
 ARD_CREDENTIALS_LEN = 128
 
 
@@ -203,7 +202,8 @@ class HandshakeScrubber:
             yield _Want(self.s2c, 16)  # challenge
             yield _Want(self.c2s, 16)  # response
         elif sectype == AuthTypes.DIFFIE_HELLMAN:
-            # ARD, laid out as RFBClient._handleDHAuth reads it. A `none`
+            # ARD, laid out as rfbproto's Diffie-Hellman Authentication has
+            # it: a generator and key size, then two key-size values. A `none`
             # handshake has nowhere for the DH values, so they go too.
             head = yield _Want(self.s2c, 4)
             _generator, key_len = unpack("!HH", head)
