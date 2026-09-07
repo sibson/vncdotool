@@ -28,6 +28,7 @@ from typing import (
     Tuple,
 )
 
+from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives import hashes
@@ -663,8 +664,9 @@ def des_encrypt(key: bytes, data: bytes) -> bytes:
     password file format are defined in terms of it, so a stronger
     algorithm here would simply fail to talk to any VNC server."""
     # Triple-DES with the same 56-bit key repeated three times is
-    # equivalent to single-DES
-    encryptor = Cipher(algorithms.TripleDES(key * 3), modes.ECB()).encryptor()
+    # equivalent to single-DES. Passing the 8-byte key directly is deprecated
+    # upstream; only 24-byte keys will be accepted in a future release.
+    encryptor = Cipher(TripleDES(key * 3), modes.ECB()).encryptor()
     return encryptor.update(data) + encryptor.finalize()
 
 

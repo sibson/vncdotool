@@ -32,7 +32,7 @@ classifiers = [
 dependencies = [
     "Twisted",
     "Pillow",
-    "cryptography",
+    "cryptography>=43",
 ]
 
 [project.optional-dependencies]
