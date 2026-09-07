@@ -77,7 +77,6 @@ class RFBClient(Protocol):
     # narrows it.
     MAX_DESKTOP_SIZE = 0x10000
 
-    # Policy, not protocol: narrowable by a subclass.
     MAX_MESSAGE_PAYLOAD = 1 << 20
 
     _HEADER = b"RFB 000.000\n"
