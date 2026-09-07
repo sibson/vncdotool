@@ -306,6 +306,26 @@ class TestZRLE(unittest.TestCase):
 
         assert_pixels(self, self.cli.screen, [colour] * (width * height))
 
+    def test_zrle_depth_32_still_narrows_to_three_bytes(self) -> None:
+        """libvncserver-example declares depth 32 in ServerInit but its ZRLE
+        encoder narrows CPIXELs to 3 bytes regardless (#483); depth must not
+        gate ``cpixel_bytes``, only channel placement.
+        """
+        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
+        width = height = 2
+        self.cli.dataReceived(b"RFB 003.003\n")
+        self.cli.dataReceived(pack("!I", rfb.AuthTypes.NONE))
+        server_init = pack("!HH16sI", width, height, pixel_format.to_bytes(), 0)
+        self.cli.dataReceived(server_init)
+
+        colour = (11, 22, 33)
+        body = pack("!B", 1) + _cpixel(*colour)
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+
     def test_zrle_rle_palette_may_hold_more_than_16_colours(self) -> None:
         """The 16-colour cap is the packed form's (RFC 6143 7.7.6); the RLE
         form's own limit is the 127 its size field can hold.
