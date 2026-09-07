@@ -41,6 +41,14 @@ INSTALL_HINT = (
 
 REDACTED = "?<redacted>"
 
+# RFB is a byte stream, so the payload is always binary. Offering "base64"
+# alongside it, as autobahn does by default, is refused outright by servers
+# built on Go's x/net/websocket: its handshake rejects any client offering
+# more than one subprotocol.
+BINARY_SUBPROTOCOL = "binary"
+
+ORIGIN_SCHEMES = {"ws": "http", "wss": "https"}
+
 
 class WebSocketUnavailable(ImportError):
     """Raised for a ws:// address when the websocket extra is not installed."""
@@ -68,6 +76,13 @@ def parse_url(server: str) -> tuple[str, int]:
     return urlunsplit((scheme, netloc, path, parts.query, "")), port
 
 
+def http_origin(url: str) -> str:
+    """The Origin header for `url`, which some servers reject a client without."""
+    parts = urlsplit(url)
+    scheme = ORIGIN_SCHEMES[parts.scheme.lower()]
+    return f"{scheme}://{parts.netloc}"
+
+
 def redact(address: str) -> str:
     """Hide anything a URL query string may carry, such as Selenoid's ?password=."""
     if not is_websocket_url(address):
@@ -91,11 +106,13 @@ def _wrapping_factory_class() -> type:
     import txaio
 
     # autobahn logs the whole handshake, request-URI and query string included,
-    # at debug.
-    txaio.set_global_log_level("info")  # type: ignore[attr-defined]
+    # at debug. A logger given an explicit level is skipped by any later
+    # set_global_log_level, so nothing can raise this one back into a leak.
+    handshake_log = txaio.make_logger("info")  # type: ignore[attr-defined]
 
     class ClosingProtocol(WrappingWebSocketClientProtocol):  # type: ignore[misc,valid-type]
         _proto: Any
+        log = handshake_log
 
         def loseConnection(self) -> None:
             # The wrapper closes with no status code, and autobahn then rejects
@@ -110,6 +127,18 @@ def _wrapping_factory_class() -> type:
 
     class ClosingFactory(WrappingWebSocketClientFactory):  # type: ignore[misc,valid-type]
         protocol = ClosingProtocol
+        log = handshake_log
+
+        def __init__(self, factory: ClientFactory, url: str, **kwargs: Any) -> None:
+            super().__init__(factory, url, **kwargs)
+            # Go's x/net/websocket, which Selenoid is built on, refuses a
+            # handshake offering two subprotocols and one carrying no Origin
+            # header. A browser always sends Origin, which is why noVNC
+            # reaches these servers and a bare client does not.
+            self._subprotocols = [BINARY_SUBPROTOCOL]
+            self.setSessionParameters(
+                url=url, origin=http_origin(url), protocols=self._subprotocols
+            )
 
         def buildProtocol(self, addr: object) -> ClosingProtocol:
             proto = ClosingProtocol()

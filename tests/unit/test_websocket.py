@@ -98,6 +98,36 @@ class TestConnect(unittest.TestCase):
         assert wrapping.call_args.args == (factory, "ws://host:5942/vnc/s?token=1")
 
 
+class TestHttpOrigin(unittest.TestCase):
+
+    def test_ws_becomes_http(self) -> None:
+        assert websocket.http_origin("ws://h:5942/vnc/s?q=1") == "http://h:5942"
+
+    def test_wss_becomes_https(self) -> None:
+        assert websocket.http_origin("wss://h:5943/vnc/s") == "https://h:5943"
+
+
+class TestHandshakeOffer(unittest.TestCase):
+    """Selenoid rejects two subprotocols, and rejects a missing Origin."""
+
+    def setUp(self) -> None:
+        self.factory_class = websocket._wrapping_factory_class()
+
+    def build(self, url: str):
+        return self.factory_class(
+            mock.Mock(), url, reactor=mock.Mock(), enableCompression=False
+        )
+
+    def test_only_binary_is_offered(self) -> None:
+        assert self.build("ws://h:5942/vnc/s").protocols == ["binary"]
+
+    def test_origin_is_sent(self) -> None:
+        assert self.build("ws://h:5942/vnc/s?password=x").origin == "http://h:5942"
+
+    def test_wss_origin_is_https(self) -> None:
+        assert self.build("wss://h:5943/vnc/s").origin == "https://h:5943"
+
+
 class TestExtraMissing(unittest.TestCase):
     """Everything but connecting has to work without the websocket extra."""
 
