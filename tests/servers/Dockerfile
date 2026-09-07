@@ -50,6 +50,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         tigervnc-standalone-server \
         tigervnc-common \
         tigervnc-tools \
+        openssl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY servers/tigervnc-entrypoint.sh /entrypoint.sh

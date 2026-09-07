@@ -5,7 +5,10 @@
 # VNC_PASSWORD set            -> classic VNC password auth, with the
 #                                password written at start-up by vncpasswd
 #                                so it is never baked into the image.
-# That is the only difference between the two TigerVNC services in
+# VNC_SECURITY_TYPES set      -> passed to Xvnc verbatim, overriding both.
+# VNC_X509_DIR set            -> generate a self-signed certificate there,
+#                                which the X509 VeNCrypt subtypes need.
+# That is the only difference between the TigerVNC services in
 # docker-compose.yml, so they share this entrypoint and the image.
 set -e
 
@@ -16,6 +19,8 @@ trap 'kill -TERM "$XVNC_PID" 2>/dev/null; exit 0' TERM INT
 # "Server is already active for display 0".
 rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
+set --
+
 if [ -n "$VNC_PASSWORD" ]; then
     mkdir -p /root/.vnc
     printf '%s' "$VNC_PASSWORD" | vncpasswd -f > /root/.vnc/passwd
@@ -25,9 +30,29 @@ if [ -n "$VNC_PASSWORD" ]; then
     # host's blackmark. The readiness probe never authenticates (see the
     # HEALTHCHECK in Dockerfile), so a generous threshold avoids blacklisting
     # the harness itself while still capping real password guessing.
-    set -- -SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd -BlacklistThreshold=50
+    set -- "$@" -PasswordFile /root/.vnc/passwd -BlacklistThreshold=50
+fi
+
+if [ -n "$VNC_X509_DIR" ]; then
+    mkdir -p "$VNC_X509_DIR"
+    # subjectAltName must list the address the tests dial (HOST in
+    # tests/functional/utils.py).
+    openssl req -x509 -newkey rsa:2048 -nodes -days 3650 \
+        -subj "/CN=localhost" \
+        -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" \
+        -keyout "$VNC_X509_DIR/key.pem" \
+        -out "$VNC_X509_DIR/cert.pem" 2>/dev/null
+    chmod 600 "$VNC_X509_DIR/key.pem"
+    chmod 644 "$VNC_X509_DIR/cert.pem"
+    set -- "$@" -X509Cert "$VNC_X509_DIR/cert.pem" -X509Key "$VNC_X509_DIR/key.pem"
+fi
+
+if [ -n "$VNC_SECURITY_TYPES" ]; then
+    set -- "$@" -SecurityTypes "$VNC_SECURITY_TYPES"
+elif [ -n "$VNC_PASSWORD" ]; then
+    set -- "$@" -SecurityTypes VncAuth
 else
-    set -- -SecurityTypes None
+    set -- "$@" -SecurityTypes None
 fi
 
 Xvnc :0 \

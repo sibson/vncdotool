@@ -102,6 +102,19 @@ class VNCServer(NamedTuple):
 TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
 X11VNC = VNCServer("x11vnc", 5933)
+# Out of DOCKER_SERVERS: neither can be reached without TLS options the
+# smoke grid does not pass.
+TIGERVNC_VENCRYPT = VNCServer(
+    "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192)
+)
+TIGERVNC_VENCRYPT_ANON = VNCServer(
+    "tigervnc-vencrypt-anon", 5951, password="vncdotool", size=(256, 192)
+)
+# Written by the tigervnc-vencrypt container into a bind mount at every
+# start; it does not exist until the fleet has run.
+VENCRYPT_CA_CERT = (
+    Path(__file__).resolve().parents[1] / "servers" / "vencrypt-certs" / "cert.pem"
+)
 # 800x600 is the demo's hard-coded size; it takes no -geometry option.
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
