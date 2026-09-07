@@ -92,9 +92,9 @@ class RFBClient(Protocol):
         for name in cls._CHANGING_HOOKS:
             if not getattr(cls, name).__module__.startswith("vncdotool."):
                 warnings.warn(
-                    f"{name} changed in 2.0; please comment "
+                    f"{name} changed in 2.0; comment "
                     "on https://github.com/sibson/vncdotool/issues/385 if "
-                    "this broke you",
+                    "you can't migrate",
                     FutureWarning,
                     stacklevel=2,
                 )
