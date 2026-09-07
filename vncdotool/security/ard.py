@@ -17,9 +17,6 @@ class DiffieHellmanHandler(SecurityHandler):
     SECURITY_TYPE = AuthTypes.DIFFIE_HELLMAN
 
     def handle(self, client: Any) -> Generator[int, bytes, bool]:
-        # rfbproto, Diffie-Hellman Authentication: a U16 generator and a U16
-        # key size, then the prime modulus and the server's public value, each
-        # key-size bytes.
         generator, key_len = unpack("!HH", (yield 4))
         modulus = yield key_len
         server_key = yield key_len
@@ -40,9 +37,6 @@ def _encrypt(
     p = int.from_bytes(modulus, "big")
     sk = int.from_bytes(server_key, "big")
     with warnings.catch_warnings():
-        # ARD auth is specified over classic finite-field DH; the server
-        # picks p/g and there is no other algorithm to negotiate into.
-        # Tracking upstream removal: https://github.com/sibson/vncdotool/issues/388
         warnings.simplefilter("ignore", CryptographyDeprecationWarning)
         param_nums = dh.DHParameterNumbers(p=p, g=generator)
         server_public = dh.DHPublicNumbers(sk, param_nums).public_key()
