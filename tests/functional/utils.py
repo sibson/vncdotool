@@ -293,6 +293,10 @@ CURSOR_TESTED_SERVERS = [s for s in TCP_SERVERS + WEBSOCKET_SERVERS if s is not 
 # grid; test_events.py still needs its host/port.
 VNCEV = VNCServer("vncev", 5934, renders_desktop=False, size=None)
 
+# Its geometry is what test_desktop_resize.py changes, so it stays out of the
+# smoke grid and out of every test that asserts a size.
+TIGERVNC_RESIZE = VNCServer("tigervnc-resize", 5940, size=(256, 192))
+
 # Credentials the OS-hosted server setup scripts configure. They are spike
 # credentials for a throwaway runner, deliberately visible; a permanent job
 # passes real ones through these environment variables from CI secrets.
