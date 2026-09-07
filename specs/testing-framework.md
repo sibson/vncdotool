@@ -278,6 +278,18 @@ and can proceed while 3–5 follow.
   than the one-key-per-server smoke case that exists today.
 - **Fleet expansion** (TightVNC, QEMU, more): follows the plan's tier
   process; this framework adds a server as one descriptor + one subclass.
+- **macOS Screen Sharing pixel rendering is permanently untestable in CI**:
+  confirmed by hand against a real Mac (2026-09-06) that ARD auth as the
+  actual console owner does capture a real desktop (thousands of distinct
+  colors, legible window content) rather than the black frame CI sees.
+  The gap is the hosted runner, not the account: it has no attached display
+  for WindowServer to composite into, so even the console owner's own
+  session captures as near-solid color there. Closing it needs a
+  self-hosted runner with a live desktop, which `macos.sh` refuses to run
+  against on purpose (see `tests/servers/screen-sharing/README.md`), not
+  worth the security/maintenance cost of a permanent GUI Mac as CI infra.
+  Manual verification, as done here, is the intended check for changes that
+  touch this path.
 - **Input-reactive test surface**: nothing in the fleet reacts to input at
   a known screen position (`tests/servers/draw-content.sh` paints static
   content once at start-up), so a keyboard/mouse test can only assert "some
