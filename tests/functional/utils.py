@@ -88,6 +88,9 @@ class VNCServer(NamedTuple):
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
     address: Optional[str] = None
+    # vncdo options this server cannot be reached without. A test that asks
+    # what happens *without* them clears the field with _replace(extra_args=()).
+    extra_args: Tuple[str, ...] = ()
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
@@ -97,35 +100,60 @@ class VNCServer(NamedTuple):
 # One constant per service in tests/servers/docker-compose.yml, named so a
 # test that needs a specific one can import it directly instead of
 # searching DOCKER_SERVERS by name.
-# Small framebuffer: keeps a committed golden Raw update to tens of
-# kilobytes rather than megabytes; see specs/decoder-goldens.md.
-TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
-TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
-X11VNC = VNCServer("x11vnc", 5933)
-# Out of DOCKER_SERVERS: neither can be reached without TLS options the
-# smoke grid does not pass.
-TIGERVNC_VENCRYPT = VNCServer(
-    "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192)
-)
-TIGERVNC_VENCRYPT_ANON = VNCServer(
-    "tigervnc-vencrypt-anon", 5951, password="vncdotool", size=(256, 192)
-)
-# Written by the tigervnc-vencrypt container into a bind mount at every
-# start; it does not exist until the fleet has run.
+# Both written by their container into a bind mount at every start; neither
+# exists until the fleet has run.
 VENCRYPT_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "vencrypt-certs" / "cert.pem"
-)
-# Out of DOCKER_SERVERS for the same reason as the two above.
-WAYVNC = VNCServer(
-    "wayvnc", 5952, username="vncdotool", password="vncdotool", size=(1024, 768)
 )
 WAYVNC_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "wayvnc-certs" / "cert.pem"
 )
+
+TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
+TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
+# x11vnc paints the X cursor into the framebuffer unless a client asks for
+# the Cursor pseudo-encoding.
+X11VNC = VNCServer("x11vnc", 5933, size=(256, 192), extra_args=("--nocursor",))
+TIGERVNC_VENCRYPT = VNCServer(
+    "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192),
+    extra_args=("--tls-ca-cert", str(VENCRYPT_CA_CERT)),
+)
+TIGERVNC_VENCRYPT_ANON = VNCServer(
+    "tigervnc-vencrypt-anon", 5951, password="vncdotool", size=(256, 192),
+    extra_args=("--tls-insecure-skip-verify",),
+)
+WAYVNC = VNCServer(
+    "wayvnc", 5952, username="vncdotool", password="vncdotool", size=(256, 192),
+    extra_args=("--tls-ca-cert", str(WAYVNC_CA_CERT)),
+)
 # 800x600 is the demo's hard-coded size; it takes no -geometry option.
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
-DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+# Every service in docker-compose.yml that speaks RFB over a plain socket
+# and draws a screen.
+DOCKER_SERVERS = [
+    TIGERVNC,
+    TIGERVNC_AUTH,
+    TIGERVNC_VENCRYPT,
+    TIGERVNC_VENCRYPT_ANON,
+    WAYVNC,
+    X11VNC,
+    LIBVNCSERVER_EXAMPLE,
+]
+
+# One server per distinct framebuffer path that displays the committed scene
+# PNGs: Xvnc's damage tracking, x11vnc polling an Xvfb, and wlroots
+# compositing an Xwayland surface for neatvnc.
+SCENE_SERVERS = [TIGERVNC, X11VNC, WAYVNC]
+
+# vnclog reaches its upstream through command.add_standard_options, which
+# carries neither of these.
+TLS_OPTIONS = ("--tls-ca-cert", "--tls-insecure-skip-verify")
+
+
+def vnclog_can_reach(server: VNCServer) -> bool:
+    return not any(option in server.extra_args for option in TLS_OPTIONS)
+
 
 QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
 QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
@@ -441,6 +469,7 @@ def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
         argv += ["-p", server.password]
     if server.username is not None:
         argv += ["-u", server.username]
+    argv.extend(server.extra_args)
     argv.extend(args)
     return argv
 

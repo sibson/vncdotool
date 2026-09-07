@@ -32,9 +32,11 @@ certificate_file=/certs/cert.pem
 CFG
 
 # The headless backend invents an output whose default size is not ours.
+# hide_cursor's timeout is milliseconds; 1 is as soon as the pointer stops.
 cat > /home/vnc/sway.conf <<CFG
 output HEADLESS-1 resolution ${GEOMETRY}
-exec sleep infinity
+seat seat0 hide_cursor 1
+exec cd / && python3 -m tests.goldens.scene_player
 CFG
 
 mkdir -p /home/vnc/xdg

@@ -19,12 +19,16 @@ from .utils import (
     screenshot_dir,
 )
 
-NO_PASSWORD = TIGERVNC_VENCRYPT._replace(password=None)
-ANON_NO_PASSWORD = TIGERVNC_VENCRYPT_ANON._replace(password=None)
+VENCRYPT = TIGERVNC_VENCRYPT._replace(extra_args=())
+VENCRYPT_ANON = TIGERVNC_VENCRYPT_ANON._replace(extra_args=())
+WAYVNC_BARE = WAYVNC._replace(extra_args=())
+
+NO_PASSWORD = VENCRYPT._replace(password=None)
+ANON_NO_PASSWORD = VENCRYPT_ANON._replace(password=None)
 
 
 class _VeNCryptTestMixin:
-    server = TIGERVNC_VENCRYPT
+    server = VENCRYPT
 
     def setUp(self) -> None:
         if not port_open(HOST, self.server.port):
@@ -61,49 +65,47 @@ class _VeNCryptTestMixin:
 
 
 class TestVeNCryptX509(_VeNCryptTestMixin, TestCase):
-    server = TIGERVNC_VENCRYPT
+    server = VENCRYPT
 
     def test_x509_vnc_connects_when_the_certificate_verifies(self) -> None:
-        self.assert_captured(
-            TIGERVNC_VENCRYPT, "--tls-ca-cert", str(VENCRYPT_CA_CERT)
-        )
+        self.assert_captured(VENCRYPT, "--tls-ca-cert", str(VENCRYPT_CA_CERT))
 
     def test_x509_none_is_taken_when_no_password_was_given(self) -> None:
         self.assert_captured(NO_PASSWORD, "--tls-ca-cert", str(VENCRYPT_CA_CERT))
 
     def test_an_unverifiable_certificate_is_refused_by_default(self) -> None:
-        stderr = self.assert_refused(TIGERVNC_VENCRYPT)
+        stderr = self.assert_refused(VENCRYPT)
 
         self.assertIn("--tls-ca-cert", stderr)
         self.assertIn("--tls-insecure-skip-verify", stderr)
 
     def test_the_insecure_flag_accepts_the_certificate_anyway(self) -> None:
-        self.assert_captured(TIGERVNC_VENCRYPT, "--tls-insecure-skip-verify")
+        self.assert_captured(VENCRYPT, "--tls-insecure-skip-verify")
 
 
 class TestVeNCryptAnonymous(_VeNCryptTestMixin, TestCase):
-    server = TIGERVNC_VENCRYPT_ANON
+    server = VENCRYPT_ANON
 
     def test_anonymous_tls_is_refused_by_default(self) -> None:
-        stderr = self.assert_refused(TIGERVNC_VENCRYPT_ANON)
+        stderr = self.assert_refused(VENCRYPT_ANON)
 
         self.assertIn("--tls-insecure-skip-verify", stderr)
 
     def test_tls_vnc_connects_with_the_insecure_flag(self) -> None:
-        self.assert_captured(TIGERVNC_VENCRYPT_ANON, "--tls-insecure-skip-verify")
+        self.assert_captured(VENCRYPT_ANON, "--tls-insecure-skip-verify")
 
     def test_tls_none_is_taken_when_no_password_was_given(self) -> None:
         self.assert_captured(ANON_NO_PASSWORD, "--tls-insecure-skip-verify")
 
 
 class TestWayvnc(_VeNCryptTestMixin, TestCase):
-    server = WAYVNC
+    server = WAYVNC_BARE
 
     def test_x509_plain_captures_a_screen(self) -> None:
-        self.assert_captured(WAYVNC, "--tls-ca-cert", str(WAYVNC_CA_CERT))
+        self.assert_captured(WAYVNC_BARE, "--tls-ca-cert", str(WAYVNC_CA_CERT))
 
     def test_an_unverifiable_certificate_is_refused_by_default(self) -> None:
-        result = run_vncdo(WAYVNC, "pause", "0")
+        result = run_vncdo(WAYVNC_BARE, "pause", "0")
 
         self.assertNotEqual(
             result.returncode,
@@ -113,4 +115,4 @@ class TestWayvnc(_VeNCryptTestMixin, TestCase):
         self.assertIn("--tls-insecure-skip-verify", result.stderr)
 
     def test_the_insecure_flag_accepts_the_certificate_anyway(self) -> None:
-        self.assert_captured(WAYVNC, "--tls-insecure-skip-verify")
+        self.assert_captured(WAYVNC_BARE, "--tls-insecure-skip-verify")

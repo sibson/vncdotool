@@ -222,6 +222,7 @@ FROM base AS wayvnc
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wayvnc \
         sway \
+        xwayland \
         openssl \
     && rm -rf /var/lib/apt/lists/*
 

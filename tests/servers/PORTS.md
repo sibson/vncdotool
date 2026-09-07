@@ -36,11 +36,26 @@ server on 5900 inside the same container) the mapping says so.
 | 5946 | 4444 | `selenoid` | #499 |
 | 5947 | 5900 | `kasmvnc` | #499 |
 
-## 595x -- anonymous TLS
+## 595x -- reachable over TLS and nothing else
 
-| Host | Container | Service | Claimed by |
-|------|-----------|---------|------------|
-| 5951 | 5900 | `tigervnc-vencrypt-anon` | #498 |
+| Host | Container | Service | Claimed by | Subtype |
+|------|-----------|---------|------------|---------|
+| 5951 | 5900 | `tigervnc-vencrypt-anon` | #498 | anonymous TLS |
+| 5952 | 5900 | `wayvnc` | #498 | X509, with a username |
+
+## 599x -- vnclog proxies the harness starts
+
+Not fleet services: a test that records a session starts its own `vnclog` on
+one of these and stops it again within the test, so two modules may share a
+number but two live proxies may not.
+
+| Host | Started by |
+|------|------------|
+| 5990, 5991 | `test_encodings.py`, one per proxyable scene server |
+| 5993, 5994, 5995 | `test_proxy.py` |
+| 5996, 5997 | `test_roundtrip.py` |
+| 5998 | `test_proxy.py` and `test_bandwidth.py`, never at once |
+| 5999 | `tests/goldens/capture.py` |
 
 ## Not in the fleet
 
