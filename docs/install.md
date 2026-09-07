@@ -10,6 +10,18 @@ vncdotool relies on a number of libraries, the two major ones are [Pillow](https
 [Twisted](https://twistedmatrix.com/), an asynchronous networking library.
 While vncdotool should work with any recent version of these libraries sometimes things break.
 
+## Optional extras
+
+Connecting to a `ws://` or `wss://` server -- noVNC, websockify, Proxmox,
+Selenoid -- needs [autobahn](https://autobahn.readthedocs.io/), which the
+`websocket` extra pulls in:
+
+```
+pip install 'vncdotool[websocket]'
+```
+
+See [Server Addresses](usage.md#server-addresses) for the URL syntax.
+
 ## Windows
 
 If you are not familiar with Python, the most reliable way to install vncdotool is to use binary packages.

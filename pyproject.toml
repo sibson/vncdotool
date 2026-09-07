@@ -36,6 +36,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Twisted[tls] is what optionsForClientTLS needs to verify a wss:// certificate.
+websocket = [
+    "autobahn",
+    "Twisted[tls]",
+]
 docs = [
     "mkdocs",
     "mkdocs-material",
@@ -58,7 +63,7 @@ dev = [
     "flake8",
     "mypy",
     "mypy-zope",  # understands zope.interface, which Twisted is built on
-    "vncdotool[docs]",
+    "vncdotool[docs,websocket]",
 ]
 
 [tool.hatch.build.targets.wheel]

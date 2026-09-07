@@ -15,7 +15,7 @@ phased plan to close them.
 | Security types | None (1), VNC Authentication (2), ARD Diffie-Hellman (30) | Anything else → "unknown security types" and disconnect |
 | Encodings | Raw, CopyRect, RRE, CoRRE, Hextile, ZRLE | No Tight, no TRLE, no JPEG quality/compression level pseudo-encodings |
 | Pseudo-encodings | Cursor, DesktopSize, LastRect, QEMU Extended Key Event | Fence is answered but not offered, and never initiated; no ExtendedDesktopSize, ContinuousUpdates, Extended Clipboard |
-| Transports | TCP, Unix socket | No WebSocket (noVNC, Proxmox), no TLS |
+| Transports | TCP, Unix socket, WebSocket (`ws://`, `wss://`) | No VeNCrypt or AnonTLS over a plain TCP connection |
 
 **Test coverage:** unit tests with hand-crafted byte strings; functional
 tests against LibVNCServer example servers (in CI since #330) and an
@@ -171,8 +171,10 @@ pixel-exact against reference images for every supported pixel format.
   `--fence` flag and command give it a caller.
 - **Extended Clipboard** (beyond the Phase 1 "don't hang" guard) for
   non-Latin-1 text.
-- **WebSocket transport** (`ws://`/`wss://` server addresses) targeting
-  noVNC and Proxmox (#259, #138); optional dependency, Twisted-native.
+- ~~**WebSocket transport** (`ws://`/`wss://` server addresses) targeting
+  noVNC and Proxmox~~: done in #259, as `vncdotool/websocket.py` on
+  autobahn behind the `websocket` extra. Still open: `vnclog` refuses a
+  `ws://` address, and #138 is a Proxmox auth problem this does not touch.
 - **Keysym audit** against QEMU/KVM for symbol characters and layouts
   (#269, #65).
 

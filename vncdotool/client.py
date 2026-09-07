@@ -19,7 +19,7 @@ from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
 from twisted.python.failure import Failure
 
-from . import decoders, pixelformat, rfb
+from . import decoders, pixelformat, rfb, websocket
 from .const import JPEG_QUALITY_ENCODINGS
 from .keys import KEYMAP
 
@@ -705,15 +705,17 @@ class VMWareFactory(VNCDoToolFactory):
 
 
 def factory_connect(
-    factory: VNCDoToolFactory, host: str, port: int, family: socket.AddressFamily
+    factory: VNCDoToolFactory, host: str, port: int, family: websocket.AddressFamily
 ) -> None:
-    if family in {socket.AF_UNSPEC, socket.AF_INET, socket.AF_INET6}:
-        ep = HostnameEndpoint(reactor, host, port)
+    if family is websocket.WEBSOCKET:
+        # host carries the whole URL: the path and query select the session.
+        conn = websocket.connect(reactor, factory, host)
+    elif family in {socket.AF_UNSPEC, socket.AF_INET, socket.AF_INET6}:
+        conn = HostnameEndpoint(reactor, host, port).connect(factory)
     elif hasattr(socket, "AF_UNIX") and family == socket.AF_UNIX:
-        ep = UNIXClientEndpoint(reactor, host)
+        conn = UNIXClientEndpoint(reactor, host).connect(factory)
     else:
         raise ValueError(family)
 
-    conn = ep.connect(factory)
     # conn.addCallback(factory.clientConnectionMade) already called by VNCDoToolClient.vncConnectionMade()
     conn.addErrback(lambda reason: factory.clientConnectionFailed(None, reason))

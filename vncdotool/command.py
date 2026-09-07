@@ -27,7 +27,7 @@ from twisted.internet.interfaces import IConnector
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from . import decoders, pixelformat
+from . import decoders, pixelformat, websocket
 from .capture import check_capture_target
 from .client import (
     JPEG_QUALITY_ENCODINGS,
@@ -354,7 +354,11 @@ def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
     # no outcome decided yet; set before connecting so a synchronous
     # connection failure has somewhere to record itself
     reactor.exit_status = None
-    factory_connect(factory, options.host, options.port, options.address_family)
+    try:
+        factory_connect(factory, options.host, options.port, options.address_family)
+    except websocket.WebSocketUnavailable as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(ExitStatus.USAGE)
 
     factory.deferred.addCallback(lambda client: client.transport.loseConnection())
     factory.deferred.addCallback(lambda _: factory.done(ExitStatus.SUCCESS))
@@ -389,7 +393,8 @@ def add_standard_options(parser: argparse.ArgumentParser) -> argparse.ArgumentPa
         "-s",
         "--server",
         default="127.0.0.1",
-        help="connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%(default)s]",
+        help="connect to VNC server at ADDRESS[:DISPLAY|::PORT], a Unix socket "
+        "path, or a ws://HOST:PORT/PATH or wss:// URL [%(default)s]",
     )
     parser.add_argument(
         "--logfile",
@@ -437,7 +442,18 @@ def setup_logging(options: argparse.Namespace) -> None:
     PythonLoggingObserver().start()
 
 
-def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
+def format_address(host: str, port: int) -> str:
+    """Render a parsed address for a log line, with any URL credentials removed."""
+    if websocket.is_websocket_url(host):
+        return websocket.redact(host)
+    return f"{host}:{port}"
+
+
+def parse_server(server: str) -> tuple[websocket.AddressFamily, str, int]:
+    if websocket.is_websocket_url(server):
+        url, port = websocket.parse_url(server)
+        return websocket.WEBSOCKET, url, port
+
     if server.startswith("["):
         host, sep, server = server[1:].partition("]")
         if not sep:
@@ -537,6 +553,8 @@ def vnclog() -> None:
     setup_logging(options)
 
     options.address_family, options.host, options.port = parse_server(options.server)
+    if options.address_family is websocket.WEBSOCKET:
+        parser.error("vnclog records a TCP or Unix-socket server; ws:// is vncdo-only")
 
     output = None
     # The error names only --one-shot; --capture-raw implies it.
@@ -704,7 +722,7 @@ def vncdo(argv: list[str] | None = None) -> None:
     setup_logging(options)
     options.address_family, options.host, options.port = parse_server(options.server)
 
-    log.info("connecting to %s:%s", options.host, options.port)
+    log.info("connecting to %s", format_address(options.host, options.port))
 
     factory = build_tool(options, args)
     factory.username = options.username

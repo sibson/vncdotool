@@ -20,7 +20,7 @@ from twisted.internet.defer import Deferred, maybeDeferred
 from twisted.python.failure import Failure
 from twisted.python.log import PythonLoggingObserver
 
-from . import command
+from . import command, websocket
 from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
 
 V = TypeVar("V")
@@ -61,7 +61,10 @@ class ThreadedVNCClientProxy:
         self.disconnect()
 
     def connect(
-        self, host: str, port: int = 5900, family: socket.AddressFamily = socket.AF_INET
+        self,
+        host: str,
+        port: int = 5900,
+        family: websocket.AddressFamily = socket.AF_INET,
     ) -> None:
         def capture_protocol(protocol: TClient) -> TClient:
             self.protocol = protocol
