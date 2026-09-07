@@ -5,6 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Iterable, NamedTuple, Sequence
 
+from OpenSSL import SSL
+from twisted.internet.interfaces import IOpenSSLContextFactory
+from twisted.internet.ssl import (
+    Certificate,
+    CertificateOptions,
+    optionsForClientTLS,
+    platformTrust,
+    trustRootFromCertificates,
+)
+from zope.interface import implementer
+
 from .const import VeNCryptSubtypes
 
 ANONYMOUS_SUBTYPES = frozenset(
@@ -49,10 +60,6 @@ PREFERENCE: Sequence[VeNCryptSubtypes] = (
 
 INSECURE_FLAG = "--tls-insecure-skip-verify"
 
-MISSING_TLS_SUPPORT = (
-    "VeNCrypt's TLS subtypes need pyOpenSSL; install vncdotool[tls]"
-)
-
 # OpenSSL offers no anonymous ciphersuite at all until the security level is
 # lowered.
 _ANONYMOUS_CIPHERS = b"AECDH:ADH:@SECLEVEL=0"
@@ -71,15 +78,6 @@ class Credentials(NamedTuple):
     password: str | None = None
 
 
-def tls_available() -> bool:
-    try:
-        import OpenSSL.SSL  # noqa: F401
-        import twisted.protocols.tls  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def unusable(
     subtype: int, policy: TLSPolicy, credentials: Credentials
 ) -> str | None:
@@ -88,8 +86,6 @@ def unusable(
         return "sends the password in the clear over an unencrypted socket"
     if subtype not in set(PREFERENCE):
         return "not implemented"
-    if subtype in TLS_SUBTYPES and not tls_available():
-        return MISSING_TLS_SUPPORT
     if subtype in ANONYMOUS_SUBTYPES and not policy.allow_unverified:
         return (
             f"anonymous TLS carries no certificate to verify, so it needs "
@@ -143,13 +139,6 @@ def client_options(subtype: int, policy: TLSPolicy) -> Any:
 
 
 def _verified_options(hostname: str, ca_certs: str | None) -> Any:
-    from twisted.internet.ssl import (
-        Certificate,
-        optionsForClientTLS,
-        platformTrust,
-        trustRootFromCertificates,
-    )
-
     if ca_certs is None:
         trust_root = platformTrust()
     else:
@@ -166,16 +155,10 @@ def _verified_options(hostname: str, ca_certs: str | None) -> Any:
 
 
 def _unverified_options() -> Any:
-    from twisted.internet.ssl import CertificateOptions
-
     return CertificateOptions()
 
 
 def _anonymous_options() -> Any:
-    from OpenSSL import SSL
-    from twisted.internet.interfaces import IOpenSSLContextFactory
-    from zope.interface import implementer
-
     @implementer(IOpenSSLContextFactory)
     class AnonymousTLSContextFactory:
         def __init__(self) -> None:

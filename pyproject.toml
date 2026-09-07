@@ -39,12 +39,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# service-identity is what Twisted's optionsForClientTLS checks a
-# certificate with; nothing here imports it.
-tls = [
-    "pyOpenSSL",
-    "service-identity",
-]
 docs = [
     "mkdocs",
     "mkdocs-material",
@@ -68,7 +62,6 @@ dev = [
     "mypy",
     "mypy-zope",  # understands zope.interface, which Twisted is built on
     "vncdotool[docs]",
-    "vncdotool[tls]",
 ]
 
 [tool.hatch.build.targets.wheel]

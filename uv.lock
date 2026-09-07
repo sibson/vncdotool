@@ -12,7 +12,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-08-31T16:43:32.312146Z"
+exclude-newer = "2026-08-31T18:20:57.023209Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -1876,10 +1876,6 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
-tls = [
-    { name = "pyopenssl" },
-    { name = "service-identity" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -1887,7 +1883,7 @@ dev = [
     { name = "flake8" },
     { name = "mypy" },
     { name = "mypy-zope" },
-    { name = "vncdotool", extra = ["docs", "tls"] },
+    { name = "vncdotool", extra = ["docs"] },
 ]
 
 [package.metadata]
@@ -1899,11 +1895,9 @@ requires-dist = [
     { name = "mkdocs-material", marker = "extra == 'docs'" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'" },
     { name = "pillow" },
-    { name = "pyopenssl", marker = "extra == 'tls'" },
-    { name = "service-identity", marker = "extra == 'tls'" },
     { name = "twisted", extras = ["tls"] },
 ]
-provides-extras = ["tls", "docs"]
+provides-extras = ["docs"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1912,7 +1906,6 @@ dev = [
     { name = "mypy" },
     { name = "mypy-zope" },
     { name = "vncdotool", extras = ["docs"] },
-    { name = "vncdotool", extras = ["tls"] },
 ]
 
 [[package]]

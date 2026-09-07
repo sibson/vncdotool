@@ -445,17 +445,16 @@ class TestVeNCrypt(TestCase):
 
         self.client.vncAuthFailed.assert_called_once_with(b"denied")
 
-    def test_vnc_authentication_wins_when_the_tls_extra_is_missing(self):
-        with mock.patch.object(rfb.vencrypt, "tls_available", return_value=False):
-            self.feed(
-                b"RFB 003.008\n"
-                b"\x02"  # num-auth-types
-                b"\x02\x13"  # VNC_AUTHENTICATION, VENCRYPT
-            )
+    def test_vencrypt_is_taken_over_a_plain_vnc_authentication(self):
+        self.feed(
+            b"RFB 003.008\n"
+            b"\x02"  # num-auth-types
+            b"\x02\x13"  # VNC_AUTHENTICATION, VENCRYPT
+        )
 
-        assert self.written().endswith(b"\x02")
-        # the 16-byte VNC authentication challenge, not a VeNCrypt version
-        assert self.client._expected_len == 16
+        assert self.written().endswith(b"\x13")
+        # the 2-byte VeNCrypt version, not a 16-byte VNC challenge
+        assert self.client._expected_len == 2
 
     def reason(self) -> str:
         self.client.vncProtocolError.assert_called_once()

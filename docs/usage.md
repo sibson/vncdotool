@@ -198,13 +198,7 @@ request, on the RFB scale of 0 (low) to 9 (high):
 ## TLS, with VeNCrypt
 
 Servers that wrap the session in TLS offer the VeNCrypt *security type*.
-Install the extra that carries it:
-
-```
-> pip install "vncdotool[tls]"
-```
-
-vncdo then negotiates the subtypes `X509None`, `X509Vnc`, `X509Plain`,
+vncdo negotiates the subtypes `X509None`, `X509Vnc`, `X509Plain`,
 `TLSNone`, `TLSVnc` and `TLSPlain`, every one of which builds a TLS tunnel
 first. The bare `Plain` subtype puts the username and password on an
 unencrypted socket, so vncdo refuses it rather than offering a flag for it.

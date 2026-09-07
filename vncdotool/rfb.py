@@ -166,19 +166,13 @@ class RFBClient(Protocol):
         types = unpack(f"!{len(block)}B", block)
         for sec_type in types:
             log.msg(f"Offered {AuthTypes.lookup(sec_type)!r}")
-        valid_types = self._usableAuths(set(types))
+        valid_types = set(types) & self.SUPPORTED_AUTHS
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
             self._startSecurity(sec_type)
         else:
             self.abortConnection(f"unknown security types: {types!r}")
-
-    def _usableAuths(self, offered: set[int]) -> set[int]:
-        supported = offered & self.SUPPORTED_AUTHS
-        if len(supported) > 1 and not vencrypt.tls_available():
-            supported -= {AuthTypes.VENCRYPT}
-        return supported
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
