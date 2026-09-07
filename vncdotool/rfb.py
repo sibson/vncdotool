@@ -77,9 +77,7 @@ class RFBClient(Protocol):
     # narrows it.
     MAX_DESKTOP_SIZE = 0x10000
 
-    # Bounds a server-declared message payload length (ServerCutText,
-    # SetColourMapEntries) before it sizes a read; policy, not protocol, and
-    # narrowable by a subclass.
+    # Policy, not protocol: narrowable by a subclass.
     MAX_MESSAGE_PAYLOAD = 1 << 20
 
     _HEADER = b"RFB 000.000\n"
@@ -318,11 +316,10 @@ class RFBClient(Protocol):
         if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
             return
-        handler_cls = messages.HANDLERS.get(msgid)
-        if handler_cls is None:
+        handler = self._messages.get(msgid)
+        if handler is None:
             self.abortConnection(f"unknown message received {MsgS2C.lookup(msgid)!r}")
             return
-        handler = self._messages[msgid]
         self._pump(
             None,
             handler.handle(self),

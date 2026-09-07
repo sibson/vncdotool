@@ -11,12 +11,10 @@ class ServerFenceHandler(MessageHandler):
     MESSAGE = MsgS2C.SERVER_FENCE
 
     def handle(self, client: Any) -> Generator[int, bytes, None]:
-        # rfbproto ServerFence: 3 bytes padding, U32 flags, U8 payload-length.
         flags, length = unpack("!xxxIB", (yield 8))
         payload = (yield length) if length else b""
         if flags & FenceFlags.REQUEST:
-            # rfbproto ServerFence: masking to the flags handled here, rather
-            # than just clearing Request, is what lets the server tell which
-            # flags this client supports as new ones are defined.
+            # Masking, not clearing REQUEST alone, is what lets the server
+            # learn which flags this client understands.
             known = FenceFlags.BLOCK_BEFORE | FenceFlags.BLOCK_AFTER | FenceFlags.SYNC_NEXT
             client.clientFence(FenceFlags(flags) & known, payload)
