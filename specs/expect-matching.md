@@ -111,13 +111,13 @@ on a smooth screen reads 20 against a noise floor of 7.
 `expect` and `rexpect` keep their names and their arguments. Two options tune
 them, alongside `--jpeg-quality` and the rest:
 
-    --expect-fuzz N   per-pixel bound, 0..255 [derived from the format]
-    --expect-blur R   box blur radius applied to both images [2 with
+    --fuzz N   per-pixel bound, 0..255 [derived from the format]
+    --blur R   box blur radius applied to both images [2 with
                       --jpeg-quality, 0 without]
 
 **Asking for JPEG asks for the blur.** A lossy frame does not match at any
 bound that still rejects a wrong screen, so `--jpeg-quality` without a blur
-would be a flag that quietly stops `expect` working. `--expect-blur 0` turns
+would be a flag that quietly stops `expect` working. `--blur 0` turns
 it back off for anyone who wants the strictness.
 
 **Fuzz, not tolerance.** `fuzz` is already the word in vncdo's own help text
@@ -134,7 +134,7 @@ format whose channel tolerance is (7, 3, 7) admits a worst-case YIQ delta of
 default.
 
 `expect FILE FUZZ` keeps its optional third token, meaning that same bound and
-**overriding `--expect-fuzz` for that one command**. The option sets a run's
+**overriding `--fuzz` for that one command**. The option sets a run's
 default; the token tunes one wait. One script can wait on a smooth login dialog
 and then on a desktop playing video, which the option alone cannot express.
 
@@ -242,14 +242,14 @@ so it generates one case per format through `load_tests` rather than looping.
 deleted -- its rule is now the default fuzz rather than a fallback nobody
 documented. `expectScreen(filename, fuzz=None, blur=None)` and
 `expectRegion(filename, x, y, fuzz=None, blur=None)`; `maxrms` is gone from both.
-The client carries `expect_fuzz` and `expect_blur` set from the factory, the way
+The client carries `fuzz` and `blur` set from the factory, the way
 `requested_jpeg_quality` already is.
 
 Six tests in `tests/unit/test_client.py` assert on `cli.expected` as a
 histogram and are rewritten against the new comparison. `CHANGELOG.md` gets the
 entry for the breaking change, under `(UNRELEASED)`.
 
-**3. The command-line surface.** `--expect-fuzz` and `--expect-blur` parsed and
+**3. The command-line surface.** `--fuzz` and `--blur` parsed and
 validated (fuzz 0..255, blur non-negative), onto the factory. `expect` and
 `rexpect` take their trailing number only when the next token parses as one,
 which incidentally fixes a live bug: `docs/usage.rst` documents `expect

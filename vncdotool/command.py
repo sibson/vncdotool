@@ -47,7 +47,7 @@ SUPPORTED_FORMATS = ("png", "jpg", "jpeg", "gif", "bmp")
 
 # A JPEG frame is further from its target than any per-pixel bound can
 # separate from a wrong screen; asking for a quality level asks for this too.
-LOSSY_EXPECT_BLUR = 2
+LOSSY_BLUR = 2
 
 
 class TimeoutError(RuntimeError):
@@ -640,7 +640,11 @@ def vncdo(argv: list[str] | None = None) -> None:
         "--encodings",
         metavar="LIST",
         help="comma-separated encodings to offer the server, in preference "
-        "order (%s) [raw]" % ", ".join(decoders.ENCODING_NAMES),
+        "order (%s) [%s]"
+        % (
+            ", ".join(decoders.ENCODING_NAMES),
+            ",".join(decoders.DEFAULT_ENCODING_NAMES),
+        ),
     )
     op.add_option(
         "--pixel-format",
@@ -657,20 +661,20 @@ def vncdo(argv: list[str] | None = None) -> None:
         "to 9 (high). Lossy [none]",
     )
     op.add_option(
-        "--expect-fuzz",
+        "--fuzz",
         type="int",
         metavar="N",
         help="how far any one pixel may sit from the target image for expect "
-        "to call it a match, 0 (exact) to 255 [what the pixel format cannot "
-        "express]",
+        "or stable to call it a match, 0 (exact) to 255 [what the pixel "
+        "format cannot express]",
     )
     op.add_option(
-        "--expect-blur",
+        "--blur",
         type="int",
         metavar="RADIUS",
-        help="blur both screens by RADIUS before expect compares them, which "
-        "is what carries a match through a lossy encoding [%d with "
-        "--jpeg-quality, 0 without]" % LOSSY_EXPECT_BLUR,
+        help="blur both screens by RADIUS before expect or stable compares "
+        "them, which is what carries a match through a lossy encoding "
+        "[%d with --jpeg-quality, 0 without]" % LOSSY_BLUR,
     )
     op.add_option(
         "-i",
@@ -724,24 +728,25 @@ def vncdo(argv: list[str] | None = None) -> None:
                 f"{len(JPEG_QUALITY_ENCODINGS) - 1} (high), not "
                 f"{options.jpeg_quality}"
             )
-        if decoders.ENCODING_NAMES["tight"] not in (factory.encodings or []):
+        offered = factory.encodings or decoders.DEFAULT_ENCODINGS
+        if decoders.ENCODING_NAMES["tight"] not in offered:
             op.error("--jpeg-quality only applies to Tight; add --encodings tight")
         factory.jpeg_quality = options.jpeg_quality
 
-    if options.expect_fuzz is not None:
-        if not 0 <= options.expect_fuzz <= 255:
+    if options.fuzz is not None:
+        if not 0 <= options.fuzz <= 255:
             op.error(
-                f"--expect-fuzz takes a bound from 0 (exact) to 255, not "
-                f"{options.expect_fuzz}"
+                f"--fuzz takes a bound from 0 (exact) to 255, not "
+                f"{options.fuzz}"
             )
-        factory.expect_fuzz = options.expect_fuzz
+        factory.fuzz = options.fuzz
 
-    if options.expect_blur is None:
-        factory.expect_blur = LOSSY_EXPECT_BLUR if options.jpeg_quality is not None else 0
-    elif options.expect_blur < 0:
-        op.error(f"--expect-blur takes a radius of 0 or more, not {options.expect_blur}")
+    if options.blur is None:
+        factory.blur = LOSSY_BLUR if options.jpeg_quality is not None else 0
+    elif options.blur < 0:
+        op.error(f"--blur takes a radius of 0 or more, not {options.blur}")
     else:
-        factory.expect_blur = options.expect_blur
+        factory.blur = options.blur
 
     if options.timeout:
         message = "TIMEOUT Exceeded (%ss)" % options.timeout

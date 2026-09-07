@@ -79,14 +79,14 @@ behind it.
 Nothing here needs its own comparison. What `stable` asks of a comparator is
 what `expect` asks: that it see a small change on a large screen, and that it
 not mistake a lossy re-encoding for one. Sharing it means FUZZ carries one
-meaning across both commands, `--expect-fuzz` and `--expect-blur` reach both,
+meaning across both commands, `--fuzz` and `--blur` reach both,
 and the goldens that calibrated the metric calibrate this too.
 
 One difference is worth knowing and not worth acting on. `expect` compares the
 screen against a file that was written in some other pixel format, so its
 default fuzz is what the negotiated format cannot express; `stable` compares
 two frames that came from the same server in the same format, where that
-quantisation cancels and the honest default would be 0. Sharing `--expect-fuzz`
+quantisation cancels and the honest default would be 0. Sharing `--fuzz`
 is worth more than the two or three units this gives away.
 
 ## How the window is driven
@@ -160,7 +160,7 @@ motivating case is an agent that believes it. Fail loudly; the recovery is
     VNCDoToolClient.stableRegion(seconds, x, y, w, h, fuzz=None, blur=None) -> Deferred
 
 Beside `expectScreen`/`expectRegion`, and resolving `fuzz` and `blur` through
-the same `_expectFuzz`/`_expectBlur`. `stableRegion` calls `_requireOnScreen`,
+the same `_fuzz`/`_blur`. `stableRegion` calls `_requireOnScreen`,
 so an off-screen region fails at once rather than settling against the black
 padding `Image.crop` supplies.
 
@@ -218,7 +218,7 @@ works.
 
 - Whether the default fuzz should be 0 rather than the pixel format's bound,
   since both frames come from the same server in the same format. It would
-  cost `--expect-fuzz` reaching this command.
+  cost `--fuzz` reaching this command.
 - Whether any common server sends periodic no-op updates that a pixel
   comparison would correctly ignore but that would still churn CPU on a large
   framebuffer. Not yet checked against the fleet.

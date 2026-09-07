@@ -68,20 +68,19 @@ Every pixel has to be within a bound of the target, a whole number from 0
 (identical) to 255. Left out, the bound is whatever the pixel format cannot
 express, so a 5-bit-red server does not poll forever waiting to reproduce an
 8-bit value. To allow more, write it after the filename or pass
-`--expect-fuzz`:
+`--fuzz`:
 
 ```
 > vncdo expect somescreen.png 16
-> vncdo --expect-fuzz 16 expect somescreen.png
+> vncdo --fuzz 16 expect somescreen.png
 ```
 
 `--jpeg-quality` also blurs both images before comparing, because a JPEG
 frame is further from its target than any bound can separate from a wrong
-screen. `--expect-blur RADIUS` sets that radius, or `0` turns it off:
+screen. `--blur RADIUS` sets that radius, or `0` turns it off:
 
 ```
-> vncdo --encodings tight --jpeg-quality 5 --expect-fuzz 64 \
-        expect somescreen.png
+> vncdo --jpeg-quality 5 --fuzz 64 expect somescreen.png
 ```
 
 Before 2.0 the number after the filename was the root-mean-square difference

@@ -58,6 +58,9 @@ ENCODING_NAMES: Dict[str, Encoding] = {
     "tight": Encoding.TIGHT,
 }
 
+DEFAULT_ENCODING_NAMES = ("tight", "hextile", "raw")
+DEFAULT_ENCODINGS = [ENCODING_NAMES[name] for name in DEFAULT_ENCODING_NAMES]
+
 
 def for_connection() -> Dict[Encoding, Decoder]:
     return {encoding: cls() for encoding, cls in DECODERS.items()}
