@@ -526,12 +526,18 @@ class TestBuildTool(unittest.TestCase):
 @mock.patch('vncdotool.command.factory_connect')
 @mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
 class TestVncdoArgvParameter(unittest.TestCase):
-    """vncdo(argv) must feed optparse instead of mutating sys.argv, so a
+    """vncdo(argv) must feed the parser instead of mutating sys.argv, so a
     caller like _replay_client can build a synthetic invocation directly."""
 
     def test_argv_parameter_is_what_gets_parsed(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit) as raised:
             command.vncdo(['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_a_leading_option_looking_number_is_a_usage_error(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['-10', '20'])
 
         assert raised.exception.code == command.ExitStatus.USAGE
 
@@ -818,20 +824,31 @@ class TestVncdoArgumentParsing(CLIParsingTestCase):
             assert options.password == 'sekrit'
             assert args == ['key', 'a']
 
-    def test_a_password_starting_with_a_dash(self) -> None:
-        for argv in (['-p', '-dash', 'key', 'a'],
-                     ['-p-dash', 'key', 'a'],
-                     ['--password=-dash', 'key', 'a']):
+    def test_a_password_starting_with_a_dash_needs_the_attached_form(self) -> None:
+        """optparse took `-p -dash`; argparse reads a separate argument that
+        looks like an option as one, so the value has to be attached."""
+        for argv in (['-p-dash', 'key', 'a'], ['--password=-dash', 'key', 'a']):
             self.build_tool.reset_mock()
             options, args = self.parse(argv)
             assert options.password == '-dash', argv
             assert args == ['key', 'a']
+
+        assert '--password' in self.usage_error(['-p', '-dash', 'key', 'a'])
+
+    def test_a_password_that_is_a_negative_number(self) -> None:
+        options, args = self.parse(['-p', '-123', 'key', 'a'])
+        assert options.password == '-123'
 
     def test_numeric_options_are_converted(self) -> None:
         options, args = self.parse(['--delay', '25', '-w', '2.5', '-t', '1.5', 'key', 'a'])
         assert options.delay == 25
         assert options.warp == 2.5
         assert options.timeout == 1.5
+
+    def test_the_delay_default_comes_from_the_environment(self) -> None:
+        with mock.patch.dict(os.environ, {'VNCDOTOOL_DELAY': '25'}):
+            options, args = self.parse(['key', 'a'])
+        assert options.delay == 25
 
     def test_server_defaults_to_loopback(self) -> None:
         options, args = self.parse(['key', 'a'])
@@ -856,9 +873,6 @@ class TestVncdoArgumentParsing(CLIParsingTestCase):
 
     def test_an_unknown_pixel_format_is_a_usage_error(self) -> None:
         assert 'rgb999' in self.usage_error(['--pixel-format', 'rgb999', 'key', 'a'])
-
-    def test_a_leading_option_looking_number_is_a_usage_error(self) -> None:
-        self.assertUsageError(lambda: command.vncdo(['-10', '20']))
 
     def test_help_lists_the_command_vocabulary(self) -> None:
         help_text = self.output_of(['--help'])
@@ -933,9 +947,10 @@ class TestVnclogArgumentParsing(CLIParsingTestCase):
 
 
 class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
-    """`vncdo-replay` reads options on either side of the archive: the
-    functional suite starts it as `--server ARCHIVE --listen PORT --forever`,
-    and docs/capture.md drives it as `ARCHIVE CMD ARGS...`."""
+    """`vncdo-replay` reads options on either side of the archive, but the
+    command list has to run straight on from it: the functional suite starts
+    it as `--server ARCHIVE --listen PORT --forever`, and docs/capture.md
+    drives it as `ARCHIVE CMD ARGS...`."""
 
     def setUp(self) -> None:
         super().setUp()
@@ -964,11 +979,12 @@ class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
         assert archive == 'capture.zip'
         assert extra == ['capture', 'out.png']
 
-    def test_an_option_between_the_archive_and_the_commands(self) -> None:
-        self.run_replay(['capture.zip', '-v', 'capture', 'out.png'])
-        archive, extra = self.replay_client.call_args.args[3:]
-        assert archive == 'capture.zip'
-        assert extra == ['capture', 'out.png']
+    def test_an_option_between_the_archive_and_the_commands_is_a_usage_error(self) -> None:
+        """optparse read the commands past the option; argparse matches one
+        contiguous run of positionals, so the commands go unmatched."""
+        assert 'unrecognized arguments: capture out.png' in self.usage_error(
+            ['capture.zip', '-v', 'capture', 'out.png']
+        )
 
     def test_no_archive_is_a_usage_error(self) -> None:
         assert 'no capture archive' in self.usage_error([])
