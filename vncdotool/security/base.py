@@ -41,6 +41,7 @@ def security_result(client: Any) -> Generator[int, bytes, bool]:
         client.vncAuthFailed(reason)
     else:
         (waitfor,) = unpack("!I", (yield 4))
+        client.requirePayload(waitfor)
         client.vncAuthFailed((yield waitfor))
     client.transport.loseConnection()
     return False

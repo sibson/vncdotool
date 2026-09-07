@@ -206,6 +206,11 @@ class RFBClient(Protocol):
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
+        try:
+            self.requirePayload(waitfor)
+        except decoders.DecodeError as exc:
+            self.abortConnection(f"cannot read the connection-failed reason: {exc}")
+            return
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block: bytes) -> None:

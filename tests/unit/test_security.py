@@ -12,6 +12,7 @@ from cryptography.utils import CryptographyDeprecationWarning
 
 from vncdotool import security
 from vncdotool.const import AuthTypes
+from vncdotool.decoders import DecodeError
 
 SECURITY_OK = pack("!I", 0)
 SECURITY_FAILED = pack("!I", 1)
@@ -183,6 +184,22 @@ class TestSecurityResult(TestCase):
         assert outcome is False
         self.client.vncAuthFailed.assert_called_once_with(reason)
         self.client.transport.loseConnection.assert_called_once()
+
+    def test_oversized_reason_is_bounded_before_reading_it(self):
+        self.client._version = (3, 8)
+        self.client.requirePayload.side_effect = DecodeError("too big")
+        generator = security.security_result(self.client)
+        generator.send(None)
+        generator.send(SECURITY_FAILED)
+        with self.assertRaises(DecodeError):
+            generator.send(pack("!I", 1 << 30))
+        self.client.vncAuthFailed.assert_not_called()
+
+    def test_reason_length_is_checked_against_the_payload_bound(self):
+        self.client._version = (3, 8)
+        reason = b"nope"
+        self.drive_result(SECURITY_FAILED, pack("!I", len(reason)), reason)
+        self.client.requirePayload.assert_called_once_with(len(reason))
 
     def test_unknown_result_drops_the_connection_without_a_reason(self):
         self.client._version = (3, 8)
