@@ -49,6 +49,28 @@ services:
     ports:
       - "127.0.0.1:5934:5900"
 
+  websockify:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: websockify
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-websockify:${FLEET_TAG:-dev}
+    command: ["tigervnc:5900"]
+    ports:
+      - "127.0.0.1:5942:5900"
+
+  websockify-tls:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: websockify
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-websockify:${FLEET_TAG:-dev}
+    command: ["tigervnc:5900"]
+    environment:
+      WEBSOCKIFY_TLS: "1"
+    ports:
+      - "127.0.0.1:5943:5900"
+
   libvncserver-example:
     build:
       context: ..

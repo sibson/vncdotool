@@ -85,6 +85,9 @@ class VNCServer(NamedTuple):
     # The default suits a container on loopback; an OS-hosted server sharing
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
+    # What to pass `vncdo -s`, where host and port do not say it: a ws:// or
+    # wss:// URL.
+    address: Optional[str] = None
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
@@ -103,6 +106,17 @@ X11VNC = VNCServer("x11vnc", 5933)
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
 DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+
+# websockify serves every path, so the path and query in these URLs name no
+# session on the server; they are there to test what vncdotool passes on.
+WEBSOCKIFY = VNCServer(
+    "websockify", 5942, size=(256, 192),
+    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
+)
+WEBSOCKIFY_TLS = VNCServer(
+    "websockify-tls", 5943, size=(256, 192),
+    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
+)
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.
@@ -352,7 +366,7 @@ assert_cli_installed()
 
 
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
-    argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
+    argv = [VNCDO, "-s", server.address or f"{HOST}::{server.port}"]
     if server.password is not None:
         argv += ["-p", server.password]
     if server.username is not None:
@@ -362,7 +376,10 @@ def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
 
 
 def run_vncdo(
-    server: VNCServer, *args: str, timeout: Optional[float] = None
+    server: VNCServer,
+    *args: str,
+    timeout: Optional[float] = None,
+    env: Optional[Mapping[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """Run the real `vncdo` CLI against `server` and return the completed process.
 
@@ -371,9 +388,13 @@ def run_vncdo(
     """
     argv = vncdo_argv(server, *args)
     budget = (server.timeout if timeout is None else timeout) + SUBPROCESS_TIMEOUT_HEADROOM
+    child_env = None if env is None else {**os.environ, **env}
     try:
         # stdin closed so an unexpected getpass() prompt fails instead of blocking.
-        return subprocess.run(argv, capture_output=True, text=True, timeout=budget, stdin=subprocess.DEVNULL)
+        return subprocess.run(
+            argv, capture_output=True, text=True, timeout=budget,
+            stdin=subprocess.DEVNULL, env=child_env,
+        )
     except subprocess.TimeoutExpired as exc:
         raise AssertionError(
             f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"

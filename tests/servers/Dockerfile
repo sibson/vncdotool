@@ -136,3 +136,17 @@ COPY --from=libvncserver-build /tmp/libvncserver/libvncserver.so* /usr/local/lib
 RUN ldconfig
 
 ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]
+
+
+# websockify, proxying whichever fleet member is passed as an argument.
+FROM base AS websockify
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        websockify \
+        openssl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY servers/websockify-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
