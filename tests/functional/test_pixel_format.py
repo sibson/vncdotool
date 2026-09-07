@@ -10,6 +10,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -17,7 +18,7 @@ from PIL import Image
 from vncdotool import pixelformat
 
 from .imagediff import assert_images_match
-from .utils import HOST, TIGERVNC, port_open, run_vncdo
+from .utils import HOST, SCENE_SERVERS, VNCServer, port_open, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
@@ -30,22 +31,32 @@ FORMATS = ("bgrx8888", "rgbx8888")
 SCENES = ("0", "s", "d")
 
 
-def capture(test: TestCase, pixel_format: str, key: str) -> tuple[Image.Image, str]:
+def capture(
+    test: TestCase, server: VNCServer, pixel_format: str, key: str
+) -> Tuple[Image.Image, str]:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
-            TIGERVNC, "-v", "--pixel-format", pixel_format,
+            server, "-v", "--pixel-format", pixel_format,
             "key", key, "pause", "0.3", "capture", str(path),
         )
         if result.returncode != 0:
-            test.fail(f"vncdo --pixel-format {pixel_format} failed ({result.returncode}): {result.stderr}")
+            test.fail(
+                f"{server.name}: vncdo --pixel-format {pixel_format} failed "
+                f"({result.returncode}): {result.stderr}"
+            )
         return Image.open(path).convert("RGB").copy(), result.stderr
 
 
 class FleetTestCase(TestCase):
+    server: VNCServer
+
     def setUp(self) -> None:
-        if not port_open(HOST, TIGERVNC.port):
-            self.fail(f"{TIGERVNC.name} is not listening on {TIGERVNC.port}; {TIGERVNC.how_to_start}")
+        if not port_open(HOST, self.server.port):
+            self.fail(
+                f"{self.server.name} is not listening on {self.server.port}; "
+                f"{self.server.how_to_start}"
+            )
 
 
 class RendersTheScene:
@@ -60,15 +71,17 @@ class RendersTheScene:
     def test_renders_every_scene(self) -> None:
         for key in SCENES:
             with self.subTest(scene=key):
-                screen, _ = capture(self, self.pixel_format, key)
+                screen, _ = capture(self, self.server, self.pixel_format, key)
                 oracle = Image.open(SCENES_DIR / f"{key}.png").convert("RGB")
                 assert_images_match(
-                    self, screen, oracle, f"{self.pixel_format}-scene-{key}",
-                    message=f"{self.pixel_format} does not render the image the server was shown",
+                    self, screen, oracle,
+                    f"{self.server.name}-{self.pixel_format}-scene-{key}",
+                    message=f"{self.server.name}: {self.pixel_format} does not "
+                            "render the image the server was shown",
                 )
 
 
-class TestNegotiation(FleetTestCase):
+class Negotiation:
     def test_the_server_sends_every_format_it_is_asked_for(self) -> None:
         """Nothing on the wire acknowledges SetPixelFormat: a server that
         ignored it would keep sending its own, and the client -- reading at
@@ -81,20 +94,28 @@ class TestNegotiation(FleetTestCase):
             with self.subTest(pixel_format=name):
                 fmt = pixelformat.PIXEL_FORMATS[name]
                 tolerance = max(255 // maximum for maximum in (fmt.redmax, fmt.greenmax, fmt.bluemax))
-                screen, log = capture(self, name, "s")
+                screen, log = capture(self, self.server, name, "s")
                 self.assertIn(f"Requesting {fmt}", log)
                 assert_images_match(
-                    self, screen, oracle, f"{name}-scene-s", tolerance=tolerance,
-                    message=f"{name} differs by more than its own quantization allows",
+                    self, screen, oracle, f"{self.server.name}-{name}-scene-s",
+                    tolerance=tolerance,
+                    message=f"{self.server.name}: {name} differs by more than "
+                            "its own quantization allows",
                 )
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """One case per format, so a failure's test id says which one failed."""
     suite = unittest.TestSuite()
-    suite.addTests(loader.loadTestsFromTestCase(TestNegotiation))
-    for pixel_format in FORMATS:
-        name = f"TestRenders_{pixel_format}"
-        case = type(name, (RendersTheScene, FleetTestCase), {"pixel_format": pixel_format})
-        suite.addTest(case("test_renders_every_scene"))
+    for server in SCENE_SERVERS:
+        label = server.name.replace("-", "_")
+        name = f"TestNegotiation_{label}"
+        case = type(name, (Negotiation, FleetTestCase), {"server": server})
+        suite.addTest(case("test_the_server_sends_every_format_it_is_asked_for"))
+        for pixel_format in FORMATS:
+            name = f"TestRenders_{label}_{pixel_format}"
+            case = type(
+                name, (RendersTheScene, FleetTestCase),
+                {"server": server, "pixel_format": pixel_format},
+            )
+            suite.addTest(case("test_renders_every_scene"))
     return suite

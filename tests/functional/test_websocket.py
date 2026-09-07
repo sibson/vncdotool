@@ -80,6 +80,12 @@ class WebSocketTests:
         )
         return result.stdout + result.stderr
 
+    def test_a_key_event_is_accepted(self) -> None:
+        self.run_ok("key", "x")
+
+    def test_a_pointer_event_is_accepted(self) -> None:
+        self.run_ok("move", "10", "10")
+
     def test_captures_a_real_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             shot = Path(tmp) / "ws.png"
