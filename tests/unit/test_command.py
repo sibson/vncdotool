@@ -203,6 +203,10 @@ class TestBuildCommandList(unittest.TestCase):
         self.call_build_commands_list('drag 100 200')
         self.assertCalled(self.client.mouseDrag, 100, 200)
 
+    def test_resize(self) -> None:
+        self.call_build_commands_list('resize 800 600')
+        self.assertCalled(self.client.resizeScreen, 800, 600)
+
     def test_drag_rejects_a_prefix_of_itself(self) -> None:
         with self.assertRaises(command.CommandParseError):
             self.call_build_commands_list('dra 100 200')
