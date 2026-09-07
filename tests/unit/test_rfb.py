@@ -210,3 +210,23 @@ class TestRFBClientSubclassWarning(TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             type("Sub", (rfb.RFBClient,), {"updateRectangle": updateRectangle})
+
+
+class TestDesEncrypt(TestCase):
+
+    def test_matches_the_published_des_vector(self):
+        """The FIPS SP 800-17 single-DES vector, so this checks against
+        published DES rather than against whatever this implementation
+        happens to produce."""
+        key = bytes.fromhex("0123456789ABCDEF")
+        plaintext = bytes.fromhex("4E6F772069732074")
+
+        self.assertEqual(
+            rfb.des_encrypt(key, plaintext).hex().upper(),
+            "3FA40E8A984D4815",
+        )
+
+    def test_emits_no_deprecation_warning(self):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            rfb.des_encrypt(b"12345678", b"87654321")

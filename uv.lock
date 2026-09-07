@@ -9,7 +9,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-08-30T20:12:27.936632Z"
+exclude-newer = "2026-08-31T05:19:27.548031Z"
 exclude-newer-span = "P7D"
 
 [[package]]
@@ -1492,7 +1492,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cryptography" },
+    { name = "cryptography", specifier = ">=43" },
     { name = "mkdocs", marker = "extra == 'docs'" },
     { name = "mkdocs-include-markdown-plugin", marker = "extra == 'docs'" },
     { name = "mkdocs-material", marker = "extra == 'docs'" },
