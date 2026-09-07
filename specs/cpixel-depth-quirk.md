@@ -107,5 +107,7 @@ requested `depth=32`, plus `libvncserver-example` at its real native
 depth-32 ServerInit: all four narrow to 3-byte CPIXELs regardless and decode
 clean. `vncev` is colour-mapped (no CPIXEL) and wasn't probed; OS-hosted
 servers (UltraVNC/Screen Sharing/QEMU) run in CI only and weren't probed
-here. CI now runs the same sweep on every push against the fleet, recording
-its output as an artifact for future reference (`.github/workflows/ci.yml`).
+here. CI now runs the same sweep on every push against the fleet
+(`.github/workflows/ci.yml`) and, per OS, against UltraVNC/Screen Sharing/
+QEMU-KVM (`.github/workflows/os-servers.yml`), recording each server's
+output as an artifact for future reference.

@@ -6,11 +6,13 @@ regardless of a declared or requested depth): connects with a real client,
 requests the given format (or nothing, to see the server's own native
 choice), and reports whether the encoding decoded cleanly.
 
-Run by hand, against the fleet (`make servers-up`):
+Run by hand, against the fleet (`make servers-up`) or an OS-hosted server
+this host has set up per tests/servers/*/README.md:
 
     uv run python -m tests.goldens.probe_pixel_format --server tigervnc --depth 32
     uv run python -m tests.goldens.probe_pixel_format --server libvncserver-example --native
     uv run python -m tests.goldens.probe_pixel_format --server x11vnc --pixel-format rgbx8888 --depth 32 --encoding zrle
+    uv run python -m tests.goldens.probe_pixel_format --server screen-sharing --depth 32
 
 Drives the Twisted reactor (via vncdotool.api), so it must run as its own
 process, never inside a test.
@@ -26,9 +28,12 @@ from vncdotool import api, decoders
 from vncdotool.client import VNCDoToolFactory
 from vncdotool.pixelformat import PIXEL_FORMATS
 
-from tests.functional.utils import DOCKER_SERVERS, HOST
+from tests.functional.utils import DOCKER_SERVERS, HOST, os_servers
 
-SERVERS_BY_NAME = {server.name: server for server in DOCKER_SERVERS}
+# os_servers() is only the current platform's -- an OS-hosted server can't
+# be dialled into from anywhere else, so cross-platform names don't belong
+# in this process's list at all.
+SERVERS_BY_NAME = {server.name: server for server in DOCKER_SERVERS + os_servers()}
 CONNECT_SETTLE = 0.5
 
 
@@ -54,7 +59,10 @@ def main() -> int:
         help="encoding to offer the server, forcing it off Raw [zrle]",
     )
     parser.add_argument("--out", default="probe.png", help="screenshot path [probe.png]")
-    parser.add_argument("--timeout", type=float, default=15.0, help="seconds [15]")
+    parser.add_argument(
+        "--timeout", type=float,
+        help="seconds [the server's own default; an OS-hosted one is slower than a container]",
+    )
     args = parser.parse_args()
 
     server = SERVERS_BY_NAME[args.server]
@@ -69,9 +77,12 @@ def main() -> int:
         encodings = [decoders.ENCODING_NAMES[args.encoding]]
 
     print(f"requesting {requested if requested else '(native)'}")
-    client = api.connect(f"{HOST}::{server.port}", server.password, factory_class=ProbeFactory)
+    client = api.connect(
+        f"{HOST}::{server.port}", server.password,
+        factory_class=ProbeFactory, username=server.username,
+    )
     try:
-        client.timeout = args.timeout
+        client.timeout = args.timeout if args.timeout is not None else server.timeout
         time.sleep(CONNECT_SETTLE)
         client.captureScreen(args.out)
     except Exception as exc:  # noqa: BLE001 -- diagnostic tool, any failure is the result
