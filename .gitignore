@@ -18,6 +18,7 @@ docs/vale/styles/
 *~
 #*
 tests/servers/screenshots/
+tests/servers/qemu-tls/
 
 .DS_Store
 .tool-versions

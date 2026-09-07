@@ -15,6 +15,7 @@ per-server test body, the screenshot gallery -- is shared rather than
 written twice.
 """
 
+import contextlib
 import json
 import os
 import select
@@ -23,9 +24,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -117,6 +119,59 @@ WEBSOCKIFY_TLS = VNCServer(
     "websockify-tls", 5943, size=(256, 192),
     address="wss://localhost:5943/vnc/a-session?password=vncdotool",
 )
+
+# QEMU answers 404 to any request-URI but exactly "/", so neither address
+# carries a path or a query.
+QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
+QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
+# QEMU presents a leaf signed by a CA rather than a self-signed certificate,
+# so the trust anchor cannot be read off the connection. Its service writes
+# the CA here at start-up.
+QEMU_TLS_CA = Path(__file__).resolve().parent.parent / "servers" / "qemu-tls" / "ca-cert.pem"
+KASMVNC = VNCServer(
+    "kasmvnc", 5947, size=(256, 192),
+    address="ws://127.0.0.1:5947/?password=vncdotool",
+)
+
+# Selenoid keys the session off the URL path, so this address only resolves
+# while a WebDriver session with this id is open.
+SELENOID_SESSION_ID = "c2ec57a377e94f515b35b2a57caad26e"
+SELENOID = VNCServer(
+    "selenoid", 5946, size=(256, 192),
+    address=f"ws://127.0.0.1:5946/vnc/{SELENOID_SESSION_ID}?password=vncdotool",
+)
+
+WEBSOCKET_SERVERS = [WEBSOCKIFY, WEBSOCKIFY_TLS, QEMU, QEMU_TLS, SELENOID, KASMVNC]
+
+
+@contextlib.contextmanager
+def selenoid_session() -> Iterator[None]:
+    """Hold a Selenoid WebDriver session open, which its /vnc/ route needs."""
+    endpoint = f"http://{HOST}:{SELENOID.port}/wd/hub/session"
+    body = json.dumps(
+        {
+            "capabilities": {
+                "alwaysMatch": {
+                    "browserName": "stub",
+                    "browserVersion": "1.0",
+                    "selenoid:options": {"enableVNC": True},
+                }
+            }
+        }
+    ).encode()
+    request = urllib.request.Request(
+        endpoint, data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(request, timeout=SELENOID.timeout) as response:
+        session_id = json.loads(response.read())["sessionId"]
+    try:
+        yield
+    finally:
+        urllib.request.urlopen(
+            urllib.request.Request(f"{endpoint}/{session_id}", method="DELETE"),
+            timeout=SELENOID.timeout,
+        ).close()
+
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.

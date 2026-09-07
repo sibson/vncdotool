@@ -173,8 +173,11 @@ pixel-exact against reference images for every supported pixel format.
   non-Latin-1 text.
 - ~~**WebSocket transport** (`ws://`/`wss://` server addresses) targeting
   noVNC and Proxmox~~: done in #259, as `vncdotool/websocket.py` on
-  autobahn behind the `websocket` extra. Still open: `vnclog` refuses a
-  `ws://` address, and #138 is a Proxmox auth problem this does not touch.
+  autobahn behind the `websocket` extra, and exercised against four
+  independent implementations of the handshake -- websockify, QEMU's
+  built-in server, Selenoid's Go bridge and KasmVNC. Still open: `vnclog`
+  refuses a `ws://` address, and #138 is a Proxmox auth problem this does
+  not touch.
 - **Keysym audit** against QEMU/KVM for symbol characters and layouts
   (#269, #65).
 
