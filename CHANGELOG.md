@@ -1,5 +1,6 @@
 ## 2.0.0.dev0 (UNRELEASED)
 - Fix ZRLE decoding failing against servers, `libvncserver`-based ones among them, that report `depth=32` in `ServerInit` but narrow CPIXELs to 3 bytes anyway; 3-byte eligibility is now decided from channel placement alone, matching `raw_mode` (@sibson, #483)
+- ZRLE now ends the session with a named error if a rectangle's tiles leave bytes unconsumed in its zlib chunk, rather than silently misreading the next tile; guards the above fix against a server that genuinely needs 4-byte CPIXELs (@sibson)
 - Fix `RFBFactory` raising `AttributeError` on ARD authentication when used directly, instead of through `VNCDoToolFactory` (@sibson)
 - Add `vncdo stable SECONDS [FUZZ]` and `rstable SECONDS X Y W H [FUZZ]`, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
 - Fix `rexpect` polling until `--timeout` and `rcapture` writing black pixels when the region runs off the screen, and `expect` doing the same against a target image larger than the screen. All three now fail with a message naming the region and the screen size, exiting 30 (@sibson)

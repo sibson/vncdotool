@@ -111,3 +111,24 @@ here. CI now runs the same sweep on every push against the fleet
 (`.github/workflows/ci.yml`) and, per OS, against UltraVNC/Screen Sharing/
 QEMU-KVM (`.github/workflows/os-servers.yml`), recording each server's
 output as an artifact for future reference.
+
+## Detecting a genuinely 4-byte server
+
+Dropping the `depth` check trades a spec-literal read for an assumption:
+every real ZRLE encoder narrows whenever placement fits, none actually uses
+a 4th byte a narrower placement would also cover. Nothing before this
+change could tell those two cases apart at runtime -- a wrong guess either
+way would decode garbage or silently drift.
+
+`ZRLEDecoder.decodePixels` (`vncdotool/decoders/zrle.py`) now checks that
+after all a rectangle's tiles are read, `pos == end`: RFC 6143 7.7.6 has
+every subencoding consume an exact, self-describing number of bytes, so a
+rectangle's zlib chunk is fully accounted for only when `cpixel_bytes`
+guessed the width the server actually used. A wrong guess leaves bytes
+unconsumed (or, more often, runs out early inside a tile -- already caught
+by the existing `short()` raises) and now ends the session with a named
+`DecodeError` instead of misreading the next tile as a stray subencoding
+byte. Pinned by
+`test_zrle_leftover_bytes_after_a_tile_is_a_protocol_error`. Verified
+against every committed ZRLE golden and the new depth-32 unit test: none
+trip it, so it isn't a false-positive risk for the layouts already covered.

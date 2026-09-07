@@ -95,6 +95,27 @@ class TestZRLE(unittest.TestCase):
 
         assert_pixels(self, self.cli.screen, self.GRID_4X4)
 
+    def test_zrle_leftover_bytes_after_a_tile_is_a_protocol_error(self) -> None:
+        """A server actually sending wider PIXELs than cpixel_bytes assumed
+        leaves bytes unconsumed at the end of the rectangle's zlib chunk --
+        caught here rather than silently misreading the next tile or, for a
+        rectangle that is only one tile, going unnoticed altogether.
+        """
+        width = height = 2
+        handshake(self.cli, width, height)
+        self.cli.vncProtocolError = mock.Mock()
+
+        # A real 4-bytes-per-pixel encoder's raw tile, decoded as if it were
+        # the usual 3: the low 3 bytes of each pixel look like valid CPIXELs,
+        # leaving one whole pixel's worth of bytes over at the end.
+        body = pack("!B", 0) + bytes(range(width * height * 4))
+        self.cli.dataReceived(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        self.cli.vncProtocolError.assert_called_once()
+        self.cli.transport.loseConnection.assert_called_once()
+
     def test_zrle_solid_tile_fills_the_tile(self) -> None:
         width = height = 4
         handshake(self.cli, width, height)
