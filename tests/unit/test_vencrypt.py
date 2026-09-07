@@ -10,7 +10,7 @@ from OpenSSL import SSL
 from twisted.internet.ssl import CertificateOptions
 
 from vncdotool import vencrypt
-from vncdotool.const import VeNCryptSubtypes
+from vncdotool.const import AuthTypes, VeNCryptSubtypes
 
 CREDENTIALS = vencrypt.Credentials(username="alice", password="s3kr1t")
 VERIFYING = vencrypt.TLSPolicy(hostname="vnc.example.com")
@@ -85,7 +85,13 @@ class TestSubtypeChoice(TestCase):
 
         reason = vencrypt.refusal(offered, VERIFYING, CREDENTIALS)
 
-        assert "TLS_SASL" in reason and "TLS_NONE" in reason
+        assert "TLSSASL (263)" in reason and "TLSNone (257)" in reason
+
+    def test_a_plain_security_type_among_the_subtypes_is_named_as_one(self):
+        """rfbproto lets a server list any normal security type here."""
+        reason = vencrypt.refusal([AuthTypes.TIGHT], VERIFYING, CREDENTIALS)
+
+        assert "Tight (16)" in reason
 
 
 class TestClientOptions(TestCase):
