@@ -17,6 +17,7 @@ from twisted.internet import reactor
 from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
 from twisted.internet.endpoints import HostnameEndpoint, UNIXClientEndpoint
 from twisted.internet.interfaces import IConnector, ITCPTransport
+from twisted.internet.protocol import connectionDone
 from twisted.python.failure import Failure
 
 from . import decoders, pixelformat, rfb, websocket
@@ -167,7 +168,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if isinstance(self.transport, ITCPTransport):
             self.transport.setTcpNoDelay(True)
 
-    def connectionLost(self, reason: Failure) -> None:
+    def connectionLost(self, reason: Failure = connectionDone) -> None:
         super().connectionLost(reason)
         self.factory.clientConnectionLost(self, reason)
 

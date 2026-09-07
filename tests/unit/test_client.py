@@ -34,6 +34,11 @@ class TestVNCDoToolClient(TestCase):
         self.client.keyEvent = mock.Mock()  # type: ignore[method-assign]
         self.client.setEncodings = mock.Mock()  # type: ignore[method-assign]
 
+    def test_connectionLost_accepts_twisted_calling_it_with_no_reason(self):
+        self.client.connectionLost()
+
+        self.client.factory.clientConnectionLost.assert_called_once()
+
     def test_vncConnectionMade(self):
         cli = self.client
         cli._packet = bytearray(self.MSG_HANDSHAKE)
