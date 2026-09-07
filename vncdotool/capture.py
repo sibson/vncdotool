@@ -351,7 +351,7 @@ class CaptureWriter:
 
 def check_capture_target(path: str) -> None:
     """Creates nothing: the archive is written when the session ends, so a
-    later `op.error()` leaves nothing behind.
+    later `parser.error()` leaves nothing behind.
     """
     if not path.endswith(".zip"):
         raise ValueError(f"--capture-raw target {path!r} must end in .zip -- captures are written as one archive")

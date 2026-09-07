@@ -8,12 +8,12 @@ Command line interface to interact with a VNC Server.
 
 from __future__ import annotations
 
+import argparse
 import getpass
 import ipaddress
 import enum
 import logging
 import logging.handlers
-import optparse
 import os
 import shlex
 import socket
@@ -150,9 +150,9 @@ class ExitingProcess(protocol.ProcessProtocol):
         sys.stderr.buffer.flush()
 
 
-class VNCDoToolOptionParser(optparse.OptionParser):
-    def format_help(self, formatter: optparse.HelpFormatter | None = None) -> str:
-        result = super().format_help(formatter)
+class VNCDoToolArgumentParser(argparse.ArgumentParser):
+    def format_help(self) -> str:
+        result = super().format_help()
         result += (
             "\n"
             "Common Commands (CMD):\n"
@@ -332,7 +332,7 @@ def build_command_list(
             factory.deferred.addCallback(client.pause, delay)
 
 
-def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
+def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
     factory = VNCDoCLIFactory()
 
     if options.verbose:
@@ -363,7 +363,7 @@ def build_tool(options: optparse.Values, args: list[str]) -> VNCDoCLIFactory:
     return factory
 
 
-def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
+def build_proxy(options: argparse.Namespace) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
     factory.server_address = options.server
@@ -374,41 +374,52 @@ def build_proxy(options: optparse.Values) -> VNCLoggingServerFactory:
     return factory
 
 
-def add_standard_options(parser: optparse.OptionParser) -> optparse.OptionParser:
-    parser.disable_interspersed_args()
-
-    parser.add_option(
+def add_standard_options(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    parser.add_argument(
         "-p",
         "--password",
         help="use password to access server",
     )
-    parser.add_option(
+    parser.add_argument(
         "-u",
         "--username",
         help="use username to access server",
     )
-    parser.add_option(
+    parser.add_argument(
         "-s",
         "--server",
         default="127.0.0.1",
-        help="connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%default]",
+        help="connect to VNC server at ADDRESS[:DISPLAY|::PORT] [%(default)s]",
     )
-    parser.add_option(
+    parser.add_argument(
         "--logfile",
         metavar="FILE",
         help="output logging information to FILE",
     )
-    parser.add_option(
+    parser.add_argument(
         "-v",
         "--verbose",
         action="count",
         default=0,
         help="increase verbosity, use multiple times",
     )
+    # REMAINDER stops option parsing at the first positional, which is what
+    # optparse's disable_interspersed_args did.
+    parser.add_argument("args", nargs=argparse.REMAINDER, help=argparse.SUPPRESS)
     return parser
 
 
-def setup_logging(options: optparse.Values) -> None:
+def trailing_args(options: argparse.Namespace) -> list[str]:
+    """The command list, without the `--` that may have introduced it.
+
+    argparse hands REMAINDER the `--` that ended option parsing; optparse
+    dropped it, and a command list starting with `--` is not a command.
+    """
+    args = options.args
+    return args[1:] if args and args[0] == "--" else args
+
+
+def setup_logging(options: argparse.Namespace) -> None:
     # route Twisted log messages via stdlib logging
     if options.logfile:
         handler = logging.handlers.RotatingFileHandler(
@@ -466,45 +477,45 @@ def parse_server(server: str) -> tuple[socket.AddressFamily, str, int]:
 def vnclog() -> None:
     from vncdotool import __version__
 
-    usage = "%prog [options] [OUTPUT]"
+    usage = "%(prog)s [options] [OUTPUT]"
     description = "Capture user interactions with a VNC Server"
-    version = "%prog " + __version__
 
-    op = optparse.OptionParser(usage=usage, description=description, version=version)
-    add_standard_options(op)
-    op.add_option(
+    parser = argparse.ArgumentParser(usage=usage, description=description)
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
+    add_standard_options(parser)
+    parser.add_argument(
         "--listen",
         metavar="PORT",
         default=5902,
-        type="int",
-        help="listen for client connections on PORT [%default]",
+        type=int,
+        help="listen for client connections on PORT [%(default)s]",
     )
-    op.add_option(
+    parser.add_argument(
         "--file-per-client",
         action="store_true",
         default=False,
         help="record each client connection to its own .vdo in OUTPUT, which must "
         "be a directory (was --forever, which never controlled how long vnclog ran)",
     )
-    op.add_option(
+    parser.add_argument(
         "--viewer",
         metavar="CMD",
-        help="launch an interactive client using CMD [%default]",
+        help="launch an interactive client using CMD [%(default)s]",
     )
     # ideally we wouldn't need this, VNCLoggingClient should sniff and set this properly
-    op.add_option(
+    parser.add_argument(
         "--password-required",
         action="store_true",
         default=False,
         help="a VNC password is required to connect to the server",
     )
-    op.add_option(
+    parser.add_argument(
         "--one-shot",
         action="store_true",
         default=False,
         help="serve a single session, then exit; implied by --capture-raw",
     )
-    op.add_option(
+    parser.add_argument(
         "--capture-raw",
         metavar="FILE.zip",
         help="write a raw wire capture (auth stripped, replaced by a none-auth "
@@ -512,7 +523,7 @@ def vnclog() -> None:
         "FILE.zip must not exist; OUTPUT is implied (session.vdo inside the archive) "
         "and should be omitted.",
     )
-    op.add_option(
+    parser.add_argument(
         "--capture-raw-unsafe",
         action="store_true",
         default=False,
@@ -520,7 +531,8 @@ def vnclog() -> None:
         "and all. Needed for auth types vncdotool cannot follow, and for a bug in the "
         "negotiation itself. Use a disposable password and rotate it afterwards.",
     )
-    options, args = op.parse_args()
+    options = parser.parse_args()
+    args = trailing_args(options)
 
     setup_logging(options)
 
@@ -529,18 +541,18 @@ def vnclog() -> None:
     output = None
     # The error names only --one-shot; --capture-raw implies it.
     if (options.one_shot or options.capture_raw) and options.file_per_client:
-        op.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
+        parser.error("--file-per-client records several clients, so it cannot be combined with --one-shot")
     if options.capture_raw:
         if args:
-            op.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
+            parser.error("OUTPUT is implied by --capture-raw (session.vdo in the archive); do not also pass OUTPUT")
         try:
             check_capture_target(options.capture_raw)
         except ValueError as exc:
-            op.error(str(exc))
+            parser.error(str(exc))
     elif options.capture_raw_unsafe:
-        op.error("--capture-raw-unsafe is only meaningful with --capture-raw")
+        parser.error("--capture-raw-unsafe is only meaningful with --capture-raw")
     elif len(args) != 1:
-        op.error("incorrect number of arguments")
+        parser.error("incorrect number of arguments")
     else:
         output = args[0]
 
@@ -560,7 +572,7 @@ def vnclog() -> None:
     elif options.file_per_client and os.path.isdir(output):
         factory.output = output
     elif options.file_per_client:
-        op.error("--file-per-client requires OUTPUT to be a directory")
+        parser.error("--file-per-client requires OUTPUT to be a directory")
     elif output == "-":
         factory.output = sys.stdout
     else:
@@ -587,56 +599,56 @@ def vnclog() -> None:
 def vncdo(argv: list[str] | None = None) -> None:
     from vncdotool import __version__
 
-    usage = "%prog [options] CMD CMDARGS|-|filename"
+    usage = "%(prog)s [options] CMD CMDARGS|-|filename"
     description = "Command line control of a VNC server"
-    version = "%prog " + __version__
 
-    op = VNCDoToolOptionParser(usage=usage, description=description, version=version)
-    add_standard_options(op)
+    parser = VNCDoToolArgumentParser(usage=usage, description=description)
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
+    add_standard_options(parser)
 
-    op.add_option(
+    parser.add_argument(
         "--delay",
         metavar="MILLISECONDS",
         default=os.environ.get("VNCDOTOOL_DELAY", 10),
-        type="int",
-        help="delay MILLISECONDS between actions [%defaultms]",
+        type=int,
+        help="delay MILLISECONDS between actions [%(default)sms]",
     )
-    op.add_option(
+    parser.add_argument(
         "--force-caps",
         action="store_true",
         help="for non-compliant servers, send shift-LETTER, ensures capitalization works",
     )
-    op.add_option(
+    parser.add_argument(
         "--localcursor",
         action="store_true",
         help="request the cursor shape from the server and draw it into captures",
     )
-    op.add_option(
+    parser.add_argument(
         "--nocursor",
         action="store_true",
         help="omit the mouse pointer from captures",
     )
-    op.add_option(
+    parser.add_argument(
         "--disable-desktop-resizing",
         action="store_true",
         help="disable desktop resizing, this was default behaviour < 0.11",
     )
-    op.add_option(
+    parser.add_argument(
         "-t",
         "--timeout",
-        type="float",
+        type=float,
         metavar="SECONDS",
         help="abort if unable to complete all actions within TIMEOUT seconds",
     )
-    op.add_option(
+    parser.add_argument(
         "-w",
         "--warp",
-        type="float",
+        type=float,
         metavar="FACTOR",
         default=1.0,
-        help="pause time is accelerated by FACTOR [x%default]",
+        help="pause time is accelerated by FACTOR [x%(default)s]",
     )
-    op.add_option(
+    parser.add_argument(
         "--encodings",
         metavar="LIST",
         help="comma-separated encodings to offer the server, in preference "
@@ -646,37 +658,37 @@ def vncdo(argv: list[str] | None = None) -> None:
             ",".join(decoders.DEFAULT_ENCODING_NAMES),
         ),
     )
-    op.add_option(
+    parser.add_argument(
         "--pixel-format",
         metavar="FORMAT",
         choices=sorted(pixelformat.PIXEL_FORMATS),
         help="ask the server for FORMAT (%s) instead of accepting the one it "
         "announces" % ", ".join(sorted(pixelformat.PIXEL_FORMATS)),
     )
-    op.add_option(
+    parser.add_argument(
         "--jpeg-quality",
-        type="int",
+        type=int,
         metavar="LEVEL",
         help="offer the JPEG Quality Level pseudo-encoding for LEVEL, 0 (low) "
         "to 9 (high). Lossy [none]",
     )
-    op.add_option(
+    parser.add_argument(
         "--fuzz",
-        type="int",
+        type=int,
         metavar="N",
         help="how far any one pixel may sit from the target image for expect "
         "or stable to call it a match, 0 (exact) to 255 [what the pixel "
         "format cannot express]",
     )
-    op.add_option(
+    parser.add_argument(
         "--blur",
-        type="int",
+        type=int,
         metavar="RADIUS",
         help="blur both screens by RADIUS before expect or stable compares "
         "them, which is what carries a match through a lossy encoding "
         "[%d with --jpeg-quality, 0 without]" % LOSSY_BLUR,
     )
-    op.add_option(
+    parser.add_argument(
         "-i",
         "--incremental-refreshes",
         action="store_true",
@@ -684,9 +696,10 @@ def vncdo(argv: list[str] | None = None) -> None:
         help='set the "incremental" flag',
     )
 
-    options, args = op.parse_args(args=argv)
+    options = parser.parse_args(args=argv)
+    args = trailing_args(options)
     if not len(args):
-        op.error("no command provided")
+        parser.error("no command provided")
 
     setup_logging(options)
     options.address_family, options.host, options.port = parse_server(options.server)
@@ -716,26 +729,26 @@ def vncdo(argv: list[str] | None = None) -> None:
                 for name in options.encodings.split(",")
             ]
         except KeyError as exc:
-            op.error(f"unknown encoding {exc.args[0]!r}; known: {', '.join(decoders.ENCODING_NAMES)}")
+            parser.error(f"unknown encoding {exc.args[0]!r}; known: {', '.join(decoders.ENCODING_NAMES)}")
 
     if options.pixel_format:
         factory.pixel_format = pixelformat.PIXEL_FORMATS[options.pixel_format]
 
     if options.jpeg_quality is not None:
         if options.jpeg_quality not in range(len(JPEG_QUALITY_ENCODINGS)):
-            op.error(
+            parser.error(
                 f"--jpeg-quality takes a level from 0 (low) to "
                 f"{len(JPEG_QUALITY_ENCODINGS) - 1} (high), not "
                 f"{options.jpeg_quality}"
             )
         offered = factory.encodings or decoders.DEFAULT_ENCODINGS
         if decoders.ENCODING_NAMES["tight"] not in offered:
-            op.error("--jpeg-quality only applies to Tight; add --encodings tight")
+            parser.error("--jpeg-quality only applies to Tight; add --encodings tight")
         factory.jpeg_quality = options.jpeg_quality
 
     if options.fuzz is not None:
         if not 0 <= options.fuzz <= 255:
-            op.error(
+            parser.error(
                 f"--fuzz takes a bound from 0 (exact) to 255, not "
                 f"{options.fuzz}"
             )
@@ -744,7 +757,7 @@ def vncdo(argv: list[str] | None = None) -> None:
     if options.blur is None:
         factory.blur = LOSSY_BLUR if options.jpeg_quality is not None else 0
     elif options.blur < 0:
-        op.error(f"--blur takes a radius of 0 or more, not {options.blur}")
+        parser.error(f"--blur takes a radius of 0 or more, not {options.blur}")
     else:
         factory.blur = options.blur
 
@@ -774,67 +787,71 @@ def vncdo_replay() -> None:
         load_capture,
     )
 
-    op = VNCDoToolOptionParser(
-        usage="%prog [options] CAPTURE.zip [CMD CMDARGS...]",
+    parser = VNCDoToolArgumentParser(
+        usage="%(prog)s [options] CAPTURE.zip [CMD CMDARGS...]",
         description="Replay a vnclog --capture-raw archive. Without --server, runs the "
         "session.vdo recorded inside CAPTURE.zip through vncdo, plus any commands given "
         "after it. See docs/capture.rst.",
-        version="%prog " + __version__,
     )
-    op.add_option(
+    parser.add_argument("--version", action="version", version="%(prog)s " + __version__)
+    parser.add_argument(
         "--server",
         action="store_true",
         default=False,
         help="serve the archive's recorded bytes to whatever client connects, instead of "
         "being the client",
     )
-    op.add_option(
+    parser.add_argument(
         "-s",
         "--connect",
         metavar="ADDRESS",
         default=DEFAULT_SERVER,
-        help="client mode: the replay server to drive the session against [%default]",
+        help="client mode: the replay server to drive the session against [%(default)s]",
     )
-    op.add_option(
+    parser.add_argument(
         "-p",
         "--password",
         help="client mode: password for a --capture-raw-unsafe archive whose original "
         "handshake demands one",
     )
-    op.add_option(
+    parser.add_argument(
         "--listen",
-        type="int",
+        type=int,
         metavar="PORT",
         default=DEFAULT_PORT,
-        help="--server: TCP port to listen on [%default]",
+        help="--server: TCP port to listen on [%(default)s]",
     )
-    op.add_option(
+    parser.add_argument(
         "--bind",
         metavar="ADDR",
         default=DEFAULT_BIND,
-        help="--server: interface to listen on [%default], i.e. local connections only. A "
+        help="--server: interface to listen on [%(default)s], i.e. local connections only. A "
         "--capture-raw-unsafe archive replays whatever credentials it carried, so opening "
         "this up is a deliberate call to make.",
     )
-    op.add_option(
+    parser.add_argument(
         "--client-timeout",
-        type="float",
+        type=float,
         metavar="SECONDS",
         default=DEFAULT_CLIENT_TIMEOUT,
         help="--server: warn if the client sends nothing for this long, "
-        "0 disables the warning [%default]",
+        "0 disables the warning [%(default)s]",
     )
-    op.add_option(
+    parser.add_argument(
         "--forever",
         action="store_true",
         default=False,
         help="--server: keep accepting a new client after each connection ends",
     )
-    op.add_option("-v", "--verbose", action="store_true", help="hexdump client->server bytes")
+    parser.add_argument("-v", "--verbose", action="store_true", help="hexdump client->server bytes")
+    parser.add_argument("args", nargs="*", help=argparse.SUPPRESS)
 
-    options, args = op.parse_args()
+    # argparse matches one contiguous run of positionals, so an option placed
+    # after CAPTURE.zip leaves the commands behind it unmatched.
+    options = parser.parse_args()
+    args = options.args
     if not args:
-        op.error("no capture archive given")
+        parser.error("no capture archive given")
     archive, extra = args[0], args[1:]
 
     logging.basicConfig(
@@ -845,14 +862,14 @@ def vncdo_replay() -> None:
     try:
         capture = load_capture(archive)
     except ValueError as exc:
-        op.error(str(exc))
+        parser.error(str(exc))
 
     if not options.server:
-        _replay_client(op, options, capture, archive, extra)
+        _replay_client(parser, options, capture, archive, extra)
         return
 
     if extra:
-        op.error("--server serves bytes and takes no commands; run those from a client instead")
+        parser.error("--server serves bytes and takes no commands; run those from a client instead")
     if capture.auth_preserved:
         log.warning(
             "%s was recorded with --capture-raw-unsafe, so its original handshake is served "
@@ -872,8 +889,8 @@ def vncdo_replay() -> None:
 
 
 def _replay_client(
-    op: optparse.OptionParser,
-    options: optparse.Values,
+    parser: argparse.ArgumentParser,
+    options: argparse.Namespace,
     capture: Capture,
     archive: str,
     extra: list[str],
@@ -885,7 +902,7 @@ def _replay_client(
     proves nothing about the one that was captured."""
     session_vdo = capture.session_vdo.strip()
     if not session_vdo and not extra:
-        op.error(
+        parser.error(
             f"{archive} records no session.vdo (a GUI-driven capture records events, not "
             "vncdo commands), and no commands were given to run instead"
         )

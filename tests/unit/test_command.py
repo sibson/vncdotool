@@ -1,3 +1,4 @@
+import contextlib
 import io
 import logging
 import os
@@ -525,12 +526,18 @@ class TestBuildTool(unittest.TestCase):
 @mock.patch('vncdotool.command.factory_connect')
 @mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)
 class TestVncdoArgvParameter(unittest.TestCase):
-    """vncdo(argv) must feed optparse instead of mutating sys.argv, so a
+    """vncdo(argv) must feed the parser instead of mutating sys.argv, so a
     caller like _replay_client can build a synthetic invocation directly."""
 
     def test_argv_parameter_is_what_gets_parsed(self, reactor, connect) -> None:
         with self.assertRaises(SystemExit) as raised:
             command.vncdo(['nosuchcommand'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_a_leading_option_looking_number_is_a_usage_error(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.vncdo(['-10', '20'])
 
         assert raised.exception.code == command.ExitStatus.USAGE
 
@@ -722,3 +729,265 @@ class TestReplayClient(unittest.TestCase):
         command._replay_client(self.op, self.options, capture, 'archive.zip', [])
 
         assert not log.warning.called
+
+
+class CLIParsingTestCase(unittest.TestCase):
+    """Base for tests that watch what a parser produced.
+
+    Every entry point ends in sys.exit(), so the helpers swallow SystemExit
+    and report the parse. The reactor is a stand-in throughout: no test here
+    may start one.
+    """
+
+    def patch(self, target, *args, **kwargs):
+        patcher = mock.patch(target, *args, **kwargs)
+        self.addCleanup(patcher.stop)
+        return patcher.start()
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.patch('vncdotool.command.reactor', new_callable=mock.MagicMock)
+        self.patch('vncdotool.command.setup_logging')
+
+    def assertUsageError(self, call) -> str:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as raised:
+                call()
+        assert raised.exception.code == command.ExitStatus.USAGE, stderr.getvalue()
+        return stderr.getvalue()
+
+
+class TestVncdoArgumentParsing(CLIParsingTestCase):
+    """Where `vncdo` stops reading options and starts reading commands.
+
+    The trailing command list may hold anything a command takes -- negative
+    coordinates, a bare `-`, a word starting with `--` -- so the boundary is
+    part of the CLI contract rather than an accident of the parser.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.build_tool = self.patch('vncdotool.command.build_tool')
+
+    def parse(self, argv):
+        with self.assertRaises(SystemExit):
+            command.vncdo(argv)
+        return self.build_tool.call_args.args
+
+    def usage_error(self, argv) -> str:
+        return self.assertUsageError(lambda: command.vncdo(argv))
+
+    def output_of(self, argv) -> str:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            with self.assertRaises(SystemExit) as raised:
+                command.vncdo(argv)
+        assert raised.exception.code == 0
+        return stdout.getvalue()
+
+    def test_commands_reach_build_tool(self) -> None:
+        options, args = self.parse(['key', 'ctrl-c'])
+        assert args == ['key', 'ctrl-c']
+
+    def test_options_before_the_commands_are_parsed(self) -> None:
+        options, args = self.parse(['-v', '-v', '-s', '1.2.3.4', 'key', 'a'])
+        assert options.verbose == 2
+        assert options.server == '1.2.3.4'
+        assert args == ['key', 'a']
+
+    def test_options_after_the_first_command_are_command_arguments(self) -> None:
+        options, args = self.parse(['key', 'a', '-v'])
+        assert args == ['key', 'a', '-v']
+        assert options.verbose == 0
+
+    def test_double_dash_is_dropped_before_the_command_list(self) -> None:
+        options, args = self.parse(['-v', '--', 'key', 'a'])
+        assert args == ['key', 'a']
+
+    def test_double_dash_after_a_command_is_a_command_argument(self) -> None:
+        options, args = self.parse(['key', '--', 'a'])
+        assert args == ['key', '--', 'a']
+
+    def test_negative_coordinates_are_command_arguments(self) -> None:
+        options, args = self.parse(['move', '-10', '20'])
+        assert args == ['move', '-10', '20']
+
+    def test_a_bare_dash_names_stdin(self) -> None:
+        options, args = self.parse(['-'])
+        assert args == ['-']
+
+    def test_password_short_and_long(self) -> None:
+        for argv in (['-p', 'sekrit', 'key', 'a'], ['--password', 'sekrit', 'key', 'a']):
+            self.build_tool.reset_mock()
+            options, args = self.parse(argv)
+            assert options.password == 'sekrit'
+            assert args == ['key', 'a']
+
+    def test_a_password_starting_with_a_dash_needs_the_attached_form(self) -> None:
+        """optparse took `-p -dash`; argparse reads a separate argument that
+        looks like an option as one, so the value has to be attached."""
+        for argv in (['-p-dash', 'key', 'a'], ['--password=-dash', 'key', 'a']):
+            self.build_tool.reset_mock()
+            options, args = self.parse(argv)
+            assert options.password == '-dash', argv
+            assert args == ['key', 'a']
+
+        assert '--password' in self.usage_error(['-p', '-dash', 'key', 'a'])
+
+    def test_a_password_that_is_a_negative_number(self) -> None:
+        options, args = self.parse(['-p', '-123', 'key', 'a'])
+        assert options.password == '-123'
+
+    def test_numeric_options_are_converted(self) -> None:
+        options, args = self.parse(['--delay', '25', '-w', '2.5', '-t', '1.5', 'key', 'a'])
+        assert options.delay == 25
+        assert options.warp == 2.5
+        assert options.timeout == 1.5
+
+    def test_the_delay_default_comes_from_the_environment(self) -> None:
+        with mock.patch.dict(os.environ, {'VNCDOTOOL_DELAY': '25'}):
+            options, args = self.parse(['key', 'a'])
+        assert options.delay == 25
+
+    def test_server_defaults_to_loopback(self) -> None:
+        options, args = self.parse(['key', 'a'])
+        assert options.server == '127.0.0.1'
+
+    def test_flags_default_off(self) -> None:
+        options, args = self.parse(['key', 'a'])
+        assert not options.force_caps
+        assert not options.localcursor
+        assert not options.nocursor
+        assert not options.disable_desktop_resizing
+        assert not options.incremental_refreshes
+
+    def test_no_command_is_a_usage_error(self) -> None:
+        assert 'no command provided' in self.usage_error([])
+
+    def test_unknown_option_is_a_usage_error(self) -> None:
+        assert '--nope' in self.usage_error(['--nope', 'key', 'a'])
+
+    def test_a_non_numeric_delay_is_a_usage_error(self) -> None:
+        assert '--delay' in self.usage_error(['--delay', 'soon', 'key', 'a'])
+
+    def test_an_unknown_pixel_format_is_a_usage_error(self) -> None:
+        assert 'rgb999' in self.usage_error(['--pixel-format', 'rgb999', 'key', 'a'])
+
+    def test_help_lists_the_command_vocabulary(self) -> None:
+        help_text = self.output_of(['--help'])
+        assert 'Common Commands (CMD):' in help_text
+        assert 'key KEY' in help_text
+        assert 'rstable SECONDS X Y W H [FUZZ]' in help_text
+
+    def test_help_expands_every_placeholder(self) -> None:
+        help_text = self.output_of(['--help'])
+        assert '[options] CMD CMDARGS|-|filename' in help_text
+        for unexpanded in ('%prog', '%default', '%(prog)s', '%(default)s'):
+            assert unexpanded not in help_text, unexpanded
+
+    def test_version_is_reported(self) -> None:
+        from vncdotool import __version__
+        assert __version__ in self.output_of(['--version'])
+
+
+class TestVnclogArgumentParsing(CLIParsingTestCase):
+    """`vnclog`'s option checks, including the ones that turn a ValueError
+    from check_capture_target into a usage error."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.build_proxy = self.patch('vncdotool.command.build_proxy')
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.tmp = tmp.name
+
+    def parse(self, argv):
+        self.patch('sys.argv', ['vnclog'] + argv)
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit):
+                command.vnclog()
+        return self.build_proxy.call_args.args[0]
+
+    def usage_error(self, argv) -> str:
+        self.patch('sys.argv', ['vnclog'] + argv)
+        return self.assertUsageError(command.vnclog)
+
+    def test_output_and_options_reach_the_proxy(self) -> None:
+        options = self.parse(['--listen', '5910', '-s', '1.2.3.4', '-'])
+        assert options.listen == 5910
+        assert options.host == '1.2.3.4'
+
+    def test_missing_output_is_a_usage_error(self) -> None:
+        assert 'incorrect number of arguments' in self.usage_error([])
+
+    def test_a_second_output_is_a_usage_error(self) -> None:
+        assert 'incorrect number of arguments' in self.usage_error(['one.vdo', 'two.vdo'])
+
+    def test_capture_raw_target_must_end_in_zip(self) -> None:
+        target = os.path.join(self.tmp, 'capture.tar')
+        assert 'must end in .zip' in self.usage_error(['--capture-raw', target])
+
+    def test_capture_raw_target_directory_must_exist(self) -> None:
+        target = os.path.join(self.tmp, 'nowhere', 'capture.zip')
+        assert 'does not exist' in self.usage_error(['--capture-raw', target])
+
+    def test_capture_raw_takes_no_output(self) -> None:
+        target = os.path.join(self.tmp, 'capture.zip')
+        assert 'OUTPUT is implied' in self.usage_error(['--capture-raw', target, 'out.vdo'])
+
+    def test_one_shot_and_file_per_client_conflict(self) -> None:
+        assert '--file-per-client' in self.usage_error(['--one-shot', '--file-per-client', 'out'])
+
+    def test_capture_raw_unsafe_alone_is_a_usage_error(self) -> None:
+        assert '--capture-raw-unsafe' in self.usage_error(['--capture-raw-unsafe', 'out.vdo'])
+
+    def test_a_non_numeric_listen_port_is_a_usage_error(self) -> None:
+        assert '--listen' in self.usage_error(['--listen', 'soon', 'out.vdo'])
+
+
+class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
+    """`vncdo-replay` reads options on either side of the archive, but the
+    command list has to run straight on from it: the functional suite starts
+    it as `--server ARCHIVE --listen PORT --forever`, and docs/capture.md
+    drives it as `ARCHIVE CMD ARGS...`."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.capture = Capture(s2c=b'', session_vdo=b'key a\n', meta=None)
+        self.patch('vncdotool.replay.load_capture', return_value=self.capture)
+        self.factory = self.patch('vncdotool.replay.ReplayFactory')
+        self.replay_client = self.patch('vncdotool.command._replay_client')
+
+    def run_replay(self, argv) -> None:
+        self.patch('sys.argv', ['vncdo-replay'] + argv)
+        command.vncdo_replay()
+
+    def usage_error(self, argv) -> str:
+        self.patch('sys.argv', ['vncdo-replay'] + argv)
+        return self.assertUsageError(command.vncdo_replay)
+
+    def test_server_options_follow_the_archive(self) -> None:
+        self.run_replay(['--server', 'capture.zip', '--listen', '5999', '--forever'])
+        options = self.factory.call_args.kwargs
+        assert options['forever'] is True
+        assert command.reactor.listenTCP.call_args.args[0] == 5999
+
+    def test_commands_follow_the_archive(self) -> None:
+        self.run_replay(['-s', '127.0.0.1::5999', 'capture.zip', 'capture', 'out.png'])
+        archive, extra = self.replay_client.call_args.args[3:]
+        assert archive == 'capture.zip'
+        assert extra == ['capture', 'out.png']
+
+    def test_an_option_between_the_archive_and_the_commands_is_a_usage_error(self) -> None:
+        """optparse read the commands past the option; argparse matches one
+        contiguous run of positionals, so the commands go unmatched."""
+        assert 'unrecognized arguments: capture out.png' in self.usage_error(
+            ['capture.zip', '-v', 'capture', 'out.png']
+        )
+
+    def test_no_archive_is_a_usage_error(self) -> None:
+        assert 'no capture archive' in self.usage_error([])
+
+    def test_server_mode_refuses_commands(self) -> None:
+        assert 'takes no commands' in self.usage_error(['--server', 'capture.zip', 'key', 'a'])
