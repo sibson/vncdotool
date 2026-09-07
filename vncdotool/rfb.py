@@ -275,10 +275,9 @@ class RFBClient(Protocol):
         log.msg(f"Requesting {chosen!r}")
         self._vencrypt_subtype = chosen
         self.transport.write(pack("!I", chosen))
-        if chosen in vencrypt.TLS_SUBTYPES:
-            self.expect(self._handleVeNCryptTLSAck, 1)
-        else:
-            self._startVeNCryptSubAuth()
+        # The ack is sent for TLS and X509 subtypes only, which is every
+        # subtype this client will choose.
+        self.expect(self._handleVeNCryptTLSAck, 1)
 
     def _handleVeNCryptTLSAck(self, block: bytes) -> None:
         (ack,) = unpack("!B", block)

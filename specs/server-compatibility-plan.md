@@ -12,7 +12,7 @@ phased plan to close them.
 | Area | Supported | Notes |
 |---|---|---|
 | Protocol versions | 3.3, 3.7, 3.8 + quirks: 3.889 (Apple ARD), 4.0 (Intel AMT), 4.1/5.0 (RealVNC) | Unknown versions are logged but negotiation picks the highest known version ≤ server's |
-| Security types | None (1), VNC Authentication (2), VeNCrypt (19), ARD Diffie-Hellman (30) | VeNCrypt covers every subtype but SASL and Ident. Anything else → "unknown security types" and disconnect |
+| Security types | None (1), VNC Authentication (2), VeNCrypt (19), ARD Diffie-Hellman (30) | VeNCrypt covers every TLS-backed subtype; bare Plain is refused as cleartext, SASL and Ident are unimplemented. Anything else → "unknown security types" and disconnect |
 | Encodings | Raw, CopyRect, RRE, CoRRE, Hextile, ZRLE | No Tight, no TRLE, no JPEG quality/compression level pseudo-encodings |
 | Pseudo-encodings | Cursor, DesktopSize, LastRect, QEMU Extended Key Event | Fence is answered but not offered, and never initiated; no ExtendedDesktopSize, ContinuousUpdates, Extended Clipboard |
 | Transports | TCP, Unix socket, WebSocket (`ws://`, `wss://`), TLS via VeNCrypt | An X509 certificate is verified against the address dialled, so VeNCrypt over a WebSocket URL has no hostname to check and is refused |
@@ -141,8 +141,9 @@ and TLS-fronted servers work out of the box. Ordered by expected impact:
 1. **Tight encoding** (decode; plus Tight auth type 16 negotiation, which
    TightVNC requires before falling back to VNC auth). Default encoding
    for the largest cluster of servers. (#264)
-2. ~~**VeNCrypt security type (19)**~~: done, every subtype but SASL and
-   Ident. Still open: whether it covers Proxmox (#138) and the wayvnc
+2. ~~**VeNCrypt security type (19)**~~: done, every TLS-backed subtype.
+   Bare Plain is refused by design, SASL and Ident are unimplemented.
+   Still open: whether it covers Proxmox (#138) and the wayvnc
    case in #310 — inferred from TigerVNC, not measured against either.
 3. **Pixel-format correctness pass**: generalize the ZRLE compressed-pixel
    reader for bpp/endianness, implement Raw/RRE/Hextile conversion from

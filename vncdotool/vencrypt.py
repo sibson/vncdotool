@@ -31,16 +31,16 @@ VNC_AUTH_SUBTYPES = frozenset(
 )
 
 #: Inner authentication is a username and password with no transform, so
-#: the bare Plain subtype puts both on an unencrypted socket.
+#: these carry both in the clear inside whatever the outer subtype built.
 PLAIN_AUTH_SUBTYPES = frozenset(
     {
-        VeNCryptSubtypes.PLAIN,
         VeNCryptSubtypes.TLS_PLAIN,
         VeNCryptSubtypes.X509_PLAIN,
     }
 )
 
-#: Ordered most protected first.
+#: Ordered most protected first. Every member builds a TLS tunnel first:
+#: rfbproto annotates the bare Plain subtype "should be never used".
 PREFERENCE: Sequence[VeNCryptSubtypes] = (
     VeNCryptSubtypes.X509_VNC,
     VeNCryptSubtypes.X509_PLAIN,
@@ -48,7 +48,6 @@ PREFERENCE: Sequence[VeNCryptSubtypes] = (
     VeNCryptSubtypes.TLS_VNC,
     VeNCryptSubtypes.TLS_PLAIN,
     VeNCryptSubtypes.TLS_NONE,
-    VeNCryptSubtypes.PLAIN,
 )
 
 INSECURE_FLAG = "--tls-insecure-skip-verify"
@@ -90,6 +89,8 @@ def unusable(
     subtype: int, policy: TLSPolicy, credentials: Credentials
 ) -> str | None:
     """Why this client will not speak `subtype`, or None if it will."""
+    if subtype == VeNCryptSubtypes.PLAIN:
+        return "sends the password in the clear over an unencrypted socket"
     if subtype not in set(PREFERENCE):
         return "not implemented"
     if subtype in TLS_SUBTYPES and not tls_available():

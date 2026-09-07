@@ -205,8 +205,11 @@ Install the extra that carries it:
 ```
 
 vncdo then negotiates the subtypes `X509None`, `X509Vnc`, `X509Plain`,
-`TLSNone`, `TLSVnc`, `TLSPlain` and `Plain`. SASL and Ident are not
-implemented; a server offering only those ends the session naming them.
+`TLSNone`, `TLSVnc` and `TLSPlain`, every one of which builds a TLS tunnel
+first. The bare `Plain` subtype puts the username and password on an
+unencrypted socket, so vncdo refuses it rather than offering a flag for it.
+SASL and Ident are not implemented. A server offering only subtypes vncdo
+declines ends the session naming each one and why.
 
 An X509 certificate is verified against the system trust store and must be
 issued for the address you dialled. A private CA goes in a PEM file:

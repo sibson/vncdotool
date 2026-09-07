@@ -51,12 +51,22 @@ class TestSubtypeChoice(TestCase):
 
         assert chosen == VeNCryptSubtypes.X509_VNC
 
-    def test_plain_over_a_bare_socket_is_the_last_resort(self):
+    def test_plain_over_a_bare_socket_is_never_chosen(self):
+        chosen = vencrypt.choose([VeNCryptSubtypes.PLAIN], INSECURE, CREDENTIALS)
+
+        assert chosen is None
+
+    def test_refusing_an_anonymous_tunnel_does_not_fall_back_to_plain(self):
         chosen = vencrypt.choose(
-            [VeNCryptSubtypes.PLAIN, VeNCryptSubtypes.TLS_NONE], INSECURE, CREDENTIALS
+            [VeNCryptSubtypes.TLS_VNC, VeNCryptSubtypes.PLAIN], VERIFYING, CREDENTIALS
         )
 
-        assert chosen == VeNCryptSubtypes.TLS_NONE
+        assert chosen is None
+
+    def test_plain_is_refused_for_sending_the_password_in_the_clear(self):
+        reason = vencrypt.unusable(VeNCryptSubtypes.PLAIN, INSECURE, CREDENTIALS)
+
+        assert reason is not None and "in the clear" in reason
 
     def test_anonymous_subtypes_are_unusable_by_default(self):
         for subtype in vencrypt.ANONYMOUS_SUBTYPES:

@@ -355,16 +355,19 @@ class TestVeNCrypt(TestCase):
             b"\x00"  # ClientInit shared flag
         )
 
-    def test_plain_sends_the_credentials_with_no_tls_handshake(self):
+    def test_plain_never_puts_the_credentials_on_an_unencrypted_socket(self):
         self.feed(vencrypt_offer(256))
 
         self.client.transport.startTLS.assert_not_called()
-        assert self.written().endswith(
-            b"\x00\x00\x01\x00"  # VeNCryptSubtypes.PLAIN
-            b"\x00\x00\x00\x05"  # username length
-            b"\x00\x00\x00\x06"  # password length
-            b"alices3kr1t"
-        )
+        assert b"alices3kr1t" not in self.written()
+        assert "in the clear" in self.reason()
+        assert self.client._aborted
+
+    def test_an_anonymous_tunnel_is_refused_rather_than_downgraded_to_plain(self):
+        self.feed(vencrypt_offer(258, 256))
+
+        assert b"alices3kr1t" not in self.written()
+        assert self.client._aborted
 
     def test_anonymous_tls_is_refused_without_the_insecure_flag(self):
         self.feed(vencrypt_offer(258, 257))
