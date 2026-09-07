@@ -1,9 +1,11 @@
 # Tight Encoding: Build Plan
 
-Status: draft, under review. Executes
+Status: built. Executes
 [decoder-architecture.md](decoder-architecture.md) Phase 6 and the Tight half of
 [server-compatibility-plan.md](server-compatibility-plan.md) Phase 2.1. Closes
-#264.
+#264. The Tight security type, the gradient filter, TightPNG, and Tight
+Encoding Without Zlib stay unimplemented, per "Decode only, against
+TigerVNC" below.
 
 ## What Phase 6 assumed, and what is actually missing
 
