@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum, IntFlag
+from typing import NamedTuple
 
 
 class IntEnumLookup(IntEnum):
@@ -160,6 +161,35 @@ class FenceFlags(IntFlag):
     BLOCK_AFTER = 1 << 1
     SYNC_NEXT = 1 << 2
     REQUEST = 1 << 31
+
+
+class DesktopSizeReason(IntEnumLookup):
+    """rfbproto: the ExtendedDesktopSize rectangle's x-position."""
+
+    SERVER = 0
+    THIS_CLIENT = 1
+    OTHER_CLIENT = 2
+
+
+class DesktopSizeResult(IntEnumLookup):
+    """rfbproto: the ExtendedDesktopSize rectangle's y-position."""
+
+    SUCCESS = 0
+    PROHIBITED = 1
+    OUT_OF_RESOURCES = 2
+    INVALID_LAYOUT = 3
+    FORWARDED = 4
+
+
+class Screen(NamedTuple):
+    """rfbproto's SCREEN structure. Field order is the wire order."""
+
+    id: int
+    x: int
+    y: int
+    width: int
+    height: int
+    flags: int
 
 
 class AuthTypes(IntEnumLookup):

@@ -47,6 +47,7 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
+            client.rfb.Encoding.PSEUDO_EXTENDED_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
             client.rfb.Encoding.PSEUDO_FENCE,
@@ -415,7 +416,30 @@ class TestVNCDoToolClient(TestCase):
         cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
 
         self.assertEqual(fired, [])
-        cli.framebufferUpdateRequest.assert_called_once_with()
+        cli.framebufferUpdateRequest.assert_called_once_with(incremental=False)
+
+    MSG_FBU_EXTENDED_DESKTOP_SIZE_ONLY = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x02\x80\x01\xe0"  # reason=0 result=0 w=640 h=480
+        b"\xff\xff\xfe\xcc"  # PSEUDO_EXTENDED_DESKTOP_SIZE (-308)
+        b"\x01\x00\x00\x00"  # number-of-screens, padding
+        b"\x00\x00\x00\x01\x00\x00\x00\x00\x02\x80\x01\xe0\x00\x00\x00\x00"
+    )
+
+    def test_extended_desktop_size_only_update_rerequests_incrementally(self) -> None:
+        cli = self.client
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+        cli.framebufferUpdateRequest.reset_mock()
+
+        cli.dataReceived(self.MSG_FBU_EXTENDED_DESKTOP_SIZE_ONLY)
+
+        self.assertEqual(fired, [])
+        cli.framebufferUpdateRequest.assert_called_once_with(incremental=True)
 
     def test_refresh_completes_once_pixel_data_arrives(self) -> None:
         cli = self.client
@@ -736,6 +760,137 @@ class TestStableScreen(TestCase):
         self.clock.advance(0.2)
 
         assert settled == []
+
+
+class TestResize(TestCase):
+    """`resize` sends SetDesktopSize and reports what the server answered.
+
+    A `Clock` stands in for the reactor so the answer-timeout can be advanced
+    without running one.
+    """
+
+    SCREEN = rfb.Screen(0x6B8B4567, 0, 0, 256, 192, 0)
+
+    def setUp(self) -> None:
+        self.clock = Clock()
+        patcher = mock.patch("vncdotool.client.reactor", self.clock)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+        self.client = client.VNCDoToolClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.width, self.client.height = 256, 192
+
+    def advertise(self) -> None:
+        self.client.negotiated_encodings.add(
+            rfb.Encoding.PSEUDO_EXTENDED_DESKTOP_SIZE
+        )
+        self.client.screens = (self.SCREEN,)
+
+    def answer(self, result, width=320, height=240):
+        self.client.updateExtendedDesktopSize(
+            rfb.DesktopSizeReason.THIS_CLIENT,
+            result,
+            width,
+            height,
+            [rfb.Screen(0x6B8B4567, 0, 0, width, height, 0)],
+        )
+
+    def outcome(self, d):
+        fired: list = []
+        d.addBoth(fired.append)
+        return fired
+
+    def test_a_granted_resize_fires_the_result(self) -> None:
+        self.advertise()
+        fired = self.outcome(self.client.resize(320, 240))
+
+        self.assertEqual(fired, [])
+        self.answer(rfb.DesktopSizeResult.SUCCESS)
+
+        self.assertEqual(fired, [self.client])
+        self.assertEqual(self.clock.getDelayedCalls(), [])
+
+    def test_the_request_carries_the_advertised_screen_id(self) -> None:
+        self.advertise()
+        self.client.resize(320, 240)
+
+        self.client.transport.write.assert_called_once_with(
+            b"\xfb\x00\x01\x40\x00\xf0\x01\x00"
+            b"\x6b\x8b\x45\x67\x00\x00\x00\x00\x01\x40\x00\xf0\x00\x00\x00\x00"
+        )
+        self.client.framebufferUpdateRequest.assert_called_once_with(incremental=True)
+
+    def test_a_refused_resize_fails_rather_than_going_quiet(self) -> None:
+        self.advertise()
+        fired = self.outcome(self.client.resize(320, 240))
+
+        self.answer(rfb.DesktopSizeResult.PROHIBITED)
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, client.DesktopResizeError)
+        self.assertIn("PROHIBITED", str(failure.value))
+
+    def test_an_unadvertised_server_is_asked_before_being_told(self) -> None:
+        fired = self.outcome(self.client.resize(320, 240))
+
+        self.client.framebufferUpdateRequest.assert_called_once_with(incremental=False)
+        self.client.transport.write.assert_not_called()
+
+        self.client.updateExtendedDesktopSize(
+            rfb.DesktopSizeReason.SERVER,
+            rfb.DesktopSizeResult.SUCCESS,
+            256,
+            192,
+            [self.SCREEN],
+        )
+        self.client.transport.write.assert_called_once()
+
+        self.answer(rfb.DesktopSizeResult.SUCCESS)
+        self.assertEqual(fired, [self.client])
+
+    def test_repeated_server_rectangles_send_one_request(self) -> None:
+        """TigerVNC sends three server-reason rectangles before the answer to
+        a request of ours.
+        """
+        self.client.resize(320, 240)
+        for _ in range(3):
+            self.client.updateExtendedDesktopSize(
+                rfb.DesktopSizeReason.SERVER,
+                rfb.DesktopSizeResult.SUCCESS,
+                256,
+                192,
+                [self.SCREEN],
+            )
+
+        self.client.transport.write.assert_called_once()
+
+    def test_a_silent_server_fails_rather_than_hanging(self) -> None:
+        fired = self.outcome(self.client.resize(320, 240))
+
+        self.clock.advance(self.client.RESIZE_TIMEOUT + 1)
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, client.DesktopResizeError)
+
+    def test_the_size_already_in_force_sends_nothing(self) -> None:
+        self.advertise()
+        fired = self.outcome(self.client.resize(256, 192))
+
+        self.assertEqual(fired, [self.client])
+        self.client.transport.write.assert_not_called()
+        self.assertEqual(self.clock.getDelayedCalls(), [])
+
+    def test_a_lost_connection_fails_a_pending_resize(self) -> None:
+        self.advertise()
+        fired = self.outcome(self.client.resize(320, 240))
+
+        self.client.connectionLost(mock.Mock())
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, client.DesktopResizeError)
 
 
 def _connected(jpeg_quality):
