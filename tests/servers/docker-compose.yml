@@ -61,6 +61,23 @@ services:
     ports:
       - "127.0.0.1:5951:5900"
 
+  # Offers VeNCrypt alone, and settles on X509Plain because the credentials
+  # are a username and password.
+  wayvnc:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: wayvnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-wayvnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 1024x768
+      VNC_USERNAME: vncdotool
+      VNC_PASSWORD: vncdotool
+    volumes:
+      - ./wayvnc-certs:/certs
+    ports:
+      - "127.0.0.1:5952:5900"
+
   x11vnc:
     build:
       context: ..

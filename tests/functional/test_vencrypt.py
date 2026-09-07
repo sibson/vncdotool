@@ -1,4 +1,4 @@
-"""VeNCrypt against the live TigerVNC fleet."""
+"""VeNCrypt against the live TigerVNC and wayvnc fleet."""
 
 from unittest import TestCase
 
@@ -12,6 +12,8 @@ from .utils import (
     TIGERVNC_VENCRYPT,
     TIGERVNC_VENCRYPT_ANON,
     VENCRYPT_CA_CERT,
+    WAYVNC,
+    WAYVNC_CA_CERT,
     port_open,
     run_vncdo,
     screenshot_dir,
@@ -92,3 +94,25 @@ class TestVeNCryptAnonymous(_VeNCryptTestMixin, TestCase):
 
     def test_tls_none_is_taken_when_no_password_was_given(self) -> None:
         self.assert_captured(ANON_NO_PASSWORD, "--tls-insecure-skip-verify")
+
+
+class TestWayvnc(_VeNCryptTestMixin, TestCase):
+    """wayvnc offers VeNCrypt alone, and X509Plain as its only subtype."""
+
+    server = WAYVNC
+
+    def test_x509_plain_captures_a_screen(self) -> None:
+        self.assert_captured(WAYVNC, "--tls-ca-cert", str(WAYVNC_CA_CERT))
+
+    def test_an_unverifiable_certificate_is_refused_by_default(self) -> None:
+        result = run_vncdo(WAYVNC, "pause", "0")
+
+        self.assertNotEqual(
+            result.returncode,
+            0,
+            f"vncdo accepted an unverified certificate; stderr:\n{result.stderr}",
+        )
+        self.assertIn("--tls-insecure-skip-verify", result.stderr)
+
+    def test_the_insecure_flag_accepts_the_certificate_anyway(self) -> None:
+        self.assert_captured(WAYVNC, "--tls-insecure-skip-verify")

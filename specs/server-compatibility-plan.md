@@ -24,10 +24,11 @@ installed. No other server implementation is exercised anywhere.
 
 ## What actually breaks, per the issue tracker
 
-- **Unsupported security types**: RealVNC-flavoured servers (Raspberry Pi
-  OS default) offer only RA2/RA2ne/etc.: #310. Proxmox and other
-  TLS-fronted servers need VeNCrypt: #138. RA2 is still unsupported, so a
-  server offering only 5/129 still fails.
+- **Unsupported security types**: #310 reports `(19, 129, 5)`, so that
+  server offers VeNCrypt alongside RA2 rather than RA2 alone, and picking
+  19 is enough — the fleet's wayvnc proves the case. Proxmox and other
+  TLS-fronted servers need VeNCrypt: #138. RA2 itself is still
+  unsupported, so a server offering only 5/129 fails.
 - **Unsupported encodings**: servers that assume Tight support: #264.
 - **Pixel-format assumptions**: black or corrupted captures when a server
   ignores the client's `SetPixelFormat` or uses a format outside what
@@ -143,8 +144,9 @@ and TLS-fronted servers work out of the box. Ordered by expected impact:
    for the largest cluster of servers. (#264)
 2. ~~**VeNCrypt security type (19)**~~: done, every TLS-backed subtype.
    Bare Plain is refused by design, SASL and Ident are unimplemented.
-   Still open: whether it covers Proxmox (#138) and the wayvnc
-   case in #310 — inferred from TigerVNC, not measured against either.
+   The wayvnc case in #310 is measured, not inferred: the fleet runs one,
+   and it is the only server there offering `X509Plain`. Still open:
+   whether it covers Proxmox (#138).
 3. **Pixel-format correctness pass**: generalize the ZRLE compressed-pixel
    reader for bpp/endianness, implement Raw/RRE/Hextile conversion from
    any server-native true-color format to the client's working format,
