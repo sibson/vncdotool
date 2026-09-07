@@ -1,8 +1,9 @@
 # Server Testing Framework Design
 
-Status: draft, under review. Companion to
+Status: built. Companion to
 [server-compatibility-plan.md](server-compatibility-plan.md); this document
-designs the Phase 0 framework that plan calls for.
+designs the Phase 0 framework that plan calls for. "Open questions / TODOs"
+below are follow-on work, not gaps in the framework itself.
 
 ## Problem
 

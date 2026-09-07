@@ -1,8 +1,9 @@
 # Pixel Format: Design
 
-Status: draft, under review. The first slice of
+Status: built. The first slice of
 [decoder-architecture.md](decoder-architecture.md) Phase 1, and the `rgb565`
 entry point [decoder-goldens.md](decoder-goldens.md) names in its phasing.
+Golden and functional coverage at `rgb565` is still deferred (see below).
 
 ## Problem
 

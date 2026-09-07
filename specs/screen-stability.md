@@ -1,8 +1,9 @@
 # Screen Stability Design
 
-Status: draft, under review. Sibling of the `expect` matching design; this is
-the "Not in scope" item from it: blocking until the screen stops changing,
-with no reference image.
+Status: built. Sibling of the `expect` matching design; this is the "Not in
+scope" item from it: blocking until the screen stops changing, with no
+reference image. The `scene-lossy.vdo` golden migration noted below is not
+done.
 
 ## Problem
 
