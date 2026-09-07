@@ -170,6 +170,35 @@ jobs:
       - name: Run functional tests
         run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 
+      # Data-gathering, not a gate: recorded, never allowed to fail the build.
+      - name: Sweep pixel-format probes
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p pixel-format-probes
+          {
+            for server in tigervnc tigervnc-auth x11vnc; do
+              echo "## $server, requested depth=32"
+              uv run python -m tests.goldens.probe_pixel_format \
+                --server "$server" --depth 32 --encoding zrle \
+                --out "pixel-format-probes/$server-depth32.png" || true
+              echo
+            done
+            echo "## libvncserver-example, native ServerInit"
+            uv run python -m tests.goldens.probe_pixel_format \
+              --server libvncserver-example --native --encoding zrle \
+              --out "pixel-format-probes/libvncserver-example-native.png" || true
+          } | tee pixel-format-probes/report.md
+
+      - name: Upload pixel-format probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pixel-format-probes
+          path: pixel-format-probes/
+          if-no-files-found: ignore
+          retention-days: 90
+
       # Nothing but a failed image comparison creates this directory, so its
       # existence -- not `failure()`, which any other broken test also
       # satisfies -- is what decides whether there is an image to show.

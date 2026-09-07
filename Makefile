@@ -17,7 +17,6 @@ help:
 	@echo "test-api:	run the in-process vncdotool.api lifecycle suite"
 	@echo "screenshots:	screenshot each running VNC test server into a gallery"
 	@echo "goldens:	capture decoder golden fixtures from the fleet"
-	@echo "probe-pixel-format:	probe a fleet server's real wire behaviour against a requested PixelFormat (ARGS=\"--server ... --depth ...\")"
 	@echo "scenes:		regenerate the committed scene PNGs from tests/goldens/scenes.py"
 	@echo "bench:		time a decoder against a committed golden fixture"
 	@echo "bench-record:	time it and append the run to the tracked bench.jsonl"
@@ -54,10 +53,6 @@ test: test-unit
 testall: test-unit test-func
 test-unit:
 	uv run python -m unittest discover tests/unit
-
-.PHONY: probe-pixel-format
-probe-pixel-format:
-	uv run python -m tests.goldens.probe_pixel_format $(ARGS)
 
 .PHONY: bench
 bench:

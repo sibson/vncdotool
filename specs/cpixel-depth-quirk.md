@@ -100,10 +100,12 @@ Test changes landed: `tests/unit/test_pixelformat.py`'s
 and `every_layout()` extended to sweep depth 32.
 
 The manual probes are now a committed, reusable tool:
-`tests/goldens/probe_pixel_format.py` (`make probe-pixel-format
-ARGS="--server ... --depth ..."`), rather than throwaway scripts. Every
-docker-fleet truecolor server was probed at a requested `depth=32`, plus
-`libvncserver-example` at its real native depth-32 ServerInit: all four
-narrow to 3-byte CPIXELs regardless and decode clean. `vncev` is
-colour-mapped (no CPIXEL) and wasn't probed; OS-hosted servers
-(UltraVNC/Screen Sharing/QEMU) run in CI only and weren't probed here.
+`tests/goldens/probe_pixel_format.py` (`uv run python -m
+tests.goldens.probe_pixel_format --server ... --depth ...`), rather than
+throwaway scripts. Every docker-fleet truecolor server was probed at a
+requested `depth=32`, plus `libvncserver-example` at its real native
+depth-32 ServerInit: all four narrow to 3-byte CPIXELs regardless and decode
+clean. `vncev` is colour-mapped (no CPIXEL) and wasn't probed; OS-hosted
+servers (UltraVNC/Screen Sharing/QEMU) run in CI only and weren't probed
+here. CI now runs the same sweep on every push against the fleet, recording
+its output as an artifact for future reference (`.github/workflows/ci.yml`).
