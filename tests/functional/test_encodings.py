@@ -7,6 +7,7 @@ encoding matches ours. See specs/decoder-goldens.md.
 """
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -17,32 +18,26 @@ from PIL import Image
 
 from vncdotool import decoders
 
-from .utils import (
-    SCENE_SERVERS,
-    VNCServer,
-    capture_through_vnclog,
-    run_vncdo,
-    server_is_up,
-    vnclog_can_reach,
-)
+from .utils import SCENE_SERVERS, VNCServer, run_vncdo, server_is_up
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
-# The 599x band is allocated across test modules in tests/servers/PORTS.md;
-# 5990 and 5991 are this module's.
-PROXY_PORT_BASE = 5990
 
-# Measured against the fleet by offering one encoding at a time through
-# vnclog and reading back the encoding of the rectangles that arrived.
+RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
+
+# Measured against the fleet by offering one encoding at a time and reading
+# back the encoding of the rectangles that arrived. Every server here
+# answers with Raw for anything it does not implement, so an encoding is
+# listed only where the server really sends it:
+#
 # TigerVNC 1.12.0 answers a CoRRE request with Raw, matching upstream's
-# EncodeManager::supported(), which accepts only Raw, RRE, Hextile, ZRLE
-# and Tight.
+# EncodeManager::supported(), which accepts only Raw, RRE, Hextile, ZRLE and
+# Tight.
 EMITTED: Dict[str, Set[str]] = {
     "tigervnc": {"raw", "rre", "hextile", "zrle", "tight"},
     "x11vnc": {"raw", "rre", "corre", "hextile", "zrle", "tight"},
+    "wayvnc": {"raw", "zrle", "tight"},
 }
-
-PROXYABLE = [server for server in SCENE_SERVERS if vnclog_can_reach(server)]
 
 
 def capture(test: TestCase, server: VNCServer, encodings: str, key: str) -> Image.Image:
@@ -102,40 +97,40 @@ class EmitsTheEncoding:
     """
 
     encoding: str
-    proxy_port: int
     scene = "0"
 
     def test_the_server_really_emits_the_encoding_we_asked_for(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            recorded = capture_through_vnclog(
-                self, self.server, self.proxy_port,
-                "--encodings", self.encoding,
+            result = run_vncdo(
+                self.server, "-v", "-v", "--encodings", self.encoding,
                 "key", self.scene, "pause", "0.3",
                 "capture", str(Path(tmp) / "screen.png"),
             )
+        if result.returncode != 0:
+            self.fail(
+                f"{self.server.name}: vncdo --encodings {self.encoding} failed "
+                f"({result.returncode}): {result.stderr}"
+            )
         wanted = decoders.ENCODING_NAMES[self.encoding]
-        answered = {seen["encoding"]: seen["rectangles"] for seen in recorded.meta["encodings_seen"]}
+        arrived = set(RECTANGLE_ENCODING.findall(result.stderr))
         self.assertIn(
-            wanted.value, answered,
+            wanted.name, arrived,
             f"no {wanted!r} rectangle arrived; {self.server.name} answered "
-            f"with {sorted(answered)}",
+            f"with {sorted(arrived)}",
         )
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
     suite = unittest.TestSuite()
-    for index, server in enumerate(PROXYABLE):
+    for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(EMITTED[server.name]):
             name = f"TestEmits_{label}_{encoding}"
             case = type(
                 name, (EmitsTheEncoding, FleetTestCase),
-                {"server": server, "encoding": encoding,
-                 "proxy_port": PROXY_PORT_BASE + index},
+                {"server": server, "encoding": encoding},
             )
             suite.addTest(case("test_the_server_really_emits_the_encoding_we_asked_for"))
-    for server in SCENE_SERVERS:
-        label = server.name.replace("-", "_")
         for encoding in sorted(decoders.ENCODING_NAMES):
             for scene in SCENES:
                 name = f"TestRenders_{label}_{encoding}_scene_{scene}"

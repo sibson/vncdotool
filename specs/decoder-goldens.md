@@ -345,7 +345,14 @@ connection, so the same X scene player reaches a wlroots framebuffer, and
 a golden source yet: `vnclog` reaches its upstream through
 `command.add_standard_options`, which carries no TLS options, and wayvnc offers
 VeNCrypt and nothing else. The live encoding and pixel-format grids in
-`tests/functional/` drive it directly and do cover it.
+`tests/functional/` drive it directly and do cover it. neatvnc, behind it,
+implements Raw, ZRLE and Tight and answers every other request with Raw, so
+three of the seven encodings the grid offers are its own and the rest exercise
+the fallback.
+
+Which encoding a server really used is read off `vncdo -v -v`, which names the
+encoding of every rectangle it decodes. That works wherever the client itself
+can connect, wayvnc included.
 
 ## Phasing
 

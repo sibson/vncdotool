@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import functools
 import getpass
+import logging
 import sys
 import warnings
 import zlib
@@ -286,6 +287,11 @@ class RFBClient(Protocol):
 
         if self.rectangles:
             self.rectangles -= 1
+            log.msg(
+                f"Received {Encoding.lookup(encoding)!r} rectangle "
+                f"{width}x{height}+{x}+{y}",
+                logLevel=logging.DEBUG,
+            )
             decoder = self._decoders.get(encoding)
             if decoder is not None:
                 self._pumpRectangle(decoder, x, y, width, height)
