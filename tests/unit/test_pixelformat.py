@@ -210,8 +210,13 @@ class TestCPixel(TestCase):
         self.assertEqual(cpixel_bytes(BGR565), BGR565.bypp)
         self.assertEqual(cpixel_offset(BGR565), 0)
 
-    def test_depth_32_is_never_a_cpixel(self):
-        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
+    def test_30_colour_bits_require_a_full_pixel(self):
+        pixel_format = rfb.PixelFormat(32, 30, False, True, 1023, 1023, 1023, 20, 10, 0)
+        self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
+        self.assertEqual(cpixel_offset(pixel_format), 0)
+
+    def test_colour_mapped_32bpp_requires_a_full_pixel(self):
+        pixel_format = rfb.PixelFormat(32, 32, False, False, 255, 255, 255, 0, 8, 16)
         self.assertEqual(cpixel_bytes(pixel_format), pixel_format.bypp)
         self.assertEqual(cpixel_offset(pixel_format), 0)
 
@@ -301,3 +306,24 @@ class TestChannelTolerance(TestCase):
             worst = max(min(abs(value - near) for near in grid) for value in range(256))
             with self.subTest(pixel_format=pixel_format, channel=channel):
                 self.assertLessEqual(worst, channel_tolerance(pixel_format)[channel])
+
+
+class CPixelDepth32:
+    def test_24_colour_bits_fit_despite_declared_depth(self):
+        self.assertEqual(cpixel_bytes(self.pixel_format), 3)
+        self.assertEqual(cpixel_offset(self.pixel_format), self.expected_offset)
+
+
+def load_tests(loader, tests, pattern):
+    for name, bigendian, shifts, offset in (
+        ("low_little_endian", False, (0, 8, 16), 0),
+        ("low_big_endian", True, (0, 8, 16), 1),
+        ("high_little_endian", False, (8, 16, 24), 1),
+        ("high_big_endian", True, (8, 16, 24), 0),
+    ):
+        case = type(f"TestCPixelDepth32_{name}", (CPixelDepth32, TestCase), {
+            "pixel_format": rfb.PixelFormat(32, 32, bigendian, True, 255, 255, 255, *shifts),
+            "expected_offset": offset,
+        })
+        tests.addTests(loader.loadTestsFromTestCase(case))
+    return tests

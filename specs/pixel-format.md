@@ -116,7 +116,6 @@ def channel_tolerance(pf: PixelFormat) -> tuple[int, int, int]:  # 8-bit error p
 ```
 
 `raw_mode` ignores `depth`: it does not affect where the channels sit.
-`cpixel_bytes` must obey it, since the encoder used the same declaration.
 
 `UnsupportedPixelFormat` rather than a guess, though under the policy below a
 caller only reaches it when a server ignores what was requested.
@@ -125,6 +124,10 @@ caller only reaches it when a server ignores what was requested.
 and every color bit sits in either the low or the high three bytes; which
 placement is a function of the shifts. rfbproto adds a tie-break the RFC omits:
 at depth ≤ 16 both placements fit, and the low three bytes are sent.
+
+[LibVNCServer's ZRLE encoder](https://github.com/LibVNC/libvncserver/blob/42494999e6492aaab9c1db785ecd293ef10b3aed/src/libvncserver/zrle.c#L154-L185)
+sends three bytes when the channels fit, even when its example server
+declares depth 32.
 
 Placement is in value space and `cpixel_offset` is in byte space, so big-endian
 reverses which end of the pixel they sit at. Slicing at the wrong end takes the

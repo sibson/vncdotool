@@ -198,6 +198,20 @@ class TestZRLE(unittest.TestCase):
 
         assert_pixels(self, self.cli.screen, [colour] * (width * height))
 
+    def test_zrle_rle_accepts_a_depth_32_declaration_with_24_colour_bits(self) -> None:
+        width = height = 64
+        pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
+        self.cli.dataReceived(b"RFB 003.003\n")
+        self.cli.dataReceived(pack("!I", rfb.AuthTypes.NONE))
+        self.cli.dataReceived(pack("!HH16sI", width, height, pixel_format.to_bytes(), 0))
+
+        colour = (10, 20, 30)
+        body = pack("!B", 0x80) + zrle_run(_cpixel(*colour), width * height)
+        self.cli.dataReceived(framebuffer_update([zrle_rect(0, 0, width, height, body)]))
+
+        self.cli.transport.loseConnection.assert_not_called()
+        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+
     def test_zrle_palette_rle_mixes_single_and_run_pixels(self) -> None:
         width, height = 6, 1
         handshake(self.cli, width, height)

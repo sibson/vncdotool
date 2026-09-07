@@ -179,7 +179,6 @@ def cpixel_bytes(pixel_format: PixelFormat) -> int:
     if (
         pixel_format.truecolor
         and pixel_format.bpp == 32
-        and pixel_format.depth <= 24
         and _cpixel_placement(pixel_format) is not None
     ):
         return 3
@@ -203,8 +202,7 @@ def tpixel_bytes(pixel_format: PixelFormat) -> int:
     """3 for a TPIXEL-eligible format, otherwise ``bypp`` (a PIXEL).
 
     Narrower than CPIXEL: rfbproto §Tight requires depth exactly 24 and three
-    8-bit channels, where CPIXEL takes depth 24 or less. See
-    ``specs/tight-wire.md`` §1.
+    8-bit channels. See ``specs/tight-wire.md`` §1.
     """
     if (
         pixel_format.truecolor
