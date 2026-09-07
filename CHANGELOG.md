@@ -1,50 +1,12 @@
 ## 2.0.0.dev0 (UNRELEASED)
-- Fix ZRLE decoding failing against servers, `libvncserver`-based ones among them, that report `depth=32` in `ServerInit` but narrow CPIXELs to 3 bytes anyway; a rectangle that genuinely needs 4 bytes now ends the session with a named error instead of being misread (@kudala-bharani, #483)
-- A `ServerCutText` or `SetColourMapEntries` declaring a length above 1 MiB now ends the session with a reported error instead of buffering an unbounded amount of data (#474)
-- Fix `vnclog` hanging forever when a client pastes clipboard text through it, dropping QEMU extended key events, and stalling on the last event of a message split across two reads
-- Fix `updateCursor` crashing or leaving a stale cursor on a hide-pointer update (width or height 0), instead of hiding it (#449)
-- Fix `RFBFactory` raising `AttributeError` on ARD authentication when used directly, instead of through `VNCDoToolFactory`
-- Add `vncdo stable SECONDS [FUZZ]` and `rstable SECONDS X Y W H [FUZZ]`, waiting until the screen stops changing rather than until it matches a reference image
-- Fix `rexpect` polling until `--timeout` and `rcapture` writing black pixels when the region runs off the screen, and `expect` doing the same against a target image larger than the screen. All three now fail with a message naming the region and the screen size, exiting 30
-- A Tight JPEG rectangle from a server that was never offered a JPEG quality level now ends the session with a named error instead of being decoded. JPEG is lossy, so decoding one nobody asked for made a capture inexact without saying so; pass `--jpeg-quality` to ask for them
-- [WARNING] `vncdo` offers `tight,hextile,raw` instead of Raw alone, sending roughly a quarter of the bytes against a server that speaks Tight, at more CPU to decode. Every encoding on the list is lossless, so captures stay exact; `--encodings` still replaces the list, and `VNCDoToolClient.encoding` is gone
-- [BREAKING] `expect` and `rexpect` decide a match pixel by pixel, as a perceived colour difference, rather than by the root-mean-square difference of the two histograms. The number in `expect FILE N` is now that per-pixel bound, 0 (exact) to 255, on a scale unrelated to the old one; `expectScreen` and `expectRegion` take `fuzz` and `blur` in place of `maxrms`
-- Add `vncdo --fuzz N` and `--blur RADIUS`, tuning how near the screen has to be for `expect` or `stable` to call it a match, and fixing a crash when neither command was given a fuzz at all. `--jpeg-quality` turns a blur on automatically
-- Hextile rectangles decode about 1.5x faster
-- ZRLE rectangles decode about 12x faster
-- Fix a ZRLE palette index past the end of its palette raising `IndexError` past the protocol handler instead of ending the session with a reported error
-- Tight palette rectangles decode about 1.3x faster
-- Fix `expect` never matching, and so polling until it timed out, at a reduced-depth pixel format such as `--pixel-format rgb565`. A target image now matches a screen that is as close to it as the negotiated format can express
-- Fix `vnclog` garbling its log and `--capture-raw` metadata when the client used a pixel format other than the one announced, and reporting a masking `AttributeError` in place of the reason its own decoder actually gave up
-- Malformed or oversized data from the server -- a bad header, unknown security/auth type, unrecognized message or encoding, or oversized pixel data -- now ends the session with a reported error instead of hanging, parsing garbage, or waiting for bytes that never arrive
-- A `ServerFence` no longer ends the session as an unknown message; the client answers it. The `PSEUDO_FENCE` encoding is not offered, so a server sends one only unprompted, and `VNCDoToolFactory.fence = True` opts in (based on @TeofilisMartisius's #323)
-- Fix any substring of `drag` -- `d`, `ra`, `dra` -- being accepted as the `drag` command and consuming its two arguments, instead of being reported as an unknown command
-- Fix `self.width`/`self.height` staying at the negotiated size after a server sends `PSEUDO_DESKTOP_SIZE` mid-session
-- Fix `VNCLoggingServerProxy.connectionLost` rejecting the no-argument call `Protocol.connectionLost` promises callers
-- CI now ignores dependency releases younger than a week and fails on a stale `uv.lock` instead of silently resolving something else
-- `--encodings hextile` offers Hextile, which sends less than Raw on ordinary screen content
-- Add `vncdo --encodings LIST`, choosing which encodings to offer the server (#167, #168)
-- Fix CoRRE decoding
-- Fix CopyRect leaving the screen unchanged
-- [BREAKING] `RFBClient.updateRectangle` takes the `PixelFormat` its bytes are in, and is called once per rectangle; `fillRectangle` is no longer called for any migrated encoding. Subclasses overriding either have been warned since 1.4.1, see #385
-- Add `vncdo --pixel-format FORMAT`, asking the server for `bgrx8888`, `rgbx8888`, or `rgb565` instead of accepting the format it announces; any byte-aligned truecolor format the server announces can now be captured natively, not just the five formats vncdotool used to recognize
-- Add `make typecheck`, running mypy over `vncdotool` and `tests` (#401)
-- `vncdo` failures print to stderr as plain messages (#395)
-- `vncdo -v` logs the pixel format it requests, beside the native format it already logged (#394)
-- Drop the per-rectangle debug trace: never used to diagnose anything, and decoding a full-screen update is 30% faster without it
-- Fix screenshots shifted against any server whose first rectangle does not start at (0, 0)
-- Fix `VMWareClient` raising `AttributeError` instead of detecting the VMware single-pixel update it exists to filter (#400)
-- `PixelFormat` moves to `vncdotool.pixelformat`; `vncdotool.rfb.PixelFormat` still imports (#415)
-- [BREAKING] `VNCDoToolClient.image_mode` is gone; its `FutureWarning` shipped in 1.4, see #385
-- A server that announces an unreadable pixel format is now asked for `rgbx8888` even when it identifies as Apple Remote Desktop (RFB 3.889)
-- [BREAKING] `vncdotool.rfb.Rect` is gone; annotate rectangles as `tuple[int, int, int, int]` (#415)
-- Local development moves from Makefile.venv + pip to uv; `make` targets run under `uv run` (#383)
-- Fix `make release` tagging an empty version
-- Fix: `api.ThreadedVNCClientProxy.disconnect()` hanging forever after a failed command (e.g. `captureScreen` to a missing directory) left the client's deferred errored, so `disconnect()`'s success-only callback never ran (#146)
-- Raw rectangles skip the rect-buffer entirely, cutting decode time about 11% on a full-screen update
-- `--encodings zrle` offers ZRLE, which sends substantially less than Raw on ordinary screen content
-- `--encodings tight` offers Tight, which sends less than Raw on ordinary screen content; Tight JPEG rectangles decode, and a rectangle it cannot decode ends the session with a named error rather than a wrong screen (#264)
-- Add `vncdo --jpeg-quality LEVEL`, 0 (low) to 9 (high). A server sends Tight JPEG only to a client that asked for a level, so captures stay lossless unless you pass it (#264)
+- [WARNING] `vncdo` offers `tight,hextile,raw` by default instead of Raw alone, lossless but more CPU to decode (`--encodings` still replaces the list). Hextile decodes about 1.5x faster, ZRLE about 12x, Tight palette about 1.3x, and Raw skips the rect-buffer entirely for about 11% more; fixed CoRRE and CopyRect decoding, and a ZRLE palette index past the end of its palette raising `IndexError` instead of a reported error; fixed ZRLE misdecoding against servers, `libvncserver`-based ones among them, that report `depth=32` but narrow CPIXELs to 3 bytes anyway (@kudala-bharani, #483)
+- Add `vncdo --encodings LIST` to choose which encodings to offer (raw, copyrect, rre, corre, hextile, zrle, tight); Tight JPEG rectangles decode only once `--jpeg-quality LEVEL` asks for them, refusing an unsolicited one instead of decoding it lossily (#167, #168, #264)
+- Add `vncdo --pixel-format FORMAT` (`bgrx8888`, `rgbx8888`, `rgb565`); any byte-aligned truecolor format the server announces can now be captured natively. Fixed `expect` never matching at a reduced-depth format such as `rgb565`, an unreadable-format server not falling back to `rgbx8888` when it identifies as Apple Remote Desktop, and `vnclog` garbling its log and `--capture-raw` metadata on a non-native format while masking the real decode failure with an `AttributeError` (`PixelFormat` moves to `vncdotool.pixelformat`, #415)
+- [BREAKING] `expect`/`rexpect` match pixel by pixel (a 0-255 bound) instead of by the root-mean-square difference of two histograms; `expectScreen`/`expectRegion` take `fuzz`/`blur` in place of `maxrms`. Add `vncdo stable SECONDS [FUZZ]`/`rstable SECONDS X Y W H [FUZZ]`, waiting for the screen to settle instead of matching a reference image, and `--fuzz`/`--blur` flags for both (fixing a crash when neither command got a fuzz; `--jpeg-quality` turns a blur on automatically). Fixed `rexpect`/`rcapture`/`expect` against an off-screen or oversized region erroring by name instead of writing black pixels or polling until timeout
+- Fix `vnclog` hanging forever on pasted clipboard text, dropping QEMU extended key events, stalling on a message split across two reads, and rejecting Twisted's no-argument `connectionLost` call
+- Fix session-ending robustness: malformed or oversized server data (a bad header, unknown security/auth type, unrecognized message or encoding, oversized pixel data) now ends the session with a reported error instead of hanging or parsing garbage; a `ServerCutText`/`SetColourMapEntries` above 1 MiB errors instead of buffering unbounded data (#474); `ServerFence` is answered instead of ending the session as unknown (based on @TeofilisMartisius's #323); `updateCursor` no longer crashes or leaves a stale cursor on a hide-pointer update (#449); `RFBFactory` no longer raises `AttributeError` on direct ARD authentication; `VMWareClient` no longer raises `AttributeError` instead of filtering its single-pixel update (#400); `api.ThreadedVNCClientProxy.disconnect()` no longer hangs after a failed command (#146)
+- Fix any substring of `drag` being accepted as the `drag` command; fix `self.width`/`self.height` staying stale after a server sends `PSEUDO_DESKTOP_SIZE` mid-session; fix screenshots shifted against a server whose first rectangle does not start at (0, 0); `vncdo` failures print to stderr as plain messages, and `-v` logs the pixel format it requests (#394, #395)
+- [BREAKING] `RFBClient.updateRectangle` takes the `PixelFormat` its bytes are in and is called once per rectangle (`fillRectangle` no longer called for a migrated encoding, warned since 1.4.1, #385); `VNCDoToolClient.image_mode` is gone (warned since 1.4, #385); `vncdotool.rfb.Rect` is gone, annotate rectangles as `tuple[int, int, int, int]` (#415)
 
 ## 1.4.1 (2026-08-19)
 - Start the pluggable-decoders migration (see `specs/decoder-architecture.md`): subclassing `RFBClient.fillRectangle` or `RFBClient.updateRectangle`, or reading/writing `VNCDoToolClient.image_mode`, now raises a `FutureWarning`, since both contracts will change once decoders move out of `rfb.py`. No behavior changes yet; comment on #385 if you rely on either (@sibson, #385)
