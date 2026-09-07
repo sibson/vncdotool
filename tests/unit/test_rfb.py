@@ -159,6 +159,21 @@ class TestRFB(TestCase):
         # never grew a buffer waiting for the declared length
         assert not self.client._packet
 
+    def test_oversized_connection_failed_reason_is_a_diagnosed_disconnect(self):
+        self.client.vncProtocolError = mock.Mock()
+        oversized = self.client.MAX_MESSAGE_PAYLOAD + 1
+        self.client._packet += (
+            b"RFB 003.008\n"  # header
+            b"\x00"  # no security types on offer, so the connection is refused
+            + pack("!I", oversized)
+        )
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+        assert self.client._aborted
+        # never grew a buffer waiting for the declared length
+        assert not self.client._packet
+
     def test_auth_vnc38(self):
         challenge = bytes(range(16))
         self.client._packet += (
