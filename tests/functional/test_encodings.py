@@ -18,12 +18,11 @@ from PIL import Image
 from vncdotool import decoders
 
 from .utils import (
-    HOST,
     SCENE_SERVERS,
     VNCServer,
     capture_through_vnclog,
-    port_open,
     run_vncdo,
+    server_is_up,
     vnclog_can_reach,
 )
 
@@ -65,7 +64,7 @@ class FleetTestCase(TestCase):
     server: VNCServer
 
     def setUp(self) -> None:
-        if not port_open(HOST, self.server.port):
+        if not server_is_up(self.server):
             self.fail(
                 f"{self.server.name} is not listening on {self.server.port}; "
                 f"{self.server.how_to_start}"

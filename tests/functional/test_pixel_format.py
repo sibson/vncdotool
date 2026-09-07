@@ -18,7 +18,7 @@ from PIL import Image
 from vncdotool import pixelformat
 
 from .imagediff import assert_images_match
-from .utils import HOST, SCENE_SERVERS, VNCServer, port_open, run_vncdo
+from .utils import SCENE_SERVERS, VNCServer, run_vncdo, server_is_up
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
@@ -52,7 +52,7 @@ class FleetTestCase(TestCase):
     server: VNCServer
 
     def setUp(self) -> None:
-        if not port_open(HOST, self.server.port):
+        if not server_is_up(self.server):
             self.fail(
                 f"{self.server.name} is not listening on {self.server.port}; "
                 f"{self.server.how_to_start}"

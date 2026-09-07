@@ -27,7 +27,7 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -374,6 +374,26 @@ def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool
         return False
 
 
+_SEEN_UP: Set[Tuple[str, int]] = set()
+
+
+def server_is_up(server: VNCServer) -> bool:
+    """port_open() for a test's setUp, remembered for the rest of the process.
+
+    Xvnc counts every connection closed before a successful authentication
+    towards BlacklistThreshold, and a probe drops one without ever speaking
+    RFB. One per test in a grid of a hundred blacklists the harness itself,
+    which is why the containers' HEALTHCHECK does not connect either.
+    """
+    key = (HOST, server.port)
+    if key in _SEEN_UP:
+        return True
+    if port_open(HOST, server.port):
+        _SEEN_UP.add(key)
+        return True
+    return False
+
+
 def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedVNCClientProxy:
     """Connect to one server, with whatever credentials its security type needs.
 
@@ -394,8 +414,16 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
 
 def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
-    with connect(server, timeout=timeout) as client:
-        client.captureScreen(str(path))
+    """Capture through the CLI, which is the only caller that can pass
+    extra_args: api.connect() takes no TLS options, so a VeNCrypt-only
+    server cannot be reached in-process at all.
+    """
+    result = run_vncdo(server, "capture", str(path), timeout=timeout)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"{server.name}: vncdo capture exited {result.returncode}, "
+            f"stderr:\n{result.stderr}"
+        )
     return path
 
 
@@ -591,7 +619,7 @@ class _VNCServerTestMixin:
     server: VNCServer
 
     def setUp(self) -> None:
-        if port_open(HOST, self.server.port):
+        if server_is_up(self.server):
             return
         unreachable = (
             f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
