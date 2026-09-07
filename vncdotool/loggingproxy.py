@@ -37,7 +37,8 @@ TYPE_LEN = {
     MsgC2S.FRAMEBUFFER_UPDATE_REQUEST: 10,
     MsgC2S.KEY_EVENT: 8,
     MsgC2S.POINTER_EVENT: 6,
-    MsgC2S.QEMU_CLIENT_MESSAGE: 1,
+    MsgC2S.CLIENT_CUT_TEXT: 8,
+    MsgC2S.QEMU_CLIENT_MESSAGE: 2,
     MsgC2S.CLIENT_FENCE: 9,
 }
 
@@ -108,7 +109,7 @@ class RFBServer(Protocol):
         (ptype,) = unpack_from("!B", self.buffer)
         nbytes = TYPE_LEN.get(ptype, 0)
         if len(self.buffer) < nbytes:
-            self._handler = self._handle_protocol, nbytes + 1
+            self._handler = self._handle_protocol, nbytes
             return
 
         block = bytes(self.buffer[1:nbytes])
@@ -136,7 +137,9 @@ class RFBServer(Protocol):
             buttonmask, x, y = unpack("!BHH", block)
             self.handle_pointerEvent(x, y, buttonmask)
         elif ptype == MsgC2S.CLIENT_CUT_TEXT:
-            self.handle_clientCutText(block)
+            (length,) = unpack("!xxxI", block)
+            self._cutTextLength = length
+            self._handler = self._handle_clientCutText, length
         elif ptype == MsgC2S.CLIENT_FENCE:
             flags, length = unpack("!xxxIB", block)
             payload = bytes(self.buffer[:length])
@@ -157,6 +160,13 @@ class RFBServer(Protocol):
         down_flag, keysym, keycode = unpack_from("!HII", self.buffer)
         del self.buffer[:12]
         self.handle_keyEventExtended(keysym, down_flag, keycode)
+        self._handler = self._handle_protocol, 1
+
+    def _handle_clientCutText(self) -> None:
+        length = self._cutTextLength
+        text = bytes(self.buffer[:length])
+        del self.buffer[:length]
+        self.handle_clientCutText(text)
         self._handler = self._handle_protocol, 1
 
     def handle_setPixelFormat(self, pixel_format: PixelFormat) -> None:
