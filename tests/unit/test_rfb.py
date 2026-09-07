@@ -159,6 +159,52 @@ class TestRFB(TestCase):
         # never grew a buffer waiting for the declared length
         assert not self.client._packet
 
+    def test_auth_vnc38(self):
+        challenge = bytes(range(16))
+        self.client._packet += (
+            b"RFB 003.008\n"  # header
+            b"\x01"  # num-auth-types
+            b"\x02"  # AuthTypes.VNC_AUTHENTICATION
+            + challenge
+            + b"\x00\x00\x00\x00"  # OK
+        )
+        self.client.factory.password = "secret"
+        self.client.factory.shared = 0
+        self.client._handler()
+        self.client.transport.write.assert_has_calls([
+            mock.call(b"RFB 003.008\n"),
+            mock.call(b"\x02"),  # AuthTypes.VNC_AUTHENTICATION
+            mock.call(rfb.des_encrypt(rfb._vnc_des("secret"), challenge)),
+            mock.call(b"\x00"),  # shared
+        ])
+
+    def test_password_sent_after_the_handshake_still_answers_the_challenge(self):
+        challenge = bytes(range(16))
+        self.client._packet += (
+            b"RFB 003.008\n"  # header
+            b"\x01"  # num-auth-types
+            b"\x02"  # AuthTypes.VNC_AUTHENTICATION
+            + challenge
+        )
+        self.client.factory.password = None
+        self.client._handler()
+        self.client.sendPassword("secret")
+        self.client.transport.write.assert_called_with(
+            rfb.des_encrypt(rfb._vnc_des("secret"), challenge)
+        )
+
+    def test_security_type_without_a_handler_reports_protocol_error(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client.SUPPORTED_AUTHS = {rfb.AuthTypes.TIGHT}
+        self.client._packet += (
+            b"RFB 003.008\n"  # header
+            b"\x01"  # num-auth-types
+            b"\x10"  # AuthTypes.TIGHT
+        )
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
+
     def test_ardRequestCredentials_prompts_when_factory_has_no_username(self):
         self.client.factory = rfb.RFBFactory()
         with (

@@ -29,10 +29,7 @@ from typing import (
 )
 
 from cryptography.hazmat.decrepit.ciphers.algorithms import TripleDES
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.primitives.asymmetric import dh
-from cryptography.hazmat.primitives import hashes
-from cryptography.utils import CryptographyDeprecationWarning
+from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from twisted.application import internet, service
 from twisted.internet import protocol
 from twisted.internet.interfaces import IConnector, ITransport
@@ -40,12 +37,15 @@ from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
-from . import decoders, messages
+from . import decoders, messages, security
 from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C
 from .keys import Key
 from .pixelformat import PixelFormat
 
 Ver = Tuple[int, int]
+
+_DECODE_ERRORS = (decoders.DecodeError, StructError, MemoryError, zlib.error)
+_SECURITY_ERRORS = (security.SecurityError, StructError)
 
 # ~ from twisted.internet import reactor
 
@@ -63,11 +63,7 @@ class RFBClient(Protocol):
         (5, 0),  # RealVNC 5.3
     }
     MAX_CLIENT_VERSION = (3, 8)
-    SUPPORTED_AUTHS = {
-        AuthTypes.NONE,
-        AuthTypes.VNC_AUTHENTICATION,
-        AuthTypes.DIFFIE_HELLMAN,
-    }
+    SUPPORTED_AUTHS = set(security.HANDLERS)
     _UNMIGRATED_ENCODINGS = {
         Encoding.ZRLE,
         Encoding.PSEUDO_LAST_RECT,
@@ -86,6 +82,8 @@ class RFBClient(Protocol):
     _CHANGING_HOOKS = ("fillRectangle", "updateRectangle")
 
     transport: ITransport
+
+    _challenge: bytes
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
@@ -118,6 +116,7 @@ class RFBClient(Protocol):
         self._rect_backing = bytearray()
         self._decoders = decoders.for_connection()
         self._messages = messages.for_connection()
+        self._security = security.for_connection()
 
     @property
     def bypp(self) -> int:
@@ -169,15 +168,7 @@ class RFBClient(Protocol):
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
-            if sec_type == AuthTypes.NONE:
-                if self._version < (3, 8):
-                    self._doClientInitialization()
-                else:
-                    self.expect(self._handleVNCAuthResult, 4)
-            elif sec_type == AuthTypes.VNC_AUTHENTICATION:
-                self.expect(self._handleVNCAuth, 16)
-            elif sec_type == AuthTypes.DIFFIE_HELLMAN:
-                self.expect(self._handleDHAuth, 4)
+            self._startSecurity(sec_type)
         else:
             self.abortConnection(f"unknown security types: {types!r}")
 
@@ -186,12 +177,32 @@ class RFBClient(Protocol):
         # ~ print(f"{auth=}")
         if auth == AuthTypes.INVALID:
             self.expect(self._handleConnFailed, 4)
-        elif auth == AuthTypes.NONE:
-            self._doClientInitialization()
-        elif auth == AuthTypes.VNC_AUTHENTICATION:
-            self.expect(self._handleVNCAuth, 16)
+        elif auth in self._security:
+            # Before 3.7 the server dictates the security type, so the client
+            # writes nothing to choose it.
+            self._startSecurity(auth)
         else:
             self.abortConnection(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+
+    def _startSecurity(self, sec_type: int) -> None:
+        handler = self._security.get(sec_type)
+        if handler is None:
+            self.abortConnection(
+                f"unsupported security type {AuthTypes.lookup(sec_type)!r}"
+            )
+            return
+        self._pump(
+            None,
+            handler.handle(self),
+            self._finishSecurity,
+            f"the {AuthTypes.lookup(sec_type)!r} security type",
+            _SECURITY_ERRORS,
+            "negotiate",
+        )
+
+    def _finishSecurity(self, proceed: bool) -> None:
+        if proceed:
+            self._doClientInitialization()
 
     def _handleConnFailed(self, block: bytes) -> None:
         (waitfor,) = unpack("!I", block)
@@ -199,58 +210,6 @@ class RFBClient(Protocol):
 
     def _handleConnMessage(self, block: bytes) -> None:
         self.abortConnection(f"Connection refused: {block!r}")
-
-    def _handleVNCAuth(self, block: bytes) -> None:
-        self._challenge = block
-        self.vncRequestPassword()
-        self.expect(self._handleVNCAuthResult, 4)
-
-    def _handleDHAuth(self, block: bytes) -> None:
-        self.generator, self.keyLen = unpack("!HH", block)
-        self.expect(self._handleDHAuthKey, self.keyLen)
-
-    def _handleDHAuthKey(self, block: bytes) -> None:
-        self.modulus = block
-        self.expect(self._handleDHAuthCert, self.keyLen)
-
-    def _handleDHAuthCert(self, block: bytes) -> None:
-        self.serverKey = block
-
-        self.ardRequestCredentials()
-
-        self._encryptArd()
-        self.expect(self._handleVNCAuthResult, 4)
-
-    def _encryptArd(self) -> None:
-        userStruct = f"{self.factory.username:\0<64}{self.factory.password:\0<64}"
-
-        p = int.from_bytes(self.modulus, "big")
-        sk = int.from_bytes(self.serverKey, "big")
-        with warnings.catch_warnings():
-            # ARD auth is specified over classic finite-field DH; the server
-            # picks p/g and there is no other algorithm to negotiate into.
-            # Tracking upstream removal: https://github.com/sibson/vncdotool/issues/388
-            warnings.simplefilter("ignore", CryptographyDeprecationWarning)
-            param_nums = dh.DHParameterNumbers(p=p, g=self.generator)
-            server_key = dh.DHPublicNumbers(sk, param_nums).public_key()
-
-        params = param_nums.parameters()
-        private_key = params.generate_private_key()
-        shared_key = private_key.exchange(server_key)
-
-        h = hashes.Hash(hashes.MD5())
-        h.update(shared_key)
-        key_digest = h.finalize()
-
-        cipher = Cipher(algorithms.AES(key_digest), modes.ECB())
-        encryptor = cipher.encryptor()
-        ciphertext = encryptor.update(userStruct.encode("utf-8"))
-        ciphertext += encryptor.finalize()
-
-        public_key = private_key.public_key()
-        y = public_key.public_numbers().y.to_bytes(self.keyLen, "big")
-
-        self.transport.write(ciphertext + y)
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
@@ -261,36 +220,6 @@ class RFBClient(Protocol):
     def sendPassword(self, password: str) -> None:
         """send password"""
         self.transport.write(des_encrypt(_vnc_des(password), self._challenge))
-
-    def _handleVNCAuthResult(self, block: bytes) -> None:
-        (result,) = unpack("!I", block)
-        # ~ print(f"{auth=}")
-        if result == 0:  # OK
-            self._doClientInitialization()
-            return
-        elif result == 1:  # failed
-            if self._version < (3, 8):
-                self.vncAuthFailed("authentication failed")
-                self.transport.loseConnection()
-            else:
-                self.expect(self._handleAuthFailed, 4)
-        elif result == 2:  # too many
-            if self._version < (3, 8):
-                self.vncAuthFailed("too many tries to log in")
-                self.transport.loseConnection()
-            else:
-                self.expect(self._handleAuthFailed, 4)
-        else:
-            log.msg(f"unknown auth response ({result})")
-            self.transport.loseConnection()
-
-    def _handleAuthFailed(self, block: bytes) -> None:
-        (waitfor,) = unpack("!I", block)
-        self.expect(self._handleAuthFailedMessage, waitfor)
-
-    def _handleAuthFailedMessage(self, block: bytes) -> None:
-        self.vncAuthFailed(block)
-        self.transport.loseConnection()
 
     def _doClientInitialization(self) -> None:
         self.transport.write(pack("!B", self.factory.shared))
@@ -427,22 +356,24 @@ class RFBClient(Protocol):
         generator: Generator[int, Any, Any],
         on_done: Callable[[Any], None],
         describe: str,
+        errors: tuple[type[BaseException], ...] = _DECODE_ERRORS,
+        verb: str = "decode",
     ) -> None:
         try:
             size = generator.send(block)
         except StopIteration as stop:
             on_done(stop.value)
             return
-        except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
+        except errors as exc:
             generator.close()
-            self.abortConnection(f"cannot decode {describe}: {exc}")
+            self.abortConnection(f"cannot {verb} {describe}: {exc}")
             return
 
         if size < 0:
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pump, size, generator, on_done, describe)
+        self.expect(self._pump, size, generator, on_done, describe, errors, verb)
 
     # ------------------------------------------------------
     # incomming data redirector
