@@ -591,6 +591,8 @@ class VNCDoToolClient(rfb.RFBClient):
 
         if not width or not height:
             self.cursor = None
+            self.cmask = None
+            return
 
         self.cursor = Image.frombytes(
             "RGB", (width, height), image, "raw", self._image_mode

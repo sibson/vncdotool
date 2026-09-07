@@ -67,6 +67,22 @@ class TestVNCDoToolClient(TestCase):
         (offered,) = cli.setEncodings.call_args[0]
         self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
 
+    def test_updateCursor_hides_pointer_on_zero_size(self):
+        """RFC 6143 7.6.1: a Cursor pseudo-encoding update with width or
+        height 0 means hide the pointer, not an empty image to decode.
+        """
+        cli = self.client
+        cli.factory.nocursor = False
+        cli.cursor = Image.new("RGB", (4, 4))
+        cli.cmask = Image.new("1", (4, 4))
+        cli.screen = Image.new("RGB", (100, 100))
+
+        cli.updateCursor(0, 0, 0, 0, b"", b"")
+
+        self.assertIsNone(cli.cursor)
+        self.assertIsNone(cli.cmask)
+        cli.drawCursor()
+
     def test_requested_encodings_replace_the_default_list(self):
         cli = self.client
         cli.requested_encodings = [client.rfb.Encoding.RAW]

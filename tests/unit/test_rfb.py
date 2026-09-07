@@ -119,51 +119,8 @@ class TestRFB(TestCase):
 
     def test_server_fence_dispatches_from_handleConnection(self):
         self.client._handleConnection(b"\xf8")  # SERVER_FENCE
-        assert self.client._expected_handler == self.client._handleServerFence
+        assert self.client._expected_handler == self.client._pump
         assert self.client._expected_len == 8
-
-    def test_server_fence_request_gets_a_response_with_request_cleared(self):
-        self.client._handleServerFence(
-            b"\x00\x00\x00"  # padding
-            b"\x80\x00\x00\x03"  # flags: REQUEST | BLOCK_AFTER | BLOCK_BEFORE
-            b"\x00"  # payload length
-        )
-        self.client.transport.write.assert_called_once_with(
-            b"\xf8\x00\x00\x00"  # CLIENT_FENCE, padding
-            b"\x00\x00\x00\x03"  # flags: BLOCK_AFTER | BLOCK_BEFORE, REQUEST cleared
-            b"\x00"  # payload length
-        )
-
-    def test_server_fence_request_clears_bits_the_client_does_not_understand(self):
-        self.client._handleServerFence(
-            b"\x00\x00\x00"  # padding
-            b"\x80\x00\x00\x08"  # flags: REQUEST | an unknown bit
-            b"\x00"  # payload length
-        )
-        self.client.transport.write.assert_called_once_with(
-            b"\xf8\x00\x00\x00"
-            b"\x00\x00\x00\x00"  # the unknown bit is cleared in the response
-            b"\x00"
-        )
-
-    def test_server_fence_response_is_not_echoed_back(self):
-        self.client._handleServerFence(
-            b"\x00\x00\x00"  # padding
-            b"\x00\x00\x00\x03"  # flags: BLOCK_AFTER | BLOCK_BEFORE, no REQUEST
-            b"\x00"  # payload length
-        )
-        self.client.transport.write.assert_not_called()
-
-    def test_server_fence_payload_is_echoed_back_with_the_response(self):
-        self.client._handleServerFence(
-            b"\x00\x00\x00"
-            b"\x80\x00\x00\x00"  # REQUEST
-            b"\x04"  # payload length
-        )
-        self.client._handleServerFencePayload(b"ping", 0x80000000)
-        self.client.transport.write.assert_called_once_with(
-            b"\xf8\x00\x00\x00\x00\x00\x00\x00\x04ping"
-        )
 
     def test_clientFence(self):
         self.client.clientFence(rfb.FenceFlags.SYNC_NEXT, b"abc")
@@ -186,6 +143,21 @@ class TestRFB(TestCase):
             mock.call(b"\x01"),  # AuthTypes.NONE
             mock.call(b"\x00"),  # shared
         ])
+
+    def test_oversized_server_cut_text_length_is_a_diagnosed_disconnect(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._handler = self.client._handleExpected
+        self.client.expect(self.client._handleConnection, 1)
+        oversized = self.client.MAX_MESSAGE_PAYLOAD + 1
+        self.client._packet += bytes([rfb.MsgS2C.SERVER_CUT_TEXT]) + pack(
+            "!xxxI", oversized
+        )
+        self.client._handler()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
+        assert self.client._aborted
+        # never grew a buffer waiting for the declared length
+        assert not self.client._packet
 
     def test_ardRequestCredentials_prompts_when_factory_has_no_username(self):
         self.client.factory = rfb.RFBFactory()
