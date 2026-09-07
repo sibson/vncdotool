@@ -1,4 +1,5 @@
 ## 2.0.0.dev0 (UNRELEASED)
+- `SetColourMapEntries`, `ServerCutText`, `Bell` and `ServerFence` move out of `rfb.py` into per-message handlers under `vncdotool/messages/`, mirroring the rectangle-decoder registry (#474). A `ServerCutText` or `SetColourMapEntries` declaring a length above 1 MiB now ends the session with a reported error instead of buffering an unbounded amount of data (@sibson, #474)
 - Fix `updateCursor` decoding a hide-pointer update (width or height 0) as an empty image instead of hiding the cursor, which raised inside Pillow or pasted a bogus zero-size image onto the screen (@sibson, #449)
 - Fix `RFBFactory` raising `AttributeError` on ARD authentication when used directly, instead of through `VNCDoToolFactory` (@sibson)
 - Add `vncdo stable SECONDS [FUZZ]` and `rstable SECONDS X Y W H [FUZZ]`, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
