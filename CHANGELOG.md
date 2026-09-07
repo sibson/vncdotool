@@ -1,4 +1,5 @@
 ## 2.0.0.dev0 (UNRELEASED)
+- Fix `updateCursor` decoding a hide-pointer update (width or height 0) as an empty image instead of hiding the cursor, which raised inside Pillow or pasted a bogus zero-size image onto the screen (@sibson, #449)
 - Fix `RFBFactory` raising `AttributeError` on ARD authentication when used directly, instead of through `VNCDoToolFactory` (@sibson)
 - Add `vncdo stable SECONDS [FUZZ]` and `rstable SECONDS X Y W H [FUZZ]`, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
 - Fix `rexpect` polling until `--timeout` and `rcapture` writing black pixels when the region runs off the screen, and `expect` doing the same against a target image larger than the screen. All three now fail with a message naming the region and the screen size, exiting 30 (@sibson)
