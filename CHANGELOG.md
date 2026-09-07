@@ -1,5 +1,8 @@
 ## 2.0.0.dev0 (UNRELEASED)
 - Fix ZRLE captures from servers that declare depth 32 for 24-bit color (@kudala-bharani, #483)
+- `SetColourMapEntries`, `ServerCutText`, `Bell` and `ServerFence` move out of `rfb.py` into per-message handlers under `vncdotool/messages/`, mirroring the rectangle-decoder registry (#474). A `ServerCutText` or `SetColourMapEntries` declaring a length above 1 MiB now ends the session with a reported error instead of buffering an unbounded amount of data (@sibson, #474)
+- Fix `vnclog` hanging forever the instant a client pastes clipboard text through it: `ClientCutText` had no entry in the proxy's C2S message-length table, so its parser consumed zero bytes and spun on the same buffer without ever forwarding again (@sibson)
+- Fix `vnclog` silently dropping a QEMU extended key event (wrong length starved `struct.unpack` of its subtype byte) and stalling on the last event of a message split across two TCP reads (waited for one extra, unrelated byte) (@sibson)
 - Fix `updateCursor` decoding a hide-pointer update (width or height 0) as an empty image instead of hiding the cursor, which raised inside Pillow or pasted a bogus zero-size image onto the screen (@sibson, #449)
 - Fix `RFBFactory` raising `AttributeError` on ARD authentication when used directly, instead of through `VNCDoToolFactory` (@sibson)
 - Add `vncdo stable SECONDS [FUZZ]` and `rstable SECONDS X Y W H [FUZZ]`, waiting until the screen stops changing rather than until it matches a reference image (@sibson)
