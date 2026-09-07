@@ -122,6 +122,12 @@ class TestClientOptions(TestCase):
 
         assert type(options).__name__ == "ClientTLSOptions"
 
+    def test_verification_without_a_hostname_is_an_error_not_a_bare_context(self):
+        policy = VERIFYING._replace(hostname=None)
+
+        with self.assertRaises(ValueError):
+            vencrypt.client_options(VeNCryptSubtypes.X509_VNC, policy)
+
     def test_a_ca_file_holding_no_certificate_is_an_error(self):
         with tempfile.TemporaryDirectory() as tmp:
             empty = Path(tmp) / "ca.pem"

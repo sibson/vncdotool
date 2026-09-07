@@ -139,7 +139,11 @@ def client_options(subtype: int, policy: TLSPolicy) -> Any:
         return _anonymous_options()
     if policy.allow_unverified:
         return _unverified_options()
-    assert policy.hostname is not None, "unusable() admits no X509 subtype without one"
+    if policy.hostname is None:
+        raise ValueError(
+            f"no hostname to verify an X509 certificate against; "
+            f"{INSECURE_FLAG} is what accepts one unverified"
+        )
     return _verified_options(policy.hostname, policy.ca_certs)
 
 
