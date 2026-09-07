@@ -56,7 +56,7 @@ matrix. A reduced capability model survives on the server descriptors
 (`renders_desktop`, `known_size`, auth fields) to drive honest skips, for
 example, macOS Screen Sharing's black framebuffer.
 
-**Fleet identity**: the fleet is machine-global, fixed ports 5931-5935 and
+**Fleet identity**: the fleet is machine-global, fixed ports 5931-5943 and
 one compose project, while checkouts are many, and the Dockerfile bakes
 committed files (the scene PNGs, `scene_player.py`, the entrypoints) into
 its images. So a checkout that never ran `make servers-up` tests against

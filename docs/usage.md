@@ -135,6 +135,30 @@ region that excludes whatever is animating.
 The region has to lie on the screen; [commands](commands.md) says what each command
 does with its arguments and how it fails.
 
+## Server Addresses
+
+`-s`/`--server` takes a TCP address as `HOST`, `HOST:DISPLAY` or
+`HOST::PORT`, an IPv6 address in brackets, or the path of a Unix socket:
+
+```
+> vncdo -s 10.11.12.13::5901 capture screen.png
+> vncdo -s /run/user/1000/vnc.sock capture screen.png
+```
+
+It also takes a `ws://` or `wss://` URL, as QEMU, Selenoid, noVNC and Proxmox
+publish one. Quote it, and keep any path and query -- they name the session:
+
+```
+> vncdo -s 'ws://localhost:4444/vnc/c2ec57a?password=selenoid' capture screen.png
+```
+
+`wss://` always verifies the certificate. Point `SSL_CERT_FILE` at a private
+CA to trust one:
+
+```
+> SSL_CERT_FILE=/etc/ssl/my-ca.pem vncdo -s wss://vnc.example.com/websockify capture screen.png
+```
+
 ## Encodings
 
 By default vncdo asks the server for raw pixels: every server can send

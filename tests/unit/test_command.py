@@ -10,7 +10,7 @@ from unittest import mock, skipUnless
 from twisted.internet.error import ConnectionDone, ConnectionRefusedError, DNSLookupError
 from twisted.python.failure import Failure
 
-from vncdotool import command, pixelformat
+from vncdotool import command, pixelformat, websocket
 from vncdotool.client import AuthenticationError, ProtocolError, RegionError
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
@@ -341,6 +341,37 @@ class TestParseServer(unittest.TestCase):
         assert family == socket.AF_UNSPEC
         assert host == 'localhost'
         assert port == 5900
+
+    def test_websocket_url_keeps_path_and_query(self) -> None:
+        family, host, port = command.parse_server(
+            "ws://localhost:4444/vnc/c2ec57a?password=selenoid"
+        )
+        assert family == websocket.WEBSOCKET
+        assert host == "ws://localhost:4444/vnc/c2ec57a?password=selenoid"
+        assert port == 4444
+
+    def test_websocket_url_default_port(self) -> None:
+        family, host, port = command.parse_server("ws://example.com/websockify")
+        assert family == websocket.WEBSOCKET
+        assert host == "ws://example.com:80/websockify"
+        assert port == 80
+
+    def test_secure_websocket_url_default_port(self) -> None:
+        family, host, port = command.parse_server("wss://example.com")
+        assert family == websocket.WEBSOCKET
+        assert host == "wss://example.com:443/"
+        assert port == 443
+
+
+class TestFormatAddress(unittest.TestCase):
+
+    def test_host_and_port(self) -> None:
+        assert command.format_address("10.11.12.13", 5900) == "10.11.12.13:5900"
+
+    def test_websocket_url_query_is_hidden(self) -> None:
+        formatted = command.format_address("ws://h:4444/vnc/s?password=secret", 4444)
+        assert "secret" not in formatted
+        assert formatted == "ws://h:4444/vnc/s?<redacted>"
 
 
 class TestVNCDoCLIClient(unittest.TestCase):

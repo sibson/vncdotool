@@ -15,6 +15,7 @@ per-server test body, the screenshot gallery -- is shared rather than
 written twice.
 """
 
+import contextlib
 import json
 import os
 import select
@@ -23,9 +24,10 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -85,6 +87,7 @@ class VNCServer(NamedTuple):
     # The default suits a container on loopback; an OS-hosted server sharing
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
+    address: Optional[str] = None
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
@@ -103,6 +106,67 @@ X11VNC = VNCServer("x11vnc", 5933)
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
 DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+
+QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
+QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
+# QEMU presents a leaf signed by a CA rather than a self-signed certificate,
+# so the trust anchor cannot be read off the connection. Its service writes
+# the CA here at start-up.
+QEMU_TLS_CA = Path(__file__).resolve().parent.parent / "servers" / "qemu-tls" / "ca-cert.pem"
+
+# Selenoid keys the session off the URL path, so this address only resolves
+# while a WebDriver session with this id is open.
+SELENOID_SESSION_ID = "c2ec57a377e94f515b35b2a57caad26e"
+SELENOID = VNCServer(
+    "selenoid", 5946, size=(256, 192),
+    address=f"ws://127.0.0.1:5946/vnc/{SELENOID_SESSION_ID}?password=vncdotool",
+)
+
+KASMVNC = VNCServer(
+    "kasmvnc", 5947, size=(256, 192),
+    address="ws://127.0.0.1:5947/?password=vncdotool",
+)
+
+WEBSOCKIFY = VNCServer(
+    "websockify", 5942, size=(256, 192),
+    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
+)
+WEBSOCKIFY_TLS = VNCServer(
+    "websockify-tls", 5943, size=(256, 192),
+    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
+)
+
+WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC, WEBSOCKIFY, WEBSOCKIFY_TLS]
+
+
+@contextlib.contextmanager
+def selenoid_session() -> Iterator[None]:
+    """Hold a Selenoid WebDriver session open, which its /vnc/ route needs."""
+    endpoint = f"http://{HOST}:{SELENOID.port}/wd/hub/session"
+    body = json.dumps(
+        {
+            "capabilities": {
+                "alwaysMatch": {
+                    "browserName": "stub",
+                    "browserVersion": "1.0",
+                    "selenoid:options": {"enableVNC": True},
+                }
+            }
+        }
+    ).encode()
+    request = urllib.request.Request(
+        endpoint, data=body, headers={"Content-Type": "application/json"}
+    )
+    with urllib.request.urlopen(request, timeout=SELENOID.timeout) as response:
+        session_id = json.loads(response.read())["sessionId"]
+    try:
+        yield
+    finally:
+        urllib.request.urlopen(
+            urllib.request.Request(f"{endpoint}/{session_id}", method="DELETE"),
+            timeout=SELENOID.timeout,
+        ).close()
+
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.
@@ -352,7 +416,7 @@ assert_cli_installed()
 
 
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
-    argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
+    argv = [VNCDO, "-s", server.address or f"{HOST}::{server.port}"]
     if server.password is not None:
         argv += ["-p", server.password]
     if server.username is not None:
@@ -362,7 +426,10 @@ def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
 
 
 def run_vncdo(
-    server: VNCServer, *args: str, timeout: Optional[float] = None
+    server: VNCServer,
+    *args: str,
+    timeout: Optional[float] = None,
+    env: Optional[Mapping[str, str]] = None,
 ) -> subprocess.CompletedProcess:
     """Run the real `vncdo` CLI against `server` and return the completed process.
 
@@ -371,9 +438,13 @@ def run_vncdo(
     """
     argv = vncdo_argv(server, *args)
     budget = (server.timeout if timeout is None else timeout) + SUBPROCESS_TIMEOUT_HEADROOM
+    child_env = None if env is None else {**os.environ, **env}
     try:
         # stdin closed so an unexpected getpass() prompt fails instead of blocking.
-        return subprocess.run(argv, capture_output=True, text=True, timeout=budget, stdin=subprocess.DEVNULL)
+        return subprocess.run(
+            argv, capture_output=True, text=True, timeout=budget,
+            stdin=subprocess.DEVNULL, env=child_env,
+        )
     except subprocess.TimeoutExpired as exc:
         raise AssertionError(
             f"{server.name}: `{' '.join(argv)}` did not finish within {budget}s"

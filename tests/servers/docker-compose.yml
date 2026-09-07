@@ -49,6 +49,72 @@ services:
     ports:
       - "127.0.0.1:5934:5900"
 
+  websockify:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: websockify
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-websockify:${FLEET_TAG:-dev}
+    command: ["tigervnc:5900"]
+    ports:
+      - "127.0.0.1:5942:5900"
+
+  websockify-tls:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: websockify
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-websockify:${FLEET_TAG:-dev}
+    command: ["tigervnc:5900"]
+    environment:
+      WEBSOCKIFY_TLS: "1"
+    ports:
+      - "127.0.0.1:5943:5900"
+
+  qemu:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: qemu
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-qemu:${FLEET_TAG:-dev}
+    ports:
+      - "127.0.0.1:5944:5900"
+
+  qemu-tls:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: qemu
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-qemu:${FLEET_TAG:-dev}
+    environment:
+      QEMU_VNC_TLS: "1"
+    volumes:
+      - ./qemu-tls:/tls
+    ports:
+      - "127.0.0.1:5945:5900"
+
+  selenoid:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: selenoid
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-selenoid:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 256x192
+    ports:
+      - "127.0.0.1:5946:4444"
+
+  kasmvnc:
+    build:
+      context: ..
+      dockerfile: servers/Dockerfile
+      target: kasmvnc
+    image: ${FLEET_IMAGE_PREFIX:-vncdotool-test}-kasmvnc:${FLEET_TAG:-dev}
+    environment:
+      VNC_GEOMETRY: 256x192
+    ports:
+      - "127.0.0.1:5947:5900"
+
   libvncserver-example:
     build:
       context: ..

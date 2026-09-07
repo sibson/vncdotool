@@ -30,9 +30,12 @@ classifiers = [
     "Topic :: Software Development :: Testing",
 ]
 dependencies = [
-    "Twisted",
+    # Twisted[tls] is what optionsForClientTLS needs to verify a wss://
+    # certificate.
+    "Twisted[tls]",
     "Pillow",
     "cryptography>=43",
+    "autobahn",
 ]
 
 [project.optional-dependencies]
