@@ -107,10 +107,13 @@ requested `depth=32`, plus `libvncserver-example` at its real native
 depth-32 ServerInit: all four narrow to 3-byte CPIXELs regardless and decode
 clean. `vncev` is colour-mapped (no CPIXEL) and wasn't probed; OS-hosted
 servers (UltraVNC/Screen Sharing/QEMU) run in CI only and weren't probed
-here. CI now runs the same sweep on every push against the fleet
-(`.github/workflows/ci.yml`) and, per OS, against UltraVNC/Screen Sharing/
-QEMU-KVM (`.github/workflows/os-servers.yml`), recording each server's
-output as an artifact for future reference.
+here. CI ran the same sweep, once, against the fleet
+(`.github/workflows/ci.yml`, PR #488) and, per OS, against UltraVNC/Screen
+Sharing/QEMU-KVM (`.github/workflows/os-servers.yml`): all seven decode
+clean at a requested `depth=32` (Screen Sharing's screenshot is flat black,
+matching `VNCServer(..., renders_desktop=False)`'s documented reason -- the
+decode itself still succeeded). That CI wiring was pulled back out after
+gathering this once; `probe_pixel_format.py` stays for ad hoc runs.
 
 ## Detecting a genuinely 4-byte server
 

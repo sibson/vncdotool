@@ -101,31 +101,6 @@ jobs:
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 
-      # Data-gathering, not a gate: recorded, never allowed to fail the job.
-      # shell: bash overrides matrix.shell (pwsh on Windows) -- GitHub's
-      # Windows runners carry Git Bash for exactly this, and pwsh doesn't
-      # take a backslash line continuation the way this command needs.
-      - name: Probe pixel-format at a requested depth=32
-        if: always()
-        continue-on-error: true
-        shell: bash
-        run: |
-          uv run python -m tests.goldens.probe_pixel_format \
-            --server "${{ matrix.server }}" --depth 32 --encoding zrle \
-            --out "${{ matrix.server }}-depth32.png" \
-            | tee "${{ matrix.server }}-pixel-format-probe.md"
-
-      - name: Upload pixel-format probe result
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.server }}-pixel-format-probe
-          path: |
-            ${{ matrix.server }}-depth32.png
-            ${{ matrix.server }}-pixel-format-probe.md
-          if-no-files-found: ignore
-          retention-days: 90
-
       # Everything below is diagnostics and artifact collection, so it runs
       # with if: failure() -- a failing test is exactly when the screenshot
       # and the server's own logs are worth having, and a green run has
