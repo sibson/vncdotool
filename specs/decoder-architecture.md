@@ -386,9 +386,9 @@ working unchanged.
 **This machinery is temporary.** Once the contracts have actually changed the
 warnings are reworded to past tense, since the audience for the survey is the
 people upgrading across the change and they arrive at that moment; they are
-removed after 2.0 ships. If the survey turns up nobody, they are removed having
-cost one release. If it turns up someone, there is a named user to design
-compatibility with rather than a hypothetical one.
+removed after 2.0 ships, having cost one release if the survey turns up
+nobody. If it turns up someone, there is a named user to design compatibility
+with rather than a hypothetical one.
 
 ## Build order
 
