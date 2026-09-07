@@ -1,6 +1,8 @@
+import unittest
 import warnings
 from contextlib import contextmanager
 from struct import pack
+from typing import NamedTuple
 from unittest import TestCase, mock
 
 from cryptography.hazmat.primitives import hashes
@@ -47,6 +49,59 @@ def drive(handler, client, *blocks):
         except StopIteration as stop:
             return stop.value
     raise AssertionError("handler did not finish after the given blocks")
+
+
+ARD_GENERATOR = 2
+ARD_KEY_LEN = 256
+
+
+def ard_client(username, password):
+    client = mock.Mock()
+    client._version = (3, 8)
+    client.factory.username = username
+    client.factory.password = password
+    return client
+
+
+class ArdExchange(NamedTuple):
+    outcome: bool
+    sent: bytes
+    plaintext: bytes
+
+
+def ard_exchange(client):
+    """Run the server half of the ARD exchange and decrypt what the client sent.
+
+    The plaintext is recovered through the server's own shared secret, so it
+    says what reached the server rather than what the client meant to build.
+    """
+    handler = security.HANDLERS[AuthTypes.DIFFIE_HELLMAN]()
+    with ffdh():
+        params = dh.DHParameterNumbers(p=MODP_2048, g=ARD_GENERATOR)
+        server_private = params.parameters().generate_private_key()
+    server_public = server_private.public_key().public_numbers().y
+
+    outcome = drive(
+        handler,
+        client,
+        pack("!HH", ARD_GENERATOR, ARD_KEY_LEN),
+        MODP_2048.to_bytes(ARD_KEY_LEN, "big"),
+        server_public.to_bytes(ARD_KEY_LEN, "big"),
+        SECURITY_OK,
+    )
+
+    (sent,) = client.transport.write.call_args.args
+    ciphertext, client_public = sent[:128], sent[128:]
+    with ffdh():
+        shared = server_private.exchange(
+            dh.DHPublicNumbers(
+                int.from_bytes(client_public, "big"), params
+            ).public_key()
+        )
+    digest = hashes.Hash(hashes.MD5())
+    digest.update(shared)
+    decryptor = Cipher(algorithms.AES(digest.finalize()), modes.ECB()).decryptor()
+    return ArdExchange(outcome, sent, decryptor.update(ciphertext) + decryptor.finalize())
 
 
 class TestHandlerRegistry(TestCase):
@@ -159,46 +214,22 @@ class TestDiffieHellmanHandler(TestCase):
 
     def setUp(self):
         self.handler = security.HANDLERS[AuthTypes.DIFFIE_HELLMAN]()
-        self.client = mock.Mock()
-        self.client._version = (3, 8)
-        self.client.factory.username = "alice"
-        self.client.factory.password = "secret"
+        self.client = ard_client("alice", "secret")
 
     def test_credentials_decrypt_with_the_shared_secret(self):
-        generator, key_len = 2, 256
-        with ffdh():
-            params = dh.DHParameterNumbers(p=MODP_2048, g=generator)
-            server_private = params.parameters().generate_private_key()
-        server_public = server_private.public_key().public_numbers().y
-
-        outcome = drive(
-            self.handler,
-            self.client,
-            pack("!HH", generator, key_len),
-            MODP_2048.to_bytes(key_len, "big"),
-            server_public.to_bytes(key_len, "big"),
-            SECURITY_OK,
-        )
-        assert outcome is True
+        exchange = ard_exchange(self.client)
+        assert exchange.outcome is True
         self.client.ardRequestCredentials.assert_called_once_with()
 
-        (sent,) = self.client.transport.write.call_args.args
-        assert len(sent) == 128 + key_len
-        ciphertext, client_public = sent[:128], sent[128:]
+        assert len(exchange.sent) == 128 + ARD_KEY_LEN
+        assert exchange.plaintext[:64].startswith(b"alice\0")
+        assert exchange.plaintext[64:].startswith(b"secret\0")
 
-        with ffdh():
-            shared = server_private.exchange(
-                dh.DHPublicNumbers(
-                    int.from_bytes(client_public, "big"), params
-                ).public_key()
-            )
-        digest = hashes.Hash(hashes.MD5())
-        digest.update(shared)
-        decryptor = Cipher(algorithms.AES(digest.finalize()), modes.ECB()).decryptor()
-        plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-        assert plaintext[:64] == b"alice".ljust(64, b"\0")
-        assert plaintext[64:] == b"secret".ljust(64, b"\0")
+    def test_padding_after_the_terminator_differs_between_exchanges(self):
+        first = ard_exchange(ard_client("alice", "secret")).plaintext
+        second = ard_exchange(ard_client("alice", "secret")).plaintext
+        assert first[6:64] != second[6:64]
+        assert first[70:128] != second[70:128]
 
     def test_credentials_are_requested_before_anything_is_sent(self):
         self.client.ardRequestCredentials.side_effect = AssertionError("asked late")
@@ -209,3 +240,73 @@ class TestDiffieHellmanHandler(TestCase):
         with self.assertRaises(AssertionError):
             generator.send(b"\x00" * 4)
         self.client.transport.write.assert_not_called()
+
+
+# The 63-byte field holds fewer characters than it looks for non-ASCII.
+CREDENTIALS_THAT_FIT = (
+    ("ascii", "alice", "secret"),
+    ("non_ascii", "üser", "pässwörd"),
+    ("outside_the_bmp", "al🙂ce", "s🔑cret"),
+    ("longest_ascii_that_fits", "a" * 63, "b" * 63),
+    ("non_ascii_at_the_byte_limit", "é" * 31 + "z", "ü" * 31 + "z"),
+)
+
+CREDENTIALS_THAT_DO_NOT_FIT = (
+    ("username_fills_the_field_leaving_no_terminator", "a" * 64, "secret", "username"),
+    ("password_far_over_the_field", "alice", "b" * 200, "password"),
+    ("non_ascii_under_64_characters_but_over_64_bytes", "é" * 40, "secret", "username"),
+)
+
+
+class ArdCredentialsFit:
+    """The server decrypts both fields whole out of a 128-byte plaintext."""
+
+    username: str
+    password: str
+
+    def test_server_reads_both_fields_back(self) -> None:
+        exchange = ard_exchange(ard_client(self.username, self.password))
+        self.assertIs(exchange.outcome, True)  # type: ignore[attr-defined]
+        self.assertEqual(len(exchange.plaintext), 128)  # type: ignore[attr-defined]
+        for name, value, field in (
+            ("username", self.username, exchange.plaintext[:64]),
+            ("password", self.password, exchange.plaintext[64:]),
+        ):
+            encoded = value.encode("utf-8")
+            self.assertEqual(field[: len(encoded)], encoded, name)  # type: ignore[attr-defined]
+            self.assertEqual(field[len(encoded)], 0, f"{name} lost its terminator")  # type: ignore[attr-defined]
+
+
+class ArdCredentialsDoNotFit:
+    """A credential too long for its field ends the attempt, saying which."""
+
+    username: str
+    password: str
+    field: str
+
+    def test_nothing_reaches_the_wire(self) -> None:
+        client = ard_client(self.username, self.password)
+        with self.assertRaises(security.SecurityError) as raised:  # type: ignore[attr-defined]
+            ard_exchange(client)
+        self.assertIn(self.field, str(raised.exception))  # type: ignore[attr-defined]
+        client.transport.write.assert_not_called()
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
+    suite = unittest.TestSuite()
+    suite.addTests(tests)
+    for name, username, password in CREDENTIALS_THAT_FIT:
+        case = type(
+            f"TestArdCredentialsFit_{name}",
+            (ArdCredentialsFit, unittest.TestCase),
+            {"username": username, "password": password},
+        )
+        suite.addTest(case("test_server_reads_both_fields_back"))
+    for name, username, password, field in CREDENTIALS_THAT_DO_NOT_FIT:
+        case = type(
+            f"TestArdCredentialsDoNotFit_{name}",
+            (ArdCredentialsDoNotFit, unittest.TestCase),
+            {"username": username, "password": password, "field": field},
+        )
+        suite.addTest(case("test_nothing_reaches_the_wire"))
+    return suite
