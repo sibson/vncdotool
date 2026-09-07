@@ -14,19 +14,18 @@ https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
 
 from __future__ import annotations
 
+import functools
 import getpass
 import sys
 import warnings
 import zlib
-from struct import error as StructError, pack, unpack, unpack_from
+from struct import error as StructError, pack, unpack
 from typing import (
     Any,
     Callable,
     Collection,
     Generator,
-    List,
     Tuple,
-    cast,
 )
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -40,7 +39,7 @@ from twisted.internet.protocol import Protocol
 from twisted.python import log, usage
 from twisted.python.failure import Failure
 
-from . import decoders
+from . import decoders, messages
 from .const import Encoding, AuthTypes, FenceFlags, MsgC2S, MsgS2C
 from .keys import Key
 from .pixelformat import PixelFormat
@@ -77,6 +76,11 @@ class RFBClient(Protocol):
     # Greater than any u16 dimension, so it refuses nothing until a subclass
     # narrows it.
     MAX_DESKTOP_SIZE = 0x10000
+
+    # Bounds a server-declared message payload length (ServerCutText,
+    # SetColourMapEntries) before it sizes a read; policy, not protocol, and
+    # narrowable by a subclass.
+    MAX_MESSAGE_PAYLOAD = 1 << 20
 
     _HEADER = b"RFB 000.000\n"
     _HEADER_TRANSLATE = bytes.maketrans(b"0123456789", b"0" * 10)
@@ -115,6 +119,7 @@ class RFBClient(Protocol):
         self.height = 0
         self._rect_backing = bytearray()
         self._decoders = decoders.for_connection()
+        self._messages = messages.for_connection()
 
     @property
     def bypp(self) -> int:
@@ -312,17 +317,21 @@ class RFBClient(Protocol):
         (msgid,) = unpack("!B", block)
         if msgid == MsgS2C.FRAMEBUFFER_UPDATE:
             self.expect(self._handleFramebufferUpdate, 3)
-        elif msgid == MsgS2C.SET_COLOUR_MAP_ENTRIES:
-            self.expect(self._handleColourMapEntries, 5)
-        elif msgid == MsgS2C.BELL:
-            self.bell()
-            self.expect(self._handleConnection, 1)
-        elif msgid == MsgS2C.SERVER_CUT_TEXT:
-            self.expect(self._handleServerCutText, 7)
-        elif msgid == MsgS2C.SERVER_FENCE:
-            self.expect(self._handleServerFence, 8)
-        else:
+            return
+        handler_cls = messages.HANDLERS.get(msgid)
+        if handler_cls is None:
             self.abortConnection(f"unknown message received {MsgS2C.lookup(msgid)!r}")
+            return
+        handler = self._messages[msgid]
+        self._pump(
+            None,
+            handler.handle(self),
+            self._finishMessage,
+            f"the {MsgS2C.lookup(msgid)!r} message",
+        )
+
+    def _finishMessage(self, _outcome: None) -> None:
+        self.expect(self._handleConnection, 1)
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
@@ -358,7 +367,12 @@ class RFBClient(Protocol):
         self, decoder: decoders.Decoder, x: int, y: int, width: int, height: int
     ) -> None:
         rect = (x, y, width, height)
-        self._pumpGenerator(None, decoder.decode(self, rect, self.pixel_format), rect)
+        self._pump(
+            None,
+            decoder.decode(self, rect, self.pixel_format),
+            functools.partial(self._finishRectangle, rect),
+            "this rectangle",
+        )
 
     def _finishRectangle(
         self, rect: tuple[int, int, int, int], outcome: decoders.Outcome
@@ -402,70 +416,36 @@ class RFBClient(Protocol):
             raise decoders.DecodeError(f"no memory for a {width}x{height} rectangle")
         return decoders.RectBuffer(width, height, self.bypp, self._rect_backing)
 
-    def _pumpGenerator(
+    def requirePayload(self, length: int) -> None:
+        """Raise unless a server-declared message payload fits the bound."""
+        if length > self.MAX_MESSAGE_PAYLOAD:
+            raise decoders.DecodeError(
+                f"payload of {length} bytes exceeds the {self.MAX_MESSAGE_PAYLOAD} "
+                "byte limit"
+            )
+
+    def _pump(
         self,
         block: bytes | None,
-        generator: Generator[int, Any, decoders.Outcome],
-        rect: tuple[int, int, int, int],
+        generator: Generator[int, Any, Any],
+        on_done: Callable[[Any], None],
+        describe: str,
     ) -> None:
         try:
             size = generator.send(block)
         except StopIteration as stop:
-            self._finishRectangle(rect, stop.value)
+            on_done(stop.value)
             return
         except (decoders.DecodeError, StructError, MemoryError, zlib.error) as exc:
             generator.close()
-            self.abortConnection(f"cannot decode this rectangle: {exc}")
+            self.abortConnection(f"cannot decode {describe}: {exc}")
             return
 
         if size < 0:
             generator.close()
             self.abortConnection(f"decoder asked for {size} bytes")
             return
-        self.expect(self._pumpGenerator, size, generator, rect)
-
-    # ---  other server messages
-
-    def _handleColourMapEntries(self, block: bytes) -> None:
-        (first_color, number_of_colors) = unpack("!xHH", block)
-        self.expect(
-            self._handleColourMapEntriesValue, 6 * number_of_colors, first_color
-        )
-
-    def _handleColourMapEntriesValue(self, block: bytes, first_color: int) -> None:
-        colors = [
-            unpack_from("!HHH", block, offset) for offset in range(0, len(block), 6)
-        ]
-        self.set_color_map(first_color, cast(List[Tuple[int, int, int]], colors))
-        self.expect(self._handleConnection, 1)
-
-    def _handleServerCutText(self, block: bytes) -> None:
-        (length,) = unpack("!xxxI", block)
-        self.expect(self._handleServerCutTextValue, length)
-
-    def _handleServerCutTextValue(self, block: bytes) -> None:
-        self.copy_text(block.decode("iso-8859-1"))
-        self.expect(self._handleConnection, 1)
-
-    def _handleServerFence(self, block: bytes) -> None:
-        # rfbproto ServerFence: 3 bytes padding, U32 flags, U8 payload-length.
-        flags, length = unpack("!xxxIB", block)
-        if length:
-            self.expect(self._handleServerFencePayload, length, flags)
-        else:
-            self._doServerFence(flags, b"")
-
-    def _handleServerFencePayload(self, block: bytes, flags: int) -> None:
-        self._doServerFence(flags, block)
-
-    def _doServerFence(self, flags: int, payload: bytes) -> None:
-        if flags & FenceFlags.REQUEST:
-            # rfbproto ServerFence: masking to the flags handled here, rather
-            # than just clearing Request, is what lets the server tell which
-            # flags this client supports as new ones are defined.
-            known = FenceFlags.BLOCK_BEFORE | FenceFlags.BLOCK_AFTER | FenceFlags.SYNC_NEXT
-            self.clientFence(FenceFlags(flags) & known, payload)
-        self.expect(self._handleConnection, 1)
+        self.expect(self._pump, size, generator, on_done, describe)
 
     # ------------------------------------------------------
     # incomming data redirector
