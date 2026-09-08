@@ -87,11 +87,14 @@ FROM base AS libvncserver-build
 
 ARG LIBVNCSERVER_VERSION=0.9.14
 
+# Without libjpeg-dev, libvncserver compiles Tight out and the example server
+# answers a Tight request with Raw, which no distro build of it does.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         cmake \
         libssl-dev \
         zlib1g-dev \
+        libjpeg-dev \
         ca-certificates \
         curl \
     && rm -rf /var/lib/apt/lists/*

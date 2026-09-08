@@ -459,8 +459,8 @@ registers it goes in `decoders/__init__.py`, and `Encoding.TIGHT` already exists
 in `const.py`, so `rfb.py` and `const.py` are both untouched. That is the test of
 R1: today the same change edits `RFBClient.SUPPORTED_ENCODINGS`, and if it still
 does, the architecture did not deliver what it exists for.
-`libvncserver-example` falls back to Raw when asked for Tight, so its oracle
-comes from `tigervnc` and `x11vnc`.
+Every fleet server that implements Tight emits it, so the oracle can come from
+any of `tigervnc`, `x11vnc` or `libvncserver-example`.
 
 TRLE is **not** in this plan. No server in the fleet emits it (see Fleet
 encoding support), so under the captured-fixture rule it cannot be tested at
@@ -486,7 +486,7 @@ exactly one encoding and reading back the encoding it actually used:
 | CoRRE | no [1] | yes [1] | yes | ? | ? |
 | Hextile | yes | yes | yes | ? | ? |
 | ZRLE | yes | yes | yes | ? | ? |
-| Tight | yes | no | — see below | ? | ? |
+| Tight | yes | yes [2] | yes [2] | ? | ? |
 | TRLE | no | no | no | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
@@ -503,6 +503,12 @@ and nothing else. Every other cell predates this pass and remains uncited. The
 probe itself was committed and then removed within #417, so `git show` against
 that PR's history recovers the script without it living in the tree ahead of
 the Phase 3 tooling below.
+
+[2] Measured 2026-09-08 by offering one encoding at a time and reading back
+the encoding of each rectangle from `vncdo -v -v`. x11vnc emitted Tight where
+this table previously recorded Raw. libvncserver-example answered with Raw
+until the fleet's libvncserver build gained `libjpeg-dev`, without which Tight
+is compiled out -- a property of that build, not of LibVNCServer.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):

@@ -44,7 +44,7 @@ Ordered by preference, and every entry earns its place by covering servers the
 one before it does not:
 
 - **Tight** — best bandwidth and the cheapest compressed decode. Confirmed
-  emitted by tigervnc; the fleet's libvncserver-example answers with Raw.
+  emitted by tigervnc, x11vnc and libvncserver-example.
 - **Hextile** — older and in wider reach than Tight, and the last stop before
   giving up on compression.
 - **Raw** — mandatory, and explicit here so the list reads as the full

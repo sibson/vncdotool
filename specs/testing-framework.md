@@ -221,12 +221,19 @@ libvncserver from a pinned release.
 
 ## Why LibVNCServer's example server is in the fleet
 
-It looks like a demo, and testing a demo would be hard to justify. But
-LibVNCServer is what gets embedded when a VNC server is bolted onto something
-that is not a desktop, so the `example` stage stands in for a class of server
-nobody would otherwise cover: Proxmox VE's `vncterm` statically links it, and
-so do VirtualBox's VBoxVNC, OpenBMC's `obmc-ikvm`, KDE's krfb, x11vnc and
-droidVNC-NG.
+It looks like a demo, and x11vnc is LibVNCServer too, so the library's wire
+behaviour is covered without it. Two things are not:
+
+- It declares `depth=32` in `ServerInit` and narrows CPIXELs to three bytes
+  anyway, which is the server behaviour behind the ZRLE misdecode of #483.
+  Nothing else in the fleet sends anything but depth 24, so removing it leaves
+  that fix with frozen bytes and no live server that reproduces it.
+- It grows and shrinks its framebuffer on demand, so it is the only live
+  coverage of `PSEUDO_DESKTOP_SIZE` (`test_desktop_resize.py`).
+
+The fleet's own build of it needs `libjpeg-dev`, without which LibVNCServer
+compiles Tight out and the server answers a Tight request with Raw -- weaker
+than any distro build, and not a property of LibVNCServer itself.
 
 ## Compatibility matrix visibility
 
