@@ -167,6 +167,11 @@ jobs:
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml ps
 
+      # Seconds, against one server. A fleet that came up stale or
+      # unreachable fails here rather than minutes into the step below.
+      - name: Smoke test the fleet
+        run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_docker.py'
+
       - name: Run functional tests
         run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 

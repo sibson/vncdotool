@@ -60,42 +60,56 @@ More documentation can be found on [Read the Docs](http://vncdotool.readthedocs.
 vncdotool speaks standard RFB and works with far more servers than we test.
 This table says what we have evidence for, not what works.
 
-| Server | Level | Notes |
+| Server | Level | What CI exercises |
 |---|---|---|
-| [TigerVNC](https://tigervnc.org) | Verified | VNC password and VeNCrypt, X509 and anonymous TLS |
-| [x11vnc](https://github.com/LibVNC/x11vnc) | Verified | The only server we see emit CoRRE |
-| [wayvnc](https://github.com/any1/wayvnc) | Verified | wlroots; Raw, ZRLE and Tight, VeNCrypt X509 |
-| [LibVNCServer](https://libvnc.github.io) | Smoke | Its `example` server |
-| [KasmVNC](https://kasmweb.com/kasmvnc) | Smoke | `ws://` only |
-| [QEMU](https://qemu.org) built-in | Smoke | `ws://` and `wss://` |
-| [websockify](https://github.com/novnc/websockify) / noVNC | Smoke | `ws://` and `wss://` |
-| [Selenoid](https://aerokube.com/selenoid/) | Smoke | `ws://`, session in the URL path |
-| UltraVNC | Smoke | Windows, CI only |
-| Apple Screen Sharing | Smoke | macOS, ARD authentication, CI only |
-| Everything else | Unknown | RealVNC, TightVNC, TurboVNC, Vino, … |
+| [TigerVNC](https://tigervnc.org) | Verified | Everything: VNC password, VeNCrypt X509 and anonymous TLS, 5 encodings, 4 pixel formats |
+| [x11vnc](https://github.com/LibVNC/x11vnc) | Verified | 6 encodings, the only one we see emit CoRRE; 4 pixel formats |
+| [wayvnc](https://github.com/any1/wayvnc) | Verified | wlroots; Raw, ZRLE and Tight — all neatvnc has; VeNCrypt X509 |
+| [LibVNCServer](https://libvnc.github.io) | Verified | Its `example` server: connect, input, capture. No X server, so no scenes |
+| [KasmVNC](https://kasmweb.com/kasmvnc) | Verified | Native `ws://`; connect, input, capture |
+| [QEMU](https://qemu.org) built-in | Verified | `ws://` and `wss://`; connect, input, capture. Firmware screen, so no scenes |
+| [Selenoid](https://aerokube.com/selenoid/) | Verified | `ws://` with the session in the URL path |
+| UltraVNC | Verified | Windows, CI runners only |
+| Apple Screen Sharing | Verified | macOS, ARD authentication, CI runners only |
+| Everything else | Unknown | RealVNC, TightVNC, TurboVNC, PiKVM, … |
 
-**Verified** — every pull request runs the full compatibility grid against it:
-connect, authenticate, keypress, pointer, and a pixel-exact screen capture at
-every encoding and pixel format that server implements.
+**Verified** — every pull request connects, authenticates, sends a key and a
+pointer event and captures a screen, plus every encoding and pixel format that
+server implements. The third column says what that came to, because it is not
+the same everywhere: a server that implements three encodings is verified for
+three.
 
-**Smoke** — every pull request connects, authenticates, sends a key and a
-pointer event, and captures a screen. Encodings and pixel formats are not
-exercised.
+**Known-broken** — we tried it and it does not work. Nothing is at this level
+today.
+
+**Community** — reported working by a user, with the vncdotool and server
+versions and the date it was tried. Not run by CI, so it ages.
 
 **Unknown** — we have never tested it. It should work; we make no claim.
 A report of success or failure is welcome, and is how a server reaches the
 table.
 
-**Community** — reported working by a user, with the vncdotool and server
-versions and the date it was tried. Not run by CI, so it ages.
+`vncdo` also reaches servers through [websockify](https://github.com/novnc/websockify),
+which is what noVNC deployments put in front of a VNC server —
+`selenium/standalone-chrome`, the most-pulled VNC-bearing image on Docker Hub,
+is x11vnc behind exactly that. KasmVNC, QEMU and Selenoid need no proxy; they
+speak RFB over WebSocket themselves.
+
+Testing LibVNCServer's `example` server covers more than the demo: LibVNCServer
+is what gets embedded when a VNC server is bolted onto something that is not a
+desktop. Proxmox VE's `vncterm` statically links it, and so do VirtualBox's
+VBoxVNC, OpenBMC's `obmc-ikvm`, KDE's krfb, x11vnc and droidVNC-NG.
 
 ### What the tests prove
 
 The suites answer different questions, and none of them subsumes another.
 
-- **The compatibility grid** runs the real `vncdo` against live servers in
-  Docker, so it proves negotiation works against the server version installed
-  *today*. It needs Docker and runs on Linux only.
+- **The smoke test** runs one server and answers one question: can we talk to a
+  VNC server at all. It is the fast path, so a fleet that came up stale or
+  unreachable fails in seconds rather than minutes.
+- **The compatibility grids** run the real `vncdo` against live servers in
+  Docker, so they prove negotiation works against the server version installed
+  *today*. They need Docker and run on Linux only.
 - **The scene tests** show a server a committed PNG and demand the capture come
   back pixel-identical. The image is an independent oracle: it is the file the
   server was shown, not something our decoder produced. Paired with a check

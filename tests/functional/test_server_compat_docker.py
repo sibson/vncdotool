@@ -1,13 +1,18 @@
-"""Functional tests against the Docker Compose VNC test servers.
+"""The fast path: can we talk to a VNC server at all.
 
-See tests/servers/docker-compose.yml and tests/servers/servers.mk. The test
-servers are expected to already be running (e.g. via ``make servers-up``)
-before this module executes; a server whose port isn't open fails with a
-clear message rather than passing silently as skipped.
+Not a per-server grid. Running the same round trip against every fleet
+member proves the harness works seven times over and nothing else, because
+whatever distinguishes a server is tested where that distinction lives:
+the security types in test_vencrypt.py, the transports in
+test_websocket.py, the encodings and pixel formats in test_encodings.py and
+test_pixel_format.py, and the in-process API against
+libvncserver-example in test_api_lifecycle.py.
 
-The servers themselves, and the round trip run against each of them, are
-described in utils.py and shared with the OS-hosted servers tested by
-test_server_compat_native.py.
+So this module runs one server, first, and cheaply. A fleet that is down,
+stale or unreachable fails here in seconds rather than part-way through the
+suites that take minutes. The per-server grid that remains is
+test_server_compat_native.py, where an OS-hosted server has no other
+coverage at all.
 
 Screenshots captured here are kept rather than thrown away: each one is
 written to the screenshots directory (``tests/servers/screenshots`` by
@@ -15,8 +20,8 @@ default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) so that a failing or
 suspicious capture can be looked at directly after the run.
 """
 
-from .utils import DOCKER_SERVERS, register_server_tests
+from .utils import TIGERVNC, register_server_tests
 
 # Every scenario shells out to the vncdo CLI (see utils.run_vncdo), so
 # no reactor ever starts in this process and no api.shutdown() is needed.
-register_server_tests(DOCKER_SERVERS, globals())
+register_server_tests([TIGERVNC], globals())
