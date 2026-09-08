@@ -375,6 +375,12 @@ Recorded so they are not rediscovered as new ideas.
   resize).
 - **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
   one. That is found out by reading a capture, not by asserting it in advance.
+- **One large, complex scene**, on a service serving more than 256x192. Every
+  scene here is small and synthetic, so none of them says whether a photograph
+  at a desktop size decodes correctly, and encoders choose differently at that
+  size. The cost is the reason it is deferred rather than done: fixture size
+  scales with area, so the 3.1 MB of committed goldens becomes about 12 MB at
+  512x384 and 50 MB at 1024x768, against a 22 MB repository.
 
 ## Risks
 

@@ -28,12 +28,12 @@ from vncdotool import api, decoders
 from vncdotool.client import VNCDoToolFactory
 from vncdotool.pixelformat import PIXEL_FORMATS
 
-from tests.functional.utils import DOCKER_SERVERS, HOST, os_servers
+from tests.functional.utils import HOST, TCP_SERVERS, os_servers
 
 # os_servers() is only the current platform's -- an OS-hosted server can't
 # be dialled into from anywhere else, so cross-platform names don't belong
 # in this process's list at all.
-SERVERS_BY_NAME = {server.name: server for server in DOCKER_SERVERS + os_servers()}
+SERVERS_BY_NAME = {server.name: server for server in TCP_SERVERS + os_servers()}
 CONNECT_SETTLE = 0.5
 
 

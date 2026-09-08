@@ -108,7 +108,7 @@ WAYVNC_CA_CERT = (
 
 # One constant per service in tests/servers/docker-compose.yml, named so a
 # test that needs a specific one can import it directly instead of
-# searching DOCKER_SERVERS by name.
+# searching TCP_SERVERS by name.
 TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
 # x11vnc paints the X cursor into the framebuffer unless a client asks for
@@ -133,9 +133,7 @@ LIBVNCSERVER_EXAMPLE = VNCServer(
     normalize_size_keys=("up", "up", "down"),
 )
 
-# Every service in docker-compose.yml that speaks RFB over a TCP socket
-# rather than a WebSocket, and draws a screen.
-DOCKER_SERVERS = [
+TCP_SERVERS = [
     TIGERVNC,
     TIGERVNC_AUTH,
     TIGERVNC_VENCRYPT,
@@ -145,13 +143,10 @@ DOCKER_SERVERS = [
     LIBVNCSERVER_EXAMPLE,
 ]
 
-# One server per distinct framebuffer path that displays the committed scene
-# PNGs: Xvnc's damage tracking, x11vnc polling an Xvfb, and wlroots
-# compositing an Xwayland surface for neatvnc.
+# The servers running tests/goldens/scene_player.py, so a test can ask them
+# to display a committed PNG.
 SCENE_SERVERS = [TIGERVNC, X11VNC, WAYVNC]
 
-# vnclog reaches its upstream through command.add_standard_options, which
-# carries neither of these.
 TLS_OPTIONS = ("--tls-ca-cert", "--tls-insecure-skip-verify")
 
 
@@ -282,7 +277,7 @@ def os_servers(platform: str = sys.platform) -> List[VNCServer]:
 
 
 def select_servers(group: str) -> List[VNCServer]:
-    groups = {"docker": DOCKER_SERVERS, "os": os_servers()}
+    groups = {"docker": TCP_SERVERS, "os": os_servers()}
     if group == "all":
         return [server for servers in groups.values() for server in servers]
     if group not in groups:
@@ -375,12 +370,8 @@ SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 def awaiting(key: str) -> Tuple[str, ...]:
     """`vncdo` arguments that block until the scene `key` selects is on screen.
 
-    x11vnc polls the X display rather than tracking damage, so how long a
-    repaint takes to reach a client is not a constant a delay can name.
-
-    No fuzz argument, so `expect` derives one from the negotiated pixel
-    format. An explicit 0 overrides that, and at a reduced depth the
-    comparison then never comes true however long it polls.
+    No fuzz argument: `expect` then derives one from the negotiated pixel
+    format, and an explicit 0 would never come true at a reduced depth.
     """
     return ("expect", str(SCENES_DIR / f"{key}.png"))
 
@@ -424,9 +415,7 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
 
 def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
-    """Capture by shelling out: api.connect() takes no TLS options, so a
-    VeNCrypt-only server cannot be reached in-process at all.
-    """
+    """Capture through the CLI, which is what carries a server's extra_args."""
     result = run_vncdo(server, "capture", str(path), timeout=timeout)
     if result.returncode != 0:
         raise AssertionError(
