@@ -92,10 +92,7 @@ class VNCServer(NamedTuple):
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
     skip_when_down: bool = False
-    # Keys that drive a server whose framebuffer size any client can change
-    # back to `size`, pressed before the readiness capture and after a test
-    # that resizes it.
-    normalize_keys: Tuple[str, ...] = ()
+    normalize_size_keys: Tuple[str, ...] = ()
 
 
 # One constant per service in tests/servers/docker-compose.yml, named so a
@@ -126,14 +123,11 @@ WAYVNC = VNCServer(
 WAYVNC_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "wayvnc-certs" / "cert.pem"
 )
-# 800x600 is the size the demo starts at; it takes no -geometry option. Any
-# client can change it though: XK_Up and XK_Down step the whole server's
-# framebuffer through 640x480, 800x600 and 1024x768, clamped at both ends,
-# and it stays there for every later client. Two Ups then a Down therefore
-# land on 800x600 whatever the last client left behind.
+# 800x600 is the size the demo starts at; it takes no -geometry option, and
+# any client's arrow keys resize it for every later client.
 LIBVNCSERVER_EXAMPLE = VNCServer(
     "libvncserver-example", 5935, size=(800, 600),
-    normalize_keys=("up", "up", "down"),
+    normalize_size_keys=("up", "up", "down"),
 )
 
 DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
@@ -393,14 +387,11 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
-def normalize_framebuffer(server: VNCServer) -> None:
-    """Put a server whose size a client can change back to ``server.size``.
-
-    A no-op for every server that serves one fixed size.
-    """
-    if not server.normalize_keys:
+def normalize_size(server: VNCServer) -> None:
+    """Put a server whose size a client can change back to ``server.size``."""
+    if not server.normalize_size_keys:
         return
-    argv = [arg for key in server.normalize_keys for arg in ("key", key)]
+    argv = [arg for key in server.normalize_size_keys for arg in ("key", key)]
     result = run_vncdo(server, *argv)
     if result.returncode != 0:
         raise RuntimeError(
@@ -429,7 +420,7 @@ def wait_until_ready(
             time.sleep(RETRY_DELAY)
             continue
         try:
-            normalize_framebuffer(server)
+            normalize_size(server)
             with tempfile.TemporaryDirectory() as tmp:
                 probe = Path(tmp) / f"{server.name}-ready.png"
                 capture_screenshot(server, probe, timeout=attempt_timeout)

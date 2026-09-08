@@ -7,7 +7,7 @@ from .utils import (
     LIBVNCSERVER_EXAMPLE,
     distinct_colours,
     has_expected_content,
-    normalize_framebuffer,
+    normalize_size,
     port_open,
     run_vncdo,
     screenshot_dir,
@@ -25,9 +25,7 @@ class TestDesktopResize(TestCase):
                 f"{LIBVNCSERVER_EXAMPLE.name} not reachable on {HOST}:{LIBVNCSERVER_EXAMPLE.port} -- "
                 f"{LIBVNCSERVER_EXAMPLE.how_to_start}"
             )
-        # The size this test leaves behind is the size every later client of
-        # the fleet gets, including another checkout's run.
-        self.addCleanup(normalize_framebuffer, LIBVNCSERVER_EXAMPLE)
+        self.addCleanup(normalize_size, LIBVNCSERVER_EXAMPLE)
 
     def test_mid_session_resize_is_decoded(self) -> None:
         """Each capture's size reflects the server's actual PSEUDO_DESKTOP_SIZE
