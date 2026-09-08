@@ -29,8 +29,6 @@ server on 5900 inside the same container) the mapping says so.
 |------|-----------|---------|------------|
 | 5940 | 5900 | `tigervnc-resize` | #497 |
 | 5941 | 5900 | `tigervnc-vencrypt` | #498 |
-| 5942 | 5900 | `websockify` | #499 |
-| 5943 | 5900 | `websockify-tls` | #499 |
 | 5944 | 5900 | `qemu` | #499 |
 | 5945 | 5900 | `qemu-tls` | #499 |
 | 5946 | 4444 | `selenoid` | #499 |

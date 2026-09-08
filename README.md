@@ -78,11 +78,10 @@ against it once. Not tracked by CI, so it ages. Nothing listed yet.
 else. It should work; we make no claim. A report either way is welcome, and is
 how a server moves up.
 
-`vncdo` also reaches servers through [websockify](https://github.com/novnc/websockify),
-which is what noVNC deployments put in front of a VNC server —
-`selenium/standalone-chrome`, the most-pulled VNC-bearing image on Docker Hub,
-is x11vnc behind exactly that. KasmVNC, QEMU and Selenoid need no proxy; they
-speak RFB over WebSocket themselves.
+KasmVNC, QEMU and Selenoid are reached over `ws://` or `wss://`, which they
+speak themselves. A server published through a separate WebSocket proxy should
+work the same way, but `vncdo` can open a TCP socket directly, so there is
+usually no reason to go through one.
 
 ### What the tests prove
 

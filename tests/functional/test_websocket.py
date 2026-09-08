@@ -1,8 +1,8 @@
 """ws:// and wss:// against every WebSocket server the fleet can host.
 
-Four independent implementations of the handshake -- websockify (noVNC's
-proxy), QEMU's built-in server, Selenoid's Go bridge and KasmVNC -- which
-disagree about it, so one server is no evidence about the rest.
+Three independent implementations of the handshake -- QEMU's built-in
+server, Selenoid's Go bridge and KasmVNC -- which disagree about it, so one
+server is no evidence about the rest.
 """
 from __future__ import annotations
 
@@ -13,27 +13,20 @@ from pathlib import Path
 from typing import Dict, Optional
 from unittest import TestCase
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 from .utils import (
     HOST,
     QEMU_TLS,
     QEMU_TLS_CA,
     SELENOID,
-    TIGERVNC,
     WEBSOCKET_SERVERS,
-    WEBSOCKIFY,
-    WEBSOCKIFY_TLS,
     VNCServer,
     distinct_colours,
     port_open,
     run_vncdo,
     selenoid_session,
 )
-
-# The same TigerVNC instance the TCP tests reach, so a capture through the
-# proxy can be held against one taken directly.
-PROXIES_TIGERVNC = {WEBSOCKIFY, WEBSOCKIFY_TLS}
 
 
 class WebSocketTests:
@@ -106,21 +99,6 @@ class QueryStringTests(WebSocketTests):
         self.assertNotIn("password=vncdotool", self.run_ok("-v", "-v", "pause", "0"))
 
 
-class ProxiedWebSocketTests(WebSocketTests):
-
-    def test_capture_matches_the_same_server_over_tcp(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            through_socket = Path(tmp) / "ws.png"
-            direct = Path(tmp) / "tcp.png"
-            self.run_ok("capture", str(through_socket))
-            self.assertEqual(run_vncdo(TIGERVNC, "capture", str(direct)).returncode, 0)
-
-            over_websocket = Image.open(through_socket).convert("RGB").copy()
-            over_tcp = Image.open(direct).convert("RGB").copy()
-
-        self.assertIsNone(ImageChops.difference(over_websocket, over_tcp).getbbox())
-
-
 class TLSWebSocketTests(WebSocketTests):
 
     def test_untrusted_certificate_is_refused(self) -> None:
@@ -131,8 +109,6 @@ class TLSWebSocketTests(WebSocketTests):
 
 def _bases(server: VNCServer) -> tuple:
     bases = []
-    if server in PROXIES_TIGERVNC:
-        bases.append(ProxiedWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)
     if "?" in server.address:

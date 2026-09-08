@@ -1,6 +1,6 @@
 """The ws:// and wss:// transport, without a reactor or a server.
 
-The live half is tests/functional/test_websocket.py, against websockify.
+The live half is tests/functional/test_websocket.py, against the fleet.
 """
 import unittest
 from unittest import mock

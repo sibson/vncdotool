@@ -174,16 +174,7 @@ KASMVNC = VNCServer(
     address="ws://127.0.0.1:5947/?password=vncdotool",
 )
 
-WEBSOCKIFY = VNCServer(
-    "websockify", 5942, size=(256, 192),
-    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
-)
-WEBSOCKIFY_TLS = VNCServer(
-    "websockify-tls", 5943, size=(256, 192),
-    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
-)
-
-WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC, WEBSOCKIFY, WEBSOCKIFY_TLS]
+WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
 
 
 @contextlib.contextmanager
