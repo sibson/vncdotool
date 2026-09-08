@@ -224,6 +224,21 @@ libvncserver from a pinned release.
   decoder goldens (leg 1).
 - **Replay/transcripts as CI fixtures**: never existed; explicitly out.
 
+## What each suite proves
+
+None of them subsumes another.
+
+- **The smoke test** is the critical user journey: connect, send input,
+  capture a screen. It catches `vncdo` breaking outright, and runs first.
+- **The compatibility grids** drive real products, so they cover a wider
+  variety of settings and behaviours than a fixture can carry.
+- **The scene tests** are decoder resilience to variation in server
+  behaviour, held against the image the server was actually shown rather
+  than against anything our decoder produced.
+- **The goldens** replay committed wire bytes offline, so any feature can be
+  tested on every OS we support, and a server nobody can deploy locally or
+  in CI can still be covered by someone sending us a capture of it.
+
 ## Compatibility matrix visibility
 
 The CI grid is the matrix: server × scenario as test names, visible per

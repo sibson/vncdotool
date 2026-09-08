@@ -78,28 +78,8 @@ against it once. Not tracked by CI, so it ages. Nothing listed yet.
 else. It should work; we make no claim. A report either way is welcome, and is
 how a server moves up.
 
-KasmVNC, QEMU and Selenoid are reached over `ws://` or `wss://`, which they
-speak themselves. A server published through a separate WebSocket proxy should
-work the same way, but `vncdo` can open a TCP socket directly, so there is
-usually no reason to go through one.
-
-### What the tests prove
-
-The suites answer different questions, and none of them subsumes another.
-
-- **The smoke test** is the critical user journey: connect, send input, capture
-  a screen. It catches `vncdo` breaking outright.
-- **The compatibility grids** drive real products, so they cover a wider variety
-  of settings and behaviours than a fixture can carry.
-- **The scene tests** are decoder resilience to variation in server behaviour,
-  held against the image the server was actually shown rather than against
-  anything our decoder produced.
-- **The goldens** replay committed wire bytes offline, so any feature can be
-  tested on every OS we support — and a server nobody can deploy locally or in
-  CI can still be covered, by someone sending us a capture of it.
-
-`tests/servers/docker-compose.yml` is the fleet, `specs/testing-framework.md`
-and `specs/decoder-goldens.md` the design.
+How the servers are tested is in `specs/testing-framework.md`; the fleet
+itself is `tests/servers/docker-compose.yml`.
 
 ## Feedback
 
