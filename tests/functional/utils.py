@@ -88,8 +88,7 @@ class VNCServer(NamedTuple):
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
     address: Optional[str] = None
-    # vncdo options this server cannot be reached without. A test that asks
-    # what happens *without* them clears the field with _replace(extra_args=()).
+    # vncdo options this server cannot be reached without.
     extra_args: Tuple[str, ...] = ()
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
@@ -97,9 +96,6 @@ class VNCServer(NamedTuple):
     skip_when_down: bool = False
 
 
-# One constant per service in tests/servers/docker-compose.yml, named so a
-# test that needs a specific one can import it directly instead of
-# searching DOCKER_SERVERS by name.
 # Both written by their container into a bind mount at every start; neither
 # exists until the fleet has run.
 VENCRYPT_CA_CERT = (
@@ -109,6 +105,9 @@ WAYVNC_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "wayvnc-certs" / "cert.pem"
 )
 
+# One constant per service in tests/servers/docker-compose.yml, named so a
+# test that needs a specific one can import it directly instead of
+# searching DOCKER_SERVERS by name.
 TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
 # x11vnc paints the X cursor into the framebuffer unless a client asks for
@@ -129,8 +128,8 @@ WAYVNC = VNCServer(
 # 800x600 is the demo's hard-coded size; it takes no -geometry option.
 LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
 
-# Every service in docker-compose.yml that speaks RFB over a plain socket
-# and draws a screen.
+# Every service in docker-compose.yml that speaks RFB over a TCP socket
+# rather than a WebSocket, and draws a screen.
 DOCKER_SERVERS = [
     TIGERVNC,
     TIGERVNC_AUTH,
@@ -381,13 +380,11 @@ def awaiting(key: str) -> Tuple[str, ...]:
     """`vncdo` arguments that block until the scene `key` selects is on screen.
 
     x11vnc polls the X display rather than tracking damage, so how long a
-    repaint takes to reach a client is not a constant a delay can name: at
-    0.3s one capture in eight arrived still showing the previous scene.
-    `expect` polls until the screen matches instead.
+    repaint takes to reach a client is not a constant a delay can name.
 
-    No fuzz, so `expect` derives one from the negotiated pixel format. An
-    explicit 0 overrides that, and at a reduced depth the comparison then
-    never comes true however long it polls.
+    No fuzz argument, so `expect` derives one from the negotiated pixel
+    format. An explicit 0 overrides that, and at a reduced depth the
+    comparison then never comes true however long it polls.
     """
     return ("expect", str(SCENES_DIR / f"{key}.png"))
 
@@ -400,8 +397,7 @@ def server_is_up(server: VNCServer) -> bool:
 
     Xvnc counts every connection closed before a successful authentication
     towards BlacklistThreshold, and a probe drops one without ever speaking
-    RFB. One per test in a grid of a hundred blacklists the harness itself,
-    which is why the containers' HEALTHCHECK does not connect either.
+    RFB. One per test in a grid of a hundred blacklists the harness itself.
     """
     key = (HOST, server.port)
     if key in _SEEN_UP:
@@ -432,9 +428,8 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
 
 def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
-    """Capture through the CLI, which is the only caller that can pass
-    extra_args: api.connect() takes no TLS options, so a VeNCrypt-only
-    server cannot be reached in-process at all.
+    """Capture by shelling out: api.connect() takes no TLS options, so a
+    VeNCrypt-only server cannot be reached in-process at all.
     """
     result = run_vncdo(server, "capture", str(path), timeout=timeout)
     if result.returncode != 0:

@@ -28,11 +28,7 @@ RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
 # Measured against the fleet by offering one encoding at a time and reading
 # back the encoding of the rectangles that arrived. Every server here
 # answers with Raw for anything it does not implement, so an encoding is
-# listed only where the server really sends it:
-#
-# TigerVNC 1.12.0 answers a CoRRE request with Raw, matching upstream's
-# EncodeManager::supported(), which accepts only Raw, RRE, Hextile, ZRLE and
-# Tight.
+# listed only where the server really sends it.
 EMITTED: Dict[str, Set[str]] = {
     "tigervnc": {"raw", "rre", "hextile", "zrle", "tight"},
     "x11vnc": {"raw", "rre", "corre", "hextile", "zrle", "tight"},

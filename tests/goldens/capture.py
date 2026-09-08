@@ -151,9 +151,6 @@ def main() -> int:
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance_kind": "jpeg-lossy" if lossy else "format-quantization",
-            # A capture that asked for the Cursor pseudo-encoding carries a
-            # cursor rectangle, and a replay that does not discard it paints a
-            # pointer the scene the server was shown never had.
             "nocursor": "--nocursor" in server.extra_args,
         }
         if lossy:

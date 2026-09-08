@@ -51,9 +51,8 @@ else
 fi
 
 # Xvnc counts every connection closed before a successful authentication
-# towards BlacklistThreshold, whatever the security type, and a successful
-# authentication clears the host's blackmark. The harness drops such a
-# connection whenever it probes a port, so a generous threshold avoids
+# towards BlacklistThreshold, whatever the security type. The harness drops
+# such a connection whenever it probes a port, so a generous threshold avoids
 # blacklisting it while still capping real password guessing.
 Xvnc :0 \
     "$@" \

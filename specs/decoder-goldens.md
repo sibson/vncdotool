@@ -35,10 +35,9 @@ the matrix bigger without making a decoder better exercised, it was cut.
 toolkit and no fonts. A keypress selects one of the committed PNGs in the
 adjacent `tests/goldens/scenes/` and it goes to the X framebuffer whole, via
 `XPutImage`, so what the server sees is a file in the repository rather than
-the outcome of a rendering stack. It replaces `draw-content.sh` in the
-`tigervnc`, `x11vnc` and `wayvnc` images -- the last through Xwayland, so one
-X client covers three unrelated framebuffer paths. `libvncserver-example` has
-no X server and stays out of golden capture.
+the outcome of a rendering stack. It runs in the `tigervnc`, `x11vnc` and
+`wayvnc` images, the last through Xwayland. `libvncserver-example` has no X
+server and stays out of golden capture.
 
 The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
 `main()`, from the same pure functions the unit suite covers. Committing the
@@ -325,12 +324,10 @@ one case where CPIXEL and pixel coincide, and that is precisely where the
 known ZRLE hardcoded-layout defect lives.
 
 **Servers.** TigerVNC is primary. x11vnc is not a second copy of everything: it
-is there because CoRRE comes only from x11vnc and Tight only from TigerVNC, per
-the measured table in `decoder-architecture.md`, plus a small sanity subset
-where its polling differ produces messier rect patterns than Xvnc's damage
-tracking. Measured against the fleet: offering CoRRE to TigerVNC 1.12.0 gets
-Raw back, and `x11vnc-corre-bgrx8888` is the only fixture in the tree holding
-real CoRRE rectangles.
+is there because it is the only server in the fleet that emits CoRRE, plus a
+small sanity subset where its polling differ produces messier rect patterns than
+Xvnc's damage tracking. `x11vnc-corre-bgrx8888` is the only fixture in the tree
+holding real CoRRE rectangles.
 
 x11vnc paints the X cursor into the framebuffer unless the client asks for the
 Cursor pseudo-encoding, and at the scene geometry the pointer rests on the
@@ -351,8 +348,7 @@ three of the seven encodings the grid offers are its own and the rest exercise
 the fallback.
 
 Which encoding a server really used is read off `vncdo -v -v`, which names the
-encoding of every rectangle it decodes. That works wherever the client itself
-can connect, wayvnc included.
+encoding of every rectangle it receives.
 
 ## Phasing
 
