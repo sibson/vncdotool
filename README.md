@@ -84,11 +84,6 @@ which is what noVNC deployments put in front of a VNC server —
 is x11vnc behind exactly that. KasmVNC, QEMU and Selenoid need no proxy; they
 speak RFB over WebSocket themselves.
 
-Testing LibVNCServer's `example` server covers more than the demo: LibVNCServer
-is what gets embedded when a VNC server is bolted onto something that is not a
-desktop. Proxmox VE's `vncterm` statically links it, and so do VirtualBox's
-VBoxVNC, OpenBMC's `obmc-ikvm`, KDE's krfb, x11vnc and droidVNC-NG.
-
 ### What the tests prove
 
 The suites answer different questions, and none of them subsumes another.
@@ -103,6 +98,7 @@ The suites answer different questions, and none of them subsumes another.
 - **The goldens** replay committed wire bytes offline, so any feature can be
   tested on every OS we support — and a server nobody can deploy locally or in
   CI can still be covered, by someone sending us a capture of it.
+
 `tests/servers/docker-compose.yml` is the fleet, `specs/testing-framework.md`
 and `specs/decoder-goldens.md` the design.
 

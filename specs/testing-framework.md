@@ -219,6 +219,15 @@ libvncserver from a pinned release.
   decoder goldens (leg 1).
 - **Replay/transcripts as CI fixtures**: never existed; explicitly out.
 
+## Why LibVNCServer's example server is in the fleet
+
+It looks like a demo, and testing a demo would be hard to justify. But
+LibVNCServer is what gets embedded when a VNC server is bolted onto something
+that is not a desktop, so the `example` stage stands in for a class of server
+nobody would otherwise cover: Proxmox VE's `vncterm` statically links it, and
+so do VirtualBox's VBoxVNC, OpenBMC's `obmc-ikvm`, KDE's krfb, x11vnc and
+droidVNC-NG.
+
 ## Compatibility matrix visibility
 
 The CI grid is the matrix: server × scenario as test names, visible per
