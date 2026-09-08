@@ -325,10 +325,10 @@ def fleet_mismatch(server: VNCServer) -> Optional[str]:
     )
 
 
-def assert_fleet_current(test: TestCase, server: VNCServer) -> None:
+def assert_fleet_current(server: VNCServer) -> None:
     mismatch = fleet_mismatch(server)
     if mismatch is not None:
-        test.fail(mismatch)
+        raise AssertionError(mismatch)
 
 
 def screenshot_dir() -> Path:

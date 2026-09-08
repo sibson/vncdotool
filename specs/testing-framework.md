@@ -62,11 +62,16 @@ committed files (the scene PNGs, `scene_player.py`, the entrypoints) into
 its images. So a checkout that never ran `make servers-up` tests against
 whichever checkout did, reading that checkout's baked files back off the
 wire as if they were its own. `tests/servers/fleet-tag.sh` hashes the
-Dockerfile's COPY inputs; `servers.mk` tags the images with it, and
-`fleet_mismatch()` in `tests/functional/utils.py` reads the tag back off
-the running container, so the mismatch fails by name in `servers-up` and in
-the tests that depend on baked content. The hash is of `HEAD`, so a fleet
-built from uncommitted edits to those files tags as the commit it sits on.
+Dockerfile's COPY inputs, plus the Dockerfile and `docker-compose.yml`
+themselves; `servers.mk` tags the images with it, and `fleet_mismatch()` in
+`tests/functional/utils.py` reads the tag back off the running container, so
+the mismatch fails by name in `servers-up` and in the tests that depend on
+baked content.
+
+The hash is of the working tree, because that is what `docker compose build`
+bakes. Identical content hashes identically whether committed or not, which
+CI relies on: `FLEET_TAG` is also the GHCR pull key that decides whether a
+fleet is fetched or rebuilt.
 
 **Execution model**: every fleet scenario runs the real command-line tool via
 `subprocess.run(["vncdo", ...], timeout=N)`.
