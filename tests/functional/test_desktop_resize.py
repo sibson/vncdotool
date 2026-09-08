@@ -2,7 +2,16 @@ from unittest import TestCase
 
 from PIL import Image
 
-from .utils import HOST, LIBVNCSERVER_EXAMPLE, distinct_colours, has_expected_content, port_open, run_vncdo, screenshot_dir
+from .utils import (
+    HOST,
+    LIBVNCSERVER_EXAMPLE,
+    distinct_colours,
+    has_expected_content,
+    normalize_size,
+    port_open,
+    run_vncdo,
+    screenshot_dir,
+)
 
 FLOOR_SIZE = (640, 480)
 RESIZED_SIZE = (800, 600)
@@ -16,6 +25,7 @@ class TestDesktopResize(TestCase):
                 f"{LIBVNCSERVER_EXAMPLE.name} not reachable on {HOST}:{LIBVNCSERVER_EXAMPLE.port} -- "
                 f"{LIBVNCSERVER_EXAMPLE.how_to_start}"
             )
+        self.addCleanup(normalize_size, LIBVNCSERVER_EXAMPLE)
 
     def test_mid_session_resize_is_decoded(self) -> None:
         """Each capture's size reflects the server's actual PSEUDO_DESKTOP_SIZE

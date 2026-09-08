@@ -397,7 +397,7 @@ Tier 1 follow-ups:
   the workflow post/update a PR comment with `raw.githubusercontent.com`
   image links, so they render inline where review happens.
 - **Image build tax: done.** The `servers` job in `ci.yml` pulls the fleet
-  from GHCR, tagged with the `tests/servers` tree hash, instead of
+  from GHCR, tagged by `tests/servers/fleet-tag.sh`, instead of
   rebuilding it. A miss falls back to building, so a PR that edits the
   fleet (and any fork PR) behaves as it did before the registry existed,
   and a `main` push that built publishes what it built once the suite is
