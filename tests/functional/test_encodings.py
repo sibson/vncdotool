@@ -18,7 +18,7 @@ from PIL import Image
 
 from vncdotool import decoders
 
-from .utils import SCENE_SERVERS, VNCServer, awaiting, run_vncdo, server_is_up
+from .utils import SCENE_SERVERS, FleetTestCase, VNCServer, awaiting, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
@@ -33,6 +33,8 @@ EMITTED: Dict[str, Set[str]] = {
     "tigervnc": {"raw", "rre", "hextile", "zrle", "tight"},
     "x11vnc": {"raw", "rre", "corre", "hextile", "zrle", "tight"},
     "wayvnc": {"raw", "zrle", "tight"},
+    "selenoid": {"raw", "rre", "hextile", "zrle", "tight"},
+    "kasmvnc": {"raw", "rre", "hextile", "zrle", "tight"},
 }
 
 
@@ -49,17 +51,6 @@ def capture(test: TestCase, server: VNCServer, encodings: str, key: str) -> Imag
                 f"({result.returncode}): {result.stderr}"
             )
         return Image.open(path).convert("RGB").copy()
-
-
-class FleetTestCase(TestCase):
-    server: VNCServer
-
-    def setUp(self) -> None:
-        if not server_is_up(self.server):
-            self.fail(
-                f"{self.server.name} is not listening on {self.server.port}; "
-                f"{self.server.how_to_start}"
-            )
 
 
 class RendersTheScene:
@@ -83,13 +74,12 @@ class RendersTheScene:
         )
 
 
-class EmitsTheEncoding:
+class ServerHonoursTheRequestedEncoding:
     """Without this, the test above passes on a server that answered every request with Raw.
 
-    x11vnc encodes a rectangle as Raw whenever RRE or CoRRE would need more
-    subrectangles than its limit allows, so what it emits is a property of
-    what is on screen: the flat scenes come back RRE, the dense and
-    scattered ones Raw.
+    The scene is fixed because x11vnc falls back to Raw once RRE or CoRRE
+    would need more subrectangles than its limit allows, so what it emits
+    depends on what is on screen.
     """
 
     encoding: str
@@ -121,9 +111,9 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(EMITTED[server.name]):
-            name = f"TestEmits_{label}_{encoding}"
+            name = f"TestHonours_{label}_{encoding}"
             case = type(
-                name, (EmitsTheEncoding, FleetTestCase),
+                name, (ServerHonoursTheRequestedEncoding, FleetTestCase),
                 {"server": server, "encoding": encoding},
             )
             suite.addTest(case("test_the_server_really_emits_the_encoding_we_asked_for"))

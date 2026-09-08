@@ -1,9 +1,7 @@
-"""The fast path: can we talk to one VNC server at all.
+"""The critical user journey: connect, send input, capture a screen.
 
-Not a per-server grid. What distinguishes a server is tested where that
-distinction lives; the only per-server grid left is
-test_server_compat_native.py, where an OS-hosted server has no other
-coverage.
+One server, run first and cheaply, so `vncdo` breaking outright fails here
+rather than part-way through the suites that take minutes.
 
 Screenshots captured here are kept rather than thrown away: each one is
 written to the screenshots directory (``tests/servers/screenshots`` by

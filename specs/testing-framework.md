@@ -224,22 +224,6 @@ libvncserver from a pinned release.
   decoder goldens (leg 1).
 - **Replay/transcripts as CI fixtures**: never existed; explicitly out.
 
-## Why LibVNCServer's example server is in the fleet
-
-It looks like a demo, and x11vnc is LibVNCServer too, so the library's wire
-behaviour is covered without it. Two things are not:
-
-- It declares `depth=32` in `ServerInit` and narrows CPIXELs to three bytes
-  anyway, which is the server behaviour behind the ZRLE misdecode of #483.
-  Nothing else in the fleet sends anything but depth 24, so removing it leaves
-  that fix with frozen bytes and no live server that reproduces it.
-- It grows and shrinks its framebuffer on demand, so it is the only live
-  coverage of `PSEUDO_DESKTOP_SIZE` (`test_desktop_resize.py`).
-
-The fleet's own build of it needs `libjpeg-dev`, without which LibVNCServer
-compiles Tight out and the server answers a Tight request with Raw -- weaker
-than any distro build, and not a property of LibVNCServer itself.
-
 ## Compatibility matrix visibility
 
 The CI grid is the matrix: server × scenario as test names, visible per

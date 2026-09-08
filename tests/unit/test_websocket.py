@@ -1,7 +1,4 @@
-"""The ws:// and wss:// transport, without a reactor or a server.
-
-The live half is tests/functional/test_websocket.py, against the fleet.
-"""
+"""The ws:// and wss:// transport, without a reactor or a server."""
 import unittest
 from unittest import mock
 

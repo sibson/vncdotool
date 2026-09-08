@@ -87,8 +87,6 @@ FROM base AS libvncserver-build
 
 ARG LIBVNCSERVER_VERSION=0.9.14
 
-# Without libjpeg-dev, libvncserver compiles Tight out and the example server
-# answers a Tight request with Raw, which no distro build of it does.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         cmake \
@@ -155,7 +153,6 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 
-# Selenoid's WebSocket bridge, its own Go code.
 FROM aerokube/selenoid:1.11.3 AS selenoid-dist
 
 FROM base AS selenoid

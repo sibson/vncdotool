@@ -50,13 +50,10 @@ else
     set -- "$@" -SecurityTypes None
 fi
 
-# Xvnc counts every connection closed before a successful authentication
-# towards BlacklistThreshold, whatever the security type. The harness drops
-# such a connection whenever it probes a port, so a generous threshold avoids
-# blacklisting it while still capping real password guessing.
+# BlacklistThreshold avoids lockout due to multiple test runs.
 Xvnc :0 \
     "$@" \
-    -BlacklistThreshold=50 \
+    -BlacklistThreshold=500 \
     -rfbport 5900 \
     -geometry "${VNC_GEOMETRY:-1024x768}" \
     -depth 24 \

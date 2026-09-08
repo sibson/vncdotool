@@ -36,8 +36,8 @@ toolkit and no fonts. A keypress selects one of the committed PNGs in the
 adjacent `tests/goldens/scenes/` and it goes to the X framebuffer whole, via
 `XPutImage`, so what the server sees is a file in the repository rather than
 the outcome of a rendering stack. It runs in the `tigervnc`, `x11vnc` and
-`wayvnc` images, the last through Xwayland. `libvncserver-example` has no X
-server and stays out of golden capture.
+`wayvnc` images. `libvncserver-example` has no X server and stays out of
+golden capture.
 
 The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
 `main()`, from the same pure functions the unit suite covers. Committing the
@@ -329,23 +329,13 @@ small sanity subset where its polling differ produces messier rect patterns than
 Xvnc's damage tracking. `x11vnc-corre-bgrx8888` is the only fixture in the tree
 holding real CoRRE rectangles.
 
-x11vnc paints the X cursor into the framebuffer unless the client asks for the
-Cursor pseudo-encoding, and at the scene geometry the pointer rests on the
-scene rather than beside it. Its capture therefore runs `--nocursor`, which
-puts a cursor rectangle in the fixture that a replaying client has to discard
-the same way: `conditions.json` records `nocursor` for that, alongside the
-pixel format and the JPEG quality, and for the same reason.
+A capture records the client options it ran under, `nocursor` among them,
+because a replay that does not discard the same rectangles decodes a different
+frame from the one captured.
 
-wayvnc displays the scenes too -- Debian's sway spawns Xwayland on the first X
-connection, so the same X scene player reaches a wlroots framebuffer, and
-`seat seat0 hide_cursor` keeps sway's own pointer out of the capture. It is not
-a golden source yet: `vnclog` reaches its upstream through
-`command.add_standard_options`, which carries no TLS options, and wayvnc offers
-VeNCrypt and nothing else. The live encoding and pixel-format grids in
-`tests/functional/` drive it directly and do cover it. neatvnc, behind it,
-implements Raw, ZRLE and Tight and answers every other request with Raw, so
-three of the seven encodings the grid offers are its own and the rest exercise
-the fallback.
+wayvnc displays the scenes but is not a golden source: `vnclog` carries no TLS
+options and wayvnc offers VeNCrypt and nothing else. The live encoding and
+pixel-format grids drive it directly instead.
 
 Which encoding a server really used is read off `vncdo -v -v`, which names the
 encoding of every rectangle it receives.

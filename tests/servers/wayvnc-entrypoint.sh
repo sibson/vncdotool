@@ -31,8 +31,6 @@ private_key_file=/certs/key.pem
 certificate_file=/certs/cert.pem
 CFG
 
-# The headless backend invents an output whose default size is not ours.
-# hide_cursor's timeout is milliseconds; 1 is as soon as the pointer stops.
 cat > /home/vnc/sway.conf <<CFG
 output HEADLESS-1 resolution ${GEOMETRY}
 seat seat0 hide_cursor 1
@@ -57,15 +55,12 @@ sway -c /home/vnc/sway.conf &
 SWAY_PID=$!
 
 # wayvnc exits if it starts before the compositor is accepting clients.
-WAYLAND_DISPLAY=
+# The stale sockets are cleared above, so sway always takes wayland-1.
+export WAYLAND_DISPLAY=wayland-1
 for _ in $(seq 30); do
-    for socket in "$XDG_RUNTIME_DIR"/wayland-*; do
-        [ -S "$socket" ] && WAYLAND_DISPLAY=${socket##*/}
-    done
-    [ -n "$WAYLAND_DISPLAY" ] && break
+    [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && break
     sleep 0.5
 done
-export WAYLAND_DISPLAY
 
 wayvnc \
     --config=/home/vnc/.config/wayvnc/config \

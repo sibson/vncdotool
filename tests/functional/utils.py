@@ -144,7 +144,8 @@ TCP_SERVERS = [
 ]
 
 # The servers running tests/goldens/scene_player.py, so a test can ask them
-# to display a committed PNG.
+# to display a committed PNG. SELENOID and KASMVNC are appended below, once
+# their addresses are defined.
 SCENE_SERVERS = [TIGERVNC, X11VNC, WAYVNC]
 
 TLS_OPTIONS = ("--tls-ca-cert", "--tls-insecure-skip-verify")
@@ -175,6 +176,11 @@ KASMVNC = VNCServer(
 )
 
 WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
+
+# Both run the scene player behind their bridge, so the encoding and pixel
+# format grids reach them over ws:// and the handshake is exercised by every
+# case rather than by a test of its own.
+SCENE_SERVERS += [SELENOID, KASMVNC]
 
 
 @contextlib.contextmanager
@@ -393,6 +399,23 @@ def server_is_up(server: VNCServer) -> bool:
         _SEEN_UP.add(key)
         return True
     return False
+
+
+class FleetTestCase(TestCase):
+    """Base for a grid that runs one body against several fleet servers."""
+
+    server: VNCServer
+
+    def setUp(self) -> None:
+        if not server_is_up(self.server):
+            self.fail(
+                f"{self.server.name} is not listening on {self.server.port}; "
+                f"{self.server.how_to_start}"
+            )
+        if self.server is SELENOID:
+            session = selenoid_session()
+            session.__enter__()
+            self.addCleanup(session.__exit__, None, None, None)
 
 
 def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedVNCClientProxy:

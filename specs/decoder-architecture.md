@@ -505,10 +505,8 @@ that PR's history recovers the script without it living in the tree ahead of
 the Phase 3 tooling below.
 
 [2] Measured 2026-09-08 by offering one encoding at a time and reading back
-the encoding of each rectangle from `vncdo -v -v`. x11vnc emitted Tight where
-this table previously recorded Raw. libvncserver-example answered with Raw
-until the fleet's libvncserver build gained `libjpeg-dev`, without which Tight
-is compiled out -- a property of that build, not of LibVNCServer.
+the encoding of each rectangle from `vncdo -v -v`. LibVNCServer compiles Tight
+out without `libjpeg-dev`, so a build lacking it answers with Raw.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):

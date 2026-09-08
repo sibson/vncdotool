@@ -1,8 +1,9 @@
-"""ws:// and wss:// against every WebSocket server the fleet can host.
+"""What the WebSocket transport does that the compatibility grids cannot see.
 
-Three independent implementations of the handshake -- QEMU's built-in
-server, Selenoid's Go bridge and KasmVNC -- which disagree about it, so one
-server is no evidence about the rest.
+Selenoid and KasmVNC are in SCENE_SERVERS, so every encoding and pixel
+format case already runs over ws:// against them. What is left here is the
+client's own behaviour: refusing an unverifiable wss:// certificate, and
+keeping a password out of the log when the address carries one.
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ from .utils import (
     HOST,
     QEMU_TLS,
     QEMU_TLS_CA,
+    SCENE_SERVERS,
     SELENOID,
     WEBSOCKET_SERVERS,
     VNCServer,
@@ -73,6 +75,10 @@ class WebSocketTests:
         )
         return result.stdout + result.stderr
 
+
+class BasicWebSocketTests(WebSocketTests):
+    """For a server the scene grids cannot reach, so nothing else drives it."""
+
     def test_a_key_event_is_accepted(self) -> None:
         self.run_ok("key", "x")
 
@@ -109,6 +115,8 @@ class TLSWebSocketTests(WebSocketTests):
 
 def _bases(server: VNCServer) -> tuple:
     bases = []
+    if server not in SCENE_SERVERS:
+        bases.append(BasicWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)
     if "?" in server.address:

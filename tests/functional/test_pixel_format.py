@@ -18,7 +18,7 @@ from PIL import Image
 from vncdotool import pixelformat
 
 from .imagediff import assert_images_match
-from .utils import SCENE_SERVERS, VNCServer, awaiting, run_vncdo, server_is_up
+from .utils import SCENE_SERVERS, FleetTestCase, VNCServer, awaiting, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 
@@ -46,17 +46,6 @@ def capture(
                 f"({result.returncode}): {result.stderr}"
             )
         return Image.open(path).convert("RGB").copy(), result.stderr
-
-
-class FleetTestCase(TestCase):
-    server: VNCServer
-
-    def setUp(self) -> None:
-        if not server_is_up(self.server):
-            self.fail(
-                f"{self.server.name} is not listening on {self.server.port}; "
-                f"{self.server.how_to_start}"
-            )
 
 
 class RendersTheScene:
