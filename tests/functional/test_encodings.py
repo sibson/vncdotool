@@ -11,7 +11,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -22,6 +22,8 @@ from .utils import SCENE_SERVERS, FleetTestCase, VNCServer, awaiting, run_vncdo
 
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
+# Flat enough that every server encodes it the way it was asked to.
+HONOURED_SCENE = "0"
 
 RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
 
@@ -38,11 +40,13 @@ EMITTED: Dict[str, Set[str]] = {
 }
 
 
-def capture(test: TestCase, server: VNCServer, encodings: str, key: str) -> Image.Image:
+def capture(
+    test: TestCase, server: VNCServer, encodings: str, key: str
+) -> Tuple[Image.Image, str]:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
-            server, "--encodings", encodings,
+            server, "-v", "-v", "--encodings", encodings,
             "key", key, *awaiting(key), "capture", str(path),
         )
         if result.returncode != 0:
@@ -50,7 +54,7 @@ def capture(test: TestCase, server: VNCServer, encodings: str, key: str) -> Imag
                 f"{server.name}: vncdo --encodings {encodings} failed "
                 f"({result.returncode}): {result.stderr}"
             )
-        return Image.open(path).convert("RGB").copy()
+        return Image.open(path).convert("RGB").copy(), result.stderr
 
 
 class RendersTheScene:
@@ -63,8 +67,8 @@ class RendersTheScene:
     encoding: str
     scene: str
 
-    def test_renders_the_scene(self) -> None:
-        screen = capture(self, self.server, self.encoding, self.scene)
+    def test_renders_the_scene_through_the_encoding_it_asked_for(self) -> None:
+        screen, log = capture(self, self.server, self.encoding, self.scene)
         oracle = Image.open(SCENES_DIR / f"{self.scene}.png").convert("RGB")
         self.assertEqual(screen.size, oracle.size)
         self.assertEqual(
@@ -73,32 +77,14 @@ class RendersTheScene:
             f"{self.scene} as the server was shown it",
         )
 
-
-class ServerHonoursTheRequestedEncoding:
-    """Without this, the test above passes on a server that answered every request with Raw.
-
-    The scene is fixed because x11vnc falls back to Raw once RRE or CoRRE
-    would need more subrectangles than its limit allows, so what it emits
-    depends on what is on screen.
-    """
-
-    encoding: str
-    scene = "0"
-
-    def test_the_server_really_emits_the_encoding_we_asked_for(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            result = run_vncdo(
-                self.server, "-v", "-v", "--encodings", self.encoding,
-                "key", self.scene, *awaiting(self.scene),
-                "capture", str(Path(tmp) / "screen.png"),
-            )
-        if result.returncode != 0:
-            self.fail(
-                f"{self.server.name}: vncdo --encodings {self.encoding} failed "
-                f"({result.returncode}): {result.stderr}"
-            )
+        # A server answers with Raw for an encoding it does not implement,
+        # and Raw renders the scene correctly, so the comparison above passes
+        # either way. Only on HONOURED_SCENE: x11vnc falls back to Raw once
+        # RRE or CoRRE would need more subrectangles than its limit allows.
+        if self.scene != HONOURED_SCENE or self.encoding not in EMITTED[self.server.name]:
+            return
         wanted = decoders.ENCODING_NAMES[self.encoding]
-        arrived = set(RECTANGLE_ENCODING.findall(result.stderr))
+        arrived = set(RECTANGLE_ENCODING.findall(log))
         self.assertIn(
             wanted.name, arrived,
             f"no {wanted!r} rectangle arrived; {self.server.name} answered "
@@ -110,13 +96,6 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
     suite = unittest.TestSuite()
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
-        for encoding in sorted(EMITTED[server.name]):
-            name = f"TestHonours_{label}_{encoding}"
-            case = type(
-                name, (ServerHonoursTheRequestedEncoding, FleetTestCase),
-                {"server": server, "encoding": encoding},
-            )
-            suite.addTest(case("test_the_server_really_emits_the_encoding_we_asked_for"))
         for encoding in sorted(decoders.ENCODING_NAMES):
             for scene in SCENES:
                 name = f"TestRenders_{label}_{encoding}_scene_{scene}"
@@ -124,5 +103,5 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
                     name, (RendersTheScene, FleetTestCase),
                     {"server": server, "encoding": encoding, "scene": scene},
                 )
-                suite.addTest(case("test_renders_the_scene"))
+                suite.addTest(case("test_renders_the_scene_through_the_encoding_it_asked_for"))
     return suite
