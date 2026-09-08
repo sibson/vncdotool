@@ -40,6 +40,10 @@ exec cd / && python3 -m tests.goldens.scene_player
 CFG
 
 mkdir -p /home/vnc/xdg
+# Restarting a container reuses its filesystem, and sway takes the next free
+# display rather than the one whose lock the previous run left behind -- so it
+# would serve wayland-2 while wayvnc below still dials wayland-1.
+rm -f /home/vnc/xdg/wayland-* /home/vnc/xdg/sway-ipc.*
 chown -R vnc:vnc /home/vnc
 chmod 700 /home/vnc/xdg
 
