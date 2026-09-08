@@ -92,6 +92,7 @@ class VNCServer(NamedTuple):
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
     skip_when_down: bool = False
+    normalize_size_keys: Tuple[str, ...] = ()
 
 
 # One constant per service in tests/servers/docker-compose.yml, named so a
@@ -122,8 +123,12 @@ WAYVNC = VNCServer(
 WAYVNC_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "wayvnc-certs" / "cert.pem"
 )
-# 800x600 is the demo's hard-coded size; it takes no -geometry option.
-LIBVNCSERVER_EXAMPLE = VNCServer("libvncserver-example", 5935, size=(800, 600))
+# 800x600 is the size the demo starts at; it takes no -geometry option, and
+# any client's arrow keys resize it for every later client.
+LIBVNCSERVER_EXAMPLE = VNCServer(
+    "libvncserver-example", 5935, size=(800, 600),
+    normalize_size_keys=("up", "up", "down"),
+)
 
 DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
 
@@ -382,6 +387,19 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
+def normalize_size(server: VNCServer) -> None:
+    """Put a server whose size a client can change back to ``server.size``."""
+    if not server.normalize_size_keys:
+        return
+    argv = [arg for key in server.normalize_size_keys for arg in ("key", key)]
+    result = run_vncdo(server, *argv)
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"{server.name}: `vncdo {' '.join(argv)}` exited {result.returncode}, "
+            f"stderr:\n{result.stderr}"
+        )
+
+
 def wait_until_ready(
     server: VNCServer,
     deadline_seconds: float = READY_DEADLINE,
@@ -402,17 +420,23 @@ def wait_until_ready(
             time.sleep(RETRY_DELAY)
             continue
         try:
+            normalize_size(server)
             with tempfile.TemporaryDirectory() as tmp:
                 probe = Path(tmp) / f"{server.name}-ready.png"
                 capture_screenshot(server, probe, timeout=attempt_timeout)
                 with Image.open(probe) as image:
                     colours = distinct_colours(image)
+                    size = image.size
         except Exception as exc:  # noqa: BLE001 - any failure means try again
             print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
             time.sleep(RETRY_DELAY)
             continue
         if not has_expected_content(server, colours):
             print(f"{server.name}: not ready yet (attempt {attempt}: capture is flat)")
+            time.sleep(RETRY_DELAY)
+            continue
+        if server.size is not None and size != server.size:
+            print(f"{server.name}: not ready yet (attempt {attempt}: serving {size}, expected {server.size})")
             time.sleep(RETRY_DELAY)
             continue
         print(f"{server.name}: ready after {attempt} attempt(s)")
