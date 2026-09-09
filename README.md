@@ -66,8 +66,14 @@ pull request: [TigerVNC](https://tigervnc.org),
 [wayvnc](https://github.com/any1/wayvnc),
 [LibVNCServer](https://libvnc.github.io),
 [KasmVNC](https://kasmweb.com/kasmvnc), [QEMU](https://qemu.org)'s built-in
-server, [Selenoid](https://aerokube.com/selenoid/), UltraVNC on Windows and
-Apple Screen Sharing on macOS.
+server, [Selenoid](https://aerokube.com/selenoid/).
+
+**Supported on their own OS** — the same journey, but only on the pull
+requests that touch code able to affect it, since these servers need a
+Windows or macOS runner: UltraVNC on Windows, and Apple Screen Sharing on
+macOS for connect, auth and input. Screen Sharing's rendering is checked by
+hand rather than in CI: a hosted macOS runner has no attached display, so
+its captures come back near-solid whatever the client does.
 
 **Compatible** — a user reported it working, or we ran the compatibility suite
 against it once. Not tracked by CI, so it ages. Nothing listed yet.

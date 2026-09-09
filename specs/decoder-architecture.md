@@ -480,14 +480,14 @@ Because fixtures must come from a real server, an encoding no fleet server emits
 cannot be tested, and therefore cannot be built. Measured by offering each server
 exactly one encoding and reading back the encoding it actually used:
 
-| Encoding | tigervnc | x11vnc | libvncserver-example | ultravnc | screen-sharing |
-|---|---|---|---|---|---|
-| RRE | yes | yes | yes | ? | ? |
-| CoRRE | no [1] | yes [1] | yes | ? | ? |
-| Hextile | yes | yes | yes | ? | ? |
-| ZRLE | yes | yes | yes | ? | ? |
-| Tight | yes | yes [2] | yes [2] | ? | ? |
-| TRLE | no | no | no | ? | ? |
+| Encoding | tigervnc | x11vnc | libvncserver-example | wayvnc | selenoid | kasmvnc | ultravnc | screen-sharing |
+|---|---|---|---|---|---|---|---|---|
+| RRE | yes | yes | yes | no [3] | yes [3] | yes [3] | ? | ? |
+| CoRRE | no [1] | yes [1] | yes | no [3] | no [3] | no [3] | ? | ? |
+| Hextile | yes | yes | yes | no [3] | yes [3] | yes [3] | ? | ? |
+| ZRLE | yes | yes | yes | yes [3] | yes [3] | yes [3] | ? | ? |
+| Tight | yes | yes [2] | yes [2] | yes [3] | yes [3] | yes [3] | ? | ? |
+| TRLE | no | no | no | ? | ? | ? | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
 
@@ -507,6 +507,12 @@ the Phase 3 tooling below.
 [2] Measured 2026-09-08 by offering one encoding at a time and reading back
 the encoding of each rectangle from `vncdo -v -v`. LibVNCServer compiles Tight
 out without `libjpeg-dev`, so a build lacking it answers with Raw.
+
+[3] Measured 2026-09-08 the same way, and asserted on every run: these rows
+are `EMITTED` in `tests/functional/test_encodings.py`, which the scene grid
+holds each server to. wayvnc's three are neatvnc's whole set. The TRLE column
+is unmeasured for them because `vncdo --encodings` cannot name an encoding the
+client has no decoder for.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):

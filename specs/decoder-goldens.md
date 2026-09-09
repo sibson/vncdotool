@@ -35,9 +35,10 @@ the matrix bigger without making a decoder better exercised, it was cut.
 toolkit and no fonts. A keypress selects one of the committed PNGs in the
 adjacent `tests/goldens/scenes/` and it goes to the X framebuffer whole, via
 `XPutImage`, so what the server sees is a file in the repository rather than
-the outcome of a rendering stack. It runs in the `tigervnc`, `x11vnc` and
-`wayvnc` images. `libvncserver-example` has no X server and stays out of
-golden capture.
+the outcome of a rendering stack. It runs in the `tigervnc`, `x11vnc`,
+`wayvnc`, `selenoid` and `kasmvnc` images, which is what lets the scene
+tests hold all five to the same picture. `libvncserver-example` has no X
+server and stays out of golden capture.
 
 The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
 `main()`, from the same pure functions the unit suite covers. Committing the

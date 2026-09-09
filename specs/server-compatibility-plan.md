@@ -88,10 +88,13 @@ supersedes this section's original sketch on several points. Summary:
   hanging client fails CI instead of hanging it. Input is verified via
   event sinks (a `vncev` container; `xev`-style logs inside X-based
   containers), not pixels.
-- Fleet targets: **TigerVNC**, **TightVNC**, **x11vnc**, **QEMU**,
-  containerized **LibVNCServer examples**; later noVNC/websockify,
-  wayvnc. The native libvncserver source build and the pexpect harness
-  are retired.
+- Fleet targets: **TigerVNC**, **x11vnc**, **wayvnc**, **QEMU**,
+  containerized **LibVNCServer examples**, and for WebSocket
+  **KasmVNC** and **Selenoid**; TightVNC later. The native libvncserver
+  source build and the pexpect harness are retired. A websockify or noVNC
+  bridge is not a target: it fronts one of these servers with a transport
+  vncdotool already exercises against servers that speak it themselves,
+  and a `vncdo` user dials the server rather than the bridge.
 - The capture kit (`vnclog --capture-raw`, strip-at-capture) plus an
   in-repo replay tool cover servers that cannot be hosted, providing
   discovery evidence, not CI fixtures.
@@ -230,8 +233,8 @@ Concretely:
 
 ### Tier 1, Containerized Linux fleet (fully owned, fully reproducible)
 
-TigerVNC, TightVNC, x11vnc, QEMU, LibVNCServer examples, and later
-websockify/noVNC are all runnable on Linux, so vncdotool owns them
+TigerVNC, x11vnc, wayvnc, QEMU, LibVNCServer examples, KasmVNC, Selenoid
+and later TightVNC are all runnable on Linux, so vncdotool owns them
 outright as a **Docker Compose fleet**. (QEMU here is a containerized
 guest for local-dev convenience: Docker Desktop has no `/dev/kvm`, so it
 runs TCG-only and boots slower; the CI-real, KVM-accelerated QEMU
