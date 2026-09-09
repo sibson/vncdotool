@@ -18,9 +18,15 @@ from PIL import Image
 
 from vncdotool import decoders
 
-from .utils import SCENE_SERVERS, FleetTestCase, VNCServer, awaiting, run_vncdo
+from .utils import (
+    SCENE_SERVERS,
+    SCENES_DIR,
+    FleetTestCase,
+    VNCServer,
+    awaiting,
+    run_vncdo,
+)
 
-SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
 # Flat enough that every server encodes it the way it was asked to.
 HONOURED_SCENE = "0"

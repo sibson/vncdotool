@@ -167,6 +167,9 @@ jobs:
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml ps
 
+      # The next step discovers this module again, since unittest has no way
+      # to exclude one. Running it twice costs seconds against a single
+      # server and buys a failure before the suites that take minutes.
       - name: Smoke test the fleet
         run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_docker.py'
 
