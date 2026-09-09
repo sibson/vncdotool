@@ -12,7 +12,6 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Dict, Optional
-from unittest import TestCase
 
 from PIL import Image
 
@@ -21,13 +20,11 @@ from .utils import (
     QEMU_TLS,
     QEMU_TLS_CA,
     SCENE_SERVERS,
-    SELENOID,
     WEBSOCKET_SERVERS,
+    FleetTestCase,
     VNCServer,
     distinct_colours,
-    port_open,
     run_vncdo,
-    selenoid_session,
 )
 
 
@@ -39,17 +36,6 @@ class WebSocketTests:
     """
 
     server: VNCServer
-
-    def setUp(self) -> None:
-        if not port_open(HOST, self.server.port):
-            self.fail(
-                f"{self.server.name} is not listening on {self.server.port};"
-                f" {self.server.how_to_start}"
-            )
-        if self.server is SELENOID:
-            session = selenoid_session()
-            session.__enter__()
-            self.addCleanup(session.__exit__, None, None, None)
 
     def env(self) -> Optional[Dict[str, str]]:
         if not self.server.address.startswith("wss://"):
@@ -122,7 +108,7 @@ def _bases(server: VNCServer) -> tuple:
     if "?" in server.address:
         bases.append(QueryStringTests)
     bases.append(WebSocketTests)
-    bases.append(TestCase)
+    bases.append(FleetTestCase)
     return tuple(bases)
 
 
