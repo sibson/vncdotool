@@ -18,34 +18,52 @@ behaviour below rests on it, so it was measured rather than assumed.
 
 ## What the fleet does
 
-Each server driven through the real CLI: `move 50 50`, `pause 0.5`, `capture`,
-in all three modes, every mode captured twice so scene churn is separated from
-the effect. The noise column is that control; both x11vnc and qemu produced a
-spurious difference on a single-pass run before it was added.
+The combination that would make this change harmful is a server that stops
+painting the pointer once `-239` is offered and then sends no shape worth
+compositing: the pointer would be gone from a capture with nothing able to ask
+it back. Every fleet server was probed for it. `-v -v` names the encoding of
+each arriving rectangle, which says what the server answered on the wire; a
+capture with and without `--localcursor` says whether offering changed the
+framebuffer.
 
-| server | noise | default vs `--nocursor` | `--nocursor` vs `--localcursor` | default vs `--localcursor` |
-|---|---|---|---|---|
-| tigervnc | none | identical | identical | identical |
-| x11vnc | none | differs (50,50)-(60,66) | differs (50,50)-(60,66) | **identical** |
-| libvncserver-example | none | differs (35,27)-(65,57) | differs (35,27)-(65,57) | **identical** |
-| qemu | blinking text cursor | identical | identical | identical |
+| server | `-239` rectangle | offering changes the capture |
+|---|---|---|
+| tigervnc | 0x0 | no |
+| tigervnc-auth | 0x0 | no |
+| tigervnc-vencrypt | 0x0 | no |
+| tigervnc-vencrypt-anon | 0x0 | no |
+| selenoid | 0x0 | no |
+| wayvnc | none | no |
+| qemu | none | no |
+| qemu-tls | none | no |
+| x11vnc | **18x18** | **yes** |
+| libvncserver-example | **32x32** | **yes** |
 
 Three things fall out.
 
-**Two of four servers paint the pointer, and stop when asked.** `--nocursor`
-cannot un-paint framebuffer pixels — it only discards a Cursor
-pseudo-rectangle in `updateCursor`. So x11vnc's and libvncserver's pointer
-disappearing under `--nocursor` is proof that those servers stopped
-compositing it the moment `-239` appeared in SetEncodings.
+**Two servers paint the pointer, and stop when asked.** `--nocursor` cannot
+un-paint framebuffer pixels — it only discards a Cursor pseudo-rectangle in
+`updateCursor`. So x11vnc's and libvncserver's pointer disappearing is proof
+that those servers stopped compositing it the moment `-239` appeared in
+SetEncodings.
 
 **The client-side composite is faithful.** On both servers that paint,
 `--localcursor` reproduces the server's own render pixel for pixel, hotspot
 included. Asking for Cursor therefore costs a user nothing they cannot get
 back.
 
-**Nothing loses a pointer irrecoverably.** tigervnc and qemu answer `-239`
-with a degenerate 0x0 rectangle — the hide-pointer path of RFC 6143 7.6.1,
-fixed in #449 — but neither painted one to begin with.
+**The harmful combination appears nowhere.** Wherever offering `-239` changed
+the capture, a usable shape arrived with it. The servers answering 0x0 are
+taking the hide-pointer path of RFC 6143 7.6.1 (#449); the servers answering
+nothing at all never painted a pointer to begin with, so neither group loses
+one. qemu is the weakest row: its screen is a four-colour text-mode boot
+display with no pointer on it, so it says nothing about how qemu would behave
+with a graphical guest.
+
+kasmvnc is unmeasured — it drops the connection mid-session on a freshly
+started fleet, independently of this change. The OS-hosted servers are
+unmeasured too: UltraVNC, Apple Screen Sharing and QEMU/KVM are set up by CI
+alone, and RealVNC — the server behind #206 — is in the fleet nowhere.
 
 A four-move-then-capture run on x11vnc differs from `--nocursor` in exactly
 the ten columns at the final position: no trail, because x11vnc repaints the
@@ -57,7 +75,7 @@ None in the fleet does.
 
 The pointer is nondeterministic content. Its position depends on wherever the
 last `move` left it, and whether it appears at all depends on which server
-answered — x11vnc and libvncserver paint it, tigervnc and qemu do not. Both
+answered — x11vnc and libvncserver paint it, the other eight do not. Both
 `expect` and `stable` compare the whole framebuffer, so a painted pointer is
 the same class of failure `specs/screen-stability.md` already names for a
 blinking cursor.
@@ -116,8 +134,9 @@ nobody has produced.
 It preserves today's pixels on the servers that matter and needs no
 deprecation story. But it keeps pointer-dependent content inside every
 `expect` comparison, which is the problem being solved, and it makes every
-capture depend on the destructive `drawCursor` paste. On tigervnc and qemu it
-changes nothing at all, so it does not even buy consistency.
+capture depend on the destructive `drawCursor` paste. On the eight servers
+that never paint a pointer it changes nothing at all, so it does not even buy
+consistency.
 
 ## What `vnclog` does
 
