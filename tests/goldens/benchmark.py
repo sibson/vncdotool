@@ -55,7 +55,7 @@ def _make_client(pixel_format: str) -> _Replay:
     cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
-    for name in ("shared", "nocursor", "pseudocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
+    for name in ("shared", "pseudocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
         setattr(cli.factory, name, False)
     cli.factory.password = None
     return cli

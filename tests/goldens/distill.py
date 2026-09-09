@@ -107,7 +107,6 @@ def _make_client(pixel_format: str, jpeg_quality: Optional[int] = None) -> _Reco
     recorder.factory = mock.Mock()
     recorder.factory.shared = 0
     recorder.factory.password = None
-    recorder.factory.nocursor = False
     recorder.factory.pseudocursor = False
     recorder.factory.pseudodesktop = False
     recorder.factory.last_rect = False

@@ -503,8 +503,9 @@ class VNCDoToolClient(rfb.RFBClient):
     def vncConnectionMade(self) -> None:
         self.setImageMode()
         encodings = list(self.requested_encodings or decoders.DEFAULT_ENCODINGS)
-        if self.factory.pseudocursor or self.factory.nocursor:
-            encodings.append(rfb.Encoding.PSEUDO_CURSOR)
+        # A server that paints the pointer into the framebuffer stops once a
+        # client asks for Cursor, so this is offered even to discard it.
+        encodings.append(rfb.Encoding.PSEUDO_CURSOR)
         if self.factory.pseudodesktop:
             encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
         if self.factory.last_rect:
@@ -587,7 +588,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def updateCursor(
         self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes
     ) -> None:
-        if self.factory.nocursor:
+        if not self.factory.pseudocursor:
             return
 
         if not width or not height:
@@ -700,7 +701,6 @@ class VNCDoToolFactory(rfb.RFBFactory):
     shared = True
 
     pseudocursor = False
-    nocursor = False
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True

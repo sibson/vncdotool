@@ -151,7 +151,6 @@ def main() -> int:
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance_kind": "jpeg-lossy" if lossy else "format-quantization",
-            "nocursor": "--nocursor" in server.extra_args,
         }
         if lossy:
             conditions["jpeg_quality"] = args.jpeg_quality

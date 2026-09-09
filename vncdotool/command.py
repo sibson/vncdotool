@@ -645,12 +645,12 @@ def vncdo(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--localcursor",
         action="store_true",
-        help="request the cursor shape from the server and draw it into captures",
+        help="draw the server's cursor shape into captures, which omit it by default",
     )
     parser.add_argument(
         "--nocursor",
         action="store_true",
-        help="omit the mouse pointer from captures",
+        help="accepted for compatibility; captures omit the mouse pointer by default",
     )
     parser.add_argument(
         "--disable-desktop-resizing",
@@ -756,9 +756,6 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     if options.disable_desktop_resizing:
         factory.pseudodesktop = False
-
-    if options.nocursor:
-        factory.nocursor = True
 
     if options.force_caps:
         factory.force_caps = True
