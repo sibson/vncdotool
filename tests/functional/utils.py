@@ -152,6 +152,13 @@ TLS_OPTIONS = ("--tls-ca-cert", "--tls-insecure-skip-verify")
 
 
 def vnclog_can_reach(server: VNCServer) -> bool:
+    """vnclog takes neither a TLS option nor a ws:// address.
+
+    An `address` server is behind a WebSocket bridge, so its port speaks
+    HTTP rather than RFB and dialling it as `HOST::port` hangs.
+    """
+    if server.address is not None:
+        return False
     return not any(option in server.extra_args for option in TLS_OPTIONS)
 
 
