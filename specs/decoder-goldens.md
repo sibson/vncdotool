@@ -121,15 +121,13 @@ guess at how long that takes and, when wrong, a fixture labelled by the
 previous image's patch. A scene that never arrives now fails the capture
 naming the image it waited for.
 
-It compares histograms rather than pixels, which is enough to sequence on; the
-pixel-exact comparison is the golden test's job, against the same file.
+It sequences on the same per-pixel match as any `expect`
+([expect-matching.md](expect-matching.md)); the authoritative comparison
+against the same file is the golden test's.
 
-At a reduced depth that histogram can never equal the scene PNG's, so `expect`
-also matches when every pixel is within the negotiated format's per-channel
-tolerance. `client.py` reads the tolerance off `self.pixel_format`, so nothing
-is written down in `scene.vdo` and every `expect` in the wild gains the same
-fix: at 8 bits per channel the tolerance is zero and the new condition is
-exact equality, which the old one already implied.
+`scene.vdo` names no fuzz, so the capture runs at the default the negotiated
+pixel format derives and tolerates that format's quantization, nothing beyond
+it.
 
 ## Capture
 
@@ -153,6 +151,11 @@ Auth stripping is irrelevant here: golden capture targets no-auth servers.
 `tests/goldens/distill.py` feeds `s2c.bin` into a `VNCDoToolClient` subclass on
 a `NullTransport`, recording each FramebufferUpdate's raw bytes and the
 encoding actually used. It adds no wire parser and starts no reactor.
+
+The replay client is configured from what the capturing client asked for, its
+pixel format and its JPEG quality level, because `s2c.bin` carries neither. A
+stream that stops decoding fails the capture rather than writing the steps it
+managed, so a fixture cut short by a decoder's refusal never reaches the tree.
 
 Steps are cut where the keysym patch changes, not on FramebufferUpdate
 framing: a driver polling for a scene draws empty updates in reply, and a

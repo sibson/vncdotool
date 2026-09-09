@@ -42,10 +42,15 @@ class _Recorder(client.VNCDoToolClient):
         self.update_ends: List[int] = []
         self.init_end: Optional[int] = None
         self.consumed = 0
+        self.abort_reason: Optional[str] = None
 
     def vncConnectionMade(self) -> None:
         super().vncConnectionMade()
         self.init_end = self.consumed
+
+    def vncProtocolError(self, reason: str) -> None:
+        self.abort_reason = reason
+        super().vncProtocolError(reason)
 
     def commitUpdate(self, rectangles: Optional[list] = None) -> None:
         super().commitUpdate(rectangles)
@@ -58,6 +63,12 @@ class _Recorder(client.VNCDoToolClient):
             self.dataReceived(s2c[offset:offset + 1])
             if len(self.update_ends) > len(screens):
                 screens.append(self.screen.copy() if self.screen else None)
+
+        if self.abort_reason is not None:
+            raise ValueError(
+                f"the recorded stream stopped decoding after {len(self.update_ends)} "
+                f"updates: {self.abort_reason}"
+            )
 
         if self.init_end is None:
             raise ValueError("stream carries no ServerInit; it is not a whole recorded session")
@@ -82,14 +93,16 @@ class _Recorder(client.VNCDoToolClient):
         return s2c[: self.init_end], steps
 
 
-def _make_client(pixel_format: str) -> _Recorder:
-    """SetPixelFormat is client-to-server (RFC 6143 section 7.5.1), so the s2c
-    stream being replayed never says the server switched layouts. The recorder
-    has to be told, or it unpacks the bytes as ServerInit announced them and
-    permutes every channel.
+def _make_client(pixel_format: str, jpeg_quality: Optional[int] = None) -> _Recorder:
+    """SetPixelFormat and SetEncodings are client-to-server (RFC 6143 sections
+    7.5.1 and 7.5.2), so a replay of s2c alone is told neither the layout the
+    server switched to nor the encodings that were asked for. Without the
+    format the recorder permutes every channel. Without the quality level it
+    refuses the capture's own JPEG rectangles.
     """
     recorder = _Recorder()
     recorder.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
+    recorder.requested_jpeg_quality = jpeg_quality
     recorder.transport = mock.Mock()
     recorder.factory = mock.Mock()
     recorder.factory.shared = 0
@@ -102,8 +115,10 @@ def _make_client(pixel_format: str) -> _Recorder:
     return recorder
 
 
-def split(s2c: bytes, pixel_format: str) -> Tuple[bytes, List[Step]]:
-    return _make_client(pixel_format).split(s2c)
+def split(
+    s2c: bytes, pixel_format: str, jpeg_quality: Optional[int] = None
+) -> Tuple[bytes, List[Step]]:
+    return _make_client(pixel_format, jpeg_quality).split(s2c)
 
 
 _NUMBER_ARRAY = re.compile(r"\[\s+((?:-?\d+,\s+)*-?\d+)\s+\]")
