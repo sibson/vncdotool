@@ -154,6 +154,14 @@ Auth stripping is irrelevant here: golden capture targets no-auth servers.
 a `NullTransport`, recording each FramebufferUpdate's raw bytes and the
 encoding actually used. It adds no wire parser and starts no reactor.
 
+The replay client is told the pixel format *and* the JPEG quality level the
+capture asked for. Both are client-to-server, so `s2c.bin` says neither, and a
+client that offered no quality level refuses the very Tight JPEG rectangles the
+capture requested. A stream that stops decoding raises rather than returning
+the steps it managed: the refusal ends the connection quietly, and without that
+check a lossy capture writes a fixture short by everything after the server's
+first JPEG rectangle and reports it as a success.
+
 Steps are cut where the keysym patch changes, not on FramebufferUpdate
 framing: a driver polling for a scene draws empty updates in reply, and a
 server may spread one scene over several. Every byte between two patches still
