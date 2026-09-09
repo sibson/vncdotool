@@ -56,13 +56,17 @@ survives on the server descriptors (`renders_desktop`, `size`, auth
 fields) to drive honest skips, for example, macOS Screen Sharing's black
 framebuffer.
 
-The Docker fleet runs this grid against TigerVNC alone
-(`test_server_compat_docker.py`), because everything it would prove for a
-second container the encoding and pixel-format grids prove in more detail.
-It is the fast path: `vncdo` broken outright fails in seconds rather than
-part-way through suites that take minutes. Tier 2 keeps a subclass per
-server, since for an OS-hosted server the smoke grid is the only coverage
-there is.
+The Docker fleet runs this grid against two servers
+(`test_server_compat_docker.py`). TigerVNC is the fast path: `vncdo` broken
+outright fails in seconds rather than part-way through suites that take
+minutes. libvncserver-example is there because it has no X server, so it
+cannot run the scene player and the encoding and pixel-format grids cannot
+reach it — the grid is the only thing that sends it input. Every other fleet
+server is covered in more detail by those grids and stays out of this one.
+
+Tier 2 keeps a subclass per server for the same reason as
+libvncserver-example: for an OS-hosted server the smoke grid is the only
+coverage there is.
 
 **Fleet identity**: the fleet is machine-global, fixed ports 5931-5943 and
 one compose project, while checkouts are many, and the Dockerfile bakes
