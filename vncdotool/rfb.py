@@ -48,6 +48,11 @@ Ver = Tuple[int, int]
 _DECODE_ERRORS = (decoders.DecodeError, StructError, MemoryError, zlib.error)
 _SECURITY_ERRORS = (security.SecurityError, StructError)
 
+# log.msg's logLevel gates the observer, not the call, so its arguments are
+# built whatever the level. PythonLoggingObserver, which both entry points
+# install, forwards to this logger.
+_LOG = logging.getLogger("twisted")
+
 # ~ from twisted.internet import reactor
 
 
@@ -287,11 +292,12 @@ class RFBClient(Protocol):
 
         if self.rectangles:
             self.rectangles -= 1
-            log.msg(
-                f"Received {Encoding.lookup(encoding)!r} rectangle "
-                f"{width}x{height}+{x}+{y}",
-                logLevel=logging.DEBUG,
-            )
+            if _LOG.isEnabledFor(logging.DEBUG):
+                log.msg(
+                    f"Received {Encoding.lookup(encoding)!r} rectangle "
+                    f"{width}x{height}+{x}+{y}",
+                    logLevel=logging.DEBUG,
+                )
             decoder = self._decoders.get(encoding)
             if decoder is not None:
                 self._pumpRectangle(decoder, x, y, width, height)
