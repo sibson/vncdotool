@@ -42,7 +42,7 @@ from typing import (
 )
 from unittest import TestCase
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from vncdotool import api
 
@@ -75,6 +75,14 @@ DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "scre
 FLEET_PROJECT = "vncdo-test-servers"
 FLEET_TAG_SCRIPT = Path(__file__).resolve().parents[1] / "servers" / "fleet-tag.sh"
 FLEET_PROBE_TIMEOUT = 30.0
+
+# Two pointer positions a capture is compared at, and a box comfortably
+# larger than the biggest cursor the fleet sends (libvncserver's 32x32). A
+# shape is drawn at the pointer minus its hotspot, so it reaches above and
+# left of the position as well as below and right.
+CURSOR_NEAR = (20, 20)
+CURSOR_FAR = (150, 120)
+CURSOR_EXTENT = 48
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 # getcolors() returns None above this many distinct colours, which is itself
@@ -822,6 +830,43 @@ class _VNCServerTestMixin:
             f"{self.server.name}: capture is a single flat colour, "
             "no screen content was decoded",
         )
+
+    def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
+        """Neither pointer position leaves a mark on a capture.
+
+        Only the neighbourhood of each position is compared, so a clock or a
+        blinking cursor elsewhere on the screen cannot be read as a painted
+        pointer. See specs/cursor-default.md.
+        """
+        shots = {}
+        for label, (x, y) in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
+            png = screenshot_dir() / f"{self.server.name}-cursor-{label}.png"
+            self.run_vncdo_ok("move", str(x), str(y), "pause", "0.5", "capture", str(png))
+            with Image.open(png) as image:
+                shots[label] = image.convert("RGB").copy()
+
+        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
+            box = cursor_box(position, shots["near"].size)
+            difference = ImageChops.difference(
+                shots["near"].crop(box), shots["far"].crop(box)
+            )
+            self.assertIsNone(
+                difference.getbbox(),
+                f"{self.server.name}: the capture changed around the {label} "
+                f"pointer position {position} (region {box}) when the pointer "
+                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
+                "painting it into the framebuffer despite being offered Cursor.",
+            )
+
+
+def cursor_box(position: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, int, int, int]:
+    """A box big enough for any cursor drawn at `position`, clipped to `size`."""
+    x, y = position
+    width, height = size
+    return (
+        max(0, x - CURSOR_EXTENT), max(0, y - CURSOR_EXTENT),
+        min(width, x + CURSOR_EXTENT), min(height, y + CURSOR_EXTENT),
+    )
 
 
 def register_server_tests(
