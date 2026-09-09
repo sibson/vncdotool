@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import gzip
+import io
 import json
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ from PIL import Image
 from tests.goldens import distill, scenes
 from vncdotool import pixelformat, rfb
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
+from vncdotool.decoders.tight import JPEG
 
 PIXEL_FORMAT = rfb.PixelFormat()
 # Large enough for a whole glyph patch, which stamp_patch refuses to clip.
@@ -30,6 +32,32 @@ def raw_update(image: Image.Image) -> bytes:
     header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
     rectangle = pack("!HHHHi", 0, 0, SIZE[0], SIZE[1], Encoding.RAW)
     return header + rectangle + image.convert("RGB").tobytes("raw", "RGBX")
+
+
+def compact(length: int) -> bytes:
+    """*length* in the wire's compact representation (specs/tight-wire.md
+    section 6).
+    """
+    out = bytearray()
+    while True:
+        byte, length = length & 0x7F, length >> 7
+        out.append(byte | (0x80 if length else 0))
+        if not length:
+            return bytes(out)
+
+
+def tight_jpeg_update(image: Image.Image) -> bytes:
+    payload = io.BytesIO()
+    image.convert("RGB").save(payload, "JPEG", quality=100)
+    jfif = payload.getvalue()
+    header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
+    rectangle = pack("!HHHHi", 0, 0, SIZE[0], SIZE[1], Encoding.TIGHT)
+    return header + rectangle + bytes([JPEG << 4]) + compact(len(jfif)) + jfif
+
+
+def unknown_encoding_update() -> bytes:
+    header = pack("!BxH", MsgS2C.FRAMEBUFFER_UPDATE, 1)
+    return header + pack("!HHHHi", 0, 0, SIZE[0], SIZE[1], 0x4242)
 
 
 def screen(key: str) -> Image.Image:
@@ -77,6 +105,21 @@ class TestSplit(unittest.TestCase):
         stream = handshake_bytes(pixelformat.PIXEL_FORMATS["bgrx8888"]) + raw_update(screen("s"))
         _, steps = distill.split(stream, "rgbx8888")
         self.assertEqual([step.key for step in steps], ["s"])
+
+    def test_the_requested_quality_level_admits_a_jpeg_rectangle(self) -> None:
+        stream = handshake_bytes() + tight_jpeg_update(screen("d"))
+        _, steps = distill.split(stream, "rgbx8888", jpeg_quality=9)
+        self.assertEqual([step.key for step in steps], ["d"])
+
+    def test_a_jpeg_rectangle_without_a_quality_level_raises(self) -> None:
+        stream = handshake_bytes() + tight_jpeg_update(screen("d"))
+        with self.assertRaisesRegex(ValueError, "JPEG Quality Level"):
+            distill.split(stream, "rgbx8888")
+
+    def test_a_stream_that_stops_decoding_raises_rather_than_truncating(self) -> None:
+        stream = handshake_bytes() + raw_update(screen("0")) + unknown_encoding_update()
+        with self.assertRaisesRegex(ValueError, "stopped decoding after 1 updates"):
+            distill.split(stream, "rgbx8888")
 
 
 class TestWriteFixture(unittest.TestCase):
