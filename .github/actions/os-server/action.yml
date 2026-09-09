@@ -1,15 +1,16 @@
 name: Set up an OS-hosted VNC server
 description: >
   Turn the runner into a live VNC server for tests/functional/test_server_compat_native.py:
-  UltraVNC as a Windows service, Apple Screen Sharing on macOS, or a raw
-  QEMU on Linux.
+  UltraVNC, TightVNC and TigerVNC as Windows services, Apple Screen Sharing
+  on macOS, or a raw QEMU on Linux.
 
 inputs:
   os:
     description: macos, windows, or linux.
     required: true
   port:
-    description: Port the server serves on.
+    description: >
+      Port the first Windows server serves on; the other two take 5901 and 5902.
     required: false
     default: '5900'
   wait-seconds:
@@ -22,9 +23,9 @@ inputs:
     default: '1200'
   password:
     description: >
-      UltraVNC's server password, which is all Windows authenticates. macOS
-      takes no credentials: it authenticates as the console owner, with the
-      auto-login password already on the machine.
+      The VNC password, which is all the three Windows servers authenticate.
+      macOS takes no credentials: it authenticates as the console owner, with
+      the auto-login password already on the machine.
     required: false
     default: ''
 
@@ -40,7 +41,7 @@ runs:
         CAFFEINATE_SECONDS: ${{ inputs.caffeinate-seconds }}
       run: bash "$GITHUB_ACTION_PATH/macos.sh"
 
-    - name: Install and start UltraVNC
+    - name: Install and start the Windows VNC servers
       if: inputs.os == 'windows'
       shell: pwsh
       env:

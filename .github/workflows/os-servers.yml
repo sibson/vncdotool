@@ -19,6 +19,10 @@ on:
       - 'vncdotool/**'
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
+      - 'tests/servers/tightvnc/**'
+      - 'tests/servers/tigervnc-win/**'
+      - 'tests/servers/windows-common.ps1'
+      - 'tests/servers/vnc_passwd.py'
       - 'tests/servers/screen-sharing/**'
       - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
@@ -28,6 +32,10 @@ on:
       - 'vncdotool/**'
       - 'tests/functional/**'
       - 'tests/servers/ultravnc/**'
+      - 'tests/servers/tightvnc/**'
+      - 'tests/servers/tigervnc-win/**'
+      - 'tests/servers/windows-common.ps1'
+      - 'tests/servers/vnc_passwd.py'
       - 'tests/servers/screen-sharing/**'
       - 'tests/servers/qemu-kvm/**'
       - '.github/workflows/os-servers.yml'
@@ -51,12 +59,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows - UltraVNC
+          - name: Windows - UltraVNC, TightVNC, TigerVNC
             runner: windows-latest
             shell: pwsh
             os: windows
-            server: ultravnc
-            diagnostics: ./tests/servers/ultravnc/collect-diagnostics.ps1
+            server: windows
+            diagnostics: pwsh tests/servers/windows-diagnostics.ps1
           - name: macOS - Screen Sharing
             runner: macos-latest
             shell: bash
@@ -100,6 +108,23 @@ jobs:
 
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
+
+      # A measurement, not a diagnostic: the cursor tests write their
+      # evidence pass or fail.
+      - name: Report what the cursor tests measured
+        if: always()
+        run: uv run python tests/functional/cursor_report.py os >> $GITHUB_STEP_SUMMARY
+        shell: bash
+
+      - name: Upload the cursor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.server }}-cursor-evidence
+          path: |
+            screenshots/*-cursor-*.png
+            screenshots/*.wire.log
+          if-no-files-found: ignore
 
       # Everything below is diagnostics and artifact collection, so it runs
       # with if: failure() -- a failing test is exactly when the screenshot
