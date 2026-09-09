@@ -60,10 +60,16 @@ one. qemu is the weakest row: its screen is a four-colour text-mode boot
 display with no pointer on it, so it says nothing about how qemu would behave
 with a graphical guest.
 
-kasmvnc is unmeasured — it drops the connection mid-session on a freshly
-started fleet, independently of this change. The OS-hosted servers are
-unmeasured too: UltraVNC, Apple Screen Sharing and QEMU/KVM are set up by CI
-alone, and RealVNC — the server behind #206 — is in the fleet nowhere.
+The table is a snapshot, so `tests/functional/test_cursor.py` asserts the
+property standing: one case per server, each checking that neither pointer
+position leaves a mark on a capture. Comparing only the neighbourhood of each
+position is what makes it reliable — a painted pointer lands there, while
+qemu's blinking text cursor is elsewhere and would otherwise read as one.
+Registering the OS-hosted servers alongside the fleet is how UltraVNC, Apple
+Screen Sharing and QEMU/KVM get covered at all: CI alone sets them up, so a
+one-off probe can never reach them. RealVNC — the server behind #206 — is in
+neither, and kasmvnc drops the connection mid-session on a fresh fleet
+independently of this change.
 
 A four-move-then-capture run on x11vnc differs from `--nocursor` in exactly
 the ten columns at the final position: no trail, because x11vnc repaints the
