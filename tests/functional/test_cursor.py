@@ -25,6 +25,7 @@ from .utils import (
     QEMU_TLS_CA,
     TCP_SERVERS,
     WEBSOCKET_SERVERS,
+    CursorShapeOffered,
     FleetTestCase,
     VNCServer,
     X11VNC,
@@ -117,9 +118,12 @@ class TestLocalCursor(CursorFreeCapture, FleetTestCase):
 def _register(namespace: Dict[str, object]) -> None:
     for server in CURSOR_SERVERS:
         name = "TestCursorFree_" + server.name.replace("-", "_")
+        bases: Tuple[type, ...] = (CursorFreeCapture, FleetTestCase)
+        if server.has_pointer:
+            bases = (CursorShapeOffered,) + bases
         namespace[name] = type(
             name,
-            (CursorFreeCapture, FleetTestCase),
+            bases,
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )
 
