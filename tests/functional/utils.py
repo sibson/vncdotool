@@ -343,16 +343,30 @@ def running_fleet_tag(server: VNCServer) -> Optional[str]:
     return tag or None
 
 
+_FLEET_MISMATCHES: Dict[str, Optional[str]] = {}
+
+
 def fleet_mismatch(server: VNCServer) -> Optional[str]:
-    """Why `server` is not this checkout's fleet, or None if it is or may be."""
+    """Why `server` is not this checkout's fleet, or None if it is or may be.
+
+    Answered once per server and remembered: a grid of a hundred cases asks
+    the same question a hundred times, and each answer costs two
+    subprocesses.
+    """
+    if server.name in _FLEET_MISMATCHES:
+        return _FLEET_MISMATCHES[server.name]
+
     expected, running = fleet_tag(), running_fleet_tag(server)
     if expected is None or running is None or expected == running:
-        return None
-    return (
-        f"{server.name} is running image tag {running!r}, but this checkout's server sources "
-        f"hash to {expected!r}: the fleet was started from a different checkout and serves "
-        f"that checkout's files. Run `make servers-down && make servers-up`."
-    )
+        mismatch = None
+    else:
+        mismatch = (
+            f"{server.name} is running image tag {running!r}, but this checkout's server sources "
+            f"hash to {expected!r}: the fleet was started from a different checkout and serves "
+            f"that checkout's files. Run `make servers-down && make servers-up`."
+        )
+    _FLEET_MISMATCHES[server.name] = mismatch
+    return mismatch
 
 
 def assert_fleet_current(server: VNCServer) -> None:
@@ -411,6 +425,10 @@ class FleetTestCase(TestCase):
     """Base for a grid that runs one body against several fleet servers."""
 
     server: VNCServer
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        assert_fleet_current(cls.server)
 
     def setUp(self) -> None:
         if not server_is_up(self.server):
