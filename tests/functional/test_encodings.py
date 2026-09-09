@@ -7,44 +7,60 @@ encoding matches ours. See specs/decoder-goldens.md.
 """
 from __future__ import annotations
 
+import re
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Dict, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
 
 from vncdotool import decoders
 
-from .utils import HOST, TIGERVNC, capture_through_vnclog, port_open, run_vncdo
+from .utils import (
+    SCENE_SERVERS,
+    SCENES_DIR,
+    FleetTestCase,
+    VNCServer,
+    awaiting,
+    run_vncdo,
+)
 
-SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
 SCENES = ("0", "s")
-PROXY_PORT = 5997
+# Flat enough that every server encodes it the way it was asked to.
+HONOURED_SCENE = "0"
 
-# tigervnc answers a CoRRE request with Raw, observed against the fleet's
-# TigerVNC 1.12.0; upstream's EncodeManager::supported() accepts only Raw,
-# RRE, Hextile, ZRLE and Tight. Offering CoRRE here would prove the fallback
-# renders, not that CoRRE does.
-EMITTED_BY_TIGERVNC = {"raw", "rre", "hextile", "zrle", "tight"}
+RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
+
+# Measured against the fleet by offering one encoding at a time and reading
+# back the encoding of the rectangles that arrived. Every server here
+# answers with Raw for anything it does not implement, so an encoding is
+# listed only where the server really sends it.
+EMITTED: Dict[str, Set[str]] = {
+    "tigervnc": {"raw", "rre", "hextile", "zrle", "tight"},
+    "x11vnc": {"raw", "rre", "corre", "hextile", "zrle", "tight"},
+    "wayvnc": {"raw", "zrle", "tight"},
+    "selenoid": {"raw", "rre", "hextile", "zrle", "tight"},
+    "kasmvnc": {"raw", "rre", "hextile", "zrle", "tight"},
+}
 
 
-def capture(test: TestCase, encodings: str, key: str) -> Image.Image:
+def capture(
+    test: TestCase, server: VNCServer, encodings: str, key: str
+) -> Tuple[Image.Image, str]:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
-            TIGERVNC, "--encodings", encodings,
-            "key", key, "pause", "0.3", "capture", str(path),
+            server, "-v", "-v", "--encodings", encodings,
+            "key", key, *awaiting(key), "capture", str(path),
         )
         if result.returncode != 0:
-            test.fail(f"vncdo --encodings {encodings} failed ({result.returncode}): {result.stderr}")
-        return Image.open(path).convert("RGB").copy()
-
-
-class FleetTestCase(TestCase):
-    def setUp(self) -> None:
-        if not port_open(HOST, TIGERVNC.port):
-            self.fail(f"{TIGERVNC.name} is not listening on {TIGERVNC.port}; {TIGERVNC.how_to_start}")
+            test.fail(
+                f"{server.name}: vncdo --encodings {encodings} failed "
+                f"({result.returncode}): {result.stderr}"
+            )
+        return Image.open(path).convert("RGB").copy(), result.stderr
 
 
 class RendersTheScene:
@@ -57,48 +73,41 @@ class RendersTheScene:
     encoding: str
     scene: str
 
-    def test_renders_the_scene(self) -> None:
-        screen = capture(self, self.encoding, self.scene)
+    def test_renders_the_scene_through_the_encoding_it_asked_for(self) -> None:
+        screen, log = capture(self, self.server, self.encoding, self.scene)
         oracle = Image.open(SCENES_DIR / f"{self.scene}.png").convert("RGB")
         self.assertEqual(screen.size, oracle.size)
         self.assertEqual(
             screen.tobytes(), oracle.tobytes(),
-            f"{self.encoding} does not render scene {self.scene} as the server was shown it",
+            f"{self.server.name}: {self.encoding} does not render scene "
+            f"{self.scene} as the server was shown it",
         )
 
-
-class EmitsTheEncoding:
-    """Without this, the test above passes on a server that answered every request with Raw."""
-
-    encoding: str
-
-    def test_the_server_really_emits_the_encoding_we_asked_for(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            recorded = capture_through_vnclog(
-                self, TIGERVNC, PROXY_PORT,
-                "--encodings", self.encoding, "capture", str(Path(tmp) / "screen.png"),
-            )
+        # A server answers with Raw for an encoding it does not implement,
+        # and Raw renders the scene correctly, so the comparison above passes
+        # either way. Only on HONOURED_SCENE: x11vnc falls back to Raw once
+        # RRE or CoRRE would need more subrectangles than its limit allows.
+        if self.scene != HONOURED_SCENE or self.encoding not in EMITTED[self.server.name]:
+            return
         wanted = decoders.ENCODING_NAMES[self.encoding]
-        answered = {seen["encoding"]: seen["rectangles"] for seen in recorded.meta["encodings_seen"]}
+        arrived = set(RECTANGLE_ENCODING.findall(log))
         self.assertIn(
-            wanted.value, answered,
-            f"no {wanted!r} rectangle arrived; tigervnc answered with {sorted(answered)}",
+            wanted.name, arrived,
+            f"no {wanted!r} rectangle arrived; {self.server.name} answered "
+            f"with {sorted(arrived)}",
         )
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    """One case per encoding, and one per encoding and scene, so a failure's test id names them."""
     suite = unittest.TestSuite()
-    for encoding in sorted(EMITTED_BY_TIGERVNC):
-        name = f"TestEmits_{encoding}"
-        case = type(name, (EmitsTheEncoding, FleetTestCase), {"encoding": encoding})
-        suite.addTest(case("test_the_server_really_emits_the_encoding_we_asked_for"))
-    for encoding in sorted(decoders.ENCODING_NAMES):
-        for scene in SCENES:
-            name = f"TestRenders_{encoding}_scene_{scene}"
-            case = type(
-                name, (RendersTheScene, FleetTestCase),
-                {"encoding": encoding, "scene": scene},
-            )
-            suite.addTest(case("test_renders_the_scene"))
+    for server in SCENE_SERVERS:
+        label = server.name.replace("-", "_")
+        for encoding in sorted(decoders.ENCODING_NAMES):
+            for scene in SCENES:
+                name = f"TestRenders_{label}_{encoding}_scene_{scene}"
+                case = type(
+                    name, (RendersTheScene, FleetTestCase),
+                    {"server": server, "encoding": encoding, "scene": scene},
+                )
+                suite.addTest(case("test_renders_the_scene_through_the_encoding_it_asked_for"))
     return suite

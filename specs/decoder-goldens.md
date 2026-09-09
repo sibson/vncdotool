@@ -35,9 +35,10 @@ the matrix bigger without making a decoder better exercised, it was cut.
 toolkit and no fonts. A keypress selects one of the committed PNGs in the
 adjacent `tests/goldens/scenes/` and it goes to the X framebuffer whole, via
 `XPutImage`, so what the server sees is a file in the repository rather than
-the outcome of a rendering stack. It replaces `draw-content.sh` in the
-`tigervnc` and `x11vnc` images; `libvncserver-example` has no X server and
-stays out of golden capture.
+the outcome of a rendering stack. It runs in the `tigervnc`, `x11vnc`,
+`wayvnc`, `selenoid` and `kasmvnc` images, which is what lets the scene
+tests hold all five to the same picture. `libvncserver-example` has no X
+server and stays out of golden capture.
 
 The scenes themselves are generated offline by `tests/goldens/scenes.py`'s own
 `main()`, from the same pure functions the unit suite covers. Committing the
@@ -109,9 +110,9 @@ this is the one service's geometry rather than a second service beside it.
 The scene is `tests/goldens/scene.vdo`, a committed `vncdo` script:
 
     key 0
-    expect scenes/0.png 0
+    expect scenes/0.png
     key s
-    expect scenes/s.png 0
+    expect scenes/s.png
 
 `expect` polls with incremental FramebufferUpdateRequests until the screen
 matches, so the driver waits on the scene arriving rather than on a duration.
@@ -324,10 +325,21 @@ one case where CPIXEL and pixel coincide, and that is precisely where the
 known ZRLE hardcoded-layout defect lives.
 
 **Servers.** TigerVNC is primary. x11vnc is not a second copy of everything: it
-is there because CoRRE comes only from x11vnc and Tight only from TigerVNC, per
-the measured table in `decoder-architecture.md`, plus a small sanity subset
-where its polling differ produces messier rect patterns than Xvnc's damage
-tracking.
+is there because it is the only server in the fleet that emits CoRRE, plus a
+small sanity subset where its polling differ produces messier rect patterns than
+Xvnc's damage tracking. `x11vnc-corre-bgrx8888` is the only fixture in the tree
+holding real CoRRE rectangles.
+
+A capture records the client options it ran under, `nocursor` among them,
+because a replay that does not discard the same rectangles decodes a different
+frame from the one captured.
+
+wayvnc displays the scenes but is not a golden source: `vnclog` carries no TLS
+options and wayvnc offers VeNCrypt and nothing else. The live encoding and
+pixel-format grids drive it directly instead.
+
+Which encoding a server really used is read off `vncdo -v -v`, which names the
+encoding of every rectangle it receives.
 
 ## Phasing
 
@@ -354,6 +366,12 @@ Recorded so they are not rediscovered as new ideas.
   resize).
 - **CopyRect**, which appears only if Xvnc turns the scene player's scroll into
   one. That is found out by reading a capture, not by asserting it in advance.
+- **One large, complex scene**, on a service serving more than 256x192. Every
+  scene here is small and synthetic, so none of them says whether a photograph
+  at a desktop size decodes correctly, and encoders choose differently at that
+  size. The cost is the reason it is deferred rather than done: fixture size
+  scales with area, so the 3.1 MB of committed goldens becomes about 12 MB at
+  512x384 and 50 MB at 1024x768, against a 22 MB repository.
 
 ## Risks
 

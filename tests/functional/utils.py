@@ -27,7 +27,7 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -88,6 +88,7 @@ class VNCServer(NamedTuple):
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
     address: Optional[str] = None
+    extra_args: Tuple[str, ...] = ()
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
     # Honoured only off CI -- see absent_server_skips().
@@ -95,33 +96,34 @@ class VNCServer(NamedTuple):
     normalize_size_keys: Tuple[str, ...] = ()
 
 
-# One constant per service in tests/servers/docker-compose.yml, named so a
-# test that needs a specific one can import it directly instead of
-# searching DOCKER_SERVERS by name.
-# Small framebuffer: keeps a committed golden Raw update to tens of
-# kilobytes rather than megabytes; see specs/decoder-goldens.md.
-TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
-TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
-X11VNC = VNCServer("x11vnc", 5933)
-# Out of DOCKER_SERVERS: neither can be reached without TLS options the
-# smoke grid does not pass.
-TIGERVNC_VENCRYPT = VNCServer(
-    "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192)
-)
-TIGERVNC_VENCRYPT_ANON = VNCServer(
-    "tigervnc-vencrypt-anon", 5951, password="vncdotool", size=(256, 192)
-)
-# Written by the tigervnc-vencrypt container into a bind mount at every
-# start; it does not exist until the fleet has run.
+# Both written by their container into a bind mount at every start; neither
+# exists until the fleet has run.
 VENCRYPT_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "vencrypt-certs" / "cert.pem"
 )
-# Out of DOCKER_SERVERS for the same reason as the two above.
-WAYVNC = VNCServer(
-    "wayvnc", 5952, username="vncdotool", password="vncdotool", size=(1024, 768)
-)
 WAYVNC_CA_CERT = (
     Path(__file__).resolve().parents[1] / "servers" / "wayvnc-certs" / "cert.pem"
+)
+
+# One constant per service in tests/servers/docker-compose.yml, named so a
+# test that needs a specific one can import it directly instead of
+# searching TCP_SERVERS by name.
+TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
+TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
+# x11vnc paints the X cursor into the framebuffer unless a client asks for
+# the Cursor pseudo-encoding.
+X11VNC = VNCServer("x11vnc", 5933, size=(256, 192), extra_args=("--nocursor",))
+TIGERVNC_VENCRYPT = VNCServer(
+    "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192),
+    extra_args=("--tls-ca-cert", str(VENCRYPT_CA_CERT)),
+)
+TIGERVNC_VENCRYPT_ANON = VNCServer(
+    "tigervnc-vencrypt-anon", 5951, password="vncdotool", size=(256, 192),
+    extra_args=("--tls-insecure-skip-verify",),
+)
+WAYVNC = VNCServer(
+    "wayvnc", 5952, username="vncdotool", password="vncdotool", size=(256, 192),
+    extra_args=("--tls-ca-cert", str(WAYVNC_CA_CERT)),
 )
 # 800x600 is the size the demo starts at; it takes no -geometry option, and
 # any client's arrow keys resize it for every later client.
@@ -130,7 +132,34 @@ LIBVNCSERVER_EXAMPLE = VNCServer(
     normalize_size_keys=("up", "up", "down"),
 )
 
-DOCKER_SERVERS = [TIGERVNC, TIGERVNC_AUTH, X11VNC, LIBVNCSERVER_EXAMPLE]
+TCP_SERVERS = [
+    TIGERVNC,
+    TIGERVNC_AUTH,
+    TIGERVNC_VENCRYPT,
+    TIGERVNC_VENCRYPT_ANON,
+    WAYVNC,
+    X11VNC,
+    LIBVNCSERVER_EXAMPLE,
+]
+
+# The servers running tests/goldens/scene_player.py, so a test can ask them
+# to display a committed PNG. SELENOID and KASMVNC are appended below, once
+# their addresses are defined.
+SCENE_SERVERS = [TIGERVNC, X11VNC, WAYVNC]
+
+TLS_OPTIONS = ("--tls-ca-cert", "--tls-insecure-skip-verify")
+
+
+def vnclog_can_reach(server: VNCServer) -> bool:
+    """vnclog takes neither a TLS option nor a ws:// address.
+
+    An `address` server is behind a WebSocket bridge, so its port speaks
+    HTTP rather than RFB and dialling it as `HOST::port` hangs.
+    """
+    if server.address is not None:
+        return False
+    return not any(option in server.extra_args for option in TLS_OPTIONS)
+
 
 QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
 QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
@@ -152,16 +181,12 @@ KASMVNC = VNCServer(
     address="ws://127.0.0.1:5947/?password=vncdotool",
 )
 
-WEBSOCKIFY = VNCServer(
-    "websockify", 5942, size=(256, 192),
-    address="ws://127.0.0.1:5942/vnc/a-session?password=vncdotool",
-)
-WEBSOCKIFY_TLS = VNCServer(
-    "websockify-tls", 5943, size=(256, 192),
-    address="wss://localhost:5943/vnc/a-session?password=vncdotool",
-)
+WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
 
-WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC, WEBSOCKIFY, WEBSOCKIFY_TLS]
+# Both run the scene player behind their bridge, so the encoding and pixel
+# format grids reach them over ws:// and the handshake is exercised by every
+# case rather than by a test of its own.
+SCENE_SERVERS += [SELENOID, KASMVNC]
 
 
 @contextlib.contextmanager
@@ -264,7 +289,7 @@ def os_servers(platform: str = sys.platform) -> List[VNCServer]:
 
 
 def select_servers(group: str) -> List[VNCServer]:
-    groups = {"docker": DOCKER_SERVERS, "os": os_servers()}
+    groups = {"docker": TCP_SERVERS, "os": os_servers()}
     if group == "all":
         return [server for servers in groups.values() for server in servers]
     if group not in groups:
@@ -351,6 +376,54 @@ def port_open(host: str, port: int, timeout: float = PORT_PROBE_TIMEOUT) -> bool
         return False
 
 
+SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
+
+
+def awaiting(key: str) -> Tuple[str, ...]:
+    """`vncdo` arguments that block until the scene `key` selects is on screen.
+
+    No fuzz argument: `expect` then derives one from the negotiated pixel
+    format, and an explicit 0 would never come true at a reduced depth.
+    """
+    return ("expect", str(SCENES_DIR / f"{key}.png"))
+
+
+_SEEN_UP: Set[Tuple[str, int]] = set()
+
+
+def server_is_up(server: VNCServer) -> bool:
+    """port_open() for a test's setUp, remembered for the rest of the process.
+
+    Xvnc counts every connection closed before a successful authentication
+    towards BlacklistThreshold, and a probe drops one without ever speaking
+    RFB. One per test in a grid of a hundred blacklists the harness itself.
+    """
+    key = (HOST, server.port)
+    if key in _SEEN_UP:
+        return True
+    if port_open(HOST, server.port):
+        _SEEN_UP.add(key)
+        return True
+    return False
+
+
+class FleetTestCase(TestCase):
+    """Base for a grid that runs one body against several fleet servers."""
+
+    server: VNCServer
+
+    def setUp(self) -> None:
+        if not server_is_up(self.server):
+            self.fail(
+                f"{self.server.name} is not listening on {self.server.port}; "
+                f"{self.server.how_to_start}"
+            )
+        if self.server is SELENOID:
+            session = selenoid_session()
+            session.__enter__()
+            self.addCleanup(session.__exit__, None, None, None)
+
+
 def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedVNCClientProxy:
     """Connect to one server, with whatever credentials its security type needs.
 
@@ -371,8 +444,13 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
 
 
 def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
-    with connect(server, timeout=timeout) as client:
-        client.captureScreen(str(path))
+    """Capture through the CLI, which is what carries a server's extra_args."""
+    result = run_vncdo(server, "capture", str(path), timeout=timeout)
+    if result.returncode != 0:
+        raise AssertionError(
+            f"{server.name}: vncdo capture exited {result.returncode}, "
+            f"stderr:\n{result.stderr}"
+        )
     return path
 
 
@@ -465,6 +543,7 @@ def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
         argv += ["-p", server.password]
     if server.username is not None:
         argv += ["-u", server.username]
+    argv.extend(server.extra_args)
     argv.extend(args)
     return argv
 
@@ -586,7 +665,7 @@ class _VNCServerTestMixin:
     server: VNCServer
 
     def setUp(self) -> None:
-        if port_open(HOST, self.server.port):
+        if server_is_up(self.server):
             return
         unreachable = (
             f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "

@@ -1,8 +1,9 @@
-"""ws:// and wss:// against every WebSocket server the fleet can host.
+"""What the WebSocket transport does that the compatibility grids cannot see.
 
-Four independent implementations of the handshake -- websockify (noVNC's
-proxy), QEMU's built-in server, Selenoid's Go bridge and KasmVNC -- which
-disagree about it, so one server is no evidence about the rest.
+Selenoid and KasmVNC are in SCENE_SERVERS, so every encoding and pixel
+format case already runs over ws:// against them. What is left here is the
+client's own behaviour: refusing an unverifiable wss:// certificate, and
+keeping a password out of the log when the address carries one.
 """
 from __future__ import annotations
 
@@ -11,29 +12,20 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Dict, Optional
-from unittest import TestCase
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 from .utils import (
     HOST,
     QEMU_TLS,
     QEMU_TLS_CA,
-    SELENOID,
-    TIGERVNC,
+    SCENE_SERVERS,
     WEBSOCKET_SERVERS,
-    WEBSOCKIFY,
-    WEBSOCKIFY_TLS,
+    FleetTestCase,
     VNCServer,
     distinct_colours,
-    port_open,
     run_vncdo,
-    selenoid_session,
 )
-
-# The same TigerVNC instance the TCP tests reach, so a capture through the
-# proxy can be held against one taken directly.
-PROXIES_TIGERVNC = {WEBSOCKIFY, WEBSOCKIFY_TLS}
 
 
 class WebSocketTests:
@@ -44,17 +36,6 @@ class WebSocketTests:
     """
 
     server: VNCServer
-
-    def setUp(self) -> None:
-        if not port_open(HOST, self.server.port):
-            self.fail(
-                f"{self.server.name} is not listening on {self.server.port};"
-                f" {self.server.how_to_start}"
-            )
-        if self.server is SELENOID:
-            session = selenoid_session()
-            session.__enter__()
-            self.addCleanup(session.__exit__, None, None, None)
 
     def env(self) -> Optional[Dict[str, str]]:
         if not self.server.address.startswith("wss://"):
@@ -80,6 +61,16 @@ class WebSocketTests:
         )
         return result.stdout + result.stderr
 
+
+class BasicWebSocketTests(WebSocketTests):
+    """For a server the scene grids cannot reach, so nothing else drives it."""
+
+    def test_a_key_event_is_accepted(self) -> None:
+        self.run_ok("key", "x")
+
+    def test_a_pointer_event_is_accepted(self) -> None:
+        self.run_ok("move", "10", "10")
+
     def test_captures_a_real_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             shot = Path(tmp) / "ws.png"
@@ -100,21 +91,6 @@ class QueryStringTests(WebSocketTests):
         self.assertNotIn("password=vncdotool", self.run_ok("-v", "-v", "pause", "0"))
 
 
-class ProxiedWebSocketTests(WebSocketTests):
-
-    def test_capture_matches_the_same_server_over_tcp(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            through_socket = Path(tmp) / "ws.png"
-            direct = Path(tmp) / "tcp.png"
-            self.run_ok("capture", str(through_socket))
-            self.assertEqual(run_vncdo(TIGERVNC, "capture", str(direct)).returncode, 0)
-
-            over_websocket = Image.open(through_socket).convert("RGB").copy()
-            over_tcp = Image.open(direct).convert("RGB").copy()
-
-        self.assertIsNone(ImageChops.difference(over_websocket, over_tcp).getbbox())
-
-
 class TLSWebSocketTests(WebSocketTests):
 
     def test_untrusted_certificate_is_refused(self) -> None:
@@ -125,14 +101,14 @@ class TLSWebSocketTests(WebSocketTests):
 
 def _bases(server: VNCServer) -> tuple:
     bases = []
-    if server in PROXIES_TIGERVNC:
-        bases.append(ProxiedWebSocketTests)
+    if server not in SCENE_SERVERS:
+        bases.append(BasicWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)
     if "?" in server.address:
         bases.append(QueryStringTests)
     bases.append(WebSocketTests)
-    bases.append(TestCase)
+    bases.append(FleetTestCase)
     return tuple(bases)
 
 

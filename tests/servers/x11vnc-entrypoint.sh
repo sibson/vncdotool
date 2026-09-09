@@ -6,7 +6,7 @@ set -e
 # start on the lock the previous run left behind.
 rm -f /tmp/.X0-lock /tmp/.X11-unix/X0
 
-Xvfb :0 -screen 0 1024x768x24 &
+Xvfb :0 -screen 0 "${VNC_GEOMETRY:-1024x768}x24" &
 XVFB_PID=$!
 trap 'kill -TERM "$XVFB_PID" 2>/dev/null; exit 0' TERM INT
 

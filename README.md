@@ -55,6 +55,38 @@ vncdo -s vncserver capture screen.png
 
 More documentation can be found on [Read the Docs](http://vncdotool.readthedocs.org).
 
+## Server Support
+
+vncdotool speaks standard RFB and works with far more servers than we test.
+This says what we have evidence for, not what works.
+
+**Supported** — all basic function known to work, regression tested on every
+pull request: [TigerVNC](https://tigervnc.org),
+[x11vnc](https://github.com/LibVNC/x11vnc),
+[wayvnc](https://github.com/any1/wayvnc),
+[LibVNCServer](https://libvnc.github.io),
+[KasmVNC](https://kasmweb.com/kasmvnc), [QEMU](https://qemu.org)'s built-in
+server, [Selenoid](https://aerokube.com/selenoid/).
+
+**Supported on their own OS** — the same journey, but only on the pull
+requests that touch code able to affect it, since these servers need a
+Windows or macOS runner: UltraVNC on Windows, and Apple Screen Sharing on
+macOS for connect, auth and input. Screen Sharing's rendering is checked by
+hand rather than in CI: a hosted macOS runner has no attached display, so
+its captures come back near-solid whatever the client does.
+
+**Compatible** — a user reported it working, or we ran the compatibility suite
+against it once. Not tracked by CI, so it ages. Nothing listed yet.
+
+**Broken** — we tried it and it does not work. Nothing listed yet.
+
+**TBD** — no data gathered: RealVNC, TightVNC, TurboVNC, PiKVM, and everything
+else. It should work; we make no claim. A report either way is welcome, and is
+how a server moves up.
+
+How the servers are tested is in `specs/testing-framework.md`; the fleet
+itself is `tests/servers/docker-compose.yml`.
+
 ## Feedback
 
 If you need help getting VNCDoTool working try the community at [Stackoverflow](https://stackoverflow.com/questions/ask?tags=vncdotool).

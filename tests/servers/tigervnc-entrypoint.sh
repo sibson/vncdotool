@@ -25,12 +25,7 @@ if [ -n "$VNC_PASSWORD" ]; then
     mkdir -p /root/.vnc
     printf '%s' "$VNC_PASSWORD" | vncpasswd -f > /root/.vnc/passwd
     chmod 600 /root/.vnc/passwd
-    # Xvnc counts every connection closed before a successful authentication
-    # towards BlacklistThreshold, and a successful authentication clears the
-    # host's blackmark. The readiness probe never authenticates (see the
-    # HEALTHCHECK in Dockerfile), so a generous threshold avoids blacklisting
-    # the harness itself while still capping real password guessing.
-    set -- "$@" -PasswordFile /root/.vnc/passwd -BlacklistThreshold=50
+    set -- "$@" -PasswordFile /root/.vnc/passwd
 fi
 
 if [ -n "$VNC_X509_DIR" ]; then
@@ -55,8 +50,10 @@ else
     set -- "$@" -SecurityTypes None
 fi
 
+# BlacklistThreshold avoids lockout due to multiple test runs.
 Xvnc :0 \
     "$@" \
+    -BlacklistThreshold=500 \
     -rfbport 5900 \
     -geometry "${VNC_GEOMETRY:-1024x768}" \
     -depth 24 \

@@ -12,6 +12,8 @@ from .utils import HOST, X11VNC, port_open, run_vncdo, screenshot_dir
 
 CURSOR_POS = (50, 50)
 
+SERVER = X11VNC._replace(extra_args=())
+
 
 class TestLocalCursor(TestCase):
     def setUp(self) -> None:
@@ -27,10 +29,10 @@ class TestLocalCursor(TestCase):
         nocursor_png = screenshot_dir() / "x11vnc-nocursor.png"
         localcursor_png = screenshot_dir() / "x11vnc-localcursor.png"
 
-        nocursor = run_vncdo(X11VNC, "--nocursor", "move", x, y, "capture", str(nocursor_png))
+        nocursor = run_vncdo(SERVER, "--nocursor", "move", x, y, "capture", str(nocursor_png))
         self.assertEqual(nocursor.returncode, 0, f"vncdo --nocursor failed: {nocursor.stderr}")
 
-        localcursor = run_vncdo(X11VNC, "--localcursor", "move", x, y, "capture", str(localcursor_png))
+        localcursor = run_vncdo(SERVER, "--localcursor", "move", x, y, "capture", str(localcursor_png))
         self.assertEqual(localcursor.returncode, 0, f"vncdo --localcursor failed: {localcursor.stderr}")
 
         with Image.open(nocursor_png) as without, Image.open(localcursor_png) as with_cursor:
@@ -54,10 +56,10 @@ class TestLocalCursor(TestCase):
         default_png = screenshot_dir() / "x11vnc-default.png"
         localcursor_png = screenshot_dir() / "x11vnc-localcursor-vs-default.png"
 
-        default = run_vncdo(X11VNC, "move", x, y, "capture", str(default_png))
+        default = run_vncdo(SERVER, "move", x, y, "capture", str(default_png))
         self.assertEqual(default.returncode, 0, f"vncdo failed: {default.stderr}")
 
-        localcursor = run_vncdo(X11VNC, "--localcursor", "move", x, y, "capture", str(localcursor_png))
+        localcursor = run_vncdo(SERVER, "--localcursor", "move", x, y, "capture", str(localcursor_png))
         self.assertEqual(localcursor.returncode, 0, f"vncdo --localcursor failed: {localcursor.stderr}")
 
         with Image.open(default_png) as oracle, Image.open(localcursor_png) as captured:

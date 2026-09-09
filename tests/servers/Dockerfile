@@ -92,6 +92,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         libssl-dev \
         zlib1g-dev \
+        libjpeg-dev \
         ca-certificates \
         curl \
     && rm -rf /var/lib/apt/lists/*
@@ -139,20 +140,6 @@ RUN ldconfig
 ENTRYPOINT ["example", "-rfbport", "5900", "-rfbwait", "1000"]
 
 
-# websockify, proxying whichever fleet member is passed as an argument.
-FROM base AS websockify
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        websockify \
-        openssl \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY servers/websockify-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-ENTRYPOINT ["/entrypoint.sh"]
-
-
 FROM base AS qemu
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -166,7 +153,6 @@ RUN chmod +x /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
 
 
-# Selenoid's WebSocket bridge, its own Go code rather than websockify.
 FROM aerokube/selenoid:1.11.3 AS selenoid-dist
 
 FROM base AS selenoid
@@ -222,6 +208,7 @@ FROM base AS wayvnc
 RUN apt-get update && apt-get install -y --no-install-recommends \
         wayvnc \
         sway \
+        xwayland \
         openssl \
     && rm -rf /var/lib/apt/lists/*
 

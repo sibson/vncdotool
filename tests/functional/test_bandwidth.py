@@ -13,7 +13,7 @@ from unittest import TestCase
 
 from tests.goldens import scenes
 
-from .utils import HOST, TIGERVNC, capture_through_vnclog, port_open, run_vncdo
+from .utils import HOST, TIGERVNC, awaiting, capture_through_vnclog, port_open, run_vncdo
 
 PROXY_PORT = 5998
 
@@ -29,7 +29,7 @@ class TestBandwidth(TestCase):
     def _show(self, scene: str) -> None:
         # The scene the sizes are compared over has to be on screen before
         # each measurement starts, or the first capture pays for the repaint.
-        run_vncdo(TIGERVNC, "key", scene, "pause", "0.3")
+        run_vncdo(TIGERVNC, "key", scene, *awaiting(scene))
 
     def _bytes_from_server(self, encodings: str) -> int:
         with tempfile.TemporaryDirectory() as tmp:

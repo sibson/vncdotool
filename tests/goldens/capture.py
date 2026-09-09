@@ -17,7 +17,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from tests.functional.utils import HOST, TIGERVNC, VNCDO, VNCLOG
+from tests.functional.utils import (
+    HOST,
+    SCENE_SERVERS,
+    VNCDO,
+    VNCLOG,
+    VNCServer,
+    vnclog_can_reach,
+)
 from tests.goldens import distill, scenes
 from vncdotool import decoders, imagematch, pixelformat
 from vncdotool.command import LOSSY_BLUR
@@ -32,10 +39,14 @@ SCENE_DEADLINE = 30.0
 JPEG_FUZZ = 64
 JPEG_FUZZ_MARGIN = 4
 
+PROXYABLE = {
+    server.name: server for server in SCENE_SERVERS if vnclog_can_reach(server)
+}
 
-def _start_vnclog(archive: Path) -> subprocess.Popen:
+
+def _start_vnclog(archive: Path, server: VNCServer) -> subprocess.Popen:
     proxy = subprocess.Popen(
-        [VNCLOG, "-s", f"{HOST}::{TIGERVNC.port}", "--listen", str(PROXY_PORT),
+        [VNCLOG, "-s", f"{HOST}::{server.port}", "--listen", str(PROXY_PORT),
          "--capture-raw", str(archive)],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True,
     )
@@ -67,6 +78,12 @@ def _measured_fuzz(steps: list[distill.Step]) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--server",
+        choices=sorted(PROXYABLE),
+        default="tigervnc",
+        help="fleet server to capture from [%(default)s]",
+    )
+    parser.add_argument(
         "--pixel-format",
         choices=sorted(pixelformat.PIXEL_FORMATS),
         required=True,
@@ -89,11 +106,12 @@ def main() -> int:
     )
     args = parser.parse_args()
     lossy = args.jpeg_quality is not None
-    name = args.name or f"tigervnc-{args.encoding}-{args.pixel_format}"
+    server = PROXYABLE[args.server]
+    name = args.name or f"{server.name}-{args.encoding}-{args.pixel_format}"
 
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
-        proxy = _start_vnclog(archive)
+        proxy = _start_vnclog(archive, server)
 
         # scene.vdo waits on `expect scenes/<key>.png`, named relative to
         # itself, so the driver runs from the directory holding both.
@@ -106,6 +124,7 @@ def main() -> int:
                     "--fuzz", str(JPEG_FUZZ),
                 ] if lossy else []
             )
+            + list(server.extra_args)
             + ["-s", f"{HOST}::{PROXY_PORT}", SCENE_VDO.name],
             check=True, timeout=CAPTURE_DEADLINE, cwd=SCENE_VDO.parent,
         )
@@ -126,12 +145,13 @@ def main() -> int:
         if directory.exists():
             shutil.rmtree(directory)
         conditions = {
-            "server": TIGERVNC.name,
+            "server": server.name,
             "encoding": args.encoding,
             "pixel_format": args.pixel_format,
             "meta": json.loads(meta),
             "geometry": list(scenes.SIZE),
             "tolerance_kind": "jpeg-lossy" if lossy else "format-quantization",
+            "nocursor": "--nocursor" in server.extra_args,
         }
         if lossy:
             conditions["jpeg_quality"] = args.jpeg_quality

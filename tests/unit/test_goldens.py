@@ -65,7 +65,7 @@ class Fixture:
         cli.factory = mock.Mock()
         cli.factory.shared = 0
         cli.factory.password = None
-        cli.factory.nocursor = False
+        cli.factory.nocursor = self.conditions.get("nocursor", False)
         cli.factory.pseudocursor = False
         cli.factory.pseudodesktop = False
         cli.factory.last_rect = False

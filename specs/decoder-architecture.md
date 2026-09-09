@@ -459,8 +459,8 @@ registers it goes in `decoders/__init__.py`, and `Encoding.TIGHT` already exists
 in `const.py`, so `rfb.py` and `const.py` are both untouched. That is the test of
 R1: today the same change edits `RFBClient.SUPPORTED_ENCODINGS`, and if it still
 does, the architecture did not deliver what it exists for.
-`libvncserver-example` falls back to Raw when asked for Tight, so its oracle
-comes from `tigervnc` and `x11vnc`.
+Every fleet server that implements Tight emits it, so the oracle can come from
+any of `tigervnc`, `x11vnc` or `libvncserver-example`.
 
 TRLE is **not** in this plan. No server in the fleet emits it (see Fleet
 encoding support), so under the captured-fixture rule it cannot be tested at
@@ -480,14 +480,14 @@ Because fixtures must come from a real server, an encoding no fleet server emits
 cannot be tested, and therefore cannot be built. Measured by offering each server
 exactly one encoding and reading back the encoding it actually used:
 
-| Encoding | tigervnc | x11vnc | libvncserver-example | ultravnc | screen-sharing |
-|---|---|---|---|---|---|
-| RRE | yes | yes | yes | ? | ? |
-| CoRRE | no [1] | yes [1] | yes | ? | ? |
-| Hextile | yes | yes | yes | ? | ? |
-| ZRLE | yes | yes | yes | ? | ? |
-| Tight | yes | no | — see below | ? | ? |
-| TRLE | no | no | no | ? | ? |
+| Encoding | tigervnc | x11vnc | libvncserver-example | wayvnc | selenoid | kasmvnc | ultravnc | screen-sharing |
+|---|---|---|---|---|---|---|---|---|
+| RRE | yes | yes | yes | no [3] | yes [3] | yes [3] | ? | ? |
+| CoRRE | no [1] | yes [1] | yes | no [3] | no [3] | no [3] | ? | ? |
+| Hextile | yes | yes | yes | no [3] | yes [3] | yes [3] | ? | ? |
+| ZRLE | yes | yes | yes | yes [3] | yes [3] | yes [3] | ? | ? |
+| Tight | yes | yes [2] | yes [2] | yes [3] | yes [3] | yes [3] | ? | ? |
+| TRLE | no | no | no | ? | ? | ? | ? | ? |
 
 A "no" means the server answered a request for that encoding with Raw.
 
@@ -503,6 +503,16 @@ and nothing else. Every other cell predates this pass and remains uncited. The
 probe itself was committed and then removed within #417, so `git show` against
 that PR's history recovers the script without it living in the tree ahead of
 the Phase 3 tooling below.
+
+[2] Measured 2026-09-08 by offering one encoding at a time and reading back
+the encoding of each rectangle from `vncdo -v -v`. LibVNCServer compiles Tight
+out without `libjpeg-dev`, so a build lacking it answers with Raw.
+
+[3] Measured 2026-09-08 the same way, and asserted on every run: these rows
+are `EMITTED` in `tests/functional/test_encodings.py`, which the scene grid
+holds each server to. wayvnc's three are neatvnc's whole set. The TRLE column
+is unmeasured for them because `vncdo --encodings` cannot name an encoding the
+client has no decoder for.
 
 **The two Tier 2 columns are unmeasured**, and they are the servers users run.
 That matters most for Tight, the encoding this whole document exists for (#264):

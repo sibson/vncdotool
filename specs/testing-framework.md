@@ -47,14 +47,26 @@ unit suite is where bugs stay fixed.
 Tier 1 = the Docker Compose fleet (`tests/servers/`). Tier 2 = OS-hosted
 servers on Windows/macOS runners (`os-servers.yml`).
 
-**Scenario grid**: a small core scenario set crossed with every server:
-connect, key press, mouse move, screenshot (and expect where a desktop
-renders). Implemented as plain `unittest` test methods on the existing
-server-test mixin, one method per scenario, one subclass per server.
-No scenario registry / NamedTuple machinery: the method grid *is* the
-matrix. A reduced capability model survives on the server descriptors
-(`renders_desktop`, `known_size`, auth fields) to drive honest skips, for
-example, macOS Screen Sharing's black framebuffer.
+**Scenario grid**: a small core scenario set — connect, key press, mouse
+move, screenshot (and expect where a desktop renders) — implemented as
+plain `unittest` test methods on the server-test mixin, one method per
+scenario and one subclass per server. No scenario registry / NamedTuple
+machinery: the method grid *is* the matrix. A reduced capability model
+survives on the server descriptors (`renders_desktop`, `size`, auth
+fields) to drive honest skips, for example, macOS Screen Sharing's black
+framebuffer.
+
+The Docker fleet runs this grid against two servers
+(`test_server_compat_docker.py`). TigerVNC is the fast path: `vncdo` broken
+outright fails in seconds rather than part-way through suites that take
+minutes. libvncserver-example is there because it has no X server, so it
+cannot run the scene player and the encoding and pixel-format grids cannot
+reach it — the grid is the only thing that sends it input. Every other fleet
+server is covered in more detail by those grids and stays out of this one.
+
+Tier 2 keeps a subclass per server for the same reason as
+libvncserver-example: for an OS-hosted server the smoke grid is the only
+coverage there is.
 
 **Fleet identity**: the fleet is machine-global, fixed ports 5931-5943 and
 one compose project, while checkouts are many, and the Dockerfile bakes
@@ -224,6 +236,21 @@ libvncserver from a pinned release.
   decoder goldens (leg 1).
 - **Replay/transcripts as CI fixtures**: never existed; explicitly out.
 
+## What each suite proves
+
+None of them subsumes another.
+
+- **The smoke test** is the critical user journey: connect, send input,
+  capture a screen. It catches `vncdo` breaking outright, and runs first.
+- **The compatibility grids** drive real products, so they cover a wider
+  variety of settings and behaviours than a fixture can carry.
+- **The scene tests** are decoder resilience to variation in server
+  behaviour, held against the image the server was actually shown rather
+  than against anything our decoder produced.
+- **The goldens** replay committed wire bytes offline, so any feature can be
+  tested on every OS we support, and a server nobody can deploy locally or
+  in CI can still be covered by someone sending us a capture of it.
+
 ## Compatibility matrix visibility
 
 The CI grid is the matrix: server × scenario as test names, visible per
@@ -281,8 +308,9 @@ and can proceed while 3–5 follow.
   key classes (named keys, function keys, modifier combos, keypad) at every
   fleet server and reading the X-side sink. Needs a per-class matrix rather
   than the one-key-per-server smoke case that exists today.
-- **Fleet expansion** (TightVNC, QEMU, more): follows the plan's tier
-  process; this framework adds a server as one descriptor + one subclass.
+- **Fleet expansion** (TightVNC, more): follows the plan's tier process;
+  this framework adds a server as one descriptor, plus its membership of
+  whichever server lists it belongs in.
 - **macOS Screen Sharing pixel rendering is permanently untestable in CI**:
   confirmed by hand against a real Mac (2026-09-06) that ARD auth as the
   actual console owner does capture a real desktop (thousands of distinct

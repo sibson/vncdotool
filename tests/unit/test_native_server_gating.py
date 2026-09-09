@@ -7,7 +7,7 @@ import unittest
 from typing import Dict, List, Mapping, Tuple
 
 from tests.functional.utils import (
-    DOCKER_SERVERS,
+    TCP_SERVERS,
     VNCEV,
     VNCServer,
     absent_server_skips,
@@ -32,7 +32,7 @@ ENV_SAMPLES: Dict[str, Tuple[Mapping[str, str], bool]] = {
 # nothing to generate a case from.
 NATIVE_PLATFORMS = ("darwin", "win32")
 
-NEVER_SKIPPING = DOCKER_SERVERS + [VNCEV]
+NEVER_SKIPPING = TCP_SERVERS + [VNCEV]
 
 
 def native_servers() -> List[Tuple[str, VNCServer]]:
