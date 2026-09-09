@@ -9,6 +9,9 @@ from pathlib import Path
 from PIL import Image
 from Xlib import X, display
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tests.goldens import click_targets  # noqa: E402
+
 DEFAULT_SCENE_DIR = Path(__file__).resolve().parent / "scenes"
 # Keeps each PutImage request under the server's maximum request length.
 BAND_ROWS = 32
@@ -33,10 +36,11 @@ class ScenePlayer:
             X.InputOutput, X.CopyFromParent,
             background_pixel=screen.black_pixel,
             override_redirect=True,
-            event_mask=X.ExposureMask,
+            event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # Without this, key events never reach the container's `xev -root` sink.
-        screen.root.change_attributes(event_mask=X.KeyPressMask)
+        # Without this, key and button events never reach the container's
+        # `xev -root` sink.
+        screen.root.change_attributes(event_mask=X.KeyPressMask | X.ButtonPressMask)
         self.gc = self.window.create_gc()
         self.window.map()
         self.paint()
@@ -55,7 +59,12 @@ class ScenePlayer:
 
     def handle_key(self, keycode: int) -> None:
         keysym = self.display.keycode_to_keysym(keycode, 0)
-        key = self.keysym_to_key(keysym)
+        self.show(self.keysym_to_key(keysym))
+
+    def handle_button(self, x: int, y: int) -> None:
+        self.show(click_targets.scene_at(x, y) or "")
+
+    def show(self, key: str) -> None:
         path = self.scene_dir / f"{key}.png"
         if not key or not path.exists():
             return
@@ -69,6 +78,8 @@ class ScenePlayer:
                 self.paint()
             elif event.type == X.KeyPress:
                 self.handle_key(event.detail)
+            elif event.type == X.ButtonPress:
+                self.handle_button(event.event_x, event.event_y)
 
     @staticmethod
     def keysym_to_key(keysym: int) -> str:

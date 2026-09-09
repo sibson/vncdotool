@@ -5,7 +5,7 @@ import unittest
 
 from PIL import Image
 
-from tests.goldens import scenes
+from tests.goldens import click_targets, scenes
 from vncdotool import pixelformat
 
 
@@ -83,6 +83,33 @@ class TestScenes(unittest.TestCase):
         self.assertEqual(stamped.tobytes(), expected.tobytes())
 
 
+class TestClickTargets(unittest.TestCase):
+    def test_no_two_scenes_share_a_target(self) -> None:
+        targets = [click_targets.click_target(key) for key in click_targets.KEYS]
+        self.assertEqual(len(set(targets)), len(targets))
+
+    def test_the_catalogues_agree(self) -> None:
+        """The two catalogues list the same scenes, so no cell selects nothing."""
+        self.assertEqual(click_targets.KEYS, tuple(sorted(scenes.SCENES)))
+
+    def test_the_grid_matches_the_scene_geometry(self) -> None:
+        self.assertEqual(click_targets.SCREEN, scenes.SIZE)
+
+
+class ClickTargetRoundTrip:
+    key: str
+
+    def test_a_target_selects_its_own_scene(self) -> None:
+        x, y = click_targets.click_target(self.key)
+        self.assertEqual(click_targets.scene_at(x, y), self.key)
+
+    def test_a_target_is_on_screen(self) -> None:
+        x, y = click_targets.click_target(self.key)
+        width, height = click_targets.SCREEN
+        self.assertTrue(0 <= x < width, f"x {x} outside {width}")
+        self.assertTrue(0 <= y < height, f"y {y} outside {height}")
+
+
 class JpegRoundTrip:
     """The glyph read back off a scene a lossy encoder has been through.
 
@@ -115,6 +142,14 @@ class PatchRoundTrip:
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
     suite = unittest.TestSuite()
     suite.addTests(loader.loadTestsFromTestCase(TestScenes))
+    suite.addTests(loader.loadTestsFromTestCase(TestClickTargets))
+    for key in click_targets.KEYS:
+        case = type(
+            f"TestClickTarget_{key}",
+            (ClickTargetRoundTrip, unittest.TestCase),
+            {"key": key},
+        )
+        suite.addTests(loader.loadTestsFromTestCase(case))
     for name in pixelformat.PIXEL_FORMATS:
         for key in scenes.SCENES:
             case = type(

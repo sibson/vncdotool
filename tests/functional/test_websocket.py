@@ -1,9 +1,9 @@
 """What the WebSocket transport does that the compatibility grids cannot see.
 
-Selenoid and KasmVNC are in SCENE_SERVERS, so every encoding and pixel
-format case already runs over ws:// against them. What is left here is the
-client's own behaviour: refusing an unverifiable wss:// certificate, and
-keeping a password out of the log when the address carries one.
+What is left for this module is the client's own behaviour: refusing an
+unverifiable wss:// certificate, and keeping a password out of the log when
+the address carries one. The per-server grid in test_server_compat_docker.py
+already drives input and captures against every product here.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from .utils import (
     HOST,
     QEMU_TLS,
     QEMU_TLS_CA,
-    SCENE_SERVERS,
+    SUPPORTED_SERVERS,
     WEBSOCKET_SERVERS,
     FleetTestCase,
     VNCServer,
@@ -61,15 +61,17 @@ class WebSocketTests:
         )
         return result.stdout + result.stderr
 
+    def assert_survives(self, *args: str) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            self.run_ok(*args, "pause", "0.3", "capture", str(Path(tmp) / "after.png"))
+
 
 class BasicWebSocketTests(WebSocketTests):
-    """For a server the scene grids cannot reach, so nothing else drives it."""
-
     def test_a_key_event_is_accepted(self) -> None:
-        self.run_ok("key", "x")
+        self.assert_survives("key", "x")
 
     def test_a_pointer_event_is_accepted(self) -> None:
-        self.run_ok("move", "10", "10")
+        self.assert_survives("move", "10", "10")
 
     def test_captures_a_real_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -101,7 +103,7 @@ class TLSWebSocketTests(WebSocketTests):
 
 def _bases(server: VNCServer) -> tuple:
     bases = []
-    if server not in SCENE_SERVERS:
+    if server not in SUPPORTED_SERVERS:
         bases.append(BasicWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)

@@ -191,7 +191,6 @@ QEMU_TLS = VNCServer(
     tls_ca=QEMU_TLS_CA,
 )
 
-
 @contextlib.contextmanager
 def selenoid_session() -> Iterator[None]:
     endpoint = f"http://{HOST}:{SELENOID.port}/wd/hub/session"
@@ -240,6 +239,20 @@ WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
 # format grids reach them over ws:// and the handshake is exercised by every
 # case rather than by a test of its own.
 SCENE_SERVERS += [SELENOID, KASMVNC]
+
+# One entry per product in README.md's "Supported" class, which is the claim
+# this grid tests. Wider than SCENE_SERVERS, because a server can answer
+# input without being able to display a scene: libvncserver-example has no X
+# server, and qemu shows firmware.
+SUPPORTED_SERVERS = [
+    TIGERVNC,
+    X11VNC,
+    WAYVNC,
+    LIBVNCSERVER_EXAMPLE,
+    KASMVNC,
+    QEMU,
+    SELENOID,
+]
 
 
 # An event sink rather than a rendering server, so it stays out of the smoke
@@ -713,7 +726,7 @@ def start_replay_server(
     testcase.fail(f"vncdo-replay --server never listened on {port}: {server.communicate()[1]}")
 
 
-class _VNCServerTestMixin:
+class _VNCServerVerificationTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 
     Deliberately does NOT subclass TestCase, or `unittest discover` would
@@ -723,15 +736,18 @@ class _VNCServerTestMixin:
     server: VNCServer
 
     def setUp(self) -> None:
-        if server_is_up(self.server):
-            return
-        unreachable = (
-            f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
-            f"{self.server.how_to_start}"
-        )
-        if absent_server_skips(self.server):
-            self.skipTest(unreachable)
-        self.fail(unreachable)
+        if not server_is_up(self.server):
+            unreachable = (
+                f"{self.server.name} not reachable on {HOST}:{self.server.port} -- "
+                f"{self.server.how_to_start}"
+            )
+            if absent_server_skips(self.server):
+                self.skipTest(unreachable)
+            self.fail(unreachable)
+        if self.server is SELENOID:
+            session = selenoid_session()
+            session.__enter__()
+            self.addCleanup(session.__exit__, None, None, None)
 
     def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
         result = run_vncdo(self.server, *args)
@@ -743,17 +759,31 @@ class _VNCServerTestMixin:
         )
         return result
 
+    def assert_survives(self, *args: str) -> None:
+        """The exit status alone proves nothing: vncdo has sent the event and
+        returned before the server reacts. KasmVNC closes the WebSocket on a
+        PointerEvent, and a bare `move` against it still exits 0 about a
+        second later.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            png = Path(tmp) / "after-input.png"
+            self.run_vncdo_ok(*args, "pause", "0.3", "capture", str(png))
+
     def test_connect(self) -> None:
         """Handshake and auth succeed: `pause 0` still needs a live connection."""
         self.run_vncdo_ok("pause", "0")
 
     def test_keypress(self) -> None:
-        """A key event is accepted without the server dropping the session."""
-        self.run_vncdo_ok("key", "x")
+        """A key event is accepted and the session survives it."""
+        self.assert_survives("key", "x")
 
     def test_mousemove(self) -> None:
-        """A pointer event is accepted without the server dropping the session."""
-        self.run_vncdo_ok("move", "10", "10")
+        """A pointer event is accepted and the session survives it."""
+        self.assert_survives("move", "10", "10")
+
+    def test_click(self) -> None:
+        """A button event is accepted and the session survives it."""
+        self.assert_survives("move", "10", "10", "click", "1")
 
     def test_capture(self) -> None:
         """A framebuffer update is received and encoded to a PNG.
@@ -798,7 +828,9 @@ class _VNCServerTestMixin:
         )
 
 
-def register_server_tests(servers: List[VNCServer], namespace: Dict[str, object]) -> None:
+def register_server_tests(
+    servers: List[VNCServer], namespace: Dict[str, object], base: type = TestCase
+) -> None:
     """Add one TestCase subclass per server to a test module's namespace.
 
     Gives `unittest discover` a separate pass/fail/skip per server instead of
@@ -808,7 +840,7 @@ def register_server_tests(servers: List[VNCServer], namespace: Dict[str, object]
         name = "TestServer_" + server.name.replace("-", "_")
         namespace[name] = type(
             name,
-            (_VNCServerTestMixin, TestCase),
+            (_VNCServerVerificationTestMixin, base),
             # __module__ so test ids name the registering module, not this one.
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )

@@ -25,6 +25,7 @@ RUN mkdir -p /tests && printf '"""Test suite package for vncdotool."""\n' > /tes
 COPY servers/__init__.py /tests/servers/__init__.py
 COPY goldens/__init__.py /tests/goldens/__init__.py
 COPY goldens/scene_player.py /tests/goldens/scene_player.py
+COPY goldens/click_targets.py /tests/goldens/click_targets.py
 COPY goldens/scenes/ /tests/goldens/scenes/
 
 EXPOSE 5900
