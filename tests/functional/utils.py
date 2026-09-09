@@ -88,7 +88,6 @@ class VNCServer(NamedTuple):
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
     address: Optional[str] = None
-    # vncdo options this server cannot be reached without.
     extra_args: Tuple[str, ...] = ()
     # How to get this server running, quoted when a test fails because it is down.
     how_to_start: str = "start the servers first with `make servers-up`"
