@@ -1,52 +1,137 @@
-"""x11vnc is the only fleet server exercised here: it answers the Cursor
-pseudo-encoding with a real 18x18 rectangle, and composites the pointer into
-the framebuffer for any client that does not ask for one. tigervnc answers
-with a degenerate 0x0 rectangle and never paints.
+"""A capture does not contain the mouse pointer, checked per server.
+
+Every server gets its own case rather than one test looping the fleet, so a
+server that starts painting the pointer names itself in the failure.
+
+x11vnc carries the `--localcursor` case: of the servers running a scene
+player it is the only one answering the Cursor pseudo-encoding with a real
+shape, 18x18. libvncserver-example sends one too, at 32x32. tigervnc, its
+VeNCrypt variants and selenoid answer a degenerate 0x0 rectangle, which means
+hide the pointer (RFC 6143 7.6.1); wayvnc, qemu and qemu-tls answer nothing
+at all. On any of those `--localcursor` has no shape to draw.
 """
 
+from typing import Dict, Optional, Tuple
 from unittest import TestCase
 
 from PIL import Image, ImageChops
 
-from .utils import HOST, X11VNC, port_open, run_vncdo, screenshot_dir
+from .utils import (
+    QEMU_TLS,
+    QEMU_TLS_CA,
+    TCP_SERVERS,
+    WEBSOCKET_SERVERS,
+    FleetTestCase,
+    VNCServer,
+    X11VNC,
+    absent_server_skips,
+    os_servers,
+    run_vncdo,
+    screenshot_dir,
+    server_is_up,
+)
 
-CURSOR_POS = (50, 50)
-FAR_POS = (200, 150)
+NEAR = (20, 20)
+FAR = (150, 120)
+# Comfortably over the largest shape the fleet sends, libvncserver's 32x32.
+CURSOR_EXTENT = 48
+
+Box = Tuple[int, int, int, int]
 
 
-class TestCursor(TestCase):
-    def setUp(self) -> None:
-        if not port_open(HOST, X11VNC.port):
-            self.fail(
-                f"x11vnc not reachable on {HOST}:{X11VNC.port} -- "
-                "start the servers first with `make servers-up`"
-            )
+class CursorFreeCapture:
+    """Shared body, parameterized per server by _register().
 
-    def capture(self, name: str, *args: str) -> Image.Image:
-        png = screenshot_dir() / f"x11vnc-{name}.png"
-        result = run_vncdo(X11VNC, *args, "capture", str(png))
-        self.assertEqual(result.returncode, 0, f"vncdo {args} failed: {result.stderr}")
+    Deliberately not a TestCase, or `unittest discover` would collect this
+    shared base as its own serverless case.
+    """
+
+    server: VNCServer
+
+    def env(self) -> Optional[Dict[str, str]]:
+        if self.server is not QEMU_TLS:
+            return None
+        # SSL_CERT_FILE is how OpenSSL, and so Twisted's platform trust, is
+        # pointed at a private CA. There is no vncdotool option that skips
+        # verification.
+        if not QEMU_TLS_CA.exists():
+            self.fail(f"{self.server.name} has not written {QEMU_TLS_CA}")
+        return {"SSL_CERT_FILE": str(QEMU_TLS_CA)}
+
+    def at(self, tag: str, position: Tuple[int, int], *flags: str) -> Image.Image:
+        png = screenshot_dir() / f"{self.server.name}-cursor-{tag}.png"
+        args = (*flags, "move", str(position[0]), str(position[1]), "pause", "0.5")
+        result = run_vncdo(self.server, *args, "capture", str(png), env=self.env())
+        self.assertEqual(
+            result.returncode, 0,
+            f"{self.server.name}: `vncdo {' '.join(args)}` exited "
+            f"{result.returncode}, stderr:\n{result.stderr}",
+        )
         with Image.open(png) as image:
-            return image.convert("RGB")
+            return image.convert("RGB").copy()
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
-        """The default keeps the pointer out of a capture on a server that
-        would otherwise paint it in."""
-        near = self.capture("pointer-near", "move", *map(str, CURSOR_POS))
-        far = self.capture("pointer-far", "move", *map(str, FAR_POS))
+        """Neither pointer position leaves a mark on a capture.
 
-        bbox = ImageChops.difference(near, far).getbbox()
-        self.assertIsNone(
-            bbox,
-            f"captures differ across {bbox} with only the pointer moved; "
-            "x11vnc is still painting it into the framebuffer",
+        Only the neighbourhood of each position is compared. A painted
+        pointer lands there and nowhere else, so a clock or a blinking text
+        cursor elsewhere on the screen cannot be mistaken for one -- and
+        unlike calibrating against the screen's own churn, this does not
+        depend on catching that churn mid-blink.
+        """
+        near = self.at("near", NEAR)
+        far = self.at("far", FAR)
+
+        for label, position in (("near", NEAR), ("far", FAR)):
+            box = self.around(position, near.size)
+            difference = ImageChops.difference(near.crop(box), far.crop(box))
+            self.assertIsNone(
+                difference.getbbox(),
+                f"{self.server.name}: the capture changed around the {label} "
+                f"pointer position {position} (region {box}) when the pointer "
+                f"moved between {NEAR} and {FAR}. The server is painting it "
+                "into the framebuffer despite being offered Cursor.",
+            )
+
+    @staticmethod
+    def around(position: Tuple[int, int], size: Tuple[int, int]) -> Box:
+        """A box big enough for any cursor drawn at `position`.
+
+        A shape is drawn at the pointer minus its hotspot, so it reaches
+        above and left of the position as well as below and right.
+        """
+        x, y = position
+        width, height = size
+        return (
+            max(0, x - CURSOR_EXTENT), max(0, y - CURSOR_EXTENT),
+            min(width, x + CURSOR_EXTENT), min(height, y + CURSOR_EXTENT),
         )
 
+
+class NativeGating:
+    """setUp for a server CI sets up rather than compose.
+
+    Not a TestCase either, for the same reason as CursorFreeCapture.
+    """
+
+    server: VNCServer
+
+    def setUp(self) -> None:
+        if server_is_up(self.server):
+            return
+        unreachable = f"{self.server.name} not reachable -- {self.server.how_to_start}"
+        if absent_server_skips(self.server):
+            self.skipTest(unreachable)
+        self.fail(unreachable)
+
+
+class TestLocalCursor(CursorFreeCapture, FleetTestCase):
+    server = X11VNC
+
     def test_localcursor_composites_a_decoded_cursor(self) -> None:
-        """--localcursor draws a decoded cursor the default discards."""
-        x, y = map(str, CURSOR_POS)
-        without = self.capture("nocursor", "move", x, y)
-        with_cursor = self.capture("localcursor", "--localcursor", "move", x, y)
+        """--localcursor draws a shape the default discards, at the pointer."""
+        without = self.at("plain", NEAR)
+        with_cursor = self.at("localcursor", NEAR, "--localcursor")
 
         bbox = ImageChops.difference(without, with_cursor).getbbox()
         self.assertIsNotNone(
@@ -54,9 +139,26 @@ class TestCursor(TestCase):
             "--localcursor capture is pixel-identical to the default at the "
             "same pointer position; no cursor was decoded and composited",
         )
-        # The differing region should sit at the pointer, not somewhere
-        # coincidental -- CURSOR_POS plus a little slack for the cursor's
-        # own extent and hotspot offset.
+        # NEAR plus slack for the cursor's own extent and hotspot offset.
         left, top, _, _ = bbox
-        self.assertLess(left, CURSOR_POS[0] + 32, f"diff region {bbox} is not near the pointer")
-        self.assertLess(top, CURSOR_POS[1] + 32, f"diff region {bbox} is not near the pointer")
+        self.assertLess(left, NEAR[0] + 32, f"diff region {bbox} is not near the pointer")
+        self.assertLess(top, NEAR[1] + 32, f"diff region {bbox} is not near the pointer")
+
+
+def _add(namespace: Dict[str, object], bases: Tuple[type, ...], server: VNCServer) -> None:
+    name = "TestCursorFree_" + server.name.replace("-", "_")
+    namespace[name] = type(
+        name,
+        bases,
+        {"server": server, "__module__": namespace.get("__name__", __name__)},
+    )
+
+
+def _register(namespace: Dict[str, object]) -> None:
+    for server in TCP_SERVERS + WEBSOCKET_SERVERS:
+        _add(namespace, (CursorFreeCapture, FleetTestCase), server)
+    for server in os_servers():
+        _add(namespace, (CursorFreeCapture, NativeGating, TestCase), server)
+
+
+_register(globals())
