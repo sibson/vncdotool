@@ -17,6 +17,8 @@ from tests.unit.utils import (
 class TestCursor(unittest.TestCase):
     def setUp(self) -> None:
         self.cli = make_client()
+        # Without --localcursor the shape is decoded and then discarded.
+        self.cli.factory.pseudocursor = True
 
     # 2x2 image at hotspot (1, 1). MASK_2X2 is MSB-first, one bit per
     # pixel; 0b11000000 flags both columns of each row valid.

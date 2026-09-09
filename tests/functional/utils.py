@@ -131,9 +131,7 @@ WAYVNC_CA_CERT = (
 # searching TCP_SERVERS by name.
 TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
-# x11vnc paints the X cursor into the framebuffer unless a client asks for
-# the Cursor pseudo-encoding.
-X11VNC = VNCServer("x11vnc", 5933, size=(256, 192), extra_args=("--nocursor",))
+X11VNC = VNCServer("x11vnc", 5933, size=(256, 192))
 TIGERVNC_VENCRYPT = VNCServer(
     "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192),
     extra_args=("--tls-ca-cert", str(VENCRYPT_CA_CERT)),

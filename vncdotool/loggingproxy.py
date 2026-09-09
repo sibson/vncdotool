@@ -506,7 +506,6 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     shared = True
 
     pseudocursor = False
-    nocursor = False
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True
