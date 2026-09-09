@@ -49,8 +49,6 @@ class _Recorder(client.VNCDoToolClient):
         self.init_end = self.consumed
 
     def vncProtocolError(self, reason: str) -> None:
-        # The error reaches a mocked factory and goes nowhere, so it is kept
-        # here for `split` to raise on.
         self.abort_reason = reason
         super().vncProtocolError(reason)
 
@@ -97,11 +95,10 @@ class _Recorder(client.VNCDoToolClient):
 
 def _make_client(pixel_format: str, jpeg_quality: Optional[int] = None) -> _Recorder:
     """SetPixelFormat and SetEncodings are client-to-server (RFC 6143 sections
-    7.5.1 and 7.5.2), so the s2c stream being replayed never says the server
-    switched layouts, nor which encodings were asked for. The recorder has to
-    be told both: otherwise it unpacks the bytes as ServerInit announced them
-    and permutes every channel, and it refuses the JPEG rectangles the capture
-    itself requested.
+    7.5.1 and 7.5.2), so a replay of s2c alone is told neither the layout the
+    server switched to nor the encodings that were asked for. Without the
+    format the recorder permutes every channel. Without the quality level it
+    refuses the capture's own JPEG rectangles.
     """
     recorder = _Recorder()
     recorder.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
