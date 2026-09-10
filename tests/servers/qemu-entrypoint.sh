@@ -32,10 +32,8 @@ else
     set --
 fi
 
-# No disk, so the firmware's own screen is the framebuffer. SeaBIOS blinks a
-# VGA text cursor, so two captures of an idle machine differ; the UEFI shell
-# holds still. Without -net none OVMF retries PXE forever and the screen
-# scrolls.
+# SeaBIOS blinks a VGA text cursor, so two captures of an idle machine
+# differ. Without -net none OVMF retries PXE forever and the screen scrolls.
 exec qemu-system-x86_64 \
     -m 128 \
     -display none \

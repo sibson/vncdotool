@@ -8,11 +8,10 @@ encoding matches ours. See specs/decoder-goldens.md.
 from __future__ import annotations
 
 import re
-import time
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, Iterator, List, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -74,14 +73,17 @@ QEMU_SCREENS = {
 # Measured against QEMU's firmware screens the way EMITTED was.
 QEMU_EMITTED = {"raw", "hextile", "zrle", "tight"}
 
-SETTLE_DELAY = 0.5
-SETTLE_ATTEMPTS = 12
+# The shell answers a command over several framebuffer updates, so a capture
+# taken as soon as the last key is sent can catch it half-drawn.
+QEMU_SETTLE_SECONDS = "1"
 
 
-def capture_current(test: TestCase, encoding: str) -> Tuple[Image.Image, str]:
+def capture_qemu(test: TestCase, encoding: str, *before: str) -> Tuple[Image.Image, str]:
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
-        result = run_vncdo(QEMU, "-v", "-v", "--encodings", encoding, "capture", str(path))
+        result = run_vncdo(
+            QEMU, "-v", "-v", "--encodings", encoding, *before, "capture", str(path)
+        )
         if result.returncode != 0:
             test.fail(
                 f"qemu: vncdo --encodings {encoding} failed "
@@ -90,30 +92,14 @@ def capture_current(test: TestCase, encoding: str) -> Tuple[Image.Image, str]:
         return Image.open(path).convert("RGB").copy(), result.stderr
 
 
-def type_commands(test: TestCase, commands: Tuple[str, ...]) -> None:
+def draw_on_qemu(test: TestCase, screen: str) -> Image.Image:
+    """Put one of QEMU_SCREENS up, and return the Raw capture of it."""
     argv: List[str] = []
-    for command in commands:
+    for command in QEMU_SCREENS[screen]:
         argv += ["type", command, "key", "enter"]
-    result = run_vncdo(QEMU, *argv)
-    if result.returncode != 0:
-        test.fail(f"qemu: vncdo {' '.join(argv)} failed ({result.returncode}): {result.stderr}")
-
-
-def settled(test: TestCase) -> Image.Image:
-    """A Raw capture, once two in a row agree.
-
-    The shell redraws over several updates, and the firmware is still
-    booting when the fleet first comes up, so a single capture can catch a
-    half-drawn screen that the next encoding would never reproduce.
-    """
-    previous = None
-    for _ in range(SETTLE_ATTEMPTS):
-        current, _ = capture_current(test, "raw")
-        if previous is not None and current.tobytes() == previous.tobytes():
-            return current
-        previous = current
-        time.sleep(SETTLE_DELAY)
-    test.fail(f"qemu: screen never settled over {SETTLE_ATTEMPTS} captures")
+    argv += ["stable", QEMU_SETTLE_SECONDS]
+    oracle, _ = capture_qemu(test, "raw", *argv)
+    return oracle
 
 
 class RendersTheScene:
@@ -159,9 +145,8 @@ class RendersTheSameScreenAsRaw:
     screen: str
 
     def test_renders_the_screen_as_raw_renders_it(self) -> None:
-        type_commands(self, QEMU_SCREENS[self.screen])
-        oracle = settled(self)
-        screen, log = capture_current(self, self.encoding)
+        oracle = draw_on_qemu(self, self.screen)
+        screen, log = capture_qemu(self, self.encoding)
         self.assertEqual(
             screen.tobytes(), oracle.tobytes(),
             f"qemu: {self.encoding} and raw disagree about the {self.screen} screen",
@@ -177,8 +162,8 @@ class RendersTheSameScreenAsRaw:
         )
 
 
-def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    suite = unittest.TestSuite()
+def qemu_cases() -> Iterator[TestCase]:
+    """One case per encoding against each firmware screen."""
     for encoding in sorted(decoders.ENCODING_NAMES):
         for screen in sorted(QEMU_SCREENS):
             name = f"TestRendersAsRaw_qemu_{encoding}_screen_{screen}"
@@ -186,7 +171,12 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
                 name, (RendersTheSameScreenAsRaw, FleetTestCase),
                 {"encoding": encoding, "screen": screen},
             )
-            suite.addTest(case("test_renders_the_screen_as_raw_renders_it"))
+            yield case("test_renders_the_screen_as_raw_renders_it")
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
+    suite = unittest.TestSuite()
+    suite.addTests(qemu_cases())
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(decoders.ENCODING_NAMES):
