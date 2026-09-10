@@ -572,6 +572,11 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
 # capture after connecting came back 99% black with 700 colours in it.
 BLANK_FRACTION = 0.95
 
+# How many times to re-take the pair when the region will not hold still. A
+# freshly started desktop is still fading in; one that is animating for good
+# is what this eventually reports.
+STEADY_ATTEMPTS = 3
+
 
 def blank_fraction(image: Image.Image) -> float:
     """How much of `image` is its single commonest colour."""
@@ -885,7 +890,7 @@ class _VNCServerTestMixin:
         log = stem.with_suffix(".wire.log")
         log.unlink(missing_ok=True)
         self.run_vncdo_ok(
-            "stable", "1", "move", str(x), str(y), "pause", "0.5", "capture", str(png),
+            "move", str(x), str(y), "pause", "0.5", "capture", str(png),
             options=("-v", "-v", "--logfile", str(log)),
         )
         with Image.open(png) as image:
@@ -922,28 +927,17 @@ class _VNCServerTestMixin:
         pointer. See specs/cursor.md.
         """
         self.warm_up_capture()
-        # Twice at the same position before the one that moves: whatever
-        # differs between these two is the desktop moving on its own, and a
-        # region that will not hold still cannot answer the question.
-        control = self.capture_at_pointer("control", CURSOR_NEAR)
-        shots = {
-            label: self.capture_at_pointer(label, position)
-            for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
-        }
+        control, shots, drift = self.settled_captures()
+        self.assertIsNone(
+            drift,
+            f"{self.server.name}: region {drift} changed between two captures taken "
+            f"at the same pointer position, {STEADY_ATTEMPTS} times running, so the "
+            "desktop is animating there and nothing about the pointer can be read "
+            "off it.",
+        )
 
         for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
             box = cursor_box(position, shots["near"].size)
-            drift = ImageChops.difference(
-                control.crop(box), shots["near"].crop(box)
-            ).getbbox()
-            self.assertIsNone(
-                drift,
-                f"{self.server.name}: the {label} region {box} changed between two "
-                f"captures taken at the same pointer position (region {drift}), so "
-                "the desktop is animating there and nothing about the pointer can "
-                "be read off it.",
-            )
-
             difference = ImageChops.difference(
                 shots["near"].crop(box), shots["far"].crop(box)
             )
@@ -955,6 +949,34 @@ class _VNCServerTestMixin:
                 "with the pointer parked. The server is painting it into the "
                 "framebuffer despite being offered Cursor.",
             )
+
+    def settled_captures(
+        self,
+    ) -> Tuple[Image.Image, Dict[str, Image.Image], Optional[Tuple[int, int, int, int]]]:
+        """Captures at both positions, plus a control taken at the first again.
+
+        Whatever differs between the control and the capture at the same
+        position is the desktop moving on its own. A freshly started desktop
+        is still fading in, so this is retried; `stable` is no use here
+        because these desktops never go entirely quiet.
+        """
+        drift = None
+        for attempt in range(STEADY_ATTEMPTS):
+            control = self.capture_at_pointer("control", CURSOR_NEAR)
+            shots = {
+                label: self.capture_at_pointer(label, position)
+                for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
+            }
+            drift = None
+            for position in (CURSOR_NEAR, CURSOR_FAR):
+                box = cursor_box(position, shots["near"].size)
+                drift = drift or ImageChops.difference(
+                    control.crop(box), shots["near"].crop(box)
+                ).getbbox()
+            if drift is None:
+                return control, shots, None
+            time.sleep(RETRY_DELAY)
+        return control, shots, drift
 
 
 class Rectangle(NamedTuple):
