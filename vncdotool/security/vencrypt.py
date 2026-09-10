@@ -50,7 +50,7 @@ class VeNCryptHandler(SecurityHandler):
         # subtype this client will choose.
         (ack,) = unpack("!B", (yield 1))
         if ack != 1:
-            raise SecurityError(f"server refused {chosen!r}")
+            raise SecurityError(f"server refused {chosen}")
         if client._packet:
             # The TLS layer takes the socket over from here and has not sent
             # its ClientHello yet, so nothing can legitimately have arrived.

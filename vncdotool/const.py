@@ -37,8 +37,6 @@ class IntEnumLookup(IntEnum):
     def __str__(self) -> str:
         return _named(self.label, self.value)
 
-    __repr__ = __str__
-
     @classmethod
     def lookup(cls, value: int) -> IntEnumLookup | Unknown:
         member = cls._value2member_map_.get(value)

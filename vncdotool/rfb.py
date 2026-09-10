@@ -315,7 +315,7 @@ class RFBClient(Protocol):
             self.rectangles -= 1
             if _LOG.isEnabledFor(logging.DEBUG):
                 log.msg(
-                    f"Received {Encoding.lookup(encoding)!r} rectangle "
+                    f"Received {Encoding.lookup(encoding)} rectangle "
                     f"{width}x{height}+{x}+{y}",
                     logLevel=logging.DEBUG,
                 )
@@ -435,7 +435,7 @@ class RFBClient(Protocol):
             # connectionLost, with no RFB message attached.
             self._tls_handshake_pending = False
             self.vncProtocolError(
-                f"TLS handshake for {self._vencrypt_subtype!r} failed "
+                f"TLS handshake for {self._vencrypt_subtype} failed "
                 f"({reason.getErrorMessage()}); an untrusted certificate "
                 f"needs --tls-ca-cert or {vencrypt.INSECURE_FLAG}"
             )
@@ -491,7 +491,7 @@ class RFBClient(Protocol):
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", MsgC2S.SET_ENCODING, len(list_of_encodings)))
         for encoding in list_of_encodings:
-            log.msg(f"Offering {encoding!r}")
+            log.msg(f"Offering {encoding}")
             self.transport.write(pack("!i", encoding))
         self.encodingsOffered(frozenset(list_of_encodings))
 

@@ -16,8 +16,8 @@ class TestNamedValues(TestCase):
     def test_a_member_renders_as_its_name_and_number(self):
         assert str(MsgS2C.FILE_TRANSFER) == "FILE_TRANSFER (7)"
 
-    def test_repr_renders_the_same_as_str(self):
-        assert f"{MsgS2C.FILE_TRANSFER!r}" == "FILE_TRANSFER (7)"
+    def test_a_member_keeps_pythons_repr_for_debugging(self):
+        assert repr(MsgS2C.FILE_TRANSFER) == "<MsgS2C.FILE_TRANSFER: 7>"
 
     def test_a_security_type_takes_rfbprotos_spelling(self):
         assert str(AuthTypes.VENCRYPT) == "VeNCrypt (19)"
@@ -48,10 +48,13 @@ class TestLookup(TestCase):
         assert Encoding.lookup(0xFFFFFF11) is Encoding.PSEUDO_CURSOR
 
     def test_an_unknown_value_renders_without_a_repr_or_quotes(self):
-        assert f"{AuthTypes.lookup(200)!r}" == "unknown (200)"
+        looked_up = AuthTypes.lookup(200)
+
+        assert str(looked_up) == "unknown (200)"
+        assert repr(looked_up) == "unknown (200)"
 
     def test_an_unknown_vendor_value_renders_in_hex(self):
-        assert f"{Encoding.lookup(0x574D56AB)!r}" == "unknown (0x574d56ab)"
+        assert str(Encoding.lookup(0x574D56AB)) == "unknown (0x574d56ab)"
 
     def test_an_unknown_value_carries_a_name_to_build_tokens_from(self):
         assert Unknown(200).name == "unknown"
