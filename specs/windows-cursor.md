@@ -40,15 +40,25 @@ if (!m_client->m_use_PointerPos) {
 ```
 
 `m_use_PointerPos` is set only by `rfbEncodingPointerPos`, which
-`rfb/rfbproto.h:551` defines as `0xFFFFFF18` — **-232**. The gate is
-UltraVNC's, but the number is not: rfbproto's Tight capability registry
-assigns it to vendor `TGHT` under the signature `POINTPOS`, "Pointer
-Position". It is absent only from the narrower list of pseudo-encodings that
-document goes on to specify, so there is no written wire format for it. Every
-implementation found agrees on one anyway — a bare 12-byte rectangle header
-with `w=h=0` and no payload: UltraVNC `vncclient.cpp:6298`, TightVNC
-`UpdateSender.cpp`, libvncserver `cursor.c:rfbSendCursorPos`. TurboVNC and
-QEMU define the same constant and signature.
+`rfb/rfbproto.h:551` defines as `0xFFFFFF18` — **-232**.
+
+The gate is UltraVNC's; the number is not, and rfbproto is no help in
+settling it. That document names PointerPos twice and contradicts itself:
+`-225` in its registry of other encodings (`rfbproto.rst:3118`), and `-232`
+in the Tight capability table under vendor `TGHT`, signature `POINTPOS`
+(`:1606`) — inside the same registry's own "`-226 to -238` Tight options"
+row. Neither table is accompanied by a wire format; the pseudo-encoding
+sections never specify the rectangle.
+
+Implementations settle it unanimously for `-232`, and none was found using
+`-225`: UltraVNC `rfbproto.h:551`, TightVNC `EncodeOptions.cpp`,
+libvncserver, TurboVNC and QEMU all define `0xFFFFFF18`. All three that send
+it send the same thing — a bare 12-byte rectangle header, position in `x`
+and `y`, `w=h=0`, no payload (UltraVNC `vncclient.cpp:6298`, TightVNC
+`UpdateSender.cpp`, libvncserver `cursor.c:rfbSendCursorPos`). Confirmed on
+the wire against libvncserver:
+
+    Received <Encoding.PSEUDO_POINTER_POS: -232> rectangle 0x0+20+20
 
 So a client offering -239 and not -232 has its RichCursor request accepted
 during the loop and revoked at the end of it. UltraVNC then behaves exactly
@@ -91,26 +101,32 @@ pointer, and paint for one that has not. `vncdo` always moves the pointer
 immediately before capturing, so both should measure clean — but the
 guarantee is "no pointer if you moved it recently", not "no pointer".
 
-## What this does not measure
+## Offering -232 is safe, and the client had to change first
 
-Whether offering -232 makes UltraVNC behave. It would, by the source above,
-but `rfb.py:_handleRectangle` aborts the connection on an encoding it has no
-decoder for, and UltraVNC's PointerPos rectangle is a bare 12-byte header
-with `w=h=0` (`vncclient.cpp:6298`). Offering -232 without first adding a
-decoder that consumes nothing would turn a working UltraVNC session into
-`unknown encoding received`. Two things would have to change together:
+SetEncodings says "a server which does not support the extension will simply
+ignore the pseudo-encoding", and that is what was measured: TigerVNC has no
+PointerPos code at all, neatvnc never defines it, and QEMU defines the
+constant but never reads it. None of them so much as noticed.
 
-* `const.py:72` calls -225 `POINTER_POS`. That number is unassigned in
-  rfbproto's registry; -232, which is assigned, currently falls inside the
-  undefined `TIGHT_226 = -226  # ... -238` span and so is not a member at all.
-* A decoder for it, and -232 appended in `client.py` beside `PSEUDO_CURSOR`.
+The breakage was on the client side. `rfb.py:_handleRectangle` aborts on an
+encoding it has no decoder for, and libvncserver and x11vnc send the
+rectangle as soon as it is asked for -- so `PointerPosDecoder` had to exist
+before `-232` could be offered at all. With it, the whole fleet's answers are
+unchanged and no server aborted.
 
-Offering it is safe for servers that do not implement it -- SetEncodings says
-"a server which does not support the extension will simply ignore the
-pseudo-encoding", and TigerVNC (no PointerPos code at all), neatvnc and QEMU
-(which defines the constant but never reads it) were measured doing exactly
-that. The breakage is on the client side: libvncserver and x11vnc send the
-rectangle as soon as it is asked for, and today that aborts the connection.
+## What this still does not measure
+
+Whether `--localcursor` reproduces what a Windows server paints. UltraVNC and
+TightVNC implement no alpha cursor encoding -- only `-240` and `-239`, whose
+mask is one bit per pixel -- while the pointer they composite into the
+framebuffer is a 32-bit ARGB Windows cursor with antialiased edges. So the
+server's own render and the client's composite may differ at the edge, and
+`specs/cursor-default.md`'s claim that the composite is faithful was measured
+on x11vnc and libvncserver only.
+
+The instrument is cheap: a capture from before `-232` (UltraVNC painting)
+against one after it with `--localcursor`, same pointer position. Both are
+already uploaded by the `cursor-evidence` artifact step.
 
 RealVNC is not in the matrix. Its Windows server needs an account and a
 licence key even on the free tier, which is not something to install
