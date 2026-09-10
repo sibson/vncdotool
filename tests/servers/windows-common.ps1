@@ -13,7 +13,10 @@ function Invoke-Native {
         [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
     )
     try {
-        & $Command @Arguments
+        # A PowerShell function emits everything written to the output
+        # stream, so without Out-Host the caller receives the command's own
+        # output as well as the exit code.
+        & $Command @Arguments 2>&1 | Out-Host
     } catch {
         Write-Host "::warning::$Command $Arguments raised $($_.Exception.Message)"
         return 1
@@ -40,8 +43,8 @@ function Get-VncPasswordHex {
     if ($TrailingNull) { $arguments += '--trailing-null' }
     $arguments += @($Password, $file)
     $code = Invoke-Native -Command 'uv' -Arguments $arguments
-    if ($code -ne 0 -or -not (Test-Path $file)) {
-        throw 'could not compute the obfuscated password hex'
+    if (-not (Test-Path $file)) {
+        throw "vnc_passwd.py exited $code without writing $file"
     }
     $hex = (Get-Content $file -Raw).Trim()
     Remove-Item $file -Force
