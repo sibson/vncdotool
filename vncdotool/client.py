@@ -158,6 +158,9 @@ class VNCDoToolClient(rfb.RFBClient):
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
+    # Where the server last said the pointer is, or None when the script's
+    # own (x, y) is still the best answer.
+    cursor_pos: tuple[int, int] | None = None
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -431,6 +434,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
+        self.cursor_pos = None
         self.pointerEvent(x, y, self.buttons)
         return self
 
@@ -506,6 +510,7 @@ class VNCDoToolClient(rfb.RFBClient):
         # A server that paints the pointer into the framebuffer stops once a
         # client asks for Cursor, so this is offered even to discard it.
         encodings.append(rfb.Encoding.PSEUDO_CURSOR)
+        encodings.append(rfb.Encoding.PSEUDO_POINTER_POS)
         if self.factory.pseudodesktop:
             encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
         if self.factory.last_rect:
@@ -603,6 +608,16 @@ class VNCDoToolClient(rfb.RFBClient):
         self.cfocus = x, y
         self.drawCursor()
 
+    def updatePointerPos(self, x: int, y: int) -> None:
+        """The server moved the pointer to (x, y).
+
+        Only where the cursor is drawn changes. self.x/self.y stay the
+        script's, so a later mouseDown still clicks where the script last
+        put the pointer rather than wherever the desktop moved it to.
+        """
+        self.cursor_pos = (x, y)
+        self.drawCursor()
+
     def drawCursor(self) -> None:
         if not self.cursor:
             return
@@ -610,8 +625,9 @@ class VNCDoToolClient(rfb.RFBClient):
         if not self.screen:
             return
 
-        x = self.x - self.cfocus[0]
-        y = self.y - self.cfocus[1]
+        at_x, at_y = self.cursor_pos or (self.x, self.y)
+        x = at_x - self.cfocus[0]
+        y = at_y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def updateDesktopSize(self, width: int, height: int) -> None:
