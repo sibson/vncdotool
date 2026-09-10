@@ -4,7 +4,7 @@ TigerVNC's Windows server, the third the OS-server job starts, on port 5902.
 Named `tigervnc-win` to keep it apart from the containerised Xvnc the Docker
 fleet calls `tigervnc`: same project, but a different screen grabber and a
 real desktop behind it, which is the whole reason it is here. See
-`specs/windows-cursor.md`.
+`specs/cursor.md`.
 
 ## What the setup has to get right
 

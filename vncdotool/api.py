@@ -22,6 +22,7 @@ from twisted.python.log import PythonLoggingObserver
 
 from . import command, websocket
 from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
+from .cursor import CursorMode
 
 V = TypeVar("V")
 TProxy = TypeVar("TProxy", bound="ThreadedVNCClientProxy")
@@ -162,6 +163,7 @@ def connect(
     proxy: type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
     timeout: float | None = None,
     username: str | None = None,
+    cursor: CursorMode = CursorMode.NONE,
 ) -> ThreadedVNCClientProxy:
     """Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications,
@@ -212,6 +214,11 @@ def connect(
 
     if password is not None:
         factory.password = password
+
+    # ThreadedVNCClientProxy defines __getattr__ but no __setattr__, so
+    # setting this on the returned client assigns a dead attribute on the
+    # proxy and returns. It has to be set here or not at all.
+    factory.cursor = cursor
 
     family, host, port = command.parse_server(server)
     client = proxy(factory, timeout)

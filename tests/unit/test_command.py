@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import io
 import logging
@@ -12,6 +13,7 @@ from twisted.python.failure import Failure
 
 from vncdotool import command, pixelformat, websocket
 from vncdotool.client import AuthenticationError, ProtocolError, RegionError
+from vncdotool.cursor import CursorMode
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
 
@@ -1022,3 +1024,43 @@ class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
 
     def test_server_mode_refuses_commands(self) -> None:
         assert 'takes no commands' in self.usage_error(['--server', 'capture.zip', 'key', 'a'])
+
+
+class TestResolveCursorMode(unittest.TestCase):
+    """--cursor and the two flags it replaced, which stay accepted."""
+
+    def resolve(self, cursor=CursorMode.NONE, localcursor=False, nocursor=False):
+        options = argparse.Namespace(
+            cursor=cursor, localcursor=localcursor, nocursor=nocursor
+        )
+        return command.resolve_cursor_mode(argparse.ArgumentParser(), options)
+
+    def usage_error(self, **kwargs) -> str:
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            with self.assertRaises(SystemExit):
+                self.resolve(**kwargs)
+        return stderr.getvalue()
+
+    def test_the_default_omits_the_pointer(self) -> None:
+        assert self.resolve() is CursorMode.NONE
+
+    def test_each_mode_survives(self) -> None:
+        for mode in CursorMode:
+            assert self.resolve(cursor=mode) is mode
+
+    def test_localcursor_still_means_local(self) -> None:
+        assert self.resolve(localcursor=True) is CursorMode.LOCAL
+
+    def test_nocursor_still_means_none(self) -> None:
+        assert self.resolve(nocursor=True) is CursorMode.NONE
+
+    def test_an_alias_agreeing_with_cursor_is_accepted(self) -> None:
+        assert self.resolve(cursor=CursorMode.LOCAL, localcursor=True) is CursorMode.LOCAL
+
+    def test_the_two_aliases_cannot_both_be_given(self) -> None:
+        assert 'contradict' in self.usage_error(localcursor=True, nocursor=True)
+
+    def test_an_alias_contradicting_cursor_is_a_usage_error(self) -> None:
+        error = self.usage_error(cursor=CursorMode.SERVER, localcursor=True)
+        assert '--cursor server contradicts --localcursor' in error

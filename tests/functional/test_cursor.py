@@ -98,6 +98,20 @@ class CursorFreeCapture:
 class TestLocalCursor(CursorFreeCapture, FleetTestCase):
     server = X11VNC
 
+    def test_localcursor_matches_the_server_side_render(self) -> None:
+        """The client composite is the server's own render, pixel for pixel.
+
+        `--cursor server` is the only way to obtain the server's render, and
+        the only reason this can be asserted at all.
+        """
+        server_drawn = self.at("servercursor", CURSOR_NEAR, "--cursor", "server")
+        client_drawn = self.at("localcursor", CURSOR_NEAR, "--cursor", "local")
+
+        self.assertIsNone(
+            ImageChops.difference(server_drawn, client_drawn).getbbox(),
+            "--cursor local does not reproduce what --cursor server captured",
+        )
+
     def test_localcursor_composites_a_decoded_cursor(self) -> None:
         """--localcursor draws a shape the default discards, at the pointer."""
         without = self.at("plain", CURSOR_NEAR)
