@@ -29,6 +29,7 @@ from twisted.python.log import PythonLoggingObserver
 
 from . import decoders, pixelformat, websocket
 from .capture import check_capture_target
+from .cursor import CursorMode
 from .client import (
     DIALECTS,
     JPEG_QUALITY_ENCODINGS,
@@ -332,6 +333,33 @@ def build_command_list(
 
         if delay and args:
             factory.deferred.addCallback(client.pause, delay)
+
+
+def resolve_cursor_mode(
+    parser: argparse.ArgumentParser, options: argparse.Namespace
+) -> CursorMode:
+    """--cursor, or whichever of the two flags it replaced was given.
+
+    Both spellings stay accepted: they are in scripts, and turning a working
+    script into a usage error is a worse trade than carrying two aliases.
+    """
+    asked = [
+        (flag, mode)
+        for flag, mode in (
+            ("--localcursor", CursorMode.LOCAL),
+            ("--nocursor", CursorMode.NONE),
+        )
+        if getattr(options, flag.lstrip("-"))
+    ]
+    if len(asked) > 1:
+        parser.error("--localcursor and --nocursor contradict each other")
+    if not asked:
+        return options.cursor
+
+    flag, mode = asked[0]
+    if options.cursor is not CursorMode.NONE and options.cursor is not mode:
+        parser.error(f"--cursor {options.cursor} contradicts {flag}")
+    return mode
 
 
 def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
@@ -643,14 +671,22 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="for non-compliant servers, send shift-LETTER, ensures capitalization works",
     )
     parser.add_argument(
+        "--cursor",
+        type=CursorMode,
+        choices=list(CursorMode),
+        default=CursorMode.NONE,
+        help="what a capture does about the mouse pointer: omit it (%(default)s), "
+        "let the server paint it (server), or draw the shape the server sends (local)",
+    )
+    parser.add_argument(
         "--localcursor",
         action="store_true",
-        help="draw the server's cursor shape into captures, which omit it by default",
+        help=argparse.SUPPRESS,  # superseded by --cursor local
     )
     parser.add_argument(
         "--nocursor",
         action="store_true",
-        help="accepted for compatibility; captures omit the mouse pointer by default",
+        help=argparse.SUPPRESS,  # superseded by --cursor none
     )
     parser.add_argument(
         "--disable-desktop-resizing",
@@ -751,8 +787,7 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     apply_dialect(factory, options.dialect)
 
-    if options.localcursor:
-        factory.pseudocursor = True
+    factory.cursor = resolve_cursor_mode(parser, options)
 
     if options.disable_desktop_resizing:
         factory.pseudodesktop = False

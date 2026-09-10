@@ -14,7 +14,7 @@ setups share.
 
 UltraVNC takes port 5900, TightVNC 5901 and TigerVNC 5902 — three servers on
 one desktop, because whether a cursor behaviour is UltraVNC's or Windows' is
-not a question one server can answer. See `specs/windows-cursor.md`.
+not a question one server can answer. See `specs/cursor.md`.
 
 Against a server that is already up, the tests are just:
 
@@ -44,7 +44,7 @@ down:
   computed; `../vnc_passwd.py` does that and explains the format.
 
 * **`ForceCursorShape` is deliberately left at its default.**
-  `specs/windows-cursor.md` says why.
+  `specs/cursor.md` says why.
 
 * **It has to run as a service.** `winvnc.exe -run` on a fresh install opens
   an interactive Settings dialog instead of serving. `-install` plus

@@ -88,7 +88,7 @@ def main(argv: List[str]) -> int:
         paints = {None: "not measured", True: "**yes**", False: "no"}[row.paints]
         shapes = ", ".join(row.shapes) or "none sent"
         print(f"| `{row.server}` | {paints} | {shapes} | {row.verdict} |")
-    print("\nSee `specs/windows-cursor.md`.")
+    print("\nSee `specs/cursor.md`.")
     return 0
 
 

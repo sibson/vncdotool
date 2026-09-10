@@ -2,7 +2,7 @@
 
 TightVNC 2.x, the second of three Windows servers the OS-server job starts,
 on port 5901. It is here to separate UltraVNC's cursor behaviour from
-Windows' — see `specs/windows-cursor.md` for what that means and what was
+Windows' — see `specs/cursor.md` for what that means and what was
 measured.
 
 Against a server that is already up, the tests are just:

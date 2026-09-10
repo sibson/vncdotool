@@ -5,6 +5,7 @@ import unittest
 from PIL import Image
 
 from vncdotool.const import Encoding
+from vncdotool.cursor import CursorMode
 
 from tests.unit.utils import (
     _pixel,
@@ -39,7 +40,7 @@ class TestPointerPos(unittest.TestCase):
     def test_rectangle_consumes_no_payload(self) -> None:
         """A following rectangle in the same update still decodes."""
         handshake(self.cli, 400, 400)
-        self.cli.factory.pseudocursor = True
+        self.cli.factory.cursor = CursorMode.LOCAL
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS, cursor_rect(1, 1)]))
 
@@ -65,7 +66,7 @@ class TestPointerPos(unittest.TestCase):
     def test_the_shape_is_drawn_where_the_server_says(self) -> None:
         """--localcursor composites at the server's position, not the script's."""
         handshake(self.cli, 400, 400)
-        self.cli.factory.pseudocursor = True
+        self.cli.factory.cursor = CursorMode.LOCAL
         self.cli.screen = Image.new("RGB", (400, 400))
         self.cli.mouseMove(10, 20)
         self.cli.dataReceived(framebuffer_update([cursor_rect()]))
