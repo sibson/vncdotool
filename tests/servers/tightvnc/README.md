@@ -21,6 +21,11 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_c
 * **Configuration is in the registry, not a file.** The service runs as
   LocalSystem and reads HKLM; a value written to HKCU is silently ignored.
 
+* **`AllowLoopback` and `LoopbackOnly` are different settings.** The first
+  permits loopback at all, the second refuses everything else. Setting only
+  the second gets "Sorry, loopback connections are not enabled" on every
+  connection, which looks like a firewall problem and is not one.
+
 * **The password blob is the same one UltraVNC stores.** Both use the classic
   vncauth.c obfuscation, so `../vnc_passwd.py` computes it for both. TightVNC
   stores the eight bytes raw where UltraVNC's ini adds a ninth null.
