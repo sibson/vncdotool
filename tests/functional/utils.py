@@ -290,7 +290,7 @@ def os_servers(platform: str = sys.platform) -> List[VNCServer]:
 
 
 def select_servers(group: str) -> List[VNCServer]:
-    groups = {"docker": TCP_SERVERS, "os": os_servers()}
+    groups = {"docker": TCP_SERVERS + WEBSOCKET_SERVERS, "os": os_servers()}
     if group == "all":
         return [server for servers in groups.values() for server in servers]
     if group not in groups:
@@ -462,9 +462,30 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
     return client
 
 
-def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
+@contextlib.contextmanager
+def probe_context(server: VNCServer) -> Iterator[Optional[Dict[str, str]]]:
+    """What a bare `vncdo capture` of this server needs around it.
+
+    Selenoid's /vnc/ route resolves only while a WebDriver session is open,
+    and QEMU signs its wss:// certificate with a CA its container writes at
+    start-up rather than one OpenSSL already trusts.
+    """
+    env = {"SSL_CERT_FILE": str(QEMU_TLS_CA)} if server is QEMU_TLS else None
+    if server is SELENOID:
+        with selenoid_session():
+            yield env
+    else:
+        yield env
+
+
+def capture_screenshot(
+    server: VNCServer,
+    path: Path,
+    timeout: Optional[float] = None,
+    env: Optional[Mapping[str, str]] = None,
+) -> Path:
     """Capture through the CLI, which is what carries a server's extra_args."""
-    result = run_vncdo(server, "capture", str(path), timeout=timeout)
+    result = run_vncdo(server, "capture", str(path), timeout=timeout, env=env)
     if result.returncode != 0:
         raise AssertionError(
             f"{server.name}: vncdo capture exited {result.returncode}, "
@@ -518,9 +539,9 @@ def wait_until_ready(
             continue
         try:
             normalize_size(server)
-            with tempfile.TemporaryDirectory() as tmp:
+            with probe_context(server) as env, tempfile.TemporaryDirectory() as tmp:
                 probe = Path(tmp) / f"{server.name}-ready.png"
-                capture_screenshot(server, probe, timeout=attempt_timeout)
+                capture_screenshot(server, probe, timeout=attempt_timeout, env=env)
                 with Image.open(probe) as image:
                     colours = distinct_colours(image)
                     size = image.size
