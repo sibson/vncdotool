@@ -70,9 +70,6 @@ class BasicWebSocketTests(WebSocketTests):
     def test_a_key_event_is_accepted(self) -> None:
         self.assert_survives("key", "x")
 
-    def test_a_pointer_event_is_accepted(self) -> None:
-        self.assert_survives("move", "10", "10")
-
     def test_captures_a_real_screen(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             shot = Path(tmp) / "ws.png"
@@ -84,6 +81,12 @@ class BasicWebSocketTests(WebSocketTests):
             distinct_colours(captured), 1,
             f"{self.server.name}: captured a blank screen",
         )
+
+
+class PointerWebSocketTests(WebSocketTests):
+
+    def test_a_pointer_event_is_accepted(self) -> None:
+        self.assert_survives("move", "10", "10")
 
 
 class QueryStringTests(WebSocketTests):
@@ -105,6 +108,8 @@ def _bases(server: VNCServer) -> tuple:
     bases = []
     if server not in SUPPORTED_SERVERS:
         bases.append(BasicWebSocketTests)
+        if server.accepts_pointer_events:
+            bases.append(PointerWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)
     if "?" in server.address:

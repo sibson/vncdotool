@@ -98,6 +98,8 @@ class ClickSelectsAScene:
 
 
 for _server in SCENE_SERVERS:
+    if not _server.accepts_pointer_events:
+        continue
     _name = "TestClick_" + _server.name.replace("-", "_")
     globals()[_name] = type(
         _name, (ClickSelectsAScene, FleetTestCase), {"server": _server, "__module__": __name__}

@@ -1,4 +1,5 @@
 ## 2.0.0.dev0 (UNRELEASED)
+- KasmVNC is now listed as Broken: `move`, `click` and `drag` end the session against it (@sibson)
 - `vncdo -v -v` names the encoding and geometry of every rectangle it receives (@sibson, #504)
 - Protocol failures name the security type, message or encoding they are about, spelled as rfbproto and a server's own configuration spell it, instead of printing a Python enum repr such as `<AuthTypes.VENCRYPT: 19>`. A server with no security type in common says what it offered and what vncdotool supports, a VeNCrypt refusal gives one subtype per line with its reason, and a server's own refusal reason reads as text rather than as `b'Too many security failures'` (#310)
 - Add VeNCrypt (security type 19), so a TLS-fronted server connects instead of failing as an unknown security type (#310, #138). Certificates are verified by default: `--tls-ca-cert FILE` supplies a private CA, `--tls-insecure-skip-verify` accepts a server that cannot be verified, and the cleartext `Plain` subtype is refused outright. SASL and Ident are unimplemented
