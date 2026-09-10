@@ -16,7 +16,7 @@ from .base import (
     WholeRectDecoder,
 )
 from .buffer import RectBuffer
-from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
+from .control import DesktopSizeDecoder, PointerPosDecoder, QemuExtendedKeyDecoder
 from .copyrect import CopyRectDecoder
 from .cursor import CursorDecoder
 from .errors import DecodeError
@@ -41,6 +41,7 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         TightDecoder,
         CursorDecoder,
         DesktopSizeDecoder,
+        PointerPosDecoder,
         QemuExtendedKeyDecoder,
     )
 }

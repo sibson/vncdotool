@@ -51,6 +51,7 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.HEXTILE,
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,
+            client.rfb.Encoding.PSEUDO_POINTER_POS,
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
@@ -86,6 +87,18 @@ class TestVNCDoToolClient(TestCase):
 
         (offered,) = cli.setEncodings.call_args[0]
         self.assertIn(client.rfb.Encoding.PSEUDO_CURSOR, offered)
+
+    def test_pointer_pos_is_offered_beside_cursor(self):
+        """UltraVNC revokes Cursor unless PointerPos is offered too."""
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertIn(client.rfb.Encoding.PSEUDO_POINTER_POS, offered)
 
     def test_updateCursor_discards_the_shape_without_localcursor(self):
         cli = self.client

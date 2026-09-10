@@ -616,6 +616,9 @@ class RFBClient(Protocol):
     ) -> None:
         """New cursor, focuses at (x, y)"""
 
+    def updatePointerPos(self, x: int, y: int) -> None:
+        """The server moved the pointer to (x, y)."""
+
     def updateDesktopSize(self, width: int, height: int) -> None:
         """New desktop size of width*height."""
 
