@@ -65,11 +65,14 @@ reach it — the grid is the only thing that sends it input. Every other fleet
 server is covered in more detail by those grids and stays out of this one.
 
 QEMU has no X server either. It reaches the encoding grid on screens `type`
-asks OVMF's UEFI shell to draw, with a Raw capture of the same screen as the
-oracle — the firmware boots no guest, so there is no scene player and no
-committed PNG to hold a capture against. Checking the other decoders against
-the simplest one is weaker than what a scene server gets. The pixel-format
-grid and the decoder goldens still do not reach QEMU.
+asks OVMF's UEFI shell to draw, which is worth the trouble because QEMU's
+Hextile, ZRLE and Tight are written from the specification rather than
+shared with the rest of the fleet: the bytes on the wire are a variation the
+decoders would otherwise never see. The oracle is a Raw capture of the same
+screen, the firmware having no scene player and no committed PNG to hold a
+capture against, so what the comparison catches is a decoder that disagrees
+with our own Raw. The pixel-format grid and the decoder goldens still do not
+reach QEMU.
 
 Tier 2 keeps a subclass per server for the same reason as
 libvncserver-example: for an OS-hosted server the smoke grid is the only
