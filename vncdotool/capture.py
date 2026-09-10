@@ -213,9 +213,8 @@ class HandshakeScrubber:
             yield _Want(self.c2s, key_len)  # client public key
         elif sectype not in (AuthTypes.NONE, AuthTypes.INVALID):
             # No grammar for this type, so its exchange has no known end.
-            looked_up = AuthTypes.lookup(sectype)
-            name = getattr(looked_up, "name", None) or str(looked_up)
-            self.unstrippable_auth = f"{name.lower().replace('_', '-')}({int(sectype)})"
+            name = AuthTypes.lookup(sectype).name
+            self.unstrippable_auth = f"{name.lower().replace('_', '-')}({sectype})"
             if not self.preserve_auth:
                 self.abort_reason = (
                     f"the session negotiated {self.unstrippable_auth}, whose exchange vncdotool "
@@ -296,11 +295,14 @@ class CaptureWriter:
         out = []
         for encoding in sorted(self.encodings_seen):
             looked_up = Encoding.lookup(encoding)
-            name = getattr(looked_up, "name", None)
             out.append(
                 {
                     "encoding": encoding,
-                    "name": name.lower().replace("_", "-") if name else None,
+                    "name": (
+                        looked_up.name.lower().replace("_", "-")
+                        if isinstance(looked_up, Encoding)
+                        else None
+                    ),
                     "rectangles": self.encodings_seen[encoding],
                 }
             )

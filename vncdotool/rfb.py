@@ -26,6 +26,7 @@ from typing import (
     Callable,
     Collection,
     Generator,
+    Iterable,
     Tuple,
 )
 
@@ -168,17 +169,29 @@ class RFBClient(Protocol):
         else:
             self.expect(self._handleConnFailed, 4)
 
+    def _supportedAuths(self) -> str:
+        return ", ".join(
+            str(AuthTypes.lookup(sec_type)) for sec_type in sorted(self.SUPPORTED_AUTHS)
+        )
+
+    def _offeredAuths(self, types: Iterable[int]) -> str:
+        return ", ".join(str(AuthTypes.lookup(sec_type)) for sec_type in types)
+
     def _handleSecurityTypes(self, block: bytes) -> None:
         types = unpack(f"!{len(block)}B", block)
         for sec_type in types:
-            log.msg(f"Offered {AuthTypes.lookup(sec_type)!r}")
+            log.msg(f"Offered {AuthTypes.lookup(sec_type)}")
         valid_types = set(types) & self.SUPPORTED_AUTHS
         if valid_types:
             sec_type = max(valid_types)
             self.transport.write(pack("!B", sec_type))
             self._startSecurity(sec_type)
         else:
-            self.abortConnection(f"unknown security types: {types!r}")
+            self.abortConnection(
+                f"no security type in common: the server offers "
+                f"{self._offeredAuths(types)}; vncdotool supports "
+                f"{self._supportedAuths()}"
+            )
 
     def _handleAuth(self, block: bytes) -> None:
         (auth,) = unpack("!I", block)
@@ -190,20 +203,24 @@ class RFBClient(Protocol):
             # writes nothing to choose it.
             self._startSecurity(auth)
         else:
-            self.abortConnection(f"unknown auth response {AuthTypes.lookup(auth)!r}")
+            self.abortConnection(
+                f"the server requires the {AuthTypes.lookup(auth)} security type; "
+                f"vncdotool supports {self._supportedAuths()}"
+            )
 
     def _startSecurity(self, sec_type: int) -> None:
         handler = self._security.get(sec_type)
         if handler is None:
             self.abortConnection(
-                f"unsupported security type {AuthTypes.lookup(sec_type)!r}"
+                f"the server chose the {AuthTypes.lookup(sec_type)} security type; "
+                f"vncdotool supports {self._supportedAuths()}"
             )
             return
         self._pump(
             None,
             handler.handle(self),
             self._finishSecurity,
-            f"the {AuthTypes.lookup(sec_type)!r} security type",
+            f"the {AuthTypes.lookup(sec_type)} security type",
             _SECURITY_ERRORS,
             "negotiate",
         )
@@ -222,7 +239,8 @@ class RFBClient(Protocol):
         self.expect(self._handleConnMessage, waitfor)
 
     def _handleConnMessage(self, block: bytes) -> None:
-        self.abortConnection(f"Connection refused: {block!r}")
+        reason = block.decode("utf-8", "replace")
+        self.abortConnection(f"the server refused the connection: {reason}")
 
     def ardRequestCredentials(self) -> None:
         if self.factory.username is None:
@@ -260,13 +278,16 @@ class RFBClient(Protocol):
             return
         handler = self._messages.get(msgid)
         if handler is None:
-            self.abortConnection(f"unknown message received {MsgS2C.lookup(msgid)!r}")
+            self.abortConnection(
+                f"the server sent the {MsgS2C.lookup(msgid)} message, "
+                "which vncdotool does not implement"
+            )
             return
         self._pump(
             None,
             handler.handle(self),
             self._finishMessage,
-            f"the {MsgS2C.lookup(msgid)!r} message",
+            f"the {MsgS2C.lookup(msgid)} message",
         )
 
     def _finishMessage(self, _outcome: None) -> None:
@@ -294,7 +315,7 @@ class RFBClient(Protocol):
             self.rectangles -= 1
             if _LOG.isEnabledFor(logging.DEBUG):
                 log.msg(
-                    f"Received {Encoding.lookup(encoding)!r} rectangle "
+                    f"Received {Encoding.lookup(encoding)} rectangle "
                     f"{width}x{height}+{x}+{y}",
                     logLevel=logging.DEBUG,
                 )
@@ -303,7 +324,9 @@ class RFBClient(Protocol):
                 self._pumpRectangle(decoder, x, y, width, height)
             else:
                 self.abortConnection(
-                    f"unknown encoding received {Encoding.lookup(encoding)!r}"
+                    f"the server sent a rectangle in the "
+                    f"{Encoding.lookup(encoding)} encoding, which vncdotool "
+                    "cannot decode"
                 )
         else:
             self._doConnection()
@@ -412,7 +435,7 @@ class RFBClient(Protocol):
             # connectionLost, with no RFB message attached.
             self._tls_handshake_pending = False
             self.vncProtocolError(
-                f"TLS handshake for {self._vencrypt_subtype!r} failed "
+                f"TLS handshake for {self._vencrypt_subtype} failed "
                 f"({reason.getErrorMessage()}); an untrusted certificate "
                 f"needs --tls-ca-cert or {vencrypt.INSECURE_FLAG}"
             )
@@ -468,7 +491,7 @@ class RFBClient(Protocol):
     def setEncodings(self, list_of_encodings: Collection[Encoding]) -> None:
         self.transport.write(pack("!BxH", MsgC2S.SET_ENCODING, len(list_of_encodings)))
         for encoding in list_of_encodings:
-            log.msg(f"Offering {encoding!r}")
+            log.msg(f"Offering {encoding}")
             self.transport.write(pack("!i", encoding))
         self.encodingsOffered(frozenset(list_of_encodings))
 

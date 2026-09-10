@@ -7,7 +7,7 @@ from twisted.internet.interfaces import ITLSTransport
 from twisted.python import log
 
 from .. import vencrypt
-from ..const import AuthTypes, VeNCryptSubtypes
+from ..const import AuthTypes
 from .base import SecurityHandler, security_result
 from .errors import SecurityError
 
@@ -34,7 +34,7 @@ class VeNCryptHandler(SecurityHandler):
             raise SecurityError("server offered no VeNCrypt subtypes")
         subtypes = unpack(f"!{count}I", (yield 4 * count))
         for subtype in subtypes:
-            log.msg(f"Offered {VeNCryptSubtypes.lookup(subtype)!r}")
+            log.msg(f"Offered {vencrypt.name(subtype)}")
 
         policy = _policy(client)
         credentials = _credentials(client)
@@ -42,7 +42,7 @@ class VeNCryptHandler(SecurityHandler):
         if chosen is None:
             raise SecurityError(vencrypt.refusal(subtypes, policy, credentials))
 
-        log.msg(f"Requesting {chosen!r}")
+        log.msg(f"Requesting {chosen}")
         client._vencrypt_subtype = chosen
         client.transport.write(pack("!I", chosen))
 
@@ -50,7 +50,7 @@ class VeNCryptHandler(SecurityHandler):
         # subtype this client will choose.
         (ack,) = unpack("!B", (yield 1))
         if ack != 1:
-            raise SecurityError(f"server refused {chosen!r}")
+            raise SecurityError(f"server refused {chosen}")
         if client._packet:
             # The TLS layer takes the socket over from here and has not sent
             # its ClientHello yet, so nothing can legitimately have arrived.

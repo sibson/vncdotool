@@ -82,7 +82,7 @@ class RFBServer(Protocol):
 
     def _handle_security(self) -> None:
         sectype = self.buffer[0]
-        log.debug("Client selected %r", AuthTypes.lookup(sectype))
+        log.debug("Client selected %s", AuthTypes.lookup(sectype))
         del self.buffer[:1]
         if sectype == AuthTypes.VNC_AUTHENTICATION:
             # The challenge/response is the same 16 bytes as on the pre-3.7
@@ -125,7 +125,7 @@ class RFBServer(Protocol):
             encodings = unpack_from("!" + "i" * nencodings, self.buffer)
             del self.buffer[:nbytes]
             for encoding in encodings:
-                log.debug(f"Client announces {Encoding.lookup(encoding)!r}")
+                log.debug(f"Client announces {Encoding.lookup(encoding)}")
             self.handle_setEncodings(encodings)
         elif ptype == MsgC2S.FRAMEBUFFER_UPDATE_REQUEST:
             inc, x, y, w, h = unpack("!BHHHH", block)
@@ -150,10 +150,10 @@ class RFBServer(Protocol):
             if subtype == QemuClientMessage.EXTENDED_KEY_EVENT:
                 self._handler = self._handle_qemuExtendedKeyEvent, 10
             else:
-                log.debug("Unhandled subtype %r", QemuClientMessage.lookup(subtype))
+                log.debug("Unhandled subtype %s", QemuClientMessage.lookup(subtype))
                 raise ProtocolError(subtype)
         else:
-            log.debug("Unhandled response %r", MsgC2S.lookup(ptype))
+            log.debug("Unhandled response %s", MsgC2S.lookup(ptype))
             raise ProtocolError(ptype)
 
     def _handle_qemuExtendedKeyEvent(self) -> None:

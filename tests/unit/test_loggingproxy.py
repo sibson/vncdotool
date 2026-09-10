@@ -153,7 +153,10 @@ class TestObserverFailureIsReported(ProxyPair):
         with self.assertLogs("vncdotool.loggingproxy", level=logging.ERROR) as logged:
             self.client_proxy.dataReceived(unknown_message)
 
-        self.assertIn("unknown message received", "\n".join(logged.output))
+        self.assertIn(
+            "the server sent the XVP_SERVER_MESSAGE (250) message",
+            "\n".join(logged.output),
+        )
         self.assertTrue(self.observer._aborted)
         # The byte still reached the real client: only the observer gave up.
         self.server_proxy.transport.write.assert_any_call(unknown_message)

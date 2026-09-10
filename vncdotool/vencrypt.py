@@ -16,7 +16,7 @@ from twisted.internet.ssl import (
 )
 from zope.interface import implementer
 
-from .const import VeNCryptSubtypes
+from .const import AuthTypes, VeNCryptSubtypes
 
 ANONYMOUS_SUBTYPES = frozenset(
     {
@@ -115,14 +115,23 @@ def choose(
     return None
 
 
+def name(subtype: int) -> str:
+    """What to call `subtype` in a message."""
+    # rfbproto: any normal security type may be listed among the subtypes,
+    # which are numbered from 256 up.
+    if subtype < VeNCryptSubtypes.PLAIN:
+        return str(AuthTypes.lookup(subtype))
+    return str(VeNCryptSubtypes.lookup(subtype))
+
+
 def refusal(
     offered: Sequence[int], policy: TLSPolicy, credentials: Credentials
 ) -> str:
-    reasons = ", ".join(
-        f"{VeNCryptSubtypes.lookup(subtype)!r} {unusable(subtype, policy, credentials)}"
+    reasons = "".join(
+        f"\n  {name(subtype)}: {unusable(subtype, policy, credentials)}"
         for subtype in offered
     )
-    return f"no usable VeNCrypt subtype: {reasons}"
+    return f"no usable VeNCrypt subtype, of the {len(offered)} offered:{reasons}"
 
 
 def client_options(subtype: int, policy: TLSPolicy) -> Any:

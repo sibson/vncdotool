@@ -56,8 +56,10 @@ class TestRFB(TestCase):
 
     def test_connection_refused_reports_protocol_error(self):
         self.client.vncProtocolError = mock.Mock()
-        self.client._handleConnMessage(b"nope")
-        self.client.vncProtocolError.assert_called_once()
+        self.client._handleConnMessage(b"Too many security failures")
+        self.client.vncProtocolError.assert_called_once_with(
+            "the server refused the connection: Too many security failures"
+        )
         self.client.transport.loseConnection.assert_called_once()
         assert self.client._aborted
 
@@ -221,6 +223,20 @@ class TestRFB(TestCase):
         )
         self.client._handler()
         self.client.vncProtocolError.assert_called_once()
+        assert self.client._aborted
+
+    def test_no_common_security_type_names_both_sides_of_the_mismatch(self):
+        self.client.vncProtocolError = mock.Mock()
+        self.client._packet += (
+            b"RFB 003.008\n"
+            b"\x03"  # num-auth-types
+            b"\x05\x81\x10"
+        )
+        self.client._handler()
+
+        (reason,), _ = self.client.vncProtocolError.call_args
+        assert "RSA-AES (5), RSA-AES-256 (129), Tight (16)" in reason
+        assert "VNC Authentication (2)" in reason
         assert self.client._aborted
 
     def test_ardRequestCredentials_prompts_when_factory_has_no_username(self):
@@ -410,7 +426,7 @@ class TestVeNCrypt(TestCase):
         self.feed(vencrypt_offer(263, 264, 267))
 
         reason = self.reason()
-        assert "X509_SASL" in reason and "not implemented" in reason
+        assert "X509SASL (264)" in reason and "not implemented" in reason
         assert self.client._aborted
 
     def test_an_empty_subtype_list_is_a_protocol_error(self):

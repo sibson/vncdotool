@@ -1,12 +1,48 @@
 from __future__ import annotations
 
 from enum import IntEnum, IntFlag
+from typing import cast
+
+
+def _named(name: str, value: int) -> str:
+    # rfbproto writes the vendor blocks in hex and everything below them in
+    # decimal, and this number is here to be looked up there.
+    shown = f"0x{value:x}" if value >= 0x1_0000 else f"{value}"
+    return f"{name} ({shown})"
+
+
+class Unknown:
+    name = "unknown"
+
+    def __init__(self, value: int) -> None:
+        self.value = value
+
+    def __str__(self) -> str:
+        return _named(self.name, self.value)
+
+    __repr__ = __str__
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Unknown) and other.value == self.value
+
+    def __hash__(self) -> int:
+        return hash((Unknown, self.value))
 
 
 class IntEnumLookup(IntEnum):
+    @property
+    def label(self) -> str:
+        return self.name
+
+    def __str__(self) -> str:
+        return _named(self.label, self.value)
+
     @classmethod
-    def lookup(cls, value: int) -> object:
-        return cls._value2member_map_.get(value, f"<{cls.__name__}.UNKNOWN: {value:x}>")
+    def lookup(cls, value: int) -> IntEnumLookup | Unknown:
+        member = cls._value2member_map_.get(value)
+        if member is None:
+            return Unknown(value)
+        return cast(IntEnumLookup, member)
 
 
 class Encoding(IntEnumLookup):
@@ -20,7 +56,7 @@ class Encoding(IntEnumLookup):
         return int.__new__(cls, cls.s32(value))
 
     @classmethod
-    def lookup(cls, value: int) -> object:
+    def lookup(cls, value: int) -> IntEnumLookup | Unknown:
         return super().lookup(cls.s32(value))
 
     RAW = 0
@@ -165,6 +201,10 @@ class FenceFlags(IntFlag):
 class AuthTypes(IntEnumLookup):
     """:rfc:`6143` §7.1.2. Security Handshake."""
 
+    @property
+    def label(self) -> str:
+        return AUTH_TYPE_NAMES.get(self, self.name)
+
     INVALID = 0
     NONE = 1
     VNC_AUTHENTICATION = 2
@@ -210,6 +250,10 @@ class AuthTypes(IntEnumLookup):
 class VeNCryptSubtypes(IntEnumLookup):
     """rfbproto: VeNCrypt subtypes."""
 
+    @property
+    def label(self) -> str:
+        return VENCRYPT_SUBTYPE_NAMES.get(self, self.name)
+
     PLAIN = 256
     TLS_NONE = 257
     TLS_VNC = 258
@@ -222,6 +266,46 @@ class VeNCryptSubtypes(IntEnumLookup):
     IDENT = 265
     TLS_IDENT = 266
     X509_IDENT = 267
+
+
+VENCRYPT_SUBTYPE_NAMES = {
+    VeNCryptSubtypes.PLAIN: "Plain",
+    VeNCryptSubtypes.TLS_NONE: "TLSNone",
+    VeNCryptSubtypes.TLS_VNC: "TLSVnc",
+    VeNCryptSubtypes.TLS_PLAIN: "TLSPlain",
+    VeNCryptSubtypes.X509_NONE: "X509None",
+    VeNCryptSubtypes.X509_VNC: "X509Vnc",
+    VeNCryptSubtypes.X509_PLAIN: "X509Plain",
+    VeNCryptSubtypes.TLS_SASL: "TLSSASL",
+    VeNCryptSubtypes.X509_SASL: "X509SASL",
+    VeNCryptSubtypes.IDENT: "Ident",
+    VeNCryptSubtypes.TLS_IDENT: "TLSIdent",
+    VeNCryptSubtypes.X509_IDENT: "X509Ident",
+}
+
+
+AUTH_TYPE_NAMES = {
+    AuthTypes.INVALID: "Invalid",
+    AuthTypes.NONE: "None",
+    AuthTypes.VNC_AUTHENTICATION: "VNC Authentication",
+    AuthTypes.RSA_AES: "RSA-AES",
+    AuthTypes.RSA_AES_UNENCRYPTED: "RSA-AES Unencrypted",
+    AuthTypes.RSA_AES_2STEP: "RSA-AES Two-step",
+    AuthTypes.TIGHT: "Tight",
+    AuthTypes.ULTRA: "Ultra",
+    AuthTypes.TLS: "TLS",
+    AuthTypes.VENCRYPT: "VeNCrypt",
+    AuthTypes.SASL: "SASL",
+    AuthTypes.MD5: "MD5 hash authentication",
+    AuthTypes.XVP: "xvp",
+    AuthTypes.SECURE_TUNNEL: "Secure Tunnel",
+    AuthTypes.INTEGRATED_SSH: "Integrated SSH",
+    AuthTypes.DIFFIE_HELLMAN: "Diffie-Hellman",
+    AuthTypes.MSLOGON2: "MSLogonII",
+    AuthTypes.RSA_AES256: "RSA-AES-256",
+    AuthTypes.RSA_AES256_UNENCRYPTED: "RSA-AES-256 Unencrypted",
+    AuthTypes.RSA_AES256_2STEP: "RSA-AES-256 Two-step",
+}
 
 
 class MsgS2C(IntEnumLookup):
