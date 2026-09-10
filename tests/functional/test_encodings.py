@@ -48,13 +48,13 @@ EMITTED: Dict[str, Set[str]] = {
 
 
 def capture(
-    test: TestCase, server: VNCServer, encodings: str, key: str
+    test: TestCase, server: VNCServer, encodings: str, *before: str
 ) -> Tuple[Image.Image, str]:
+    """The screen `before` leaves behind, and the log naming its rectangles."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
-            server, "-v", "-v", "--encodings", encodings,
-            "key", key, *awaiting(key), "capture", str(path),
+            server, "-v", "-v", "--encodings", encodings, *before, "capture", str(path),
         )
         if result.returncode != 0:
             test.fail(
@@ -77,27 +77,13 @@ QEMU_EMITTED = {"raw", "hextile", "zrle", "tight"}
 QEMU_SETTLE_SECONDS = "1"
 
 
-def capture_qemu(test: TestCase, encoding: str, *before: str) -> Tuple[Image.Image, str]:
-    with tempfile.TemporaryDirectory() as tmp:
-        path = Path(tmp) / "screen.png"
-        result = run_vncdo(
-            QEMU, "-v", "-v", "--encodings", encoding, *before, "capture", str(path)
-        )
-        if result.returncode != 0:
-            test.fail(
-                f"qemu: vncdo --encodings {encoding} failed "
-                f"({result.returncode}): {result.stderr}"
-            )
-        return Image.open(path).convert("RGB").copy(), result.stderr
-
-
 def draw_on_qemu(test: TestCase, screen: str) -> Image.Image:
     """Put one of QEMU_SCREENS up, and return the Raw capture of it."""
     argv: List[str] = []
     for command in QEMU_SCREENS[screen]:
         argv += ["type", command, "key", "enter"]
     argv += ["stable", QEMU_SETTLE_SECONDS]
-    oracle, _ = capture_qemu(test, "raw", *argv)
+    oracle, _ = capture(test, QEMU, "raw", *argv)
     return oracle
 
 
@@ -112,7 +98,9 @@ class RendersTheScene:
     scene: str
 
     def test_renders_the_scene_through_the_encoding_it_asked_for(self) -> None:
-        screen, log = capture(self, self.server, self.encoding, self.scene)
+        screen, log = capture(
+            self, self.server, self.encoding, "key", self.scene, *awaiting(self.scene)
+        )
         oracle = Image.open(SCENES_DIR / f"{self.scene}.png").convert("RGB")
         self.assertEqual(screen.size, oracle.size)
         self.assertEqual(
@@ -145,7 +133,7 @@ class RendersTheSameScreenAsRaw:
 
     def test_renders_the_screen_as_raw_renders_it(self) -> None:
         oracle = draw_on_qemu(self, self.screen)
-        screen, log = capture_qemu(self, self.encoding)
+        screen, log = capture(self, QEMU, self.encoding)
         self.assertEqual(
             screen.tobytes(), oracle.tobytes(),
             f"qemu: {self.encoding} and raw disagree about the {self.screen} screen",
@@ -173,9 +161,8 @@ def qemu_cases() -> Iterator[TestCase]:
             yield case("test_renders_the_screen_as_raw_renders_it")
 
 
-def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    suite = unittest.TestSuite()
-    suite.addTests(qemu_cases())
+def scene_cases() -> Iterator[TestCase]:
+    """One case per encoding against each scene, on every server running the player."""
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(decoders.ENCODING_NAMES):
@@ -185,5 +172,11 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
                     name, (RendersTheScene, FleetTestCase),
                     {"server": server, "encoding": encoding, "scene": scene},
                 )
-                suite.addTest(case("test_renders_the_scene_through_the_encoding_it_asked_for"))
+                yield case("test_renders_the_scene_through_the_encoding_it_asked_for")
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
+    suite = unittest.TestSuite()
+    suite.addTests(qemu_cases())
+    suite.addTests(scene_cases())
     return suite
