@@ -32,7 +32,7 @@ SCENES = ("0", "s")
 # Flat enough that every server encodes it the way it was asked to.
 HONOURED_SCENE = "0"
 
-RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
+RECTANGLE_ENCODING = re.compile(r"Received ([A-Z_]+) \(-?\d+\) rectangle")
 
 # Measured against the fleet by offering one encoding at a time and reading
 # back the encoding of the rectangles that arrived. Every server here
