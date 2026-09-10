@@ -64,13 +64,12 @@ def capture(
         return Image.open(path).convert("RGB").copy(), result.stderr
 
 
-# `cls N` repaints OVMF's whole shell framebuffer in colour N.
 QEMU_SCREENS = {
-    "flat": ("cls 4",),
+    "flat": ("cls 4",),  # `cls N` repaints OVMF's whole shell framebuffer in colour N
     "text": ("cls 1", "echo vncdotool encoding probe"),
 }
 
-# Measured against QEMU's firmware screens the way EMITTED was.
+# Offered one at a time; QEMU sent these and answered with Raw for the rest.
 QEMU_EMITTED = {"raw", "hextile", "zrle", "tight"}
 
 # The shell answers a command over several framebuffer updates, so a capture
