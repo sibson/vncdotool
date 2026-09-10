@@ -18,6 +18,7 @@ from typing import Dict, Optional, Tuple
 from PIL import Image, ImageChops
 
 from .utils import (
+    BLANK_FRACTION,
     CURSOR_FAR,
     CURSOR_NEAR,
     KASMVNC,
@@ -29,6 +30,7 @@ from .utils import (
     FleetTestCase,
     VNCServer,
     X11VNC,
+    blank_fraction,
     cursor_box,
     run_vncdo,
     screenshot_dir,
@@ -71,7 +73,19 @@ class CursorFreeCapture:
             f"{result.returncode}, stderr:\n{result.stderr}",
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is 99% one
+        # colour by nature, and has no pointer for a blank capture to hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {tag} capture is {blank:.0%} one colour, "
+                "so the desktop had not painted yet and nothing about the pointer "
+                f"can be read off it. See {png}.",
+            )
+        return capture
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.

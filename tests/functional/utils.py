@@ -567,6 +567,20 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
+# A desktop that has not finished painting is almost entirely one colour but
+# not entirely, so counting colours does not catch it. UltraVNC's first
+# capture after connecting came back 99% black with 700 colours in it.
+BLANK_FRACTION = 0.95
+
+
+def blank_fraction(image: Image.Image) -> float:
+    """How much of `image` is its single commonest colour."""
+    colours = image.convert("RGB").getcolors(maxcolors=image.width * image.height)
+    if not colours:
+        return 0.0
+    return max(count for count, _ in colours) / (image.width * image.height)
+
+
 def normalize_size(server: VNCServer) -> None:
     """Put a server whose size a client can change back to ``server.size``."""
     if not server.normalize_size_keys:
@@ -875,7 +889,30 @@ class _VNCServerTestMixin:
             options=("-v", "-v", "--logfile", str(log)),
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is 99% one
+        # colour by nature, and has no pointer for a blank capture to hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {label} capture is {blank:.0%} one colour, "
+                "so the desktop had not painted yet and nothing about the pointer "
+                f"can be read off it. See {png}.",
+            )
+        return capture
+
+    def warm_up_capture(self) -> None:
+        """Connect and capture once, discarding it.
+
+        UltraVNC's first capture after the service starts comes back before
+        the desktop has painted, and an unpainted capture compared against a
+        painted one differs everywhere.
+        """
+        run_vncdo(
+            self.server, "capture", str(screenshot_dir() / f"{self.server.name}-warmup.png")
+        )
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.
@@ -884,6 +921,7 @@ class _VNCServerTestMixin:
         blinking cursor elsewhere on the screen cannot be read as a painted
         pointer. See specs/cursor.md.
         """
+        self.warm_up_capture()
         shots = {
             label: self.capture_at_pointer(label, position)
             for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
