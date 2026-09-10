@@ -40,7 +40,11 @@ $settings = @{
     AcceptHttpConnections    = 0
     # A plain desktop is a steadier thing to diff two captures of.
     RemoveWallpaper         = 1
+    # Two separate settings: LoopbackOnly refuses anything that is not
+    # loopback, AllowLoopback permits loopback at all. Without the second the
+    # server answers "Sorry, loopback connections are not enabled" and closes.
     LoopbackOnly            = 1
+    AllowLoopback           = 1
     AlwaysShared            = 1
 }
 foreach ($name in $settings.Keys) {
