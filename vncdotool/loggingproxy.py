@@ -21,6 +21,7 @@ from . import __version__ as VNCDOTOOL_VERSION
 from .capture import CaptureWriter, HandshakeScrubber
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import VNCDoToolClient
+from .cursor import CursorMode
 from .keys import KEYMAP
 from .rfb import PixelFormat
 
@@ -505,7 +506,7 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
 
-    pseudocursor = False
+    cursor = CursorMode.NONE
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True

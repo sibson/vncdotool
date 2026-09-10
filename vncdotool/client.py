@@ -22,6 +22,7 @@ from twisted.python.failure import Failure
 
 from . import decoders, pixelformat, rfb, websocket
 from .const import JPEG_QUALITY_ENCODINGS
+from .cursor import CursorMode
 from .keys import KEYMAP
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
@@ -508,9 +509,10 @@ class VNCDoToolClient(rfb.RFBClient):
         self.setImageMode()
         encodings = list(self.requested_encodings or decoders.DEFAULT_ENCODINGS)
         # A server that paints the pointer into the framebuffer stops once a
-        # client asks for Cursor, so this is offered even to discard it.
-        encodings.append(rfb.Encoding.PSEUDO_CURSOR)
-        encodings.append(rfb.Encoding.PSEUDO_POINTER_POS)
+        # client asks for Cursor, so `none` offers it too, and discards it.
+        if self.factory.cursor is not CursorMode.SERVER:
+            encodings.append(rfb.Encoding.PSEUDO_CURSOR)
+            encodings.append(rfb.Encoding.PSEUDO_POINTER_POS)
         if self.factory.pseudodesktop:
             encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
         if self.factory.last_rect:
@@ -593,7 +595,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def updateCursor(
         self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes
     ) -> None:
-        if not self.factory.pseudocursor:
+        if self.factory.cursor is not CursorMode.LOCAL:
             return
 
         if not width or not height:
@@ -716,7 +718,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     shared = True
 
-    pseudocursor = False
+    cursor = CursorMode.NONE
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True

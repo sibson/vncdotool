@@ -51,15 +51,31 @@ cursor pseudo-encoding of RFC 6143, which vncdo always does. Since a pointer
 sits wherever the last `move` left it, leaving it in would make a capture
 depend on something no script controls, and `expect` compare against it.
 
-`--localcursor` draws the pointer back in, from the shape the server sends
-rather than from its own render — on x11vnc and libvncserver the result is
-pixel for pixel what those servers used to paint:
+`--cursor` chooses one of three things instead:
+
+| `--cursor` | capture contains |
+|---|---|
+| `none` (default) | no pointer, on any server |
+| `server` | whatever the server paints, as before |
+| `local` | the shape the server sends, drawn by vncdo |
 
 ```
-> vncdo --localcursor capture screenshot.png
+> vncdo --cursor local capture screenshot.png
 ```
 
-`--nocursor` is still accepted and now describes the default.
+On x11vnc and libvncserver `local` is pixel for pixel what `server` captures.
+`--localcursor` and `--nocursor` are still accepted, as aliases for
+`--cursor local` and `--cursor none`.
+
+`api.connect()` takes the same three values, which is the only way a library
+caller can set them:
+
+```python
+from vncdotool import api
+from vncdotool.cursor import CursorMode
+
+client = api.connect('vncserver', cursor=CursorMode.LOCAL)
+```
 
 With [Pillow](http://www.pythonware.com/products/pil) installed, you can wait for the screen to match a known image:
 

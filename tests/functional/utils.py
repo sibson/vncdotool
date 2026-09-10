@@ -882,7 +882,7 @@ class _VNCServerTestMixin:
 
         Only the neighbourhood of each position is compared, so a clock or a
         blinking cursor elsewhere on the screen cannot be read as a painted
-        pointer. See specs/cursor-default.md.
+        pointer. See specs/cursor.md.
         """
         shots = {
             label: self.capture_at_pointer(label, position)

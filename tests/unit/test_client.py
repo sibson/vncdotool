@@ -7,6 +7,7 @@ from PIL import Image
 from twisted.internet.task import Clock
 
 from vncdotool import client, pixelformat, rfb
+from vncdotool.cursor import CursorMode
 from vncdotool.pixelformat import PIXEL_FORMATS
 from vncdotool.keys import Key
 
@@ -76,7 +77,7 @@ class TestVNCDoToolClient(TestCase):
     def test_cursor_is_offered_by_default(self):
         """A server only stops painting the pointer into the framebuffer once
         a client asks for Cursor, so it is offered whether or not the shape
-        will be drawn (see specs/cursor-default.md).
+        will be drawn (see specs/cursor.md).
         """
         cli = self.client
         cli.factory = client.VNCDoToolFactory()
@@ -102,7 +103,7 @@ class TestVNCDoToolClient(TestCase):
 
     def test_updateCursor_discards_the_shape_without_localcursor(self):
         cli = self.client
-        cli.factory.pseudocursor = False
+        cli.factory.cursor = CursorMode.NONE
         cli.screen = Image.new("RGB", (100, 100))
 
         cli.updateCursor(0, 0, 2, 2, b"\0" * 12, b"\xc0\xc0")
@@ -114,7 +115,7 @@ class TestVNCDoToolClient(TestCase):
         height 0 means hide the pointer, not an empty image to decode.
         """
         cli = self.client
-        cli.factory.pseudocursor = True
+        cli.factory.cursor = CursorMode.LOCAL
         cli.cursor = Image.new("RGB", (4, 4))
         cli.cmask = Image.new("1", (4, 4))
         cli.screen = Image.new("RGB", (100, 100))
@@ -853,8 +854,9 @@ def _connected(jpeg_quality):
     cli = client.VNCDoToolClient()
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
-    for flag in ("pseudocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
+    for flag in ("pseudodesktop", "last_rect", "qemu_extended_key"):
         setattr(cli.factory, flag, False)
+    cli.factory.cursor = CursorMode.NONE
     cli.setEncodings = mock.Mock()
     cli.requested_jpeg_quality = jpeg_quality
     cli.vncConnectionMade()
