@@ -8,10 +8,11 @@ encoding matches ours. See specs/decoder-goldens.md.
 from __future__ import annotations
 
 import re
+import time
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -19,6 +20,7 @@ from PIL import Image
 from vncdotool import decoders
 
 from .utils import (
+    QEMU,
     SCENE_SERVERS,
     SCENES_DIR,
     FleetTestCase,
@@ -63,6 +65,57 @@ def capture(
         return Image.open(path).convert("RGB").copy(), result.stderr
 
 
+# `cls N` repaints OVMF's whole shell framebuffer in colour N.
+QEMU_SCREENS = {
+    "flat": ("cls 4",),
+    "text": ("cls 1", "echo vncdotool encoding probe"),
+}
+
+# Measured against QEMU's firmware screens the way EMITTED was.
+QEMU_EMITTED = {"raw", "hextile", "zrle", "tight"}
+
+SETTLE_DELAY = 0.5
+SETTLE_ATTEMPTS = 12
+
+
+def capture_current(test: TestCase, encoding: str) -> Tuple[Image.Image, str]:
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "screen.png"
+        result = run_vncdo(QEMU, "-v", "-v", "--encodings", encoding, "capture", str(path))
+        if result.returncode != 0:
+            test.fail(
+                f"qemu: vncdo --encodings {encoding} failed "
+                f"({result.returncode}): {result.stderr}"
+            )
+        return Image.open(path).convert("RGB").copy(), result.stderr
+
+
+def type_commands(test: TestCase, commands: Tuple[str, ...]) -> None:
+    argv: List[str] = []
+    for command in commands:
+        argv += ["type", command, "key", "enter"]
+    result = run_vncdo(QEMU, *argv)
+    if result.returncode != 0:
+        test.fail(f"qemu: vncdo {' '.join(argv)} failed ({result.returncode}): {result.stderr}")
+
+
+def settled(test: TestCase) -> Image.Image:
+    """A Raw capture, once two in a row agree.
+
+    The shell redraws over several updates, and the firmware is still
+    booting when the fleet first comes up, so a single capture can catch a
+    half-drawn screen that the next encoding would never reproduce.
+    """
+    previous = None
+    for _ in range(SETTLE_ATTEMPTS):
+        current, _ = capture_current(test, "raw")
+        if previous is not None and current.tobytes() == previous.tobytes():
+            return current
+        previous = current
+        time.sleep(SETTLE_DELAY)
+    test.fail(f"qemu: screen never settled over {SETTLE_ATTEMPTS} captures")
+
+
 class RendersTheScene:
     """One encoding against one image the server was shown.
 
@@ -98,8 +151,42 @@ class RendersTheScene:
         )
 
 
+class RendersTheSameScreenAsRaw:
+    """One encoding against QEMU's own Raw, on a screen the shell was told to draw."""
+
+    server = QEMU
+    encoding: str
+    screen: str
+
+    def test_renders_the_screen_as_raw_renders_it(self) -> None:
+        type_commands(self, QEMU_SCREENS[self.screen])
+        oracle = settled(self)
+        screen, log = capture_current(self, self.encoding)
+        self.assertEqual(
+            screen.tobytes(), oracle.tobytes(),
+            f"qemu: {self.encoding} and raw disagree about the {self.screen} screen",
+        )
+
+        if self.encoding not in QEMU_EMITTED:
+            return
+        wanted = decoders.ENCODING_NAMES[self.encoding]
+        arrived = set(RECTANGLE_ENCODING.findall(log))
+        self.assertIn(
+            wanted.name, arrived,
+            f"no {wanted!r} rectangle arrived; qemu answered with {sorted(arrived)}",
+        )
+
+
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
     suite = unittest.TestSuite()
+    for encoding in sorted(decoders.ENCODING_NAMES):
+        for screen in sorted(QEMU_SCREENS):
+            name = f"TestRendersAsRaw_qemu_{encoding}_screen_{screen}"
+            case = type(
+                name, (RendersTheSameScreenAsRaw, FleetTestCase),
+                {"encoding": encoding, "screen": screen},
+            )
+            suite.addTest(case("test_renders_the_screen_as_raw_renders_it"))
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(decoders.ENCODING_NAMES):

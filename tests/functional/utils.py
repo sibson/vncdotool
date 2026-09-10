@@ -161,8 +161,9 @@ def vnclog_can_reach(server: VNCServer) -> bool:
     return not any(option in server.extra_args for option in TLS_OPTIONS)
 
 
-QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
-QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
+# 1280x800 is the mode OVMF's UEFI shell settles in.
+QEMU = VNCServer("qemu", 5944, size=(1280, 800), address="ws://127.0.0.1:5944/")
+QEMU_TLS = VNCServer("qemu-tls", 5945, size=(1280, 800), address="wss://localhost:5945/")
 # QEMU presents a leaf signed by a CA rather than a self-signed certificate,
 # so the trust anchor cannot be read off the connection. Its service writes
 # the CA here at start-up.

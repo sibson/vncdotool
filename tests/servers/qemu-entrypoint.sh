@@ -32,10 +32,14 @@ else
     set --
 fi
 
-# No disk: SeaBIOS draws its own boot screen, which is a real framebuffer
-# with stable content and needs no guest image.
+# No disk, so the firmware's own screen is the framebuffer. SeaBIOS blinks a
+# VGA text cursor, so two captures of an idle machine differ; the UEFI shell
+# holds still. Without -net none OVMF retries PXE forever and the screen
+# scrolls.
 exec qemu-system-x86_64 \
     -m 128 \
     -display none \
+    -net none \
+    -bios /usr/share/OVMF/OVMF_CODE.fd \
     -vnc "$VNC_ARGS" \
     "$@"

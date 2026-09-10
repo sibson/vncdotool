@@ -68,6 +68,10 @@ pull request: [TigerVNC](https://tigervnc.org),
 [KasmVNC](https://kasmweb.com/kasmvnc), [QEMU](https://qemu.org)'s built-in
 server, [Selenoid](https://aerokube.com/selenoid/).
 
+QEMU is the exception: it boots firmware with no guest, so there is no
+desktop to draw a known scene, and its encodings are checked against its own
+Raw output rather than against a committed image.
+
 **Supported on their own OS** — the same journey, but only on the pull
 requests that touch code able to affect it, since these servers need a
 Windows or macOS runner: UltraVNC on Windows, and Apple Screen Sharing on

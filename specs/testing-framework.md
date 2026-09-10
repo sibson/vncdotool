@@ -64,6 +64,13 @@ cannot run the scene player and the encoding and pixel-format grids cannot
 reach it — the grid is the only thing that sends it input. Every other fleet
 server is covered in more detail by those grids and stays out of this one.
 
+QEMU has no X server either. It reaches the encoding grid on screens `type`
+asks OVMF's UEFI shell to draw, with a Raw capture of the same screen as the
+oracle — the firmware boots no guest, so there is no scene player and no
+committed PNG to hold a capture against. Checking the other decoders against
+the simplest one is weaker than what a scene server gets. The pixel-format
+grid and the decoder goldens still do not reach QEMU.
+
 Tier 2 keeps a subclass per server for the same reason as
 libvncserver-example: for an OS-hosted server the smoke grid is the only
 coverage there is.
@@ -308,6 +315,19 @@ and can proceed while 3–5 follow.
   key classes (named keys, function keys, modifier combos, keypad) at every
   fleet server and reading the X-side sink. Needs a per-class matrix rather
   than the one-key-per-server smoke case that exists today.
+- **QEMU scenes via a UEFI application**: a payload rather than a guest OS.
+  OVMF's shell auto-runs `startup.nsh` off its boot media, so a small
+  gnu-efi application (Debian packages the library) can draw a scene
+  through the GOP `Blt()` protocol and read keys through
+  `SIMPLE_TEXT_INPUT_PROTOCOL`, on a FAT image `mtools` builds without root
+  or a loop mount. Converting the committed scene PNGs to raw BGRX at build
+  time keeps a PNG decoder out of the C. Measured 2026-09-09:
+  `-device VGA,edid=on,xres=256,yres=192` makes QEMU serve exactly the scene
+  geometry, and the payload adds under a megabyte against the ~250MB a guest
+  with Xorg costs. QEMU would then be an ordinary scene server, reaching
+  both grids and the goldens through the existing pipeline rather than a
+  second fixture shape. The goldens need the container's RFB port published
+  as well, since `vnclog` cannot dial the WebSocket the fleet exposes.
 - **Fleet expansion** (TightVNC, more): follows the plan's tier process;
   this framework adds a server as one descriptor, plus its membership of
   whichever server lists it belongs in.
