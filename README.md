@@ -82,7 +82,10 @@ against it once. Not tracked by CI, so it ages. Nothing listed yet.
 work; any pointer event stops the server answering, and it drops the
 connection twenty seconds later. KasmVNC states that it has left the RFB
 specification and does not support VNC client applications, so expect no
-fix.
+fix. `vncdo --dialect kasmvnc` sends the eleven-byte pointer event its
+server reads instead of RFB's six, which keeps the session alive and moves
+the pointer; a button press reaches the X server, but has not been seen to
+reach an application.
 
 **TBD** — no data gathered: RealVNC, TightVNC, TurboVNC, PiKVM, and everything
 else. It should work; we make no claim. A report either way is welcome, and is

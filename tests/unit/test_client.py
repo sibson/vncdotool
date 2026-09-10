@@ -599,6 +599,46 @@ class TestImageMode(TestCase):
         self.client.transport.loseConnection.assert_called_once()
 
 
+class TestKasmVNCDialect(TestCase):
+
+    def setUp(self) -> None:
+        self.client = type("C", (client.KasmVNCDialect, client.VNCDoToolClient), {})()
+        self.client.transport = mock.Mock()
+
+    def test_pointer_event_carries_a_u16_mask_and_scroll_deltas(self) -> None:
+        self.client.pointerEvent(20, 30, buttonmask=1)
+
+        self.client.transport.write.assert_called_once_with(
+            struct.pack("!BHHHhh", client.rfb.MsgC2S.POINTER_EVENT, 1, 20, 30, 0, 0)
+        )
+
+    def test_the_message_is_eleven_bytes(self) -> None:
+        self.client.pointerEvent(20, 30)
+
+        (payload,), _ = self.client.transport.write.call_args
+        self.assertEqual(len(payload), 11)
+
+
+class TestApplyDialect(TestCase):
+
+    def test_standard_leaves_the_client_class_alone(self) -> None:
+        factory = client.VNCDoToolFactory()
+        client.apply_dialect(factory, "standard")
+
+        self.assertIs(factory.protocol, client.VNCDoToolClient)
+
+    def test_a_dialect_mixes_into_whatever_client_the_factory_uses(self) -> None:
+        class CLIClient(client.VNCDoToolClient):
+            pass
+
+        factory = client.VNCDoToolFactory()
+        factory.protocol = CLIClient
+        client.apply_dialect(factory, "kasmvnc")
+
+        self.assertTrue(issubclass(factory.protocol, client.KasmVNCDialect))
+        self.assertTrue(issubclass(factory.protocol, CLIClient))
+
+
 class TestVMWareClient(TestCase):
 
     def setUp(self) -> None:

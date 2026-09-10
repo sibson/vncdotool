@@ -67,3 +67,16 @@ class TestKasmVNCInput(FleetTestCase):
             f"exited {result.returncode} rather than timing out, stderr:\n"
             f"{result.stderr}",
         )
+
+    def test_the_kasmvnc_dialect_keeps_the_session_answering(self) -> None:
+        result, png = self.capture_after("--dialect", "kasmvnc", "move", "10", "10")
+        self.assertEqual(
+            result.returncode, 0,
+            f"KasmVNC: --dialect kasmvnc exited {result.returncode}, stderr:\n"
+            f"{result.stderr}",
+        )
+        self.assertTrue(
+            png.exists(),
+            "KasmVNC served no framebuffer update after an eleven-byte "
+            "PointerEvent, so --dialect kasmvnc no longer matches its reader",
+        )
