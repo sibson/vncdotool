@@ -27,11 +27,12 @@ Write-Host "--- downloading TigerVNC winvnc $Version"
 $Url = "https://sourceforge.net/projects/tigervnc/files/stable/$Version/" +
     "tigervnc64-winvnc-$Version.exe/download"
 $Installer = Join-Path $env:TEMP "tigervnc64-winvnc-$Version.exe"
-Invoke-WebRequest -Uri $Url -OutFile $Installer -UseBasicParsing
+# SourceForge serves the file itself to a command-line downloader and a
+# "your download will start shortly" page to anything that looks like a
+# browser, which PowerShell's own user agent does. Measured: the default
+# gets 121737 bytes of HTML, this gets 7018760 bytes of installer.
+Invoke-WebRequest -Uri $Url -OutFile $Installer -UseBasicParsing -UserAgent 'Wget/1.21.4'
 $Size = (Get-Item $Installer).Length
-# SourceForge answers /download with a redirect to a mirror, and on a bad day
-# with an HTML interstitial instead. Either way the file is written, so its
-# size is what says which arrived.
 if ($Size -lt 1MB) {
     Get-Content $Installer -TotalCount 20
     throw "$Url returned $Size bytes, which is not an installer"

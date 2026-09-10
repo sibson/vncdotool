@@ -14,6 +14,11 @@ real desktop behind it, which is the whole reason it is here. See
   SourceForge download, `tigervnc64-winvnc-<version>.exe`, which `setup.ps1`
   fetches directly. `TIGERVNC_VERSION` overrides the version.
 
+* **SourceForge needs a non-browser user agent.** It serves the file to a
+  command-line downloader and a "your download will start shortly" page to
+  anything else, and PowerShell's own user agent counts as anything else:
+  the default fetches 121737 bytes of HTML in place of the installer.
+
 * **WinVNC is unmaintained upstream.** TigerVNC stopped supporting it in
   1.11 and its own release notes say so. That is a reason to read a failure
   here carefully rather than a reason to skip it: it is the closest
