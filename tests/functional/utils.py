@@ -885,7 +885,7 @@ class _VNCServerTestMixin:
         log = stem.with_suffix(".wire.log")
         log.unlink(missing_ok=True)
         self.run_vncdo_ok(
-            "move", str(x), str(y), "pause", "0.5", "capture", str(png),
+            "stable", "1", "move", str(x), str(y), "pause", "0.5", "capture", str(png),
             options=("-v", "-v", "--logfile", str(log)),
         )
         with Image.open(png) as image:
@@ -922,6 +922,10 @@ class _VNCServerTestMixin:
         pointer. See specs/cursor.md.
         """
         self.warm_up_capture()
+        # Twice at the same position before the one that moves: whatever
+        # differs between these two is the desktop moving on its own, and a
+        # region that will not hold still cannot answer the question.
+        control = self.capture_at_pointer("control", CURSOR_NEAR)
         shots = {
             label: self.capture_at_pointer(label, position)
             for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
@@ -929,6 +933,17 @@ class _VNCServerTestMixin:
 
         for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
             box = cursor_box(position, shots["near"].size)
+            drift = ImageChops.difference(
+                control.crop(box), shots["near"].crop(box)
+            ).getbbox()
+            self.assertIsNone(
+                drift,
+                f"{self.server.name}: the {label} region {box} changed between two "
+                f"captures taken at the same pointer position (region {drift}), so "
+                "the desktop is animating there and nothing about the pointer can "
+                "be read off it.",
+            )
+
             difference = ImageChops.difference(
                 shots["near"].crop(box), shots["far"].crop(box)
             )
@@ -936,8 +951,9 @@ class _VNCServerTestMixin:
                 difference.getbbox(),
                 f"{self.server.name}: the capture changed around the {label} "
                 f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-                "painting it into the framebuffer despite being offered Cursor.",
+                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}, and did not change "
+                "with the pointer parked. The server is painting it into the "
+                "framebuffer despite being offered Cursor.",
             )
 
 
