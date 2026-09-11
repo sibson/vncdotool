@@ -78,12 +78,14 @@ FLEET_PROJECT = "vncdo-test-servers"
 FLEET_TAG_SCRIPT = Path(__file__).resolve().parents[1] / "servers" / "fleet-tag.sh"
 FLEET_PROBE_TIMEOUT = 30.0
 
-# Two pointer positions a capture is compared at, and a box comfortably
-# larger than the biggest cursor the fleet sends (libvncserver's 32x32). A
-# shape is drawn at the pointer minus its hotspot, so it reaches above and
-# left of the position as well as below and right.
-CURSOR_NEAR = (20, 20)
-CURSOR_FAR = (150, 120)
+# Two pointer positions a capture is compared at, far enough apart that a
+# box around one excludes the other, and a box comfortably larger than the
+# biggest cursor the fleet sends (libvncserver's 32x32). A shape is drawn at
+# the pointer minus its hotspot, so it reaches above and left of the position
+# as well as below and right.
+CURSOR_PROBE = (20, 20)
+CURSOR_AWAY = (150, 120)
+CURSOR_POSITIONS = (CURSOR_PROBE, CURSOR_AWAY)
 CURSOR_EXTENT = 48
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -927,7 +929,7 @@ class _VNCServerTestMixin:
         pointer. See specs/cursor.md.
         """
         self.warm_up_capture()
-        control, shots, drift = self.settled_captures()
+        occupied, vacated, drift = self.settled_captures()
         self.assertIsNone(
             drift,
             f"{self.server.name}: region {drift} changed between two captures taken "
@@ -936,24 +938,24 @@ class _VNCServerTestMixin:
             "off it.",
         )
 
-        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
-            box = cursor_box(position, shots["near"].size)
-            difference = ImageChops.difference(
-                shots["near"].crop(box), shots["far"].crop(box)
-            )
+        for position, holding, vacant in (
+            (CURSOR_PROBE, occupied, vacated),
+            (CURSOR_AWAY, vacated, occupied),
+        ):
+            box = cursor_box(position, holding.size)
+            difference = ImageChops.difference(holding.crop(box), vacant.crop(box))
             self.assertIsNone(
                 difference.getbbox(),
-                f"{self.server.name}: the capture changed around the {label} "
-                f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}, and did not change "
-                "with the pointer parked. The server is painting it into the "
-                "framebuffer despite being offered Cursor.",
+                f"{self.server.name}: region {box} differs between the capture "
+                f"holding the pointer at {position} and the capture that left it "
+                "vacant, and did not differ with the pointer parked. The server "
+                "is painting it into the framebuffer despite being offered Cursor.",
             )
 
     def settled_captures(
         self,
-    ) -> Tuple[Image.Image, Dict[str, Image.Image], Optional[Tuple[int, int, int, int]]]:
-        """Captures at both positions, plus a control taken at the first again.
+    ) -> Tuple[Image.Image, Image.Image, Optional[Tuple[int, int, int, int]]]:
+        """A capture at each position, once a control agrees nothing else moved.
 
         Whatever differs between the control and the capture at the same
         position is the desktop moving on its own. A freshly started desktop
@@ -961,22 +963,20 @@ class _VNCServerTestMixin:
         because these desktops never go entirely quiet.
         """
         drift = None
-        for attempt in range(STEADY_ATTEMPTS):
-            control = self.capture_at_pointer("control", CURSOR_NEAR)
-            shots = {
-                label: self.capture_at_pointer(label, position)
-                for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
-            }
+        for _ in range(STEADY_ATTEMPTS):
+            control = self.capture_at_pointer("control", CURSOR_PROBE)
+            occupied = self.capture_at_pointer("probe", CURSOR_PROBE)
+            vacated = self.capture_at_pointer("away", CURSOR_AWAY)
             drift = None
-            for position in (CURSOR_NEAR, CURSOR_FAR):
-                box = cursor_box(position, shots["near"].size)
+            for position in CURSOR_POSITIONS:
+                box = cursor_box(position, occupied.size)
                 drift = drift or ImageChops.difference(
-                    control.crop(box), shots["near"].crop(box)
+                    control.crop(box), occupied.crop(box)
                 ).getbbox()
             if drift is None:
-                return control, shots, None
+                return occupied, vacated, None
             time.sleep(RETRY_DELAY)
-        return control, shots, drift
+        return occupied, vacated, drift
 
 
 class Rectangle(NamedTuple):
@@ -1026,7 +1026,7 @@ class CursorShapeOffered:
         png = screenshot_dir() / f"{self.server.name}-cursor-shape.png"
         result = run_vncdo(
             self.server,
-            "move", str(CURSOR_NEAR[0]), str(CURSOR_NEAR[1]),
+            "move", str(CURSOR_PROBE[0]), str(CURSOR_PROBE[1]),
             "pause", "0.5", "capture", str(png),
             options=("-v", "-v", "--logfile", str(log)),
         )
