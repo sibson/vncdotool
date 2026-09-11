@@ -27,7 +27,19 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Mapping, NamedTuple, Optional, Set, Tuple
+from typing import (
+    Any,
+    Callable,
+    ContextManager,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+)
 from unittest import TestCase
 
 from PIL import Image
@@ -94,6 +106,12 @@ class VNCServer(NamedTuple):
     # Honoured only off CI -- see absent_server_skips().
     skip_when_down: bool = False
     normalize_size_keys: Tuple[str, ...] = ()
+    # A CA to trust, for a server whose address takes no --tls-ca-cert.
+    # OpenSSL reads one from SSL_CERT_FILE instead.
+    tls_ca: Optional[Path] = None
+    # Held open around anything that talks to this server, where its address
+    # resolves only inside a session.
+    session: Optional[Callable[[], ContextManager[None]]] = None
 
 
 # Both written by their container into a bind mount at every start; neither
@@ -161,37 +179,21 @@ def vnclog_can_reach(server: VNCServer) -> bool:
     return not any(option in server.extra_args for option in TLS_OPTIONS)
 
 
-QEMU = VNCServer("qemu", 5944, size=(720, 400), address="ws://127.0.0.1:5944/")
-QEMU_TLS = VNCServer("qemu-tls", 5945, size=(720, 400), address="wss://localhost:5945/")
 # QEMU presents a leaf signed by a CA rather than a self-signed certificate,
 # so the trust anchor cannot be read off the connection. Its service writes
 # the CA here at start-up.
 QEMU_TLS_CA = Path(__file__).resolve().parent.parent / "servers" / "qemu-tls" / "ca-cert.pem"
 
-# Selenoid keys the session off the URL path, so this address only resolves
-# while a WebDriver session with this id is open.
-SELENOID_SESSION_ID = "c2ec57a377e94f515b35b2a57caad26e"
-SELENOID = VNCServer(
-    "selenoid", 5946, size=(256, 192),
-    address=f"ws://127.0.0.1:5946/vnc/{SELENOID_SESSION_ID}?password=vncdotool",
+# 1280x800 is the mode OVMF's UEFI shell settles in.
+QEMU = VNCServer("qemu", 5944, size=(1280, 800), address="ws://127.0.0.1:5944/")
+QEMU_TLS = VNCServer(
+    "qemu-tls", 5945, size=(1280, 800), address="wss://localhost:5945/",
+    tls_ca=QEMU_TLS_CA,
 )
-
-KASMVNC = VNCServer(
-    "kasmvnc", 5947, size=(256, 192),
-    address="ws://127.0.0.1:5947/?password=vncdotool",
-)
-
-WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
-
-# Both run the scene player behind their bridge, so the encoding and pixel
-# format grids reach them over ws:// and the handshake is exercised by every
-# case rather than by a test of its own.
-SCENE_SERVERS += [SELENOID, KASMVNC]
 
 
 @contextlib.contextmanager
 def selenoid_session() -> Iterator[None]:
-    """Hold a Selenoid WebDriver session open, which its /vnc/ route needs."""
     endpoint = f"http://{HOST}:{SELENOID.port}/wd/hub/session"
     body = json.dumps(
         {
@@ -216,6 +218,28 @@ def selenoid_session() -> Iterator[None]:
             urllib.request.Request(f"{endpoint}/{session_id}", method="DELETE"),
             timeout=SELENOID.timeout,
         ).close()
+
+
+# Selenoid keys the session off the URL path, so this address only resolves
+# while a WebDriver session with this id is open.
+SELENOID_SESSION_ID = "c2ec57a377e94f515b35b2a57caad26e"
+SELENOID = VNCServer(
+    "selenoid", 5946, size=(256, 192),
+    address=f"ws://127.0.0.1:5946/vnc/{SELENOID_SESSION_ID}?password=vncdotool",
+    session=selenoid_session,
+)
+
+KASMVNC = VNCServer(
+    "kasmvnc", 5947, size=(256, 192),
+    address="ws://127.0.0.1:5947/?password=vncdotool",
+)
+
+WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
+
+# Both run the scene player behind their bridge, so the encoding and pixel
+# format grids reach them over ws:// and the handshake is exercised by every
+# case rather than by a test of its own.
+SCENE_SERVERS += [SELENOID, KASMVNC]
 
 
 # An event sink rather than a rendering server, so it stays out of the smoke
@@ -289,7 +313,7 @@ def os_servers(platform: str = sys.platform) -> List[VNCServer]:
 
 
 def select_servers(group: str) -> List[VNCServer]:
-    groups = {"docker": TCP_SERVERS, "os": os_servers()}
+    groups = {"docker": TCP_SERVERS + WEBSOCKET_SERVERS, "os": os_servers()}
     if group == "all":
         return [server for servers in groups.values() for server in servers]
     if group not in groups:
@@ -436,8 +460,8 @@ class FleetTestCase(TestCase):
                 f"{self.server.name} is not listening on {self.server.port}; "
                 f"{self.server.how_to_start}"
             )
-        if self.server is SELENOID:
-            session = selenoid_session()
+        if self.server.session is not None:
+            session = self.server.session()
             session.__enter__()
             self.addCleanup(session.__exit__, None, None, None)
 
@@ -461,9 +485,25 @@ def connect(server: VNCServer, timeout: Optional[float] = None) -> api.ThreadedV
     return client
 
 
-def capture_screenshot(server: VNCServer, path: Path, timeout: Optional[float] = None) -> Path:
+@contextlib.contextmanager
+def probe_context(server: VNCServer) -> Iterator[Optional[Dict[str, str]]]:
+    """What a bare `vncdo capture` of this server needs around it."""
+    env = {"SSL_CERT_FILE": str(server.tls_ca)} if server.tls_ca else None
+    if server.session is None:
+        yield env
+    else:
+        with server.session():
+            yield env
+
+
+def capture_screenshot(
+    server: VNCServer,
+    path: Path,
+    timeout: Optional[float] = None,
+    env: Optional[Mapping[str, str]] = None,
+) -> Path:
     """Capture through the CLI, which is what carries a server's extra_args."""
-    result = run_vncdo(server, "capture", str(path), timeout=timeout)
+    result = run_vncdo(server, "capture", str(path), timeout=timeout, env=env)
     if result.returncode != 0:
         raise AssertionError(
             f"{server.name}: vncdo capture exited {result.returncode}, "
@@ -517,9 +557,9 @@ def wait_until_ready(
             continue
         try:
             normalize_size(server)
-            with tempfile.TemporaryDirectory() as tmp:
+            with probe_context(server) as env, tempfile.TemporaryDirectory() as tmp:
                 probe = Path(tmp) / f"{server.name}-ready.png"
-                capture_screenshot(server, probe, timeout=attempt_timeout)
+                capture_screenshot(server, probe, timeout=attempt_timeout, env=env)
                 with Image.open(probe) as image:
                     colours = distinct_colours(image)
                     size = image.size

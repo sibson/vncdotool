@@ -36,6 +36,7 @@ from utils import (  # noqa: E402
     VNCServer,
     capture_screenshot,
     port_open,
+    probe_context,
     screenshot_dir,
     select_servers,
 )
@@ -57,7 +58,8 @@ def capture(server: VNCServer, directory: Path) -> Capture:
 
     path = directory / f"{server.name}.png"
     try:
-        capture_screenshot(server, path)
+        with probe_context(server) as env:
+            capture_screenshot(server, path, env=env)
     except Exception as exc:  # noqa: BLE001 - diagnostics must not fail the build
         return Capture(server, None, f"failed, {exc}")
 

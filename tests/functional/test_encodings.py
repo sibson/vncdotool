@@ -11,7 +11,7 @@ import re
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict, Set, Tuple
+from typing import Dict, Iterator, List, Set, Tuple
 from unittest import TestCase
 
 from PIL import Image
@@ -19,6 +19,7 @@ from PIL import Image
 from vncdotool import decoders
 
 from .utils import (
+    QEMU,
     SCENE_SERVERS,
     SCENES_DIR,
     FleetTestCase,
@@ -31,7 +32,7 @@ SCENES = ("0", "s")
 # Flat enough that every server encodes it the way it was asked to.
 HONOURED_SCENE = "0"
 
-RECTANGLE_ENCODING = re.compile(r"Received <Encoding\.([A-Z_]+):")
+RECTANGLE_ENCODING = re.compile(r"Received ([A-Z_]+) \(-?\d+\) rectangle")
 
 # Measured against the fleet by offering one encoding at a time and reading
 # back the encoding of the rectangles that arrived. Every server here
@@ -47,13 +48,13 @@ EMITTED: Dict[str, Set[str]] = {
 
 
 def capture(
-    test: TestCase, server: VNCServer, encodings: str, key: str
+    test: TestCase, server: VNCServer, encodings: str, *before: str
 ) -> Tuple[Image.Image, str]:
+    """The screen `before` leaves behind, and the log naming its rectangles."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "screen.png"
         result = run_vncdo(
-            server, "-v", "-v", "--encodings", encodings,
-            "key", key, *awaiting(key), "capture", str(path),
+            server, "-v", "-v", "--encodings", encodings, *before, "capture", str(path),
         )
         if result.returncode != 0:
             test.fail(
@@ -61,6 +62,28 @@ def capture(
                 f"({result.returncode}): {result.stderr}"
             )
         return Image.open(path).convert("RGB").copy(), result.stderr
+
+
+QEMU_SCREENS = {
+    "flat": ("cls 4",),  # `cls N` repaints OVMF's whole shell framebuffer in colour N
+    "text": ("cls 1", "echo vncdotool encoding probe"),
+}
+
+QEMU_ENCODINGS = {"raw", "hextile", "zrle", "tight"}
+
+# The shell answers a command over several framebuffer updates, so a capture
+# taken as soon as the last key is sent can catch it half-drawn.
+QEMU_SETTLE_SECONDS = "1"
+
+
+def draw_on_qemu(test: TestCase, screen: str) -> Image.Image:
+    """Put one of QEMU_SCREENS up, and return the Raw capture of it."""
+    argv: List[str] = []
+    for command in QEMU_SCREENS[screen]:
+        argv += ["type", command, "key", "enter"]
+    argv += ["stable", QEMU_SETTLE_SECONDS]
+    oracle, _ = capture(test, QEMU, "raw", *argv)
+    return oracle
 
 
 class RendersTheScene:
@@ -74,7 +97,9 @@ class RendersTheScene:
     scene: str
 
     def test_renders_the_scene_through_the_encoding_it_asked_for(self) -> None:
-        screen, log = capture(self, self.server, self.encoding, self.scene)
+        screen, log = capture(
+            self, self.server, self.encoding, "key", self.scene, *awaiting(self.scene)
+        )
         oracle = Image.open(SCENES_DIR / f"{self.scene}.png").convert("RGB")
         self.assertEqual(screen.size, oracle.size)
         self.assertEqual(
@@ -98,8 +123,45 @@ class RendersTheScene:
         )
 
 
-def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
-    suite = unittest.TestSuite()
+class RenderMatchesRaw:
+    """One encoding against QEMU's own Raw, on a screen the shell was told to draw."""
+
+    server = QEMU
+    encoding: str
+    screen: str
+
+    def test_render_matches_raw(self) -> None:
+        oracle = draw_on_qemu(self, self.screen)
+        screen, log = capture(self, QEMU, self.encoding)
+        self.assertEqual(
+            screen.tobytes(), oracle.tobytes(),
+            f"qemu: {self.encoding} and raw disagree about the {self.screen} screen",
+        )
+
+        if self.encoding not in QEMU_ENCODINGS:
+            return
+        wanted = decoders.ENCODING_NAMES[self.encoding]
+        arrived = set(RECTANGLE_ENCODING.findall(log))
+        self.assertIn(
+            wanted.name, arrived,
+            f"no {wanted!r} rectangle arrived; qemu answered with {sorted(arrived)}",
+        )
+
+
+def qemu_cases() -> Iterator[TestCase]:
+    """One case per encoding against each firmware screen."""
+    for encoding in sorted(decoders.ENCODING_NAMES):
+        for screen in sorted(QEMU_SCREENS):
+            name = f"TestMatchesRaw_qemu_{encoding}_screen_{screen}"
+            case = type(
+                name, (RenderMatchesRaw, FleetTestCase),
+                {"encoding": encoding, "screen": screen},
+            )
+            yield case("test_render_matches_raw")
+
+
+def scene_cases() -> Iterator[TestCase]:
+    """One case per encoding against each scene, on every server running the player."""
     for server in SCENE_SERVERS:
         label = server.name.replace("-", "_")
         for encoding in sorted(decoders.ENCODING_NAMES):
@@ -109,5 +171,11 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
                     name, (RendersTheScene, FleetTestCase),
                     {"server": server, "encoding": encoding, "scene": scene},
                 )
-                suite.addTest(case("test_renders_the_scene_through_the_encoding_it_asked_for"))
+                yield case("test_renders_the_scene_through_the_encoding_it_asked_for")
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: object) -> unittest.TestSuite:
+    suite = unittest.TestSuite()
+    suite.addTests(qemu_cases())
+    suite.addTests(scene_cases())
     return suite

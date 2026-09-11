@@ -144,6 +144,7 @@ FROM base AS qemu
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         qemu-system-x86 \
+        ovmf \
         openssl \
     && rm -rf /var/lib/apt/lists/*
 
