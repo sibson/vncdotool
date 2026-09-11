@@ -69,8 +69,7 @@ QEMU_SCREENS = {
     "text": ("cls 1", "echo vncdotool encoding probe"),
 }
 
-# Offered one at a time; QEMU sent these and answered with Raw for the rest.
-QEMU_EMITTED = {"raw", "hextile", "zrle", "tight"}
+QEMU_ENCODINGS = {"raw", "hextile", "zrle", "tight"}
 
 # The shell answers a command over several framebuffer updates, so a capture
 # taken as soon as the last key is sent can catch it half-drawn.
@@ -124,14 +123,14 @@ class RendersTheScene:
         )
 
 
-class RendersTheSameScreenAsRaw:
+class RenderMatchesRaw:
     """One encoding against QEMU's own Raw, on a screen the shell was told to draw."""
 
     server = QEMU
     encoding: str
     screen: str
 
-    def test_renders_the_screen_as_raw_renders_it(self) -> None:
+    def test_render_matches_raw(self) -> None:
         oracle = draw_on_qemu(self, self.screen)
         screen, log = capture(self, QEMU, self.encoding)
         self.assertEqual(
@@ -139,7 +138,7 @@ class RendersTheSameScreenAsRaw:
             f"qemu: {self.encoding} and raw disagree about the {self.screen} screen",
         )
 
-        if self.encoding not in QEMU_EMITTED:
+        if self.encoding not in QEMU_ENCODINGS:
             return
         wanted = decoders.ENCODING_NAMES[self.encoding]
         arrived = set(RECTANGLE_ENCODING.findall(log))
@@ -153,12 +152,12 @@ def qemu_cases() -> Iterator[TestCase]:
     """One case per encoding against each firmware screen."""
     for encoding in sorted(decoders.ENCODING_NAMES):
         for screen in sorted(QEMU_SCREENS):
-            name = f"TestRendersAsRaw_qemu_{encoding}_screen_{screen}"
+            name = f"TestMatchesRaw_qemu_{encoding}_screen_{screen}"
             case = type(
-                name, (RendersTheSameScreenAsRaw, FleetTestCase),
+                name, (RenderMatchesRaw, FleetTestCase),
                 {"encoding": encoding, "screen": screen},
             )
-            yield case("test_renders_the_screen_as_raw_renders_it")
+            yield case("test_render_matches_raw")
 
 
 def scene_cases() -> Iterator[TestCase]:
