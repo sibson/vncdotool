@@ -21,6 +21,13 @@ ACCEL="${VNCDOTOOL_QEMU_ACCEL:-kvm}"
 MEMORY="${VNCDOTOOL_QEMU_MEMORY:-256}"
 
 QEMU=qemu-system-x86_64
+# Ubuntu 24.04's ovmf package ships only the 4M name; Debian bookworm, which
+# the Docker fleet builds on, ships only the plain one.
+OVMF_CANDIDATES=(
+    /usr/share/OVMF/OVMF_CODE_4M.fd
+    /usr/share/OVMF/OVMF_CODE.fd
+)
+BIOS=""
 RUNTIME_DIR="${VNCDOTOOL_QEMU_RUNTIME_DIR:-/tmp/vncdotool-qemu}"
 PIDFILE="$RUNTIME_DIR/qemu.pid"
 LOGFILE="$RUNTIME_DIR/qemu.log"
@@ -28,14 +35,40 @@ LOGFILE="$RUNTIME_DIR/qemu.log"
 # QEMU takes a display number, not a port: :0 is 5900.
 DISPLAY_NUMBER=$((PORT - 5900))
 
+find_ovmf() {
+    local candidate
+    for candidate in "${OVMF_CANDIDATES[@]}"; do
+        if [ -r "$candidate" ]; then
+            echo "$candidate"
+            return
+        fi
+    done
+    return 1
+}
+
 install_qemu() {
-    echo "--- installing $QEMU"
+    echo "--- installing $QEMU and OVMF"
+    local packages=()
     if command -v "$QEMU" >/dev/null 2>&1; then
         echo "$QEMU already installed: $("$QEMU" --version | head -1)"
-        return
+    else
+        packages+=(qemu-system-x86)
     fi
-    sudo apt-get update
-    sudo apt-get install -y --no-install-recommends qemu-system-x86
+    if BIOS="$(find_ovmf)"; then
+        echo "OVMF already installed: $BIOS"
+    else
+        packages+=(ovmf)
+    fi
+    if [ "${#packages[@]}" -gt 0 ]; then
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends "${packages[@]}"
+    fi
+    if [ -z "$BIOS" ] && ! BIOS="$(find_ovmf)"; then
+        echo "no OVMF firmware to boot; looked for:" >&2
+        printf '  %s\n' "${OVMF_CANDIDATES[@]}" >&2
+        return 1
+    fi
+    echo "--- firmware to boot: $BIOS"
 }
 
 grant_kvm_access() {
@@ -79,8 +112,11 @@ start_qemu() {
     echo "--- starting $QEMU on display :$DISPLAY_NUMBER with -accel $ACCEL"
     mkdir -p "$RUNTIME_DIR"
     rm -f "$PIDFILE"
-    # No -drive and no -kernel: with nothing to boot, the machine sits at the
-    # firmware's "no bootable device" screen, which is a real framebuffer.
+    # No -drive and no -kernel: with nothing to boot, the firmware stops on
+    # its failed-boot screen, which is a real framebuffer. OVMF's holds
+    # still; SeaBIOS blinks a VGA text cursor, so two captures of an idle
+    # machine differ. Without -net none OVMF retries PXE forever and the
+    # screen scrolls instead.
     #
     # The 127.0.0.1: prefix is load-bearing. A bare -vnc :0 listens on every
     # interface, and this server has no authentication at all.
@@ -89,6 +125,8 @@ start_qemu() {
         -accel "$ACCEL" \
         -m "$MEMORY" \
         -vga std \
+        -net none \
+        -bios "$BIOS" \
         -vnc "127.0.0.1:$DISPLAY_NUMBER" \
         -pidfile "$PIDFILE" \
         -D "$LOGFILE" \
