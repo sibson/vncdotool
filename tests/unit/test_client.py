@@ -382,6 +382,7 @@ class TestVNCDoToolClient(TestCase):
         rects = mock.Mock()
         self.deferred = mock.Mock()
         self.client.deferred = self.deferred
+        self.client.screen = Image.new("RGB", (100, 100))
         self.client.commitUpdate(rects)
 
         self.deferred.callback.assert_called_once_with(self.client)
@@ -394,6 +395,17 @@ class TestVNCDoToolClient(TestCase):
         b"\x00\x01"  # number-of-rectangles
         b"\x00\x00\x00\x00\x07\x80\x04\xb0"  # x=0 y=0 w=1920 h=1200
         b"\xff\xff\xff\x21"  # PSEUDO_DESKTOP_SIZE (-223)
+    )
+    # The Cursor pseudo-encoding carries a cursor image and its hotspot in
+    # x/y, not a region of the framebuffer.
+    MSG_FBU_CURSOR_ONLY = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x00\x01\x00\x01"  # hotspot 0,0 w=1 h=1
+        b"\xff\xff\xff\x11"  # PSEUDO_CURSOR (-239)
+        b"\x00\x00\xff\x00"  # one RGBX pixel
+        b"\x80"  # one mask row
     )
     MSG_FBU_ONE_PIXEL = (
         b"\x00"  # FRAMEBUFFER_UPDATE
@@ -418,6 +430,20 @@ class TestVNCDoToolClient(TestCase):
         cli.framebufferUpdateRequest.reset_mock()
 
         cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
+
+        self.assertEqual(fired, [])
+        cli.framebufferUpdateRequest.assert_called_once_with()
+
+    def test_cursor_only_update_rerequests_instead_of_completing(self) -> None:
+        cli = self.client
+        cli.factory.nocursor = False
+        self._connect()
+        d = cli.refreshScreen()
+        fired: list = []
+        d.addCallback(fired.append)
+        cli.framebufferUpdateRequest.reset_mock()
+
+        cli.dataReceived(self.MSG_FBU_CURSOR_ONLY)
 
         self.assertEqual(fired, [])
         cli.framebufferUpdateRequest.assert_called_once_with()
