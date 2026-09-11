@@ -18,6 +18,22 @@ if (-not $Password) {
 "VNCDOTOOL_OS_SERVER_PASSWORD=$Password" |
     Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+$Advanced = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+Set-ItemProperty -Path $Advanced -Name HideIcons -Value 1 -Type DWord
+if ((Get-ItemProperty -Path $Advanced -Name HideIcons).HideIcons -ne 1) {
+    throw 'HideIcons did not take, and the desktop icons would stay on screen'
+}
+# Explorer reads HideIcons when it draws the desktop and re-reads it for
+# nothing short of a restart. Winlogon brings it back on its own.
+Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
+$Deadline = (Get-Date).AddSeconds(30)
+while (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $Deadline) {
+        throw 'explorer did not restart, so the desktop would be served blank'
+    }
+    Start-Sleep -Milliseconds 500
+}
+
 $FirstPort = if ($env:PORT) { [int]$env:PORT } else { 5900 }
 $Servers = @(
     @{ Name = 'ultravnc'; Port = $FirstPort },
