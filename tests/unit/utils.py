@@ -36,7 +36,7 @@ def make_client() -> client.VNCDoToolClient:
     cli.factory.password = None
     # A bare Mock's attributes are all truthy, so the pseudo-encoding flags
     # need pinning to real booleans.
-    cli.factory.cursor = CursorMode.NONE
+    cli.factory.cursor = CursorMode.OMIT
     cli.factory.pseudodesktop = False
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False

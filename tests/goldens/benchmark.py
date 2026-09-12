@@ -58,7 +58,7 @@ def _make_client(pixel_format: str) -> _Replay:
     cli.factory = mock.Mock()
     for name in ("shared", "pseudodesktop", "last_rect", "qemu_extended_key"):
         setattr(cli.factory, name, False)
-    cli.factory.cursor = CursorMode.NONE
+    cli.factory.cursor = CursorMode.OMIT
     cli.factory.password = None
     return cli
 

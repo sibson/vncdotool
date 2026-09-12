@@ -1029,7 +1029,7 @@ class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
 class TestResolveCursorMode(unittest.TestCase):
     """--cursor and the two flags it replaced, which stay accepted."""
 
-    def resolve(self, cursor=CursorMode.NONE, localcursor=False, nocursor=False):
+    def resolve(self, cursor=None, localcursor=False, nocursor=False):
         options = argparse.Namespace(
             cursor=cursor, localcursor=localcursor, nocursor=nocursor
         )
@@ -1043,7 +1043,7 @@ class TestResolveCursorMode(unittest.TestCase):
         return stderr.getvalue()
 
     def test_the_default_omits_the_pointer(self) -> None:
-        assert self.resolve() is CursorMode.NONE
+        assert self.resolve() is CursorMode.OMIT
 
     def test_each_mode_survives(self) -> None:
         for mode in CursorMode:
@@ -1053,7 +1053,7 @@ class TestResolveCursorMode(unittest.TestCase):
         assert self.resolve(localcursor=True) is CursorMode.LOCAL
 
     def test_nocursor_still_means_none(self) -> None:
-        assert self.resolve(nocursor=True) is CursorMode.NONE
+        assert self.resolve(nocursor=True) is CursorMode.OMIT
 
     def test_an_alias_agreeing_with_cursor_is_accepted(self) -> None:
         assert self.resolve(cursor=CursorMode.LOCAL, localcursor=True) is CursorMode.LOCAL
@@ -1064,3 +1064,11 @@ class TestResolveCursorMode(unittest.TestCase):
     def test_an_alias_contradicting_cursor_is_a_usage_error(self) -> None:
         error = self.usage_error(cursor=CursorMode.SERVER, localcursor=True)
         assert '--cursor server contradicts --localcursor' in error
+
+    def test_an_alias_contradicting_explicit_cursor_none_is_a_usage_error(self) -> None:
+        """--cursor none looks like the default (OMIT) but was still typed --
+        an alias disagreeing with it must error like any other contradiction,
+        not be mistaken for --cursor never having been given at all.
+        """
+        error = self.usage_error(cursor=CursorMode.OMIT, localcursor=True)
+        assert '--cursor none contradicts --localcursor' in error

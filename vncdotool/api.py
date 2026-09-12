@@ -163,7 +163,7 @@ def connect(
     proxy: type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
     timeout: float | None = None,
     username: str | None = None,
-    cursor: CursorMode = CursorMode.NONE,
+    cursor: CursorMode | str = CursorMode.OMIT,
 ) -> ThreadedVNCClientProxy:
     """Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications,
@@ -218,7 +218,13 @@ def connect(
     # ThreadedVNCClientProxy defines __getattr__ but no __setattr__, so
     # setting this on the returned client assigns a dead attribute on the
     # proxy and returns. It has to be set here or not at all.
-    factory.cursor = cursor
+    #
+    # CursorMode(cursor) is a no-op on an existing member and a lookup on a
+    # plain string ('local', not just CursorMode.LOCAL). Without it, a bare
+    # string here would fail every `is`/`is not` check in client.py -- for
+    # 'local' and 'server' that's silently wrong rather than a raised error,
+    # since 'none' happens to come out the same way by coincidence.
+    factory.cursor = CursorMode(cursor)
 
     family, host, port = command.parse_server(server)
     client = proxy(factory, timeout)
