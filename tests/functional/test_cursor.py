@@ -28,7 +28,7 @@ from .utils import (
     FleetTestCase,
     VNCServer,
     X11VNC,
-    assert_pointer_position_is_invisible,
+    assert_pointer_matches_expectation,
     run_vncdo,
     screenshot_dir,
 )
@@ -72,11 +72,11 @@ class CursorFreeCapture(CaptureHelper):
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.
 
-        See utils.assert_pointer_position_is_invisible(), which this shares
+        See utils.assert_pointer_matches_expectation(), which this shares
         with CursorPositionIndependent's OS-hosted servers.
         """
-        assert_pointer_position_is_invisible(
-            self, self.server.name,
+        assert_pointer_matches_expectation(
+            self, self.server,
             {"near": self.at("near", CURSOR_NEAR), "far": self.at("far", CURSOR_FAR)},
         )
 

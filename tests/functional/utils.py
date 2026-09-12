@@ -129,6 +129,9 @@ class VNCServer(NamedTuple):
     # qemu's text-mode boot screen, a headless Xvnc -- where no shape is the
     # right answer.
     has_pointer: bool = False
+    # True on a server that composites the pointer into the framebuffer even
+    # when offered Cursor: UltraVNC answers with a shape and paints it too.
+    paints_pointer: bool = False
 
 
 # Both written by their container into a bind mount at every start; neither
@@ -313,6 +316,7 @@ ULTRAVNC = os_server(
     "the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
     password=OS_SERVER_PASSWORD,
     has_pointer=True,
+    paints_pointer=True,
 )
 
 TIGHTVNC = os_server(
@@ -948,28 +952,43 @@ def cursor_box(position: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, i
     )
 
 
-def assert_pointer_position_is_invisible(
-    testcase: TestCase, server_name: str, shots: Dict[str, Image.Image]
+def assert_pointer_matches_expectation(
+    testcase: TestCase, server: VNCServer, shots: Dict[str, Image.Image]
 ) -> None:
-    """Neither CURSOR_NEAR nor CURSOR_FAR leaves a mark on a capture.
+    """Whether the pointer marks a capture is what `paints_pointer` says.
 
     Shared by CursorPositionIndependent (OS-hosted servers) and
     test_cursor.py's CursorFreeCapture (the docker fleet), which differ only
     in how `shots` -- {"near": ..., "far": ...} -- gets captured. Only the
     neighbourhood of each position is compared, so a clock or a blinking
-    cursor elsewhere on the screen cannot be read as a painted pointer. See
-    specs/cursor.md.
+    cursor elsewhere on the screen cannot be read as a painted pointer.
+
+    A server recorded as painting is asserted to still paint, rather than
+    excused: a server that quietly stops is a table gone stale, and that is
+    worth a failure too.
     """
     for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
         box = cursor_box(position, shots["near"].size)
-        difference = ImageChops.difference(shots["near"].crop(box), shots["far"].crop(box))
-        testcase.assertIsNone(
-            difference.getbbox(),
-            f"{server_name}: the capture changed around the {label} "
-            f"pointer position {position} (region {box}) when the pointer "
-            f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-            "painting it into the framebuffer despite being offered Cursor.",
-        )
+        mark = ImageChops.difference(
+            shots["near"].crop(box), shots["far"].crop(box)
+        ).getbbox()
+        if server.paints_pointer:
+            testcase.assertIsNotNone(
+                mark,
+                f"{server.name}: nothing changed around the {label} pointer "
+                f"position {position} (region {box}) when the pointer moved "
+                f"between {CURSOR_NEAR} and {CURSOR_FAR}. This server is "
+                "recorded as painting the pointer and no longer does, so "
+                "specs/cursor.md needs correcting.",
+            )
+        else:
+            testcase.assertIsNone(
+                mark,
+                f"{server.name}: the capture changed around the {label} "
+                f"pointer position {position} (region {box}) when the pointer "
+                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
+                "painting it into the framebuffer despite being offered Cursor.",
+            )
 
 
 class CursorPositionIndependent:
@@ -1006,7 +1025,7 @@ class CursorPositionIndependent:
             label: self.capture_at_pointer(label, position)
             for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
         }
-        assert_pointer_position_is_invisible(self, self.server.name, shots)
+        assert_pointer_matches_expectation(self, self.server, shots)
 
 
 def register_server_tests(
