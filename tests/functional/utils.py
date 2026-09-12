@@ -852,8 +852,12 @@ class _VNCServerTestMixin:
         server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
+        log = png.with_suffix(".wire.log")
+        log.unlink(missing_ok=True)
 
-        self.run_vncdo_ok("capture", str(png))
+        self.run_vncdo_ok(
+            "capture", str(png), options=("-v", "-v", "--logfile", str(log))
+        )
 
         data = png.read_bytes()
         print(f"{self.server.name}: screenshot written to {png}")
@@ -881,10 +885,14 @@ class _VNCServerTestMixin:
             )
             return
 
+        arrived = ", ".join(
+            f"{r.encoding} {r.width}x{r.height}+{r.x}+{r.y}"
+            for r in parse_wire_log(log)
+        )
         self.assertTrue(
             has_expected_content(self.server, distinct),
-            f"{self.server.name}: capture is a single flat colour, "
-            "no screen content was decoded",
+            f"{self.server.name}: capture is a single flat colour, no screen "
+            f"content was decoded. The server answered with: {arrived or 'nothing'}",
         )
 
 
