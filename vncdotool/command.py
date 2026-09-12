@@ -335,37 +335,30 @@ def build_command_list(
             factory.deferred.addCallback(client.pause, delay)
 
 
-def resolve_cursor_mode(
-    parser: argparse.ArgumentParser, options: argparse.Namespace
-) -> CursorMode:
-    """--cursor, or whichever of the two flags it replaced was given.
+class RemovedFlag(argparse.Action):
+    """A flag that no longer exists, failing with what took its place."""
 
-    Both spellings stay accepted: they are in scripts, and turning a working
-    script into a usage error is a worse trade than carrying two aliases.
-
-    `--cursor` defaults to `None`, not `CursorMode.OMIT`, precisely so this
-    can tell "not given" from "given as `none`" -- otherwise
-    `--cursor none --localcursor` would read as no `--cursor` at all and
-    silently return `LOCAL` instead of erroring like every other
-    contradicting pair does.
-    """
-    asked = [
-        (flag, mode)
-        for flag, mode in (
-            ("--localcursor", CursorMode.LOCAL),
-            ("--nocursor", CursorMode.OMIT),
+    def __init__(
+        self, option_strings: list[str], dest: str, replacement: str, **kwargs: object
+    ) -> None:
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=0,
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+            **kwargs,  # type: ignore[arg-type]
         )
-        if getattr(options, flag.lstrip("-"))
-    ]
-    if len(asked) > 1:
-        parser.error("--localcursor and --nocursor contradict each other")
-    if not asked:
-        return options.cursor if options.cursor is not None else CursorMode.OMIT
+        self.replacement = replacement
 
-    flag, mode = asked[0]
-    if options.cursor is not None and options.cursor is not mode:
-        parser.error(f"--cursor {options.cursor} contradicts {flag}")
-    return mode
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        parser.error(f"{option_string} was removed, use {self.replacement}")
 
 
 def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
@@ -680,24 +673,13 @@ def vncdo(argv: list[str] | None = None) -> None:
         "--cursor",
         type=CursorMode,
         choices=list(CursorMode),
-        # None, not CursorMode.OMIT: resolve_cursor_mode() needs to tell
-        # "not given" from "given as none" so --cursor none contradicting an
-        # alias is caught the same way --cursor local contradicting one is.
-        default=None,
+        default=CursorMode.OMIT,
         help="what a capture does about the mouse pointer: ask the server to "
         "stop painting it (none, the default), let it paint (server), or draw "
         "the shape it sends (local)",
     )
-    parser.add_argument(
-        "--localcursor",
-        action="store_true",
-        help=argparse.SUPPRESS,  # superseded by --cursor local
-    )
-    parser.add_argument(
-        "--nocursor",
-        action="store_true",
-        help=argparse.SUPPRESS,  # superseded by --cursor none
-    )
+    parser.add_argument("--localcursor", action=RemovedFlag, replacement="--cursor local")
+    parser.add_argument("--nocursor", action=RemovedFlag, replacement="--cursor none")
     parser.add_argument(
         "--disable-desktop-resizing",
         action="store_true",
@@ -797,7 +779,7 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     apply_dialect(factory, options.dialect)
 
-    factory.cursor = resolve_cursor_mode(parser, options)
+    factory.cursor = options.cursor
 
     if options.disable_desktop_resizing:
         factory.pseudodesktop = False

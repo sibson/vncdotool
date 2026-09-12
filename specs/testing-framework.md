@@ -104,7 +104,7 @@ fleet is fetched or rebuilt.
   lets the framework cope with a client that (pre-Phase 1) still hangs
   against hostile servers: CI fails on timeout, never hangs.
 - It exercises the command-line tool's surface (arg parsing, exit codes,
-  `--nocursor`, and more) as a side effect, so the old pexpect command-line
+  `--cursor`, and more) as a side effect, so the old pexpect command-line
   tests fold in here.
 
 **Input verification (event sinks, not pixels)**: "did the server process

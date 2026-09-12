@@ -890,8 +890,6 @@ class TestVncdoArgumentParsing(CLIParsingTestCase):
     def test_flags_default_off(self) -> None:
         options, args = self.parse(['key', 'a'])
         assert not options.force_caps
-        assert not options.localcursor
-        assert not options.nocursor
         assert not options.disable_desktop_resizing
         assert not options.incremental_refreshes
 
@@ -1026,49 +1024,39 @@ class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
         assert 'takes no commands' in self.usage_error(['--server', 'capture.zip', 'key', 'a'])
 
 
-class TestResolveCursorMode(unittest.TestCase):
-    """--cursor and the two flags it replaced, which stay accepted."""
+class TestCursorMode(CLIParsingTestCase):
+    """--cursor, and the two flags it replaced."""
 
-    def resolve(self, cursor=None, localcursor=False, nocursor=False):
-        options = argparse.Namespace(
-            cursor=cursor, localcursor=localcursor, nocursor=nocursor
-        )
-        return command.resolve_cursor_mode(argparse.ArgumentParser(), options)
+    def setUp(self) -> None:
+        super().setUp()
+        self.build_tool = self.patch('vncdotool.command.build_tool')
 
-    def usage_error(self, **kwargs) -> str:
-        stderr = io.StringIO()
-        with contextlib.redirect_stderr(stderr):
-            with self.assertRaises(SystemExit):
-                self.resolve(**kwargs)
-        return stderr.getvalue()
+    def parse(self, argv: list) -> argparse.Namespace:
+        with self.assertRaises(SystemExit):
+            command.vncdo(argv + ['key', 'a'])
+        return self.build_tool.call_args.args[0]
+
+    def usage_error(self, argv: list) -> str:
+        return self.assertUsageError(lambda: command.vncdo(argv + ['key', 'a']))
 
     def test_the_default_omits_the_pointer(self) -> None:
-        assert self.resolve() is CursorMode.OMIT
+        assert self.parse([]).cursor is CursorMode.OMIT
 
     def test_each_mode_survives(self) -> None:
         for mode in CursorMode:
-            assert self.resolve(cursor=mode) is mode
+            assert self.parse(['--cursor', str(mode)]).cursor is mode
 
-    def test_localcursor_still_means_local(self) -> None:
-        assert self.resolve(localcursor=True) is CursorMode.LOCAL
+    def test_localcursor_names_what_replaced_it(self) -> None:
+        assert '--localcursor was removed, use --cursor local' in self.usage_error(
+            ['--localcursor']
+        )
 
-    def test_nocursor_still_means_none(self) -> None:
-        assert self.resolve(nocursor=True) is CursorMode.OMIT
+    def test_nocursor_names_what_replaced_it(self) -> None:
+        assert '--nocursor was removed, use --cursor none' in self.usage_error(
+            ['--nocursor']
+        )
 
-    def test_an_alias_agreeing_with_cursor_is_accepted(self) -> None:
-        assert self.resolve(cursor=CursorMode.LOCAL, localcursor=True) is CursorMode.LOCAL
-
-    def test_the_two_aliases_cannot_both_be_given(self) -> None:
-        assert 'contradict' in self.usage_error(localcursor=True, nocursor=True)
-
-    def test_an_alias_contradicting_cursor_is_a_usage_error(self) -> None:
-        error = self.usage_error(cursor=CursorMode.SERVER, localcursor=True)
-        assert '--cursor server contradicts --localcursor' in error
-
-    def test_an_alias_contradicting_explicit_cursor_none_is_a_usage_error(self) -> None:
-        """--cursor none looks like the default (OMIT) but was still typed --
-        an alias disagreeing with it must error like any other contradiction,
-        not be mistaken for --cursor never having been given at all.
-        """
-        error = self.usage_error(cursor=CursorMode.OMIT, localcursor=True)
-        assert '--cursor none contradicts --localcursor' in error
+    def test_a_removed_flag_is_not_in_the_namespace(self) -> None:
+        """It only exists to fail, so nothing downstream should read it."""
+        assert not hasattr(self.parse([]), 'localcursor')
+        assert not hasattr(self.parse([]), 'nocursor')

@@ -66,8 +66,8 @@ and `expect` compare against it.
 ```
 
 On x11vnc and libvncserver `local` is pixel for pixel what `server` captures.
-`--localcursor` and `--nocursor` are still accepted, as aliases for
-`--cursor local` and `--cursor none`.
+`--localcursor` and `--nocursor` were removed in 2.0; each says what to use
+instead when given.
 
 `api.connect()` takes the same three values, which is the only way a library
 caller can set them:

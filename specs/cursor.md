@@ -10,10 +10,13 @@ whatever the server painted, at whatever position the last `move` left it.
 | `server` | neither | whatever the server paints |
 | `local` | `-239`, `-232` | the shape the server sent, drawn by us |
 
-`--localcursor` and `--nocursor` still work, as aliases for `local` and
-`none`. They are in users' scripts, and turning a working script into a usage
-error is a worse trade than carrying two aliases. `api.connect(cursor=...)`
-takes the same three values.
+`--localcursor` and `--nocursor` are gone, and say what replaced them:
+`--nocursor was removed, use --cursor none`. Carrying them as live aliases
+cost a reconciliation step for every contradicting pair, and a `--cursor`
+defaulting to `None` rather than to a mode so that step could tell an
+unpassed flag from an explicit `--cursor none`. A 2.0 that already breaks
+`expect` and `RFBClient.updateRectangle` can spend a mechanical rename.
+`api.connect(cursor=...)` takes the same three values.
 
 ## Two pseudo-encodings, two halves of one job
 
