@@ -2,8 +2,9 @@
 
 Every server gets its own case rather than one test looping the fleet, so a
 server that starts painting the pointer names itself in the failure. The
-OS-hosted servers get the same body through `_VNCServerTestMixin`, which is
-what the os-servers workflow runs.
+OS-hosted servers get the same body through `CursorPositionIndependent`,
+opted into `register_server_tests()` for any server not in
+`CURSOR_TESTED_SERVERS` below -- which is what the os-servers workflow runs.
 
 x11vnc carries the `--localcursor` case: of the servers running a scene
 player it is the only one answering the Cursor pseudo-encoding with a real
@@ -20,30 +21,21 @@ from PIL import Image, ImageChops
 from .utils import (
     CURSOR_FAR,
     CURSOR_NEAR,
-    KASMVNC,
+    CURSOR_TESTED_SERVERS,
     QEMU_TLS,
     QEMU_TLS_CA,
-    TCP_SERVERS,
-    WEBSOCKET_SERVERS,
     CursorShapeOffered,
     FleetTestCase,
     VNCServer,
     X11VNC,
-    cursor_box,
+    assert_pointer_position_is_invisible,
     run_vncdo,
     screenshot_dir,
 )
 
-# kasmvnc drops the WebSocket on a PointerEvent -- a bare `capture` returns in
-# about a second, anything with a `move` in it dies after twenty. Every case
-# here has to move the pointer, so there is nothing to assert against it.
-CURSOR_SERVERS = [
-    server for server in TCP_SERVERS + WEBSOCKET_SERVERS if server is not KASMVNC
-]
 
-
-class CursorFreeCapture:
-    """Shared body, parameterized per server by _register().
+class CaptureHelper:
+    """`at()`/`env()`, shared by CursorFreeCapture and TestLocalCursor's own cases.
 
     Deliberately not a TestCase, or `unittest discover` would collect this
     shared base as its own serverless case.
@@ -73,29 +65,27 @@ class CursorFreeCapture:
         with Image.open(png) as image:
             return image.convert("RGB").copy()
 
+
+class CursorFreeCapture(CaptureHelper):
+    """Adds the pointer-independence case, parameterized per server by _register()."""
+
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.
 
-        Only the neighbourhood of each position is compared. A painted
-        pointer lands there and nowhere else, so a clock or a blinking text
-        cursor elsewhere on the screen cannot be mistaken for one.
+        See utils.assert_pointer_position_is_invisible(), which this shares
+        with CursorPositionIndependent's OS-hosted servers.
         """
-        near = self.at("near", CURSOR_NEAR)
-        far = self.at("far", CURSOR_FAR)
-
-        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
-            box = cursor_box(position, near.size)
-            difference = ImageChops.difference(near.crop(box), far.crop(box))
-            self.assertIsNone(
-                difference.getbbox(),
-                f"{self.server.name}: the capture changed around the {label} "
-                f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-                "painting it into the framebuffer despite being offered Cursor.",
-            )
+        assert_pointer_position_is_invisible(
+            self, self.server.name,
+            {"near": self.at("near", CURSOR_NEAR), "far": self.at("far", CURSOR_FAR)},
+        )
 
 
-class TestLocalCursor(CursorFreeCapture, FleetTestCase):
+class TestLocalCursor(CaptureHelper, FleetTestCase):
+    """x11vnc's `--localcursor` cases. Its pointer-independence case is
+    TestCursorFree_x11vnc, registered below -- not repeated here.
+    """
+
     server = X11VNC
 
     def test_localcursor_matches_the_server_side_render(self) -> None:
@@ -130,7 +120,7 @@ class TestLocalCursor(CursorFreeCapture, FleetTestCase):
 
 
 def _register(namespace: Dict[str, object]) -> None:
-    for server in CURSOR_SERVERS:
+    for server in CURSOR_TESTED_SERVERS:
         name = "TestCursorFree_" + server.name.replace("-", "_")
         bases: Tuple[type, ...] = (CursorFreeCapture, FleetTestCase)
         if server.has_pointer:

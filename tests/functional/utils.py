@@ -267,6 +267,15 @@ SUPPORTED_SERVERS = [
     SELENOID,
 ]
 
+# The docker fleet servers test_cursor.py already registers a pointer-free
+# capture case for, one class per server. kasmvnc drops the WebSocket on a
+# PointerEvent (see test_cursor.py), so nothing there exercises it. Servers
+# outside this list -- the OS-hosted ones, reachable only through
+# register_server_tests() -- get the same case from CursorPositionIndependent
+# instead, so it runs exactly once per server rather than twice for the two
+# lists' overlap.
+CURSOR_TESTED_SERVERS = [s for s in TCP_SERVERS + WEBSOCKET_SERVERS if s is not KASMVNC]
+
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.
@@ -858,50 +867,6 @@ class _VNCServerTestMixin:
             "no screen content was decoded",
         )
 
-    def capture_at_pointer(self, label: str, position: Tuple[int, int]) -> Image.Image:
-        """Park the pointer at `position`, capture, and keep the wire log.
-
-        `-v -v` names the encoding and geometry of every rectangle the server
-        sends, which is the only way to tell a server that stopped painting
-        the pointer from one that never had one.
-        """
-        x, y = position
-        stem = screenshot_dir() / f"{self.server.name}-cursor-{label}"
-        png = stem.with_suffix(".png")
-        log = stem.with_suffix(".wire.log")
-        log.unlink(missing_ok=True)
-        self.run_vncdo_ok(
-            "move", str(x), str(y), "pause", "0.5", "capture", str(png),
-            options=("-v", "-v", "--logfile", str(log)),
-        )
-        with Image.open(png) as image:
-            return image.convert("RGB").copy()
-
-    def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
-        """Neither pointer position leaves a mark on a capture.
-
-        Only the neighbourhood of each position is compared, so a clock or a
-        blinking cursor elsewhere on the screen cannot be read as a painted
-        pointer. See specs/cursor.md.
-        """
-        shots = {
-            label: self.capture_at_pointer(label, position)
-            for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
-        }
-
-        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
-            box = cursor_box(position, shots["near"].size)
-            difference = ImageChops.difference(
-                shots["near"].crop(box), shots["far"].crop(box)
-            )
-            self.assertIsNone(
-                difference.getbbox(),
-                f"{self.server.name}: the capture changed around the {label} "
-                f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-                "painting it into the framebuffer despite being offered Cursor.",
-            )
-
 
 class Rectangle(NamedTuple):
     encoding: str
@@ -983,6 +948,67 @@ def cursor_box(position: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, i
     )
 
 
+def assert_pointer_position_is_invisible(
+    testcase: TestCase, server_name: str, shots: Dict[str, Image.Image]
+) -> None:
+    """Neither CURSOR_NEAR nor CURSOR_FAR leaves a mark on a capture.
+
+    Shared by CursorPositionIndependent (OS-hosted servers) and
+    test_cursor.py's CursorFreeCapture (the docker fleet), which differ only
+    in how `shots` -- {"near": ..., "far": ...} -- gets captured. Only the
+    neighbourhood of each position is compared, so a clock or a blinking
+    cursor elsewhere on the screen cannot be read as a painted pointer. See
+    specs/cursor.md.
+    """
+    for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
+        box = cursor_box(position, shots["near"].size)
+        difference = ImageChops.difference(shots["near"].crop(box), shots["far"].crop(box))
+        testcase.assertIsNone(
+            difference.getbbox(),
+            f"{server_name}: the capture changed around the {label} "
+            f"pointer position {position} (region {box}) when the pointer "
+            f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
+            "painting it into the framebuffer despite being offered Cursor.",
+        )
+
+
+class CursorPositionIndependent:
+    """The pointer-independence case, for servers test_cursor.py doesn't reach.
+
+    Opted into register_server_tests() for any server not already in
+    CURSOR_TESTED_SERVERS -- the OS-hosted fleet. Deliberately not a
+    TestCase, or `unittest discover` would collect this shared base itself.
+    """
+
+    server: VNCServer
+
+    def capture_at_pointer(self, label: str, position: Tuple[int, int]) -> Image.Image:
+        """Park the pointer at `position`, capture, and keep the wire log.
+
+        `-v -v` names the encoding and geometry of every rectangle the server
+        sends, which is the only way to tell a server that stopped painting
+        the pointer from one that never had one.
+        """
+        x, y = position
+        stem = screenshot_dir() / f"{self.server.name}-cursor-{label}"
+        png = stem.with_suffix(".png")
+        log = stem.with_suffix(".wire.log")
+        log.unlink(missing_ok=True)
+        self.run_vncdo_ok(
+            "move", str(x), str(y), "pause", "0.5", "capture", str(png),
+            options=("-v", "-v", "--logfile", str(log)),
+        )
+        with Image.open(png) as image:
+            return image.convert("RGB").copy()
+
+    def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
+        shots = {
+            label: self.capture_at_pointer(label, position)
+            for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
+        }
+        assert_pointer_position_is_invisible(self, self.server.name, shots)
+
+
 def register_server_tests(
     servers: List[VNCServer], namespace: Dict[str, object], base: type = TestCase
 ) -> None:
@@ -996,6 +1022,8 @@ def register_server_tests(
         bases: Tuple[type, ...] = (_VNCServerTestMixin, base)
         if server.has_pointer:
             bases = (CursorShapeOffered,) + bases
+        if server not in CURSOR_TESTED_SERVERS:
+            bases = (CursorPositionIndependent,) + bases
         namespace[name] = type(
             name,
             bases,
