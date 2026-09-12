@@ -191,6 +191,7 @@ QEMU_TLS = VNCServer(
     tls_ca=QEMU_TLS_CA,
 )
 
+
 @contextlib.contextmanager
 def selenoid_session() -> Iterator[None]:
     endpoint = f"http://{HOST}:{SELENOID.port}/wd/hub/session"
@@ -240,10 +241,6 @@ WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
 # case rather than by a test of its own.
 SCENE_SERVERS += [SELENOID, KASMVNC]
 
-# One entry per product in README.md's "Supported" class, which is the claim
-# this grid tests. Wider than SCENE_SERVERS, because a server can answer
-# input without being able to display a scene: libvncserver-example has no X
-# server, and qemu shows firmware.
 SUPPORTED_SERVERS = [
     TIGERVNC,
     X11VNC,
@@ -726,7 +723,7 @@ def start_replay_server(
     testcase.fail(f"vncdo-replay --server never listened on {port}: {server.communicate()[1]}")
 
 
-class _VNCServerVerificationTestMixin:
+class _VNCServerTestMixin:
     """Shared test body, parameterized per-server by register_server_tests().
 
     Deliberately does NOT subclass TestCase, or `unittest discover` would
@@ -840,7 +837,7 @@ def register_server_tests(
         name = "TestServer_" + server.name.replace("-", "_")
         namespace[name] = type(
             name,
-            (_VNCServerVerificationTestMixin, base),
+            (_VNCServerTestMixin, base),
             # __module__ so test ids name the registering module, not this one.
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )

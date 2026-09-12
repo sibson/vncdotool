@@ -10,7 +10,6 @@ from PIL import Image
 from Xlib import X, display
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tests.goldens import click_targets  # noqa: E402
 
 DEFAULT_SCENE_DIR = Path(__file__).resolve().parent / "scenes"
 # Keeps each PutImage request under the server's maximum request length.
@@ -62,6 +61,8 @@ class ScenePlayer:
         self.show(self.keysym_to_key(keysym))
 
     def handle_button(self, x: int, y: int) -> None:
+        from tests.goldens import click_targets
+
         self.show(click_targets.scene_at(x, y) or "")
 
     def show(self, key: str) -> None:

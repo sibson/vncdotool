@@ -1,7 +1,6 @@
-"""Imports nothing, so the scene player can run this arithmetic inside the
-fleet images. tests/.dockerignore keeps `goldens/scenes.py` out of those
-images, and the player has to place a cell exactly where the tests outside
-expect it.
+"""tests/.dockerignore excludes `goldens/scenes.py` from the fleet images, so
+this module holds the click layout: both the in-container scene player and
+the tests outside it import it, and neither computes its own copy.
 """
 from typing import Optional, Tuple
 
