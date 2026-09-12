@@ -21,11 +21,10 @@ ACCEL="${VNCDOTOOL_QEMU_ACCEL:-kvm}"
 MEMORY="${VNCDOTOOL_QEMU_MEMORY:-256}"
 
 QEMU=qemu-system-x86_64
-# ovmf ships OVMF_CODE_4M.fd on Ubuntu 24.04 and OVMF_CODE.fd on Debian
-# bookworm.
+# Ubuntu noble's ovmf package (2024.02-1 onward) dropped the legacy 2M
+# OVMF_CODE.fd; CI runs on ubuntu-latest, so only the 4M path matters here.
 OVMF_CANDIDATES=(
     /usr/share/OVMF/OVMF_CODE_4M.fd
-    /usr/share/OVMF/OVMF_CODE.fd
 )
 BIOS=""
 RUNTIME_DIR="${VNCDOTOOL_QEMU_RUNTIME_DIR:-/tmp/vncdotool-qemu}"
@@ -121,13 +120,15 @@ start_qemu() {
     #
     # The 127.0.0.1: prefix is load-bearing. A bare -vnc :0 listens on every
     # interface, and this server has no authentication at all.
+    # -bios rejects the split 4M OVMF image; it wants pflash, and a
+    # read-only unit is enough since there's no guest to persist vars for.
     "$QEMU" \
         -name vncdotool \
         -accel "$ACCEL" \
         -m "$MEMORY" \
         -vga std \
         -net none \
-        -bios "$BIOS" \
+        -drive "if=pflash,format=raw,readonly=on,file=$BIOS" \
         -vnc "127.0.0.1:$DISPLAY_NUMBER" \
         -pidfile "$PIDFILE" \
         -D "$LOGFILE" \
