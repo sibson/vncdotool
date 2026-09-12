@@ -21,8 +21,8 @@ ACCEL="${VNCDOTOOL_QEMU_ACCEL:-kvm}"
 MEMORY="${VNCDOTOOL_QEMU_MEMORY:-256}"
 
 QEMU=qemu-system-x86_64
-# Ubuntu 24.04's ovmf package ships only the 4M name; Debian bookworm, which
-# the Docker fleet builds on, ships only the plain one.
+# ovmf ships OVMF_CODE_4M.fd on Ubuntu 24.04 and OVMF_CODE.fd on Debian
+# bookworm.
 OVMF_CANDIDATES=(
     /usr/share/OVMF/OVMF_CODE_4M.fd
     /usr/share/OVMF/OVMF_CODE.fd
@@ -113,10 +113,11 @@ start_qemu() {
     mkdir -p "$RUNTIME_DIR"
     rm -f "$PIDFILE"
     # No -drive and no -kernel: with nothing to boot, the firmware stops on
-    # its failed-boot screen, which is a real framebuffer. OVMF's holds
-    # still; SeaBIOS blinks a VGA text cursor, so two captures of an idle
-    # machine differ. Without -net none OVMF retries PXE forever and the
-    # screen scrolls instead.
+    # its failed-boot screen, which is a real framebuffer.
+    #
+    # SeaBIOS blinks a VGA text cursor, so two captures of an idle machine
+    # differ. Without -net none OVMF retries PXE forever and the screen
+    # scrolls instead.
     #
     # The 127.0.0.1: prefix is load-bearing. A bare -vnc :0 listens on every
     # interface, and this server has no authentication at all.
