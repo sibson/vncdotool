@@ -18,8 +18,9 @@ from typing import Dict, Optional, Tuple
 from PIL import Image, ImageChops
 
 from .utils import (
-    CURSOR_FAR,
-    CURSOR_NEAR,
+    BLANK_FRACTION,
+    CURSOR_AWAY,
+    CURSOR_PROBE,
     KASMVNC,
     QEMU_TLS,
     QEMU_TLS_CA,
@@ -29,6 +30,7 @@ from .utils import (
     FleetTestCase,
     VNCServer,
     X11VNC,
+    blank_fraction,
     cursor_box,
     run_vncdo,
     screenshot_dir,
@@ -71,7 +73,19 @@ class CursorFreeCapture:
             f"{result.returncode}, stderr:\n{result.stderr}",
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is 99% one
+        # colour by nature, and has no pointer for a blank capture to hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {tag} capture is {blank:.0%} one colour, "
+                "so the desktop had not painted yet and nothing about the pointer "
+                f"can be read off it. See {png}.",
+            )
+        return capture
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.
@@ -80,18 +94,21 @@ class CursorFreeCapture:
         pointer lands there and nowhere else, so a clock or a blinking text
         cursor elsewhere on the screen cannot be mistaken for one.
         """
-        near = self.at("near", CURSOR_NEAR)
-        far = self.at("far", CURSOR_FAR)
+        occupied = self.at("probe", CURSOR_PROBE)
+        vacated = self.at("away", CURSOR_AWAY)
 
-        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
-            box = cursor_box(position, near.size)
-            difference = ImageChops.difference(near.crop(box), far.crop(box))
+        for position, holding, vacant in (
+            (CURSOR_PROBE, occupied, vacated),
+            (CURSOR_AWAY, vacated, occupied),
+        ):
+            box = cursor_box(position, holding.size)
+            difference = ImageChops.difference(holding.crop(box), vacant.crop(box))
             self.assertIsNone(
                 difference.getbbox(),
-                f"{self.server.name}: the capture changed around the {label} "
-                f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-                "painting it into the framebuffer despite being offered Cursor.",
+                f"{self.server.name}: region {box} differs between the capture "
+                f"holding the pointer at {position} and the capture that left it "
+                "vacant. The server is painting it into the framebuffer despite "
+                "being offered Cursor.",
             )
 
 
@@ -104,8 +121,8 @@ class TestLocalCursor(CursorFreeCapture, FleetTestCase):
         `--cursor server` is the only way to obtain the server's render, and
         the only reason this can be asserted at all.
         """
-        server_drawn = self.at("servercursor", CURSOR_NEAR, "--cursor", "server")
-        client_drawn = self.at("localcursor", CURSOR_NEAR, "--cursor", "local")
+        server_drawn = self.at("servercursor", CURSOR_PROBE, "--cursor", "server")
+        client_drawn = self.at("localcursor", CURSOR_PROBE, "--cursor", "local")
 
         self.assertIsNone(
             ImageChops.difference(server_drawn, client_drawn).getbbox(),
@@ -114,8 +131,8 @@ class TestLocalCursor(CursorFreeCapture, FleetTestCase):
 
     def test_localcursor_composites_a_decoded_cursor(self) -> None:
         """--localcursor draws a shape the default discards, at the pointer."""
-        without = self.at("plain", CURSOR_NEAR)
-        with_cursor = self.at("localcursor", CURSOR_NEAR, "--localcursor")
+        without = self.at("plain", CURSOR_PROBE)
+        with_cursor = self.at("localcursor", CURSOR_PROBE, "--localcursor")
 
         bbox = ImageChops.difference(without, with_cursor).getbbox()
         self.assertIsNotNone(
@@ -123,10 +140,10 @@ class TestLocalCursor(CursorFreeCapture, FleetTestCase):
             "--localcursor capture is pixel-identical to the default at the "
             "same pointer position; no cursor was decoded and composited",
         )
-        # CURSOR_NEAR plus slack for the cursor's extent and hotspot offset.
+        # CURSOR_PROBE plus slack for the cursor's extent and hotspot offset.
         left, top, _, _ = bbox
-        self.assertLess(left, CURSOR_NEAR[0] + 32, f"diff region {bbox} is not near the pointer")
-        self.assertLess(top, CURSOR_NEAR[1] + 32, f"diff region {bbox} is not near the pointer")
+        self.assertLess(left, CURSOR_PROBE[0] + 32, f"diff region {bbox} is not near the pointer")
+        self.assertLess(top, CURSOR_PROBE[1] + 32, f"diff region {bbox} is not near the pointer")
 
 
 def _register(namespace: Dict[str, object]) -> None:

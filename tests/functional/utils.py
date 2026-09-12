@@ -78,12 +78,14 @@ FLEET_PROJECT = "vncdo-test-servers"
 FLEET_TAG_SCRIPT = Path(__file__).resolve().parents[1] / "servers" / "fleet-tag.sh"
 FLEET_PROBE_TIMEOUT = 30.0
 
-# Two pointer positions a capture is compared at, and a box comfortably
-# larger than the biggest cursor the fleet sends (libvncserver's 32x32). A
-# shape is drawn at the pointer minus its hotspot, so it reaches above and
-# left of the position as well as below and right.
-CURSOR_NEAR = (20, 20)
-CURSOR_FAR = (150, 120)
+# Two pointer positions a capture is compared at, far enough apart that a
+# box around one excludes the other, and a box comfortably larger than the
+# biggest cursor the fleet sends (libvncserver's 32x32). A shape is drawn at
+# the pointer minus its hotspot, so it reaches above and left of the position
+# as well as below and right.
+CURSOR_PROBE = (20, 20)
+CURSOR_AWAY = (150, 120)
+CURSOR_POSITIONS = (CURSOR_PROBE, CURSOR_AWAY)
 CURSOR_EXTENT = 48
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
@@ -567,6 +569,25 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
+# A desktop that has not finished painting is almost entirely one colour but
+# not entirely, so counting colours does not catch it. UltraVNC's first
+# capture after connecting came back 99% black with 700 colours in it.
+BLANK_FRACTION = 0.95
+
+# How many times to re-take the pair when the region will not hold still. A
+# freshly started desktop is still fading in; one that is animating for good
+# is what this eventually reports.
+STEADY_ATTEMPTS = 3
+
+
+def blank_fraction(image: Image.Image) -> float:
+    """How much of `image` is its single commonest colour."""
+    colours = image.convert("RGB").getcolors(maxcolors=image.width * image.height)
+    if not colours:
+        return 0.0
+    return max(count for count, _ in colours) / (image.width * image.height)
+
+
 def normalize_size(server: VNCServer) -> None:
     """Put a server whose size a client can change back to ``server.size``."""
     if not server.normalize_size_keys:
@@ -875,7 +896,30 @@ class _VNCServerTestMixin:
             options=("-v", "-v", "--logfile", str(log)),
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is 99% one
+        # colour by nature, and has no pointer for a blank capture to hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {label} capture is {blank:.0%} one colour, "
+                "so the desktop had not painted yet and nothing about the pointer "
+                f"can be read off it. See {png}.",
+            )
+        return capture
+
+    def warm_up_capture(self) -> None:
+        """Connect and capture once, discarding it.
+
+        UltraVNC's first capture after the service starts comes back before
+        the desktop has painted, and an unpainted capture compared against a
+        painted one differs everywhere.
+        """
+        run_vncdo(
+            self.server, "capture", str(screenshot_dir() / f"{self.server.name}-warmup.png")
+        )
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         """Neither pointer position leaves a mark on a capture.
@@ -884,23 +928,55 @@ class _VNCServerTestMixin:
         blinking cursor elsewhere on the screen cannot be read as a painted
         pointer. See specs/cursor.md.
         """
-        shots = {
-            label: self.capture_at_pointer(label, position)
-            for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
-        }
+        self.warm_up_capture()
+        occupied, vacated, drift = self.settled_captures()
+        self.assertIsNone(
+            drift,
+            f"{self.server.name}: region {drift} changed between two captures taken "
+            f"at the same pointer position, {STEADY_ATTEMPTS} times running, so the "
+            "desktop is animating there and nothing about the pointer can be read "
+            "off it.",
+        )
 
-        for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
-            box = cursor_box(position, shots["near"].size)
-            difference = ImageChops.difference(
-                shots["near"].crop(box), shots["far"].crop(box)
-            )
+        for position, holding, vacant in (
+            (CURSOR_PROBE, occupied, vacated),
+            (CURSOR_AWAY, vacated, occupied),
+        ):
+            box = cursor_box(position, holding.size)
+            difference = ImageChops.difference(holding.crop(box), vacant.crop(box))
             self.assertIsNone(
                 difference.getbbox(),
-                f"{self.server.name}: the capture changed around the {label} "
-                f"pointer position {position} (region {box}) when the pointer "
-                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
-                "painting it into the framebuffer despite being offered Cursor.",
+                f"{self.server.name}: region {box} differs between the capture "
+                f"holding the pointer at {position} and the capture that left it "
+                "vacant, and did not differ with the pointer parked. The server "
+                "is painting it into the framebuffer despite being offered Cursor.",
             )
+
+    def settled_captures(
+        self,
+    ) -> Tuple[Image.Image, Image.Image, Optional[Tuple[int, int, int, int]]]:
+        """A capture at each position, once a control agrees nothing else moved.
+
+        Whatever differs between the control and the capture at the same
+        position is the desktop moving on its own. A freshly started desktop
+        is still fading in, so this is retried; `stable` is no use here
+        because these desktops never go entirely quiet.
+        """
+        drift = None
+        for _ in range(STEADY_ATTEMPTS):
+            control = self.capture_at_pointer("control", CURSOR_PROBE)
+            occupied = self.capture_at_pointer("probe", CURSOR_PROBE)
+            vacated = self.capture_at_pointer("away", CURSOR_AWAY)
+            drift = None
+            for position in CURSOR_POSITIONS:
+                box = cursor_box(position, occupied.size)
+                drift = drift or ImageChops.difference(
+                    control.crop(box), occupied.crop(box)
+                ).getbbox()
+            if drift is None:
+                return occupied, vacated, None
+            time.sleep(RETRY_DELAY)
+        return occupied, vacated, drift
 
 
 class Rectangle(NamedTuple):
@@ -950,7 +1026,7 @@ class CursorShapeOffered:
         png = screenshot_dir() / f"{self.server.name}-cursor-shape.png"
         result = run_vncdo(
             self.server,
-            "move", str(CURSOR_NEAR[0]), str(CURSOR_NEAR[1]),
+            "move", str(CURSOR_PROBE[0]), str(CURSOR_PROBE[1]),
             "pause", "0.5", "capture", str(png),
             options=("-v", "-v", "--logfile", str(log)),
         )

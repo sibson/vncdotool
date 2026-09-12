@@ -18,8 +18,7 @@ _HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
 from utils import (  # noqa: E402
-    CURSOR_FAR,
-    CURSOR_NEAR,
+    CURSOR_POSITIONS,
     VNCServer,
     cursor_box,
     parse_wire_log,
@@ -53,18 +52,18 @@ class Row(NamedTuple):
 def measure(server: VNCServer) -> Row:
     shots = screenshot_dir()
     paints = None
-    near = shots / f"{server.name}-cursor-near.png"
-    far = shots / f"{server.name}-cursor-far.png"
-    if near.exists() and far.exists():
-        with Image.open(near) as a, Image.open(far) as b:
-            first, second = a.convert("RGB"), b.convert("RGB")
+    probe = shots / f"{server.name}-cursor-probe.png"
+    away = shots / f"{server.name}-cursor-away.png"
+    if probe.exists() and away.exists():
+        with Image.open(probe) as a, Image.open(away) as b:
+            occupied, vacated = a.convert("RGB"), b.convert("RGB")
             paints = any(
                 ImageChops.difference(
-                    first.crop(cursor_box(position, first.size)),
-                    second.crop(cursor_box(position, first.size)),
+                    occupied.crop(cursor_box(position, occupied.size)),
+                    vacated.crop(cursor_box(position, occupied.size)),
                 ).getbbox()
                 is not None
-                for position in (CURSOR_NEAR, CURSOR_FAR)
+                for position in CURSOR_POSITIONS
             )
 
     shapes = []
