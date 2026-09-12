@@ -718,7 +718,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     shared = True
 
-    cursor = CursorMode.NONE
+    cursor = CursorMode.OMIT
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True

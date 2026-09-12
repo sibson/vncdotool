@@ -66,7 +66,7 @@ class Fixture:
         cli.factory = mock.Mock()
         cli.factory.shared = 0
         cli.factory.password = None
-        cli.factory.cursor = CursorMode.NONE
+        cli.factory.cursor = CursorMode.OMIT
         cli.factory.pseudodesktop = False
         cli.factory.last_rect = False
         cli.factory.qemu_extended_key = False

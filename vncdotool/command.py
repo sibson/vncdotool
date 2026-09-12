@@ -342,22 +342,28 @@ def resolve_cursor_mode(
 
     Both spellings stay accepted: they are in scripts, and turning a working
     script into a usage error is a worse trade than carrying two aliases.
+
+    `--cursor` defaults to `None`, not `CursorMode.OMIT`, precisely so this
+    can tell "not given" from "given as `none`" -- otherwise
+    `--cursor none --localcursor` would read as no `--cursor` at all and
+    silently return `LOCAL` instead of erroring like every other
+    contradicting pair does.
     """
     asked = [
         (flag, mode)
         for flag, mode in (
             ("--localcursor", CursorMode.LOCAL),
-            ("--nocursor", CursorMode.NONE),
+            ("--nocursor", CursorMode.OMIT),
         )
         if getattr(options, flag.lstrip("-"))
     ]
     if len(asked) > 1:
         parser.error("--localcursor and --nocursor contradict each other")
     if not asked:
-        return options.cursor
+        return options.cursor if options.cursor is not None else CursorMode.OMIT
 
     flag, mode = asked[0]
-    if options.cursor is not CursorMode.NONE and options.cursor is not mode:
+    if options.cursor is not None and options.cursor is not mode:
         parser.error(f"--cursor {options.cursor} contradicts {flag}")
     return mode
 
@@ -674,9 +680,13 @@ def vncdo(argv: list[str] | None = None) -> None:
         "--cursor",
         type=CursorMode,
         choices=list(CursorMode),
-        default=CursorMode.NONE,
-        help="what a capture does about the mouse pointer: omit it (%(default)s), "
-        "let the server paint it (server), or draw the shape the server sends (local)",
+        # None, not CursorMode.OMIT: resolve_cursor_mode() needs to tell
+        # "not given" from "given as none" so --cursor none contradicting an
+        # alias is caught the same way --cursor local contradicting one is.
+        default=None,
+        help="what a capture does about the mouse pointer: omit it (none, the "
+        "default), let the server paint it (server), or draw the shape the "
+        "server sends (local)",
     )
     parser.add_argument(
         "--localcursor",

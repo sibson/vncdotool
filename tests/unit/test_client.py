@@ -103,7 +103,7 @@ class TestVNCDoToolClient(TestCase):
 
     def test_updateCursor_discards_the_shape_without_localcursor(self):
         cli = self.client
-        cli.factory.cursor = CursorMode.NONE
+        cli.factory.cursor = CursorMode.OMIT
         cli.screen = Image.new("RGB", (100, 100))
 
         cli.updateCursor(0, 0, 2, 2, b"\0" * 12, b"\xc0\xc0")
@@ -856,7 +856,7 @@ def _connected(jpeg_quality):
     cli.factory = mock.Mock()
     for flag in ("pseudodesktop", "last_rect", "qemu_extended_key"):
         setattr(cli.factory, flag, False)
-    cli.factory.cursor = CursorMode.NONE
+    cli.factory.cursor = CursorMode.OMIT
     cli.setEncodings = mock.Mock()
     cli.requested_jpeg_quality = jpeg_quality
     cli.vncConnectionMade()
