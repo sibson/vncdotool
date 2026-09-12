@@ -49,3 +49,20 @@ foreach ($server in $Servers) {
         throw "$($server.Name) setup failed with exit code $LASTEXITCODE"
     }
 }
+
+# Last, so that windows the installers above opened are minimized too.
+Write-Host '=== clearing the desktop'
+# Shell.Application is served by explorer, which refuses the call until it is
+# listening again after the restart above.
+$Deadline = (Get-Date).AddSeconds(30)
+while ($true) {
+    try {
+        (New-Object -ComObject Shell.Application).MinimizeAll()
+        break
+    } catch {
+        if ((Get-Date) -gt $Deadline) {
+            throw "no window could be minimized, and the agent's console covers the desktop: $_"
+        }
+        Start-Sleep -Milliseconds 500
+    }
+}
