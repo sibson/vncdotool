@@ -63,7 +63,7 @@ differs per server.
 | selenoid | no | n/a, answers 0x0 |
 | x11vnc | **yes**, 18x18 | yes |
 | libvncserver-example | **yes**, 32x32 | yes |
-| **UltraVNC** | **yes** | **only if `-232` was offered too** |
+| **UltraVNC** | **yes**, 12x19 | **no, even offered `-232`** |
 | **TightVNC** | **yes** | only when this client moved the pointer |
 | **TigerVNC WinVNC** | **yes** | only when this client moved the pointer |
 
@@ -71,7 +71,7 @@ differs per server.
 honest; the Windows rows come from the `os-servers` workflow, which is the
 only place those three run.
 
-### UltraVNC requires PointerPos
+### UltraVNC sends the shape and paints it anyway
 
 `winvnc/winvnc/vncclient.cpp:3114`, after the whole `SetEncodings` list has
 been parsed:
@@ -87,12 +87,18 @@ if (!m_client->m_use_PointerPos) {
 ```
 
 A client offering `-239` and not `-232` has its request accepted during the
-loop and revoked at the end of it. UltraVNC then behaves as it does for a
-client that cannot draw cursors at all: it paints, and sends no shape. This
-is the same defect TigerVNC's viewer hit in TigerVNC#1342, closed
-`notourbug`. `[admin] ForceCursorShape=1` is the server-side override;
+loop and revoked at the end of it, and gets no shape. This is the same
+defect TigerVNC's viewer hit in TigerVNC#1342, closed `notourbug`. `[admin]
+ForceCursorShape=1` is the server-side override;
 `tests/servers/ultravnc/setup.ps1` deliberately leaves it alone, because
 setting it would configure the server around what `vncdo` does not offer.
+
+Offering `-232` keeps the shape, and nothing more. Measured on a runner with
+both offered: UltraVNC answers `-239` with a 32x32 rectangle, answers `-232`
+with the position, and still composites a 12x19 arrow into the framebuffer
+at the pointer. The two are one decision in this file and two in the server:
+what it sends and what it draws are not the same switch. A client that asks
+for the shape and gets it therefore has to discard it, or draw it twice.
 
 ### TightVNC and TigerVNC guess who moved it
 
