@@ -38,9 +38,9 @@ $settings = @{
     UseVncAuthentication    = 1
     UseControlAuthentication = 0
     AcceptHttpConnections    = 0
-    # The wallpaper goes on connect and comes back on disconnect, and every
-    # vncdo run is its own connection, so removing it is what makes the
-    # desktop differ between two captures.
+    # Kept, so the desktop is the same in every capture. TightVNC strips the
+    # wallpaper for the length of a connection, and each vncdo run connects
+    # again.
     RemoveWallpaper         = 0
     # Two separate settings: LoopbackOnly refuses anything that is not
     # loopback, AllowLoopback permits loopback at all. Without the second the

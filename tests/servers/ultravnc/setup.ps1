@@ -35,9 +35,9 @@ $passwdHex = Get-VncPasswordHex -Password $Password -TrailingNull
 # revocation of RichCursor for a client that did not ask for PointerPos
 # (-232), which is what these tests measure.
 #
-# The wallpaper goes on connect and comes back on disconnect, and every vncdo
-# run is its own connection, so RemoveWallpaper=1 is what makes the desktop
-# differ between two captures.
+# RemoveWallpaper is kept off, so the desktop is the same in every capture.
+# UltraVNC strips the wallpaper for the length of a connection, and each vncdo
+# run connects again.
 $ini = @"
 [admin]
 UseRegistry=0

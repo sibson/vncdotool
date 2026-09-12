@@ -6,7 +6,7 @@ whatever the server painted, at whatever position the last `move` left it.
 
 | `--cursor` | offers | capture contains |
 |---|---|---|
-| `none` (default) | `-239`, `-232` | no pointer, on any server |
+| `none` (default) | `-239`, `-232` | no pointer, bar a server that paints one regardless |
 | `server` | neither | whatever the server paints |
 | `local` | `-239`, `-232` | the shape the server sent, drawn by us |
 
@@ -96,9 +96,9 @@ setting it would configure the server around what `vncdo` does not offer.
 Offering `-232` keeps the shape, and nothing more. Measured on a runner with
 both offered: UltraVNC answers `-239` with a 32x32 rectangle, answers `-232`
 with the position, and still composites a 12x19 arrow into the framebuffer
-at the pointer. The two are one decision in this file and two in the server:
-what it sends and what it draws are not the same switch. A client that asks
-for the shape and gets it therefore has to discard it, or draw it twice.
+at the pointer. The code above governs only what the server sends; what it
+paints is a separate switch. A client that asks for the shape and gets it
+therefore has to discard it, or draw it twice.
 
 ### TightVNC and TigerVNC guess who moved it
 

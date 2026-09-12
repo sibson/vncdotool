@@ -70,11 +70,7 @@ class CursorFreeCapture(CaptureHelper):
     """Adds the pointer-independence case, parameterized per server by _register()."""
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
-        """Neither pointer position leaves a mark on a capture.
-
-        See utils.assert_pointer_matches_expectation(), which this shares
-        with CursorPositionIndependent's OS-hosted servers.
-        """
+        """Neither pointer position leaves a mark on a capture."""
         assert_pointer_matches_expectation(
             self, self.server,
             {"near": self.at("near", CURSOR_NEAR), "far": self.at("far", CURSOR_FAR)},

@@ -23,8 +23,8 @@ Set-ItemProperty -Path $Advanced -Name HideIcons -Value 1 -Type DWord
 if ((Get-ItemProperty -Path $Advanced -Name HideIcons).HideIcons -ne 1) {
     throw 'HideIcons did not take, and the desktop icons would stay on screen'
 }
-# Explorer reads HideIcons when it draws the desktop and re-reads it for
-# nothing short of a restart. Winlogon brings it back on its own.
+# Restarting Explorer is what applies HideIcons: it reads the value when it
+# draws the desktop. Winlogon starts it again on its own.
 Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
 $Deadline = (Get-Date).AddSeconds(30)
 while (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
@@ -50,10 +50,9 @@ foreach ($server in $Servers) {
     }
 }
 
-# Last, so that windows the installers above opened are minimized too.
 Write-Host '=== clearing the desktop'
-# Shell.Application is served by explorer, which refuses the call until it is
-# listening again after the restart above.
+# The retry is for Explorer, which serves Shell.Application: it registers the
+# COM server some time after the process itself is back.
 $Deadline = (Get-Date).AddSeconds(30)
 while ($true) {
     try {

@@ -130,7 +130,7 @@ class VNCServer(NamedTuple):
     # right answer.
     has_pointer: bool = False
     # True on a server that composites the pointer into the framebuffer even
-    # when offered Cursor: UltraVNC answers with a shape and paints it too.
+    # when offered Cursor.
     paints_pointer: bool = False
 
 
@@ -962,10 +962,6 @@ def assert_pointer_matches_expectation(
     in how `shots` -- {"near": ..., "far": ...} -- gets captured. Only the
     neighbourhood of each position is compared, so a clock or a blinking
     cursor elsewhere on the screen cannot be read as a painted pointer.
-
-    A server recorded as painting is asserted to still paint, rather than
-    excused: a server that quietly stops is a table gone stale, and that is
-    worth a failure too.
     """
     for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
         box = cursor_box(position, shots["near"].size)

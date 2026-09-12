@@ -45,17 +45,19 @@ make screen captures of the session:
 > vncdo capture screenshot.png
 ```
 
-Captures contain no mouse pointer. Servers such as x11vnc and libvncserver
-paint one into the framebuffer, but stop as soon as a client asks for the
-cursor pseudo-encoding of RFC 6143, which vncdo always does. Since a pointer
-sits wherever the last `move` left it, leaving it in would make a capture
-depend on something no script controls, and `expect` compare against it.
+Captures contain no mouse pointer on almost every server. Servers such as
+x11vnc and libvncserver paint one into the framebuffer, but stop as soon as a
+client asks for the cursor pseudo-encoding of RFC 6143, which vncdo always
+does. UltraVNC is the exception measured so far: it paints one whatever the
+client asks for. Since a pointer sits wherever the last `move` left it,
+leaving it in would make a capture depend on something no script controls,
+and `expect` compare against it.
 
 `--cursor` chooses one of three things instead:
 
 | `--cursor` | capture contains |
 |---|---|
-| `none` (default) | no pointer, on any server |
+| `none` (default) | no pointer, bar a server that paints one regardless |
 | `server` | whatever the server paints, as before |
 | `local` | the shape the server sends, drawn by vncdo |
 
