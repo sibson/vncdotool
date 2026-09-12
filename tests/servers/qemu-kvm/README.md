@@ -21,9 +21,14 @@ Why this server is raw rather than a container, when Tier 1 already has a
 ## What the setup has to get right
 
 * **There is no guest, and that is deliberate.** With no `-drive` and no
-  `-kernel`, the machine stops at the firmware's "no bootable device"
-  screen. That is still a real framebuffer served by QEMU's own RFB code,
-  and it costs no guest image to download and no boot to wait for.
+  `-kernel`, the machine stops on the firmware's failed-boot screen. That is
+  still a real framebuffer served by QEMU's own RFB code, and it costs no
+  guest image to download and no boot to wait for.
+
+* **The firmware is OVMF, and the machine has no network.** SeaBIOS, QEMU's
+  default, blinks a VGA text cursor, so two captures of an idle machine
+  differ. Without `-net none` OVMF retries PXE forever and the screen
+  scrolls instead. `setup.sh` installs the `ovmf` package alongside QEMU.
 
 * **`-vnc :0` listens on every interface.** QEMU's VNC server has no
   authentication unless it is started with `password=on` *and* a password is
@@ -65,8 +70,8 @@ negotiation, the encodings and pixel formats it offers, and its
 QEMU-specific pseudo-encodings.
 
 Captures come back with real content rather than the flat black a hosted
-macOS runner gives: the firmware's text screen is 720x400 in the default VGA
-text mode, drawn in a handful of colours.
+macOS runner gives: the firmware's own screen, drawn in a handful of
+colours.
 
 It does not cover a guest. Key and pointer events are accepted by the server
 and delivered to a machine with nothing running on it, so nothing types
