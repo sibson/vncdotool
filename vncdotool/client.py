@@ -625,7 +625,16 @@ class VNCDoToolClient(rfb.RFBClient):
         self.width, self.height = width, height
 
 
-class VMWareClient(VNCDoToolClient):
+class KasmVNCDialect:
+    def pointerEvent(self, x: int, y: int, buttonmask: int = 0) -> None:
+        # KasmVNC reads a U16 button mask and a trailing pair of scroll deltas:
+        # eleven bytes where RFB 6143 defines six.
+        self.transport.write(
+            pack("!BHHHhh", rfb.MsgC2S.POINTER_EVENT, buttonmask, x, y, 0, 0)
+        )
+
+
+class VMWareDialect:
     SINGLE_PIXEL_UPDATE = pack(
         "!BxHHHHHixxxx",
         rfb.MsgS2C.FRAMEBUFFER_UPDATE,  # message-type
@@ -652,6 +661,35 @@ class VMWareClient(VNCDoToolClient):
             self._handler()
         else:
             super().dataReceived(data)
+
+
+class KasmVNCClient(KasmVNCDialect, VNCDoToolClient):
+    pass
+
+
+class VMWareClient(VMWareDialect, VNCDoToolClient):
+    pass
+
+
+DIALECTS: dict[str, type | None] = {
+    "standard": None,
+    "kasmvnc": KasmVNCDialect,
+    "vmware": VMWareDialect,
+}
+
+
+def apply_dialect(factory: VNCDoToolFactory, name: str) -> None:
+    """The CLI and the library each bring their own client subclass, so a
+    dialect mixes into `factory.protocol` rather than replacing it.
+    """
+    dialect = DIALECTS[name]
+    if dialect is None:
+        return
+    factory.protocol = type(
+        dialect.__name__ + factory.protocol.__name__,
+        (dialect, factory.protocol),
+        {},
+    )
 
 
 class VNCDoToolFactory(rfb.RFBFactory):
@@ -699,6 +737,10 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionMade(self, protocol: VNCDoToolClient) -> None:
         self.deferred.callback(protocol)
+
+
+class KasmVNCFactory(VNCDoToolFactory):
+    protocol = KasmVNCClient
 
 
 class VMWareFactory(VNCDoToolFactory):

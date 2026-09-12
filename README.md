@@ -64,8 +64,7 @@ This says what we have evidence for, not what works.
 pull request: [TigerVNC](https://tigervnc.org),
 [x11vnc](https://github.com/LibVNC/x11vnc),
 [wayvnc](https://github.com/any1/wayvnc),
-[LibVNCServer](https://libvnc.github.io),
-[KasmVNC](https://kasmweb.com/kasmvnc), [QEMU](https://qemu.org)'s built-in
+[LibVNCServer](https://libvnc.github.io), [QEMU](https://qemu.org)'s built-in
 server, [Selenoid](https://aerokube.com/selenoid/).
 
 **Supported on their own OS** — the same journey, but only on the pull
@@ -78,7 +77,15 @@ its captures come back near-solid whatever the client does.
 **Compatible** — a user reported it working, or we ran the compatibility suite
 against it once. Not tracked by CI, so it ages. Nothing listed yet.
 
-**Broken** — we tried it and it does not work. Nothing listed yet.
+**Broken** — we tried it and it does not work:
+[KasmVNC](https://kasmweb.com/kasmvnc). Connecting, key input and capture
+work; any pointer event stops the server answering, and it drops the
+connection twenty seconds later. KasmVNC states that it has left the RFB
+specification and does not support VNC client applications, so expect no
+fix. `vncdo --dialect kasmvnc` sends the eleven-byte pointer event its
+server reads instead of RFB's six, which keeps the session alive and moves
+the pointer; a button press reaches the X server, but has not been seen to
+reach an application.
 
 **TBD** — no data gathered: RealVNC, TightVNC, TurboVNC, PiKVM, and everything
 else. It should work; we make no claim. A report either way is welcome, and is

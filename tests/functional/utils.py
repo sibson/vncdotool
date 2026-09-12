@@ -96,6 +96,9 @@ class VNCServer(NamedTuple):
     # False means a flat, usually all-black, framebuffer is expected rather
     # than a failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
+    # True where a pointer event ends the session instead of being acted on,
+    # so a grid that drives one has to leave this server out.
+    skip_pointer_tests: bool = False
     # The default suits a container on loopback; an OS-hosted server sharing
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
@@ -232,6 +235,7 @@ SELENOID = VNCServer(
 KASMVNC = VNCServer(
     "kasmvnc", 5947, size=(256, 192),
     address="ws://127.0.0.1:5947/?password=vncdotool",
+    skip_pointer_tests=True,
 )
 
 WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]
@@ -246,7 +250,6 @@ SUPPORTED_SERVERS = [
     X11VNC,
     WAYVNC,
     LIBVNCSERVER_EXAMPLE,
-    KASMVNC,
     QEMU,
     SELENOID,
 ]
@@ -757,10 +760,8 @@ class _VNCServerTestMixin:
         return result
 
     def assert_survives(self, *args: str) -> None:
-        """The exit status alone proves nothing: vncdo has sent the event and
-        returned before the server reacts. KasmVNC closes the WebSocket on a
-        PointerEvent, and a bare `move` against it still exits 0 about a
-        second later.
+        """vncdo sends the event and returns before the server reacts, so a
+        zero exit status does not show the session survived it.
         """
         with tempfile.TemporaryDirectory() as tmp:
             png = Path(tmp) / "after-input.png"

@@ -30,12 +30,14 @@ from twisted.python.log import PythonLoggingObserver
 from . import decoders, pixelformat, websocket
 from .capture import check_capture_target
 from .client import (
+    DIALECTS,
     JPEG_QUALITY_ENCODINGS,
     AuthenticationError,
     ProtocolError,
     TClient,
     VNCDoToolClient,
     VNCDoToolFactory,
+    apply_dialect,
     factory_connect,
 )
 from .loggingproxy import VNCLoggingServerFactory
@@ -630,6 +632,12 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="delay MILLISECONDS between actions [%(default)sms]",
     )
     parser.add_argument(
+        "--dialect",
+        choices=sorted(DIALECTS),
+        default="standard",
+        help="speak the RFB variant used by this server [%(default)s]",
+    )
+    parser.add_argument(
         "--force-caps",
         action="store_true",
         help="for non-compliant servers, send shift-LETTER, ensures capitalization works",
@@ -740,6 +748,8 @@ def vncdo(argv: list[str] | None = None) -> None:
     factory = build_tool(options, args)
     factory.username = options.username
     factory.password = options.password
+
+    apply_dialect(factory, options.dialect)
 
     if options.localcursor:
         factory.pseudocursor = True
