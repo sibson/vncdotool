@@ -21,29 +21,13 @@ ACCEL="${VNCDOTOOL_QEMU_ACCEL:-kvm}"
 MEMORY="${VNCDOTOOL_QEMU_MEMORY:-256}"
 
 QEMU=qemu-system-x86_64
-# Ubuntu noble's ovmf package (2024.02-1 onward) dropped the legacy 2M
-# OVMF_CODE.fd; CI runs on ubuntu-latest, so only the 4M path matters here.
-OVMF_CANDIDATES=(
-    /usr/share/OVMF/OVMF_CODE_4M.fd
-)
-BIOS=""
+BIOS=/usr/share/OVMF/OVMF_CODE_4M.fd
 RUNTIME_DIR="${VNCDOTOOL_QEMU_RUNTIME_DIR:-/tmp/vncdotool-qemu}"
 PIDFILE="$RUNTIME_DIR/qemu.pid"
 LOGFILE="$RUNTIME_DIR/qemu.log"
 
 # QEMU takes a display number, not a port: :0 is 5900.
 DISPLAY_NUMBER=$((PORT - 5900))
-
-find_ovmf() {
-    local candidate
-    for candidate in "${OVMF_CANDIDATES[@]}"; do
-        if [ -r "$candidate" ]; then
-            echo "$candidate"
-            return
-        fi
-    done
-    return 1
-}
 
 install_qemu() {
     echo "--- installing $QEMU and OVMF"
@@ -53,7 +37,7 @@ install_qemu() {
     else
         packages+=(qemu-system-x86)
     fi
-    if BIOS="$(find_ovmf)"; then
+    if [ -r "$BIOS" ]; then
         echo "OVMF already installed: $BIOS"
     else
         packages+=(ovmf)
@@ -62,12 +46,10 @@ install_qemu() {
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends "${packages[@]}"
     fi
-    if [ -z "$BIOS" ] && ! BIOS="$(find_ovmf)"; then
-        echo "no OVMF firmware to boot; looked for:" >&2
-        printf '  %s\n' "${OVMF_CANDIDATES[@]}" >&2
+    if [ ! -r "$BIOS" ]; then
+        echo "no OVMF firmware at $BIOS" >&2
         return 1
     fi
-    echo "--- firmware to boot: $BIOS"
 }
 
 grant_kvm_access() {
@@ -120,8 +102,6 @@ start_qemu() {
     #
     # The 127.0.0.1: prefix is load-bearing. A bare -vnc :0 listens on every
     # interface, and this server has no authentication at all.
-    # -bios rejects the split 4M OVMF image; it wants pflash, and a
-    # read-only unit is enough since there's no guest to persist vars for.
     "$QEMU" \
         -name vncdotool \
         -accel "$ACCEL" \

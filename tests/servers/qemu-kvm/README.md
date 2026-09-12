@@ -29,10 +29,6 @@ Why this server is raw rather than a container, when Tier 1 already has a
   so two captures of an idle machine differ. Without `-net none` OVMF
   retries PXE forever and the screen scrolls instead.
 
-* **OVMF loads as pflash, not `-bios`.** Ubuntu noble's `ovmf` package only
-  ships the split 4M `OVMF_CODE_4M.fd`, which `-bios` can't parse.
-  `setup.sh` loads it with `-drive if=pflash,readonly=on` instead.
-
 * **`-vnc :0` listens on every interface.** QEMU's VNC server has no
   authentication unless it is started with `password=on` *and* a password is
   then set over the monitor, so the listen address is the only thing
