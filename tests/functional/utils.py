@@ -96,9 +96,9 @@ class VNCServer(NamedTuple):
     # False means a flat, usually all-black, framebuffer is expected rather
     # than a failure -- see the macOS note in tests/servers/screen-sharing.
     renders_desktop: bool = True
-    # False where a pointer event ends the session instead of being acted on,
+    # True where a pointer event ends the session instead of being acted on,
     # so a grid that drives one has to leave this server out.
-    accepts_pointer_events: bool = True
+    skip_pointer_tests: bool = False
     # The default suits a container on loopback; an OS-hosted server sharing
     # a busy machine's real desktop can be far slower.
     timeout: float = CONNECT_TIMEOUT
@@ -235,7 +235,7 @@ SELENOID = VNCServer(
 KASMVNC = VNCServer(
     "kasmvnc", 5947, size=(256, 192),
     address="ws://127.0.0.1:5947/?password=vncdotool",
-    accepts_pointer_events=False,
+    skip_pointer_tests=True,
 )
 
 WEBSOCKET_SERVERS = [QEMU, QEMU_TLS, SELENOID, KASMVNC]

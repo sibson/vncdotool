@@ -98,7 +98,7 @@ class ClickSelectsAScene:
 
 
 for _server in SCENE_SERVERS:
-    if not _server.accepts_pointer_events:
+    if _server.skip_pointer_tests:
         continue
     _name = "TestClick_" + _server.name.replace("-", "_")
     globals()[_name] = type(

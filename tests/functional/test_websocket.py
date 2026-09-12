@@ -108,7 +108,7 @@ def _bases(server: VNCServer) -> tuple:
     bases = []
     if server not in SUPPORTED_SERVERS:
         bases.append(BasicWebSocketTests)
-        if server.accepts_pointer_events:
+        if not server.skip_pointer_tests:
             bases.append(PointerWebSocketTests)
     if server.address.startswith("wss://"):
         bases.append(TLSWebSocketTests)

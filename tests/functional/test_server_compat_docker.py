@@ -24,18 +24,24 @@ register_server_tests(SUPPORTED_SERVERS, globals(), base=FleetTestCase)
 
 
 class TestKasmVNCInput(FleetTestCase):
+    """Locks the KasmVNC behaviour that keeps it out of SUPPORTED_SERVERS.
+
+    A failure here means the server changed: re-evaluate whether it moves
+    back to README.md's Supported class.
+    """
+
     server = KASMVNC
     # Long enough that a served update arrives, short enough that the wedge
     # surfaces well before KasmVNC's own 20-second idle timeout drops the
     # socket.
-    deadline = "5"
+    timeout = "5"
 
     def capture_after(self, *args: str) -> Tuple[subprocess.CompletedProcess, Path]:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         png = Path(tmp.name) / "after-input.png"
         result = run_vncdo(
-            self.server, "--timeout", self.deadline,
+            self.server, "--timeout", self.timeout,
             *args, "pause", "0.3", "capture", str(png),
         )
         return result, png
@@ -58,7 +64,7 @@ class TestKasmVNCInput(FleetTestCase):
         self.assertFalse(
             png.exists(),
             "KasmVNC served a framebuffer update after a PointerEvent, so it "
-            "now reads the RFB 6143 message: its accepts_pointer_events=False "
+            "now reads the RFB 6143 message: its skip_pointer_tests=True "
             "and its README.md Broken entry are both wrong",
         )
         self.assertEqual(
