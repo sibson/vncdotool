@@ -50,18 +50,55 @@ foreach ($server in $Servers) {
     }
 }
 
-Write-Host '=== clearing the desktop'
-# The retry is for Explorer, which serves Shell.Application: it registers the
-# COM server some time after the process itself is back.
-$Deadline = (Get-Date).AddSeconds(30)
-while ($true) {
-    try {
-        (New-Object -ComObject Shell.Application).MinimizeAll()
-        break
-    } catch {
-        if ((Get-Date) -gt $Deadline) {
-            throw "no window could be minimized, and the agent's console covers the desktop: $_"
-        }
-        Start-Sleep -Milliseconds 500
+Write-Host '=== moving windows off the pointer probe'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public struct RECT { public int Left, Top, Right, Bottom; }
+public static class Desktop {
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(
+        IntPtr window, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT rect);
+}
+'@
+
+# CURSOR_NEAR, CURSOR_FAR and CURSOR_EXTENT in tests/functional/utils.py put
+# the compared boxes inside (0, 0)-(198, 168). Windows are moved clear of
+# that rather than minimized: a capture with every window gone is bare
+# desktop, which is black whenever the wallpaper has not painted, and
+# test_capture asks for a capture with something in it.
+$ProbeRight, $ProbeBottom = 198, 168
+$ClearX, $ClearY = 220, 180
+
+function Get-TopLevelWindows {
+    Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }
+}
+
+# user32 reaches only the calling process's own session, so finding nothing
+# would mean the windows are somewhere this cannot move them -- and the
+# check below would then pass without having looked at anything.
+$Windows = @(Get-TopLevelWindows)
+if ($Windows.Count -eq 0) {
+    throw 'no top-level window is visible from here, so none can be moved off the probe'
+}
+Write-Host "moving $($Windows.Count) window(s) to $ClearX,$ClearY"
+
+foreach ($process in $Windows) {
+    # SW_RESTORE first: SetWindowPos does not move a maximized window.
+    [Desktop]::ShowWindow($process.MainWindowHandle, 9) | Out-Null
+    # SWP_NOSIZE | SWP_NOZORDER
+    [Desktop]::SetWindowPos(
+        $process.MainWindowHandle, [IntPtr]::Zero, $ClearX, $ClearY, 0, 0, 0x0005) | Out-Null
+}
+
+foreach ($process in Get-TopLevelWindows) {
+    $rect = New-Object RECT
+    if (-not [Desktop]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
+        continue
+    }
+    if ($rect.Left -lt $ProbeRight -and $rect.Right -gt 0 -and
+        $rect.Top -lt $ProbeBottom -and $rect.Bottom -gt 0) {
+        throw "$($process.ProcessName) stayed at $($rect.Left),$($rect.Top) over the probe region"
     }
 }
