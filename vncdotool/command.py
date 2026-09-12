@@ -684,9 +684,9 @@ def vncdo(argv: list[str] | None = None) -> None:
         # "not given" from "given as none" so --cursor none contradicting an
         # alias is caught the same way --cursor local contradicting one is.
         default=None,
-        help="what a capture does about the mouse pointer: omit it (none, the "
-        "default), let the server paint it (server), or draw the shape the "
-        "server sends (local)",
+        help="what a capture does about the mouse pointer: ask the server to "
+        "stop painting it (none, the default), let it paint (server), or draw "
+        "the shape it sends (local)",
     )
     parser.add_argument(
         "--localcursor",

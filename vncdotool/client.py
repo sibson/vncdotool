@@ -616,9 +616,14 @@ class VNCDoToolClient(rfb.RFBClient):
         Only where the cursor is drawn changes. self.x/self.y stay the
         script's, so a later mouseDown still clicks where the script last
         put the pointer rather than wherever the desktop moved it to.
+
+        Recorded rather than drawn: drawCursor() composites into the
+        framebuffer without restoring what the last cursor covered, so
+        drawing here would leave one arrow per reported position. The next
+        rectangle to paint that region draws it, which is what a
+        non-incremental capture forces.
         """
         self.cursor_pos = (x, y)
-        self.drawCursor()
 
     def drawCursor(self) -> None:
         if not self.cursor:

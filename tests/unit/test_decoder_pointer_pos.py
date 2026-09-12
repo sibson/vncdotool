@@ -16,6 +16,9 @@ from tests.unit.utils import (
 )
 
 POINTER_POS = rect(150, 120, 0, 0, Encoding.PSEUDO_POINTER_POS, b"")
+# Whatever repaints the framebuffer is what draws the cursor; one pixel of
+# Raw well away from either pointer position is the cheapest such rectangle.
+PAINTS_A_PIXEL = rect(0, 0, 1, 1, Encoding.RAW, _pixel(0, 0, 0))
 
 IMAGE_2X2 = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
 MASK_2X2 = bytes([0b11000000, 0b11000000])
@@ -70,10 +73,29 @@ class TestPointerPos(unittest.TestCase):
         self.cli.screen = Image.new("RGB", (400, 400))
         self.cli.mouseMove(10, 20)
         self.cli.dataReceived(framebuffer_update([cursor_rect()]))
+        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+
+        self.cli.dataReceived(framebuffer_update([PAINTS_A_PIXEL]))
+
+        self.assertEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
+
+    def test_a_reported_move_paints_nothing_by_itself(self) -> None:
+        """Otherwise every reported position leaves its own arrow behind.
+
+        drawCursor() pastes over the framebuffer without restoring what the
+        last cursor covered, so a PointerPos that painted would accumulate
+        one cursor per move until something repainted the region.
+        """
+        handshake(self.cli, 400, 400)
+        self.cli.factory.cursor = CursorMode.LOCAL
+        self.cli.screen = Image.new("RGB", (400, 400))
+        self.cli.mouseMove(10, 20)
+        self.cli.dataReceived(framebuffer_update([cursor_rect()]))
+        self.assertEqual(self.cli.screen.getpixel((10, 20)), IMAGE_2X2[0])
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertNotEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
 
     def test_a_click_still_goes_where_the_script_put_it(self) -> None:
         handshake(self.cli, 400, 400)
