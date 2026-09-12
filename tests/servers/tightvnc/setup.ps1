@@ -38,8 +38,10 @@ $settings = @{
     UseVncAuthentication    = 1
     UseControlAuthentication = 0
     AcceptHttpConnections    = 0
-    # A plain desktop is a steadier thing to diff two captures of.
-    RemoveWallpaper         = 1
+    # The wallpaper goes on connect and comes back on disconnect, and every
+    # vncdo run is its own connection, so removing it is what makes the
+    # desktop differ between two captures.
+    RemoveWallpaper         = 0
     # Two separate settings: LoopbackOnly refuses anything that is not
     # loopback, AllowLoopback permits loopback at all. Without the second the
     # server answers "Sorry, loopback connections are not enabled" and closes.
