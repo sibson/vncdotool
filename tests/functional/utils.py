@@ -580,6 +580,22 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
+# A capture at least this much one colour is a desktop that has not painted,
+# not a desktop with little on it. Set between the two measured populations:
+# a served Windows desktop reached 84% its commonest colour at worst, with
+# the wallpaper off and a console window the only thing on it, while an
+# unpainted one has not come in below 93%.
+BLANK_FRACTION = 0.90
+
+
+def blank_fraction(image: Image.Image) -> float:
+    """How much of `image` is its single commonest colour."""
+    colours = image.convert("RGB").getcolors(maxcolors=image.width * image.height)
+    if not colours:
+        return 0.0
+    return max(count for count, _ in colours) / (image.width * image.height)
+
+
 def normalize_size(server: VNCServer) -> None:
     """Put a server whose size a client can change back to ``server.size``."""
     if not server.normalize_size_keys:
@@ -1014,7 +1030,20 @@ class CursorPositionIndependent:
             options=("-v", "-v", "--logfile", str(log)),
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is nearly
+        # all one colour by nature, and has no pointer for a blank capture to
+        # hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {label} capture is {blank:.0%} one "
+                "colour, so the desktop had not painted and nothing about the "
+                f"pointer can be read off it. See {png}.",
+            )
+        return capture
 
     def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
         shots = {

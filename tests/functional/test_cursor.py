@@ -19,6 +19,7 @@ from typing import Dict, Optional, Tuple
 from PIL import Image, ImageChops
 
 from .utils import (
+    BLANK_FRACTION,
     CURSOR_FAR,
     CURSOR_NEAR,
     CURSOR_TESTED_SERVERS,
@@ -29,6 +30,7 @@ from .utils import (
     VNCServer,
     X11VNC,
     assert_pointer_matches_expectation,
+    blank_fraction,
     run_vncdo,
     screenshot_dir,
 )
@@ -63,7 +65,17 @@ class CaptureHelper:
             f"{result.returncode}, stderr:\n{result.stderr}",
         )
         with Image.open(png) as image:
-            return image.convert("RGB").copy()
+            capture = image.convert("RGB").copy()
+
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {tag} capture is {blank:.0%} one "
+                "colour, so the desktop had not painted and nothing about the "
+                f"pointer can be read off it. See {png}.",
+            )
+        return capture
 
 
 class CursorFreeCapture(CaptureHelper):
