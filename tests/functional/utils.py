@@ -876,11 +876,11 @@ class Rectangle(NamedTuple):
     y: int
 
 
-# rfb.py logs one of these per rectangle at DEBUG. Encoding.lookup() renders
-# a known encoding's number in decimal and an unknown one's in signed hex
-# (`<Encoding.UNKNOWN: -e8>`), so only the name is taken.
+# rfb.py logs one of these per rectangle at DEBUG, str(Encoding.lookup(n))
+# spelling the encoding as "NAME (value)" -- decimal, or hex above 0x10000
+# (const._named()). Only the name is taken, so either form matches.
 _RECTANGLE_LOG = re.compile(
-    r"Received <Encoding\.(?P<name>\w+): -?[0-9a-f]+> "
+    r"Received (?P<name>\w+) \([^)]+\) "
     r"rectangle (?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+)"
 )
 
