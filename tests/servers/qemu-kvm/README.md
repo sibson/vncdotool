@@ -25,10 +25,9 @@ Why this server is raw rather than a container, when Tier 1 already has a
   still a real framebuffer served by QEMU's own RFB code, and it costs no
   guest image to download and no boot to wait for.
 
-* **The firmware is OVMF, and the machine has no network.** SeaBIOS, QEMU's
-  default, blinks a VGA text cursor, so two captures of an idle machine
-  differ. Without `-net none` OVMF retries PXE forever and the screen
-  scrolls instead. `setup.sh` installs the `ovmf` package alongside QEMU.
+* **OVMF, not SeaBIOS, and no network.** SeaBIOS blinks a VGA text cursor,
+  so two captures of an idle machine differ. Without `-net none` OVMF
+  retries PXE forever and the screen scrolls instead.
 
 * **`-vnc :0` listens on every interface.** QEMU's VNC server has no
   authentication unless it is started with `password=on` *and* a password is
