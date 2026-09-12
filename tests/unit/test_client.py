@@ -602,8 +602,11 @@ class TestImageMode(TestCase):
 class TestKasmVNCDialect(TestCase):
 
     def setUp(self) -> None:
-        self.client = type("C", (client.KasmVNCDialect, client.VNCDoToolClient), {})()
+        self.client = client.KasmVNCClient()
         self.client.transport = mock.Mock()
+
+    def test_the_factory_serves_the_dialect(self) -> None:
+        self.assertIs(client.KasmVNCFactory.protocol, client.KasmVNCClient)
 
     def test_pointer_event_carries_a_u16_mask_and_scroll_deltas(self) -> None:
         self.client.pointerEvent(20, 30, buttonmask=1)

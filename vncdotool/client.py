@@ -663,6 +663,10 @@ class VMWareDialect:
             super().dataReceived(data)
 
 
+class KasmVNCClient(KasmVNCDialect, VNCDoToolClient):
+    pass
+
+
 class VMWareClient(VMWareDialect, VNCDoToolClient):
     pass
 
@@ -733,6 +737,10 @@ class VNCDoToolFactory(rfb.RFBFactory):
 
     def clientConnectionMade(self, protocol: VNCDoToolClient) -> None:
         self.deferred.callback(protocol)
+
+
+class KasmVNCFactory(VNCDoToolFactory):
+    protocol = KasmVNCClient
 
 
 class VMWareFactory(VNCDoToolFactory):
