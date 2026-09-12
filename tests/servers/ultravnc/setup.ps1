@@ -34,6 +34,10 @@ $passwdHex = Get-VncPasswordHex -Password $Password -TrailingNull
 # ForceCursorShape=1 is deliberately absent: it overrides UltraVNC's
 # revocation of RichCursor for a client that did not ask for PointerPos
 # (-232), which is what these tests measure.
+#
+# The wallpaper goes on connect and comes back on disconnect, and every vncdo
+# run is its own connection, so RemoveWallpaper=1 is what makes the desktop
+# differ between two captures.
 $ini = @"
 [admin]
 UseRegistry=0
@@ -45,7 +49,7 @@ passwd=$passwdHex
 AllowLoopback=1
 AuthHosts=+127.0.0.1
 NewMSLogon=0
-RemoveWallpaper=1
+RemoveWallpaper=0
 NeverShutdown=1
 DebugMode=1
 DebugLevel=9
