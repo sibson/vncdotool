@@ -16,7 +16,7 @@ from .base import (
     WholeRectDecoder,
 )
 from .buffer import RectBuffer
-from .control import DesktopSizeDecoder, QemuExtendedKeyDecoder
+from .control import DesktopSizeDecoder, PointerPosDecoder, QemuExtendedKeyDecoder
 from .copyrect import CopyRectDecoder
 from .cursor import CursorDecoder
 from .errors import DecodeError
@@ -41,13 +41,15 @@ DECODERS: Dict[Encoding, Type[Decoder]] = {
         TightDecoder,
         CursorDecoder,
         DesktopSizeDecoder,
+        PointerPosDecoder,
         QemuExtendedKeyDecoder,
     )
 }
 
-# The names --encodings accepts. Cursor, DesktopSize and QemuExtendedKey are
-# registered decoders too, but client.py offers them from its own pseudocursor
-# / pseudodesktop / qemu_extended_key flags rather than by name here.
+# The names --encodings accepts. Cursor, PointerPos, DesktopSize and
+# QemuExtendedKey are registered decoders too, but client.py offers them
+# from its own cursor / pseudodesktop / qemu_extended_key flags rather than
+# by name here.
 ENCODING_NAMES: Dict[str, Encoding] = {
     "raw": Encoding.RAW,
     "copyrect": Encoding.COPY_RECTANGLE,

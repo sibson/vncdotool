@@ -1,3 +1,4 @@
+import argparse
 import contextlib
 import io
 import logging
@@ -12,6 +13,7 @@ from twisted.python.failure import Failure
 
 from vncdotool import command, pixelformat, websocket
 from vncdotool.client import AuthenticationError, ProtocolError, RegionError
+from vncdotool.cursor import CursorMode
 from vncdotool.loggingproxy import VNCLoggingServerProxy
 from vncdotool.replay import Capture
 
@@ -888,8 +890,6 @@ class TestVncdoArgumentParsing(CLIParsingTestCase):
     def test_flags_default_off(self) -> None:
         options, args = self.parse(['key', 'a'])
         assert not options.force_caps
-        assert not options.localcursor
-        assert not options.nocursor
         assert not options.disable_desktop_resizing
         assert not options.incremental_refreshes
 
@@ -1022,3 +1022,41 @@ class TestVncdoReplayArgumentParsing(CLIParsingTestCase):
 
     def test_server_mode_refuses_commands(self) -> None:
         assert 'takes no commands' in self.usage_error(['--server', 'capture.zip', 'key', 'a'])
+
+
+class TestCursorMode(CLIParsingTestCase):
+    """--cursor, and the two flags it replaced."""
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.build_tool = self.patch('vncdotool.command.build_tool')
+
+    def parse(self, argv: list) -> argparse.Namespace:
+        with self.assertRaises(SystemExit):
+            command.vncdo(argv + ['key', 'a'])
+        return self.build_tool.call_args.args[0]
+
+    def usage_error(self, argv: list) -> str:
+        return self.assertUsageError(lambda: command.vncdo(argv + ['key', 'a']))
+
+    def test_the_default_omits_the_pointer(self) -> None:
+        assert self.parse([]).cursor is CursorMode.OMIT
+
+    def test_each_mode_survives(self) -> None:
+        for mode in CursorMode:
+            assert self.parse(['--cursor', str(mode)]).cursor is mode
+
+    def test_localcursor_names_what_replaced_it(self) -> None:
+        assert '--localcursor was removed, use --cursor local' in self.usage_error(
+            ['--localcursor']
+        )
+
+    def test_nocursor_names_what_replaced_it(self) -> None:
+        assert '--nocursor was removed, use --cursor none' in self.usage_error(
+            ['--nocursor']
+        )
+
+    def test_a_removed_flag_is_not_in_the_namespace(self) -> None:
+        """It only exists to fail, so nothing downstream should read it."""
+        assert not hasattr(self.parse([]), 'localcursor')
+        assert not hasattr(self.parse([]), 'nocursor')

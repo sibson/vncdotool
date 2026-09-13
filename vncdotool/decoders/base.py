@@ -73,7 +73,9 @@ class Decoder:
     ) -> Generator[int, bytes, Tuple[bytes, PixelFormat]]:
         raise NotImplementedError
 
-    def decodeForControl(self, client: Any, width: int, height: int) -> None:
+    def decodeForControl(
+        self, client: Any, x: int, y: int, width: int, height: int
+    ) -> None:
         raise NotImplementedError
 
 
@@ -129,5 +131,5 @@ class ControlDecoder(Decoder):
         self, client: Any, rect: Rect, pixel_format: PixelFormat
     ) -> Generator[int, bytes, Outcome]:
         yield from ()  # consumes no bytes, so there is nothing to yield for
-        self.decodeForControl(client, rect[2], rect[3])
+        self.decodeForControl(client, *rect)
         return NOTHING

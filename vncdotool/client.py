@@ -22,6 +22,7 @@ from twisted.python.failure import Failure
 
 from . import decoders, pixelformat, rfb, websocket
 from .const import JPEG_QUALITY_ENCODINGS
+from .cursor import CursorMode
 from .keys import KEYMAP
 
 TClient = TypeVar("TClient", bound="VNCDoToolClient")
@@ -158,6 +159,9 @@ class VNCDoToolClient(rfb.RFBClient):
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
+    # Where the server last said the pointer is, or None when the script's
+    # own (x, y) is still the best answer.
+    cursor_pos: tuple[int, int] | None = None
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -431,6 +435,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
+        self.cursor_pos = None
         self.pointerEvent(x, y, self.buttons)
         return self
 
@@ -503,8 +508,11 @@ class VNCDoToolClient(rfb.RFBClient):
     def vncConnectionMade(self) -> None:
         self.setImageMode()
         encodings = list(self.requested_encodings or decoders.DEFAULT_ENCODINGS)
-        if self.factory.pseudocursor or self.factory.nocursor:
+        # A server that paints the pointer into the framebuffer stops once a
+        # client asks for Cursor, so `none` offers it too, and discards it.
+        if self.factory.cursor is not CursorMode.SERVER:
             encodings.append(rfb.Encoding.PSEUDO_CURSOR)
+            encodings.append(rfb.Encoding.PSEUDO_POINTER_POS)
         if self.factory.pseudodesktop:
             encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
         if self.factory.last_rect:
@@ -587,7 +595,7 @@ class VNCDoToolClient(rfb.RFBClient):
     def updateCursor(
         self, x: int, y: int, width: int, height: int, image: bytes, mask: bytes
     ) -> None:
-        if self.factory.nocursor:
+        if self.factory.cursor is not CursorMode.LOCAL:
             return
 
         if not width or not height:
@@ -602,6 +610,21 @@ class VNCDoToolClient(rfb.RFBClient):
         self.cfocus = x, y
         self.drawCursor()
 
+    def updatePointerPos(self, x: int, y: int) -> None:
+        """The server moved the pointer to (x, y).
+
+        Only where the cursor is drawn changes. self.x/self.y stay the
+        script's, so a later mouseDown still clicks where the script last
+        put the pointer rather than wherever the desktop moved it to.
+
+        Recorded rather than drawn: drawCursor() composites into the
+        framebuffer without restoring what the last cursor covered, so
+        drawing here would leave one arrow per reported position. The next
+        rectangle to paint that region draws it, which is what a
+        non-incremental capture forces.
+        """
+        self.cursor_pos = (x, y)
+
     def drawCursor(self) -> None:
         if not self.cursor:
             return
@@ -609,8 +632,9 @@ class VNCDoToolClient(rfb.RFBClient):
         if not self.screen:
             return
 
-        x = self.x - self.cfocus[0]
-        y = self.y - self.cfocus[1]
+        at_x, at_y = self.cursor_pos or (self.x, self.y)
+        x = at_x - self.cfocus[0]
+        y = at_y - self.cfocus[1]
         self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def updateDesktopSize(self, width: int, height: int) -> None:
@@ -699,8 +723,7 @@ class VNCDoToolFactory(rfb.RFBFactory):
     protocol = VNCDoToolClient
     shared = True
 
-    pseudocursor = False
-    nocursor = False
+    cursor = CursorMode.OMIT
     pseudodesktop = True
     qemu_extended_key = True
     last_rect = True

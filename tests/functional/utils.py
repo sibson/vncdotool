@@ -18,6 +18,7 @@ written twice.
 import contextlib
 import json
 import os
+import re
 import select
 import socket
 import subprocess
@@ -37,12 +38,13 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
+    Sequence,
     Set,
     Tuple,
 )
 from unittest import TestCase
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from vncdotool import api
 
@@ -75,6 +77,14 @@ DEFAULT_SCREENSHOT_DIR = Path(__file__).resolve().parents[1] / "servers" / "scre
 FLEET_PROJECT = "vncdo-test-servers"
 FLEET_TAG_SCRIPT = Path(__file__).resolve().parents[1] / "servers" / "fleet-tag.sh"
 FLEET_PROBE_TIMEOUT = 30.0
+
+# Two pointer positions a capture is compared at, and a box comfortably
+# larger than the biggest cursor the fleet sends (libvncserver's 32x32). A
+# shape is drawn at the pointer minus its hotspot, so it reaches above and
+# left of the position as well as below and right.
+CURSOR_NEAR = (20, 20)
+CURSOR_FAR = (150, 120)
+CURSOR_EXTENT = 48
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 # getcolors() returns None above this many distinct colours, which is itself
@@ -115,6 +125,13 @@ class VNCServer(NamedTuple):
     # Held open around anything that talks to this server, where its address
     # resolves only inside a session.
     session: Optional[Callable[[], ContextManager[None]]] = None
+    # False on a server whose framebuffer never had a pointer in it --
+    # qemu's text-mode boot screen, a headless Xvnc -- where no shape is the
+    # right answer.
+    has_pointer: bool = False
+    # True on a server that composites the pointer into the framebuffer even
+    # when offered Cursor.
+    paints_pointer: bool = False
 
 
 # Both written by their container into a bind mount at every start; neither
@@ -131,9 +148,7 @@ WAYVNC_CA_CERT = (
 # searching TCP_SERVERS by name.
 TIGERVNC = VNCServer("tigervnc", 5931, size=(256, 192))
 TIGERVNC_AUTH = VNCServer("tigervnc-auth", 5932, password="vncdotool")
-# x11vnc paints the X cursor into the framebuffer unless a client asks for
-# the Cursor pseudo-encoding.
-X11VNC = VNCServer("x11vnc", 5933, size=(256, 192), extra_args=("--nocursor",))
+X11VNC = VNCServer("x11vnc", 5933, size=(256, 192), has_pointer=True)
 TIGERVNC_VENCRYPT = VNCServer(
     "tigervnc-vencrypt", 5941, password="vncdotool", size=(256, 192),
     extra_args=("--tls-ca-cert", str(VENCRYPT_CA_CERT)),
@@ -151,6 +166,7 @@ WAYVNC = VNCServer(
 LIBVNCSERVER_EXAMPLE = VNCServer(
     "libvncserver-example", 5935, size=(800, 600),
     normalize_size_keys=("up", "up", "down"),
+    has_pointer=True,
 )
 
 TCP_SERVERS = [
@@ -254,6 +270,15 @@ SUPPORTED_SERVERS = [
     SELENOID,
 ]
 
+# The docker fleet servers test_cursor.py already registers a pointer-free
+# capture case for, one class per server. kasmvnc drops the WebSocket on a
+# PointerEvent (see test_cursor.py), so nothing there exercises it. Servers
+# outside this list -- the OS-hosted ones, reachable only through
+# register_server_tests() -- get the same case from CursorPositionIndependent
+# instead, so it runs exactly once per server rather than twice for the two
+# lists' overlap.
+CURSOR_TESTED_SERVERS = [s for s in TCP_SERVERS + WEBSOCKET_SERVERS if s is not KASMVNC]
+
 
 # An event sink rather than a rendering server, so it stays out of the smoke
 # grid; test_events.py still needs its host/port.
@@ -274,9 +299,9 @@ OS_SERVER_TIMEOUT = float(os.environ.get("VNCDOTOOL_OS_SERVER_TIMEOUT", "60"))
 def os_server(name: str, how_to_start: str, **overrides: Any) -> VNCServer:
     # size=None throughout: an OS-hosted server serves whatever the host
     # display or the firmware left behind, never a geometry we configure.
+    overrides.setdefault("port", OS_SERVER_PORT)
     return VNCServer(
         name=name,
-        port=OS_SERVER_PORT,
         size=None,
         timeout=OS_SERVER_TIMEOUT,
         how_to_start=how_to_start,
@@ -285,10 +310,29 @@ def os_server(name: str, how_to_start: str, **overrides: Any) -> VNCServer:
     )
 
 
+# Each server's setup.ps1 configures the same port number.
 ULTRAVNC = os_server(
     "ultravnc",
     "the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
     password=OS_SERVER_PASSWORD,
+    has_pointer=True,
+    paints_pointer=True,
+)
+
+TIGHTVNC = os_server(
+    "tightvnc",
+    "the OS server setup runs in CI only, see tests/servers/tightvnc/README.md",
+    port=5901,
+    password=OS_SERVER_PASSWORD,
+    has_pointer=True,
+)
+
+TIGERVNC_WIN = os_server(
+    "tigervnc-win",
+    "the OS server setup runs in CI only, see tests/servers/tigervnc-win/README.md",
+    port=5902,
+    password=OS_SERVER_PASSWORD,
+    has_pointer=True,
 )
 
 SCREEN_SHARING = os_server(
@@ -315,7 +359,7 @@ QEMU_KVM = os_server(
 QEMU_KVM_OPT_IN = "VNCDOTOOL_OS_SERVER_LINUX"
 
 OS_SERVERS_BY_PLATFORM: Dict[str, List[VNCServer]] = {
-    "win32": [ULTRAVNC],
+    "win32": [ULTRAVNC, TIGHTVNC, TIGERVNC_WIN],
     "darwin": [SCREEN_SHARING],
     "linux": [QEMU_KVM] if os.environ.get(QEMU_KVM_OPT_IN) else [],
 }
@@ -536,6 +580,22 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     return colours != 1
 
 
+# A capture at least this much one colour is a desktop that has not painted,
+# not a desktop with little on it. Set between the two measured populations:
+# a served Windows desktop reached 84% its commonest colour at worst, with
+# the wallpaper off and a console window the only thing on it, while an
+# unpainted one has not come in below 93%.
+BLANK_FRACTION = 0.90
+
+
+def blank_fraction(image: Image.Image) -> float:
+    """How much of `image` is its single commonest colour."""
+    colours = image.convert("RGB").getcolors(maxcolors=image.width * image.height)
+    if not colours:
+        return 0.0
+    return max(count for count, _ in colours) / (image.width * image.height)
+
+
 def normalize_size(server: VNCServer) -> None:
     """Put a server whose size a client can change back to ``server.size``."""
     if not server.normalize_size_keys:
@@ -608,12 +668,13 @@ def assert_cli_installed() -> None:
 assert_cli_installed()
 
 
-def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
+def vncdo_argv(server: VNCServer, *args: str, options: Sequence[str] = ()) -> List[str]:
     argv = [VNCDO, "-s", server.address or f"{HOST}::{server.port}"]
     if server.password is not None:
         argv += ["-p", server.password]
     if server.username is not None:
         argv += ["-u", server.username]
+    argv.extend(options)
     argv.extend(server.extra_args)
     argv.extend(args)
     return argv
@@ -624,13 +685,14 @@ def run_vncdo(
     *args: str,
     timeout: Optional[float] = None,
     env: Optional[Mapping[str, str]] = None,
+    options: Sequence[str] = (),
 ) -> subprocess.CompletedProcess:
     """Run the real `vncdo` CLI against `server` and return the completed process.
 
     Never api.connect(): a hang is then contained by the kernel reaping the
     subprocess at `timeout`, not by anything in-process.
     """
-    argv = vncdo_argv(server, *args)
+    argv = vncdo_argv(server, *args, options=options)
     budget = (server.timeout if timeout is None else timeout) + SUBPROCESS_TIMEOUT_HEADROOM
     child_env = None if env is None else {**os.environ, **env}
     try:
@@ -749,8 +811,8 @@ class _VNCServerTestMixin:
             session.__enter__()
             self.addCleanup(session.__exit__, None, None, None)
 
-    def run_vncdo_ok(self, *args: str) -> subprocess.CompletedProcess:
-        result = run_vncdo(self.server, *args)
+    def run_vncdo_ok(self, *args: str, options: Sequence[str] = ()) -> subprocess.CompletedProcess:
+        result = run_vncdo(self.server, *args, options=options)
         self.assertEqual(
             result.returncode,
             0,
@@ -790,8 +852,12 @@ class _VNCServerTestMixin:
         server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
+        log = png.with_suffix(".wire.log")
+        log.unlink(missing_ok=True)
 
-        self.run_vncdo_ok("capture", str(png))
+        self.run_vncdo_ok(
+            "capture", str(png), options=("-v", "-v", "--logfile", str(log))
+        )
 
         data = png.read_bytes()
         print(f"{self.server.name}: screenshot written to {png}")
@@ -819,11 +885,180 @@ class _VNCServerTestMixin:
             )
             return
 
+        arrived = ", ".join(
+            f"{r.encoding} {r.width}x{r.height}+{r.x}+{r.y}"
+            for r in parse_wire_log(log)
+        )
         self.assertTrue(
             has_expected_content(self.server, distinct),
-            f"{self.server.name}: capture is a single flat colour, "
-            "no screen content was decoded",
+            f"{self.server.name}: capture is a single flat colour, no screen "
+            f"content was decoded. The server answered with: {arrived or 'nothing'}",
         )
+
+
+class Rectangle(NamedTuple):
+    encoding: str
+    width: int
+    height: int
+    x: int
+    y: int
+
+
+# rfb.py logs one of these per rectangle at DEBUG, str(Encoding.lookup(n))
+# spelling the encoding as "NAME (value)" -- decimal, or hex above 0x10000
+# (const._named()). Only the name is taken, so either form matches.
+_RECTANGLE_LOG = re.compile(
+    r"Received (?P<name>\w+) \([^)]+\) "
+    r"rectangle (?P<w>\d+)x(?P<h>\d+)\+(?P<x>\d+)\+(?P<y>\d+)"
+)
+
+
+def parse_wire_log(path: Path) -> List[Rectangle]:
+    """Every framebuffer rectangle `vncdo -v -v` recorded, in arrival order."""
+    if not path.exists():
+        return []
+    return [
+        Rectangle(
+            encoding=match["name"],
+            width=int(match["w"]), height=int(match["h"]),
+            x=int(match["x"]), y=int(match["y"]),
+        )
+        for match in _RECTANGLE_LOG.finditer(path.read_text(errors="replace"))
+    ]
+
+
+class CursorShapeOffered:
+    """Deliberately not a TestCase: discovery would collect the shared base itself."""
+
+    server: VNCServer
+
+    def test_offering_cursor_yields_a_shape_that_can_be_drawn(self) -> None:
+        """A server with a pointer answers -239 with a shape `--cursor local` can paint.
+
+        A 0x0 rectangle does not count, nor does no rectangle at all: either
+        way there is nothing for the client to draw.
+        """
+        log = screenshot_dir() / f"{self.server.name}-cursor-shape.wire.log"
+        log.unlink(missing_ok=True)
+        png = screenshot_dir() / f"{self.server.name}-cursor-shape.png"
+        result = run_vncdo(
+            self.server,
+            "move", str(CURSOR_NEAR[0]), str(CURSOR_NEAR[1]),
+            "pause", "0.5", "capture", str(png),
+            options=("-v", "-v", "--logfile", str(log)),
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            f"{self.server.name}: the wire probe exited {result.returncode}, "
+            f"stderr:\n{result.stderr}",
+        )
+
+        rectangles = parse_wire_log(log)
+        self.assertTrue(rectangles, f"{self.server.name}: no rectangles logged to {log}")
+
+        cursors = [r for r in rectangles if r.encoding == "PSEUDO_CURSOR"]
+        summary = ", ".join(f"{r.width}x{r.height}" for r in cursors) or "none"
+        self.assertTrue(
+            [r for r in cursors if r.width and r.height],
+            f"{self.server.name}: offering Cursor (-239) got back no shape with a "
+            f"non-zero size (cursor rectangles: {summary}). The pointer cannot be "
+            "drawn locally, so --cursor local has nothing to paint.",
+        )
+
+
+def cursor_box(position: Tuple[int, int], size: Tuple[int, int]) -> Tuple[int, int, int, int]:
+    """A box big enough for any cursor drawn at `position`, clipped to `size`."""
+    x, y = position
+    width, height = size
+    return (
+        max(0, x - CURSOR_EXTENT), max(0, y - CURSOR_EXTENT),
+        min(width, x + CURSOR_EXTENT), min(height, y + CURSOR_EXTENT),
+    )
+
+
+def assert_pointer_matches_expectation(
+    testcase: TestCase, server: VNCServer, shots: Dict[str, Image.Image]
+) -> None:
+    """Whether the pointer marks a capture is what `paints_pointer` says.
+
+    Shared by CursorPositionIndependent (OS-hosted servers) and
+    test_cursor.py's CursorFreeCapture (the docker fleet), which differ only
+    in how `shots` -- {"near": ..., "far": ...} -- gets captured. Only the
+    neighbourhood of each position is compared, so a clock or a blinking
+    cursor elsewhere on the screen cannot be read as a painted pointer.
+    """
+    for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR)):
+        box = cursor_box(position, shots["near"].size)
+        mark = ImageChops.difference(
+            shots["near"].crop(box), shots["far"].crop(box)
+        ).getbbox()
+        if server.paints_pointer:
+            testcase.assertIsNotNone(
+                mark,
+                f"{server.name}: nothing changed around the {label} pointer "
+                f"position {position} (region {box}) when the pointer moved "
+                f"between {CURSOR_NEAR} and {CURSOR_FAR}. This server is "
+                "recorded as painting the pointer and no longer does, so "
+                "specs/cursor.md needs correcting.",
+            )
+        else:
+            testcase.assertIsNone(
+                mark,
+                f"{server.name}: the capture changed around the {label} "
+                f"pointer position {position} (region {box}) when the pointer "
+                f"moved between {CURSOR_NEAR} and {CURSOR_FAR}. The server is "
+                "painting it into the framebuffer despite being offered Cursor.",
+            )
+
+
+class CursorPositionIndependent:
+    """The pointer-independence case, for servers test_cursor.py doesn't reach.
+
+    Opted into register_server_tests() for any server not already in
+    CURSOR_TESTED_SERVERS -- the OS-hosted fleet. Deliberately not a
+    TestCase, or `unittest discover` would collect this shared base itself.
+    """
+
+    server: VNCServer
+
+    def capture_at_pointer(self, label: str, position: Tuple[int, int]) -> Image.Image:
+        """Park the pointer at `position`, capture, and keep the wire log.
+
+        `-v -v` names the encoding and geometry of every rectangle the server
+        sends, which is the only way to tell a server that stopped painting
+        the pointer from one that never had one.
+        """
+        x, y = position
+        stem = screenshot_dir() / f"{self.server.name}-cursor-{label}"
+        png = stem.with_suffix(".png")
+        log = stem.with_suffix(".wire.log")
+        log.unlink(missing_ok=True)
+        self.run_vncdo_ok(
+            "move", str(x), str(y), "pause", "0.5", "capture", str(png),
+            options=("-v", "-v", "--logfile", str(log)),
+        )
+        with Image.open(png) as image:
+            capture = image.convert("RGB").copy()
+
+        # Only where a pointer could be painted: qemu's UEFI shell is nearly
+        # all one colour by nature, and has no pointer for a blank capture to
+        # hide.
+        if self.server.has_pointer:
+            blank = blank_fraction(capture)
+            self.assertLess(
+                blank, BLANK_FRACTION,
+                f"{self.server.name}: the {label} capture is {blank:.0%} one "
+                "colour, so the desktop had not painted and nothing about the "
+                f"pointer can be read off it. See {png}.",
+            )
+        return capture
+
+    def test_capture_does_not_depend_on_where_the_pointer_is(self) -> None:
+        shots = {
+            label: self.capture_at_pointer(label, position)
+            for label, position in (("near", CURSOR_NEAR), ("far", CURSOR_FAR))
+        }
+        assert_pointer_matches_expectation(self, self.server, shots)
 
 
 def register_server_tests(
@@ -836,9 +1071,14 @@ def register_server_tests(
     """
     for server in servers:
         name = "TestServer_" + server.name.replace("-", "_")
+        bases: Tuple[type, ...] = (_VNCServerTestMixin, base)
+        if server.has_pointer:
+            bases = (CursorShapeOffered,) + bases
+        if server not in CURSOR_TESTED_SERVERS:
+            bases = (CursorPositionIndependent,) + bases
         namespace[name] = type(
             name,
-            (_VNCServerTestMixin, base),
+            bases,
             # __module__ so test ids name the registering module, not this one.
             {"server": server, "__module__": namespace.get("__name__", __name__)},
         )

@@ -29,6 +29,7 @@ from twisted.python.log import PythonLoggingObserver
 
 from . import decoders, pixelformat, websocket
 from .capture import check_capture_target
+from .cursor import CursorMode
 from .client import (
     DIALECTS,
     JPEG_QUALITY_ENCODINGS,
@@ -332,6 +333,32 @@ def build_command_list(
 
         if delay and args:
             factory.deferred.addCallback(client.pause, delay)
+
+
+class RemovedFlag(argparse.Action):
+    """A flag that no longer exists, failing with what took its place."""
+
+    def __init__(
+        self, option_strings: list[str], dest: str, replacement: str, **kwargs: object
+    ) -> None:
+        super().__init__(
+            option_strings,
+            dest,
+            nargs=0,
+            default=argparse.SUPPRESS,
+            help=argparse.SUPPRESS,
+            **kwargs,  # type: ignore[arg-type]
+        )
+        self.replacement = replacement
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        parser.error(f"{option_string} was removed, use {self.replacement}")
 
 
 def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
@@ -643,15 +670,16 @@ def vncdo(argv: list[str] | None = None) -> None:
         help="for non-compliant servers, send shift-LETTER, ensures capitalization works",
     )
     parser.add_argument(
-        "--localcursor",
-        action="store_true",
-        help="request the cursor shape from the server and draw it into captures",
+        "--cursor",
+        type=CursorMode,
+        choices=list(CursorMode),
+        default=CursorMode.OMIT,
+        help="what a capture does about the mouse pointer: ask the server to "
+        "stop painting it (none, the default), let it paint (server), or draw "
+        "the shape it sends (local)",
     )
-    parser.add_argument(
-        "--nocursor",
-        action="store_true",
-        help="omit the mouse pointer from captures",
-    )
+    parser.add_argument("--localcursor", action=RemovedFlag, replacement="--cursor local")
+    parser.add_argument("--nocursor", action=RemovedFlag, replacement="--cursor none")
     parser.add_argument(
         "--disable-desktop-resizing",
         action="store_true",
@@ -751,14 +779,10 @@ def vncdo(argv: list[str] | None = None) -> None:
 
     apply_dialect(factory, options.dialect)
 
-    if options.localcursor:
-        factory.pseudocursor = True
+    factory.cursor = options.cursor
 
     if options.disable_desktop_resizing:
         factory.pseudodesktop = False
-
-    if options.nocursor:
-        factory.nocursor = True
 
     if options.force_caps:
         factory.force_caps = True

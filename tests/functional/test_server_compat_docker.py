@@ -24,11 +24,7 @@ register_server_tests(SUPPORTED_SERVERS, globals(), base=FleetTestCase)
 
 
 class TestKasmVNCInput(FleetTestCase):
-    """Locks the KasmVNC behaviour that keeps it out of SUPPORTED_SERVERS.
-
-    A failure here means the server changed: re-evaluate whether it moves
-    back to README.md's Supported class.
-    """
+    """Locks the KasmVNC behaviour that keeps it out of SUPPORTED_SERVERS."""
 
     server = KASMVNC
     # Long enough that a served update arrives, short enough that the wedge

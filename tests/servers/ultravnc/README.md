@@ -5,12 +5,16 @@ An OS-hosted VNC server for vncdotool to test against on a Windows machine
 runs the same connect/type/capture round trip used for the Docker servers,
 and `collect-diagnostics.ps1` gathers the evidence when something goes wrong.
 
-The setup is `.github/actions/os-server`. `windows.ps1` refuses unless
-`RUNNER_ENVIRONMENT=github-hosted`: the service it installs outlives both the
-job and the checkout, and a self-hosted runner is someone's real machine.
+The setup is `setup.ps1`, one of the three `.github/actions/os-server/windows.ps1`
+runs. It refuses unless `RUNNER_ENVIRONMENT=github-hosted`: the service it
+installs outlives both the job and the checkout, and a self-hosted runner is
+someone's real machine. `../vnc_passwd.py` turns the password into the hex
+blob `ultravnc.ini` wants; `../windows-common.ps1` holds what all three
+setups share.
 
-`vnc_passwd_hex.py` stays here: it turns a password into the hex blob
-`ultravnc.ini` wants and touches nothing.
+UltraVNC takes port 5900, TightVNC 5901 and TigerVNC 5902 — three servers on
+one desktop, because whether a cursor behaviour is UltraVNC's or Windows' is
+not a question one server can answer. See `specs/cursor.md`.
 
 Against a server that is already up, the tests are just:
 
@@ -37,7 +41,10 @@ down:
   until one is set, regardless of `AuthRequired` — the server replies
   "Until a password is set, incoming connections cannot be accepted". There
   is no no-auth shortcut, so the `passwd=` entry in `ultravnc.ini` has to be
-  computed; `vnc_passwd_hex.py` does that and explains the format.
+  computed; `../vnc_passwd.py` does that and explains the format.
+
+* **`ForceCursorShape` is deliberately left at its default.**
+  `specs/cursor.md` says why.
 
 * **It has to run as a service.** `winvnc.exe -run` on a fresh install opens
   an interactive Settings dialog instead of serving. `-install` plus

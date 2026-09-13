@@ -22,6 +22,7 @@ from twisted.python.log import PythonLoggingObserver
 
 from . import command, websocket
 from .client import TClient, VNCDoToolClient, VNCDoToolFactory, factory_connect
+from .cursor import CursorMode
 
 V = TypeVar("V")
 TProxy = TypeVar("TProxy", bound="ThreadedVNCClientProxy")
@@ -162,6 +163,7 @@ def connect(
     proxy: type[ThreadedVNCClientProxy] = ThreadedVNCClientProxy,
     timeout: float | None = None,
     username: str | None = None,
+    cursor: CursorMode | str = CursorMode.OMIT,
 ) -> ThreadedVNCClientProxy:
     """Connect to a VNCServer and return a Client instance that is usable
     in the main thread of non-Twisted Python Applications,
@@ -212,6 +214,17 @@ def connect(
 
     if password is not None:
         factory.password = password
+
+    # ThreadedVNCClientProxy defines __getattr__ but no __setattr__, so
+    # setting this on the returned client assigns a dead attribute on the
+    # proxy and returns. It has to be set here or not at all.
+    #
+    # CursorMode(cursor) is a no-op on an existing member and a lookup on a
+    # plain string ('local', not just CursorMode.LOCAL). Without it, a bare
+    # string here would fail every `is`/`is not` check in client.py -- for
+    # 'local' and 'server' that's silently wrong rather than a raised error,
+    # since 'none' happens to come out the same way by coincidence.
+    factory.cursor = CursorMode(cursor)
 
     family, host, port = command.parse_server(server)
     client = proxy(factory, timeout)

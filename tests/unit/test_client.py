@@ -7,6 +7,7 @@ from PIL import Image
 from twisted.internet.task import Clock
 
 from vncdotool import client, pixelformat, rfb
+from vncdotool.cursor import CursorMode
 from vncdotool.pixelformat import PIXEL_FORMATS
 from vncdotool.keys import Key
 
@@ -51,6 +52,7 @@ class TestVNCDoToolClient(TestCase):
             client.rfb.Encoding.HEXTILE,
             client.rfb.Encoding.RAW,
             client.rfb.Encoding.PSEUDO_CURSOR,
+            client.rfb.Encoding.PSEUDO_POINTER_POS,
             client.rfb.Encoding.PSEUDO_DESKTOP_SIZE,
             client.rfb.Encoding.PSEUDO_LAST_RECT,
             client.rfb.Encoding.PSEUDO_QEMU_EXTENDED_KEY_EVENT,
@@ -72,12 +74,48 @@ class TestVNCDoToolClient(TestCase):
         (offered,) = cli.setEncodings.call_args[0]
         self.assertNotIn(client.rfb.Encoding.PSEUDO_FENCE, offered)
 
+    def test_cursor_is_offered_by_default(self):
+        """A server only stops painting the pointer into the framebuffer once
+        a client asks for Cursor, so it is offered whether or not the shape
+        will be drawn (see specs/cursor.md).
+        """
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertIn(client.rfb.Encoding.PSEUDO_CURSOR, offered)
+
+    def test_pointer_pos_is_offered_beside_cursor(self):
+        """UltraVNC revokes Cursor unless PointerPos is offered too."""
+        cli = self.client
+        cli.factory = client.VNCDoToolFactory()
+        cli.factory.clientConnectionMade = mock.Mock()
+        cli._packet = bytearray(self.MSG_HANDSHAKE)
+        cli._handleInitial()
+        cli._handleServerInit(self.MSG_INIT)
+
+        (offered,) = cli.setEncodings.call_args[0]
+        self.assertIn(client.rfb.Encoding.PSEUDO_POINTER_POS, offered)
+
+    def test_updateCursor_discards_the_shape_without_localcursor(self):
+        cli = self.client
+        cli.factory.cursor = CursorMode.OMIT
+        cli.screen = Image.new("RGB", (100, 100))
+
+        cli.updateCursor(0, 0, 2, 2, b"\0" * 12, b"\xc0\xc0")
+
+        self.assertIsNone(cli.cursor)
+
     def test_updateCursor_hides_pointer_on_zero_size(self):
         """RFC 6143 7.6.1: a Cursor pseudo-encoding update with width or
         height 0 means hide the pointer, not an empty image to decode.
         """
         cli = self.client
-        cli.factory.nocursor = False
+        cli.factory.cursor = CursorMode.LOCAL
         cli.cursor = Image.new("RGB", (4, 4))
         cli.cmask = Image.new("1", (4, 4))
         cli.screen = Image.new("RGB", (100, 100))
@@ -816,8 +854,9 @@ def _connected(jpeg_quality):
     cli = client.VNCDoToolClient()
     cli.transport = mock.Mock()
     cli.factory = mock.Mock()
-    for flag in ("pseudocursor", "nocursor", "pseudodesktop", "last_rect", "qemu_extended_key"):
+    for flag in ("pseudodesktop", "last_rect", "qemu_extended_key"):
         setattr(cli.factory, flag, False)
+    cli.factory.cursor = CursorMode.OMIT
     cli.setEncodings = mock.Mock()
     cli.requested_jpeg_quality = jpeg_quality
     cli.vncConnectionMade()

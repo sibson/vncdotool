@@ -1,110 +1,118 @@
 <#
 .SYNOPSIS
-    Install, configure and start UltraVNC as a Windows service, for
-    tests/functional/test_server_compat_native.py. See tests/servers/ultravnc/README.md.
+    Start every Windows VNC server the OS-server job measures.
 #>
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+# So a failing setup is reported by the throw below, naming the server, and
+# not by PowerShell 7.4's own message for a native command that exited
+# non-zero.
+$PSNativeCommandUseErrorActionPreference = $false
 
-$Port = if ($env:PORT) { [int]$env:PORT } else { 5900 }
-$WaitSeconds = if ($env:WAIT_SECONDS) { [int]$env:WAIT_SECONDS } else { 60 }
 $Password = $env:PASSWORD
 if (-not $Password) {
-    throw 'PASSWORD is not set: UltraVNC authenticates a password and nothing else'
-}
-
-# The service stays installed after this job, and after the checkout is gone.
-if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
-    throw "refusing to run: RUNNER_ENVIRONMENT=$($env:RUNNER_ENVIRONMENT) is not a " +
-        'GitHub-hosted runner, and this leaves the machine remotely controllable.'
+    throw 'PASSWORD is not set'
 }
 
 # tests/functional/utils.py reads this.
 "VNCDOTOOL_OS_SERVER_PASSWORD=$Password" |
     Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-# Chocolatey always installs UltraVNC here. Do not go looking for winvnc.exe
-# under C:\Program Files instead: a recursive scan of that tree takes over
-# five minutes on the loaded runner image.
-$InstallDir = 'C:\Program Files\uvnc bvba\UltraVNC'
-$WinVnc = Join-Path $InstallDir 'winvnc.exe'
-# Some UltraVNC builds read the ini from ProgramData rather than from the
-# install directory, so it gets written to both.
-$ProgramDataDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
-
-Write-Host '--- installing UltraVNC'
-# choco exits 0 when the community feed answers with something that isn't
-# valid XML, so success is judged by the installed file.
-$installed = $false
-for ($attempt = 1; $attempt -le 3; $attempt++) {
-    choco install ultravnc -y --no-progress
-    if (Test-Path $WinVnc) {
-        Write-Host "installed $WinVnc"
-        $installed = $true
-        break
+Write-Host '=== keeping the display awake'
+# A blanked display is served as (0, 0, 0) to every pixel, where this
+# desktop is (12, 12, 12). RFB traffic is not input, so nothing a test does
+# except a pointer event postpones the blank.
+foreach ($timeout in 'monitor-timeout-ac', 'monitor-timeout-dc') {
+    & powercfg /change $timeout 0
+    if ($LASTEXITCODE -ne 0) {
+        throw "powercfg /change $timeout 0 exited $LASTEXITCODE"
     }
-    Write-Host "::warning::UltraVNC install attempt $attempt did not produce $WinVnc"
-    Start-Sleep -Seconds (5 * $attempt)
 }
-if (-not $installed) {
-    throw "winvnc.exe not found at $WinVnc after 3 install attempts"
+$DesktopKey = 'HKCU:\Control Panel\Desktop'
+Set-ItemProperty -Path $DesktopKey -Name ScreenSaveActive -Value '0'
+Set-ItemProperty -Path $DesktopKey -Name ScreenSaveTimeOut -Value '0'
+
+$Advanced = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+Set-ItemProperty -Path $Advanced -Name HideIcons -Value 1 -Type DWord
+if ((Get-ItemProperty -Path $Advanced -Name HideIcons).HideIcons -ne 1) {
+    throw 'HideIcons did not take, and the desktop icons would stay on screen'
 }
-
-Write-Host '--- writing ultravnc.ini'
-$passwdFile = Join-Path ([System.IO.Path]::GetTempPath()) 'ultravnc-passwd.hex'
-uv run python tests/servers/ultravnc/vnc_passwd_hex.py $Password $passwdFile
-if ($LASTEXITCODE -ne 0 -or -not (Test-Path $passwdFile)) {
-    throw 'could not compute the ultravnc.ini password hex'
-}
-$passwdHex = (Get-Content $passwdFile -Raw).Trim()
-Remove-Item $passwdFile -Force
-
-$ini = @"
-[admin]
-UseRegistry=0
-
-[ultravnc]
-PortNumber=$Port
-HTTPPortNumber=0
-passwd=$passwdHex
-AllowLoopback=1
-AuthHosts=+127.0.0.1
-NewMSLogon=0
-RemoveWallpaper=1
-NeverShutdown=1
-DebugMode=1
-DebugLevel=9
-FileTransferEnabled=1
-"@
-
-$iniPath = Join-Path $InstallDir 'ultravnc.ini'
-Set-Content -Path $iniPath -Value $ini -Encoding ASCII
-New-Item -ItemType Directory -Force -Path $ProgramDataDir | Out-Null
-Copy-Item $iniPath (Join-Path $ProgramDataDir 'ultravnc.ini') -Force
-Write-Host "wrote $iniPath (port $Port, password set)"
-
-Write-Host '--- installing and starting the UltraVNC service'
-& $WinVnc -install
-Start-Sleep -Seconds 3
-
-$service = Get-Service |
-    Where-Object { $_.Name -match 'uvnc|winvnc' -or $_.DisplayName -match 'UltraVNC' } |
-    Select-Object -First 1
-if (-not $service) {
-    Get-Service | Format-Table Name, DisplayName, Status
-    throw 'no UltraVNC service exists after winvnc.exe -install'
-}
-Start-Service -Name $service.Name
-Write-Host "started service $($service.Name) ($($service.DisplayName))"
-
-Write-Host "--- waiting up to $WaitSeconds seconds for port $Port"
-$deadline = (Get-Date).AddSeconds($WaitSeconds)
-while ((Get-Date) -lt $deadline) {
-    $probe = Test-NetConnection -ComputerName 127.0.0.1 -Port $Port -WarningAction SilentlyContinue
-    if ($probe.TcpTestSucceeded) {
-        Write-Host "UltraVNC is serving on 127.0.0.1:$Port"
-        exit 0
+# Restarting Explorer is what applies HideIcons: it reads the value when it
+# draws the desktop. Winlogon starts it again on its own.
+Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force
+$Deadline = (Get-Date).AddSeconds(30)
+while (-not (Get-Process explorer -ErrorAction SilentlyContinue)) {
+    if ((Get-Date) -gt $Deadline) {
+        throw 'explorer did not restart, so the desktop would be served blank'
     }
-    Start-Sleep -Seconds 2
+    Start-Sleep -Milliseconds 500
 }
-throw "UltraVNC never started listening on port $Port"
+
+$FirstPort = if ($env:PORT) { [int]$env:PORT } else { 5900 }
+$Servers = @(
+    @{ Name = 'ultravnc'; Port = $FirstPort },
+    @{ Name = 'tightvnc'; Port = 5901 },
+    @{ Name = 'tigervnc-win'; Port = 5902 }
+)
+
+foreach ($server in $Servers) {
+    Write-Host "=== setting up $($server.Name) on port $($server.Port)"
+    $env:PORT = $server.Port
+    & pwsh -File "tests/servers/$($server.Name)/setup.ps1"
+    if ($LASTEXITCODE -ne 0) {
+        throw "$($server.Name) setup failed with exit code $LASTEXITCODE"
+    }
+}
+
+Write-Host '=== moving windows off the pointer probe'
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public struct RECT { public int Left, Top, Right, Bottom; }
+public static class Desktop {
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(
+        IntPtr window, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr window, int command);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr window, out RECT rect);
+}
+'@
+
+# CURSOR_NEAR, CURSOR_FAR and CURSOR_EXTENT in tests/functional/utils.py put
+# the compared boxes inside (0, 0)-(198, 168). Windows are moved clear of
+# that rather than minimized: a capture with every window gone is bare
+# desktop, which is black whenever the wallpaper has not painted, and
+# test_capture asks for a capture with something in it.
+$ProbeRight, $ProbeBottom = 198, 168
+$ClearX, $ClearY = 220, 180
+
+function Get-TopLevelWindows {
+    Get-Process | Where-Object { $_.MainWindowHandle -ne [IntPtr]::Zero }
+}
+
+# user32 reaches only the calling process's own session, so finding nothing
+# would mean the windows are somewhere this cannot move them -- and the
+# check below would then pass without having looked at anything.
+$Windows = @(Get-TopLevelWindows)
+if ($Windows.Count -eq 0) {
+    throw 'no top-level window is visible from here, so none can be moved off the probe'
+}
+Write-Host "moving $($Windows.Count) window(s) to $ClearX,$ClearY"
+
+foreach ($process in $Windows) {
+    # SW_RESTORE first: SetWindowPos does not move a maximized window.
+    [Desktop]::ShowWindow($process.MainWindowHandle, 9) | Out-Null
+    # SWP_NOSIZE | SWP_NOZORDER
+    [Desktop]::SetWindowPos(
+        $process.MainWindowHandle, [IntPtr]::Zero, $ClearX, $ClearY, 0, 0, 0x0005) | Out-Null
+}
+
+foreach ($process in Get-TopLevelWindows) {
+    $rect = New-Object RECT
+    if (-not [Desktop]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) {
+        continue
+    }
+    if ($rect.Left -lt $ProbeRight -and $rect.Right -gt 0 -and
+        $rect.Top -lt $ProbeBottom -and $rect.Bottom -gt 0) {
+        throw "$($process.ProcessName) stayed at $($rect.Left),$($rect.Top) over the probe region"
+    }
+}

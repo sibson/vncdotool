@@ -14,6 +14,7 @@ from unittest import mock
 from PIL import Image
 
 from vncdotool import client, imagematch, pixelformat
+from vncdotool.cursor import CursorMode
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
 SCENES_DIR = Path(__file__).resolve().parents[1] / "goldens" / "scenes"
@@ -65,8 +66,7 @@ class Fixture:
         cli.factory = mock.Mock()
         cli.factory.shared = 0
         cli.factory.password = None
-        cli.factory.nocursor = self.conditions.get("nocursor", False)
-        cli.factory.pseudocursor = False
+        cli.factory.cursor = CursorMode.OMIT
         cli.factory.pseudodesktop = False
         cli.factory.last_rect = False
         cli.factory.qemu_extended_key = False
