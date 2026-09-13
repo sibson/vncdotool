@@ -115,7 +115,7 @@ class _StableWatch:
         d: Deferred = Deferred()
         d.addCallback(self._update)
         self.client.deferred = d
-        self.client.framebufferUpdateRequest(incremental=incremental)
+        self.client._requestRefresh(incremental)
 
     def _update(self, _: object) -> None:
         if self.settled:
@@ -141,6 +141,58 @@ class _StableWatch:
         self.result.callback(self.client)
 
 
+class _FullScreenReceived:
+    """RFC 6143 section 7.5.3 has the server answer a non-incremental
+    FramebufferUpdateRequest with the entire requested area, across as many
+    FramebufferUpdate messages as it likes.
+    """
+
+    MAX_RETRIES = 1
+
+    def __init__(self, width: int, height: int) -> None:
+        self.retries = 0
+        self.unpainted = Image.new("1", (width, height), 1)
+
+    @classmethod
+    def awaiting(cls, width: int, height: int) -> "_FullScreenReceived":
+        """For a non-incremental refresh, which is promised the whole area."""
+        return cls(width, height)
+
+    @classmethod
+    def satisfied(cls) -> "_FullScreenReceived":
+        """For a refresh promised no area: an incremental one, or none at all."""
+        return cls(0, 0)
+
+    def retry(self) -> bool:
+        """Whether the server is worth asking again, counting this attempt."""
+        if self.retries >= self.MAX_RETRIES:
+            return False
+        self.retries += 1
+        return True
+
+    def paintRect(self, x: int, y: int, width: int, height: int) -> None:
+        # Image.paste clips a box that runs off the mask.
+        self.unpainted.paste(0, (x, y, x + width, y + height))
+
+    @property
+    def complete(self) -> bool:
+        return self.unpainted.getbbox() is None
+
+    @property
+    def pending(self) -> bool:
+        """Whether a non-incremental refresh is still riding on this."""
+        return self.unpainted.size != (0, 0)
+
+    def __str__(self) -> str:
+        width, height = self.unpainted.size
+        unpainted = sum(self.unpainted.histogram()[1:])
+        return (
+            f"the server left {unpainted} of the {width}x{height} framebuffer "
+            f"unpainted after {self.retries + 1} full-screen update "
+            f"requests; capturing it as black"
+        )
+
+
 class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
@@ -161,6 +213,10 @@ class VNCDoToolClient(rfb.RFBClient):
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._fullscreen = _FullScreenReceived.satisfied()
 
     def connectionMade(self) -> None:
         super().connectionMade()
@@ -276,8 +332,15 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
-        self.framebufferUpdateRequest(incremental=incremental)
+        self._requestRefresh(incremental)
         return d
+
+    def _requestRefresh(self, incremental: bool) -> None:
+        if incremental:
+            self._fullscreen = _FullScreenReceived.satisfied()
+        else:
+            self._fullscreen = _FullScreenReceived.awaiting(self.width, self.height)
+        self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
         self, fp: TFile, incremental: bool, *args: int, format: str | None = None
@@ -421,9 +484,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, fuzz, blur)
-        self.framebufferUpdateRequest(
-            incremental=incremental
-        )
+        self._requestRefresh(incremental)
 
         return self.deferred
 
@@ -562,6 +623,7 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
+        self._fullscreen.paintRect(x, y, width, height)
         self.drawCursor()
 
     def copyRectangle(
@@ -571,6 +633,7 @@ class VNCDoToolClient(rfb.RFBClient):
             return
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
+        self._fullscreen.paintRect(x, y, width, height)
         self.drawCursor()
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
@@ -580,6 +643,12 @@ class VNCDoToolClient(rfb.RFBClient):
                 # one that does before completing the refresh.
                 self.framebufferUpdateRequest()
                 return
+            if not self._fullscreen.complete:
+                if self._fullscreen.retry():
+                    self.framebufferUpdateRequest()
+                    return
+                log.warning("%s", self._fullscreen)
+            self._fullscreen = _FullScreenReceived.satisfied()
             d = self.deferred
             self.deferred = None
             d.callback(self)
@@ -623,6 +692,8 @@ class VNCDoToolClient(rfb.RFBClient):
             new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
         self.width, self.height = width, height
+        if self._fullscreen.pending:
+            self._fullscreen = _FullScreenReceived.awaiting(width, height)
 
 
 class KasmVNCDialect:

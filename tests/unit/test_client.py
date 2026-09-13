@@ -393,7 +393,7 @@ class TestVNCDoToolClient(TestCase):
         b"\x00"  # FRAMEBUFFER_UPDATE
         b"\x00"  # padding
         b"\x00\x01"  # number-of-rectangles
-        b"\x00\x00\x00\x00\x07\x80\x04\xb0"  # x=0 y=0 w=1920 h=1200
+        b"\x00\x00\x00\x00\x00\x04\x00\x02"  # x=0 y=0 w=4 h=2
         b"\xff\xff\xff\x21"  # PSEUDO_DESKTOP_SIZE (-223)
     )
     # The Cursor pseudo-encoding carries a cursor image and its hotspot in
@@ -414,6 +414,15 @@ class TestVNCDoToolClient(TestCase):
         b"\x00\x00\x00\x00\x00\x01\x00\x01"  # x=0 y=0 w=1 h=1
         b"\x00\x00\x00\x00"  # Encoding.RAW
         b"\xff\x00\x00\x00"  # one RGBX pixel
+    )
+    # The whole 4x2 framebuffer the DesktopSize rectangle above announces.
+    MSG_FBU_WHOLE_SCREEN = (
+        b"\x00"  # FRAMEBUFFER_UPDATE
+        b"\x00"  # padding
+        b"\x00\x01"  # number-of-rectangles
+        b"\x00\x00\x00\x00\x00\x04\x00\x02"  # x=0 y=0 w=4 h=2
+        b"\x00\x00\x00\x00"  # Encoding.RAW
+        + b"\xff\x00\x00\x00" * 8  # eight RGBX pixels
     )
 
     def _connect(self) -> None:
@@ -456,12 +465,12 @@ class TestVNCDoToolClient(TestCase):
         d.addCallback(fired.append)
 
         cli.dataReceived(self.MSG_FBU_DESKTOP_SIZE_ONLY)
-        cli.dataReceived(self.MSG_FBU_ONE_PIXEL)
+        cli.dataReceived(self.MSG_FBU_WHOLE_SCREEN)
 
         self.assertEqual(fired, [cli])
         assert cli.screen is not None
-        self.assertEqual(cli.screen.size, (1920, 1200))
-        self.assertEqual((cli.width, cli.height), (1920, 1200))
+        self.assertEqual(cli.screen.size, (4, 2))
+        self.assertEqual((cli.width, cli.height), (4, 2))
 
     def test_updateDesktopSize_updates_width_and_height(self) -> None:
         cli = self.client
@@ -691,6 +700,142 @@ class TestRequestedJpegQuality(TestCase):
 
     def test_clients_offer_no_level_by_default(self):
         assert client.VNCDoToolFactory().buildProtocol(None).requested_jpeg_quality is None
+
+
+class TestFullScreenRefresh(TestCase):
+    """A non-incremental refresh waits for the whole framebuffer.
+
+    RFC 6143 section 7.5.3 lets a server answer one request across several
+    FramebufferUpdate messages.
+    """
+
+    WIDTH, HEIGHT = 8, 4
+
+    def setUp(self) -> None:
+        self.client = client.VNCDoToolClient()
+        self.client.transport = mock.Mock()
+        self.client.factory = mock.Mock()
+        self.client.factory.nocursor = False
+        self.client.framebufferUpdateRequest = mock.Mock()  # type: ignore[method-assign]
+        self.client.setEncodings = mock.Mock()  # type: ignore[method-assign]
+
+        self.client._packet = bytearray(TestVNCDoToolClient.MSG_HANDSHAKE)
+        self.client._handleInitial()
+        self.client._handleServerInit(
+            struct.pack("!HH", self.WIDTH, self.HEIGHT)
+            + TestVNCDoToolClient.MSG_INIT[4:]
+        )
+
+    def refresh(self, incremental: bool = False) -> list:
+        outcome: list = []
+        d = self.client.refreshScreen(incremental)
+        d.addCallbacks(outcome.append, outcome.append)
+        self.client.framebufferUpdateRequest.reset_mock()
+        return outcome
+
+    def update(self, *rects: bytes) -> None:
+        self.client.dataReceived(
+            struct.pack("!BxH", rfb.MsgS2C.FRAMEBUFFER_UPDATE, len(rects))
+            + b"".join(rects)
+        )
+
+    @staticmethod
+    def raw(x: int, y: int, width: int, height: int) -> bytes:
+        return struct.pack(
+            "!HHHHi", x, y, width, height, rfb.Encoding.RAW
+        ) + b"\xff\x80\x00\x00" * (width * height)
+
+    @staticmethod
+    def copyrect(srcx: int, srcy: int, x: int, y: int, width: int, height: int) -> bytes:
+        return struct.pack(
+            "!HHHHi", x, y, width, height, rfb.Encoding.COPY_RECTANGLE
+        ) + struct.pack("!HH", srcx, srcy)
+
+    @staticmethod
+    def cursor(width: int, height: int) -> bytes:
+        return (
+            struct.pack("!HHHHi", 0, 0, width, height, rfb.Encoding.PSEUDO_CURSOR)
+            + b"\x00\x00\xff\x00" * (width * height)
+            + b"\x80" * height
+        )
+
+    def test_a_partly_painted_framebuffer_does_not_complete_the_refresh(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+
+        self.assertEqual(outcome, [])
+        self.client.framebufferUpdateRequest.assert_called_once_with()
+
+    def test_the_refresh_completes_when_a_later_update_paints_the_rest(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+        self.update(self.raw(0, 2, self.WIDTH, 2))
+
+        self.assertEqual(outcome, [self.client])
+
+    def test_rectangles_overlapping_do_not_add_up_to_coverage(self) -> None:
+        outcome = self.refresh()
+
+        self.update(
+            self.raw(0, 0, self.WIDTH, 2), self.raw(0, 1, self.WIDTH, 2)
+        )
+
+        self.assertEqual(outcome, [])
+
+    def test_a_copied_rectangle_counts_as_painted(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+        self.update(self.copyrect(0, 0, 0, 2, self.WIDTH, 2))
+
+        self.assertEqual(outcome, [self.client])
+
+    def test_a_cursor_rectangle_does_not_count_as_painted(self) -> None:
+        outcome = self.refresh()
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+
+        with self.assertLogs("vncdotool.client", "WARNING") as logs:
+            self.update(self.cursor(2, 2))
+
+        self.assertEqual(outcome, [self.client])
+        self.assertIn("16 of the 8x4 framebuffer unpainted", logs.output[0])
+
+    def test_an_incremental_refresh_completes_on_the_first_change(self) -> None:
+        outcome = self.refresh(incremental=True)
+
+        self.update(self.raw(0, 0, 1, 1))
+
+        self.assertEqual(outcome, [self.client])
+
+    def test_a_server_that_stays_short_completes_the_refresh_anyway(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+        self.assertEqual(outcome, [], "gave up without re-requesting")
+
+        with self.assertLogs("vncdotool.client", "WARNING") as logs:
+            self.update(self.raw(0, 0, self.WIDTH, 2))
+
+        self.assertEqual(outcome, [self.client])
+        self.assertIn("16 of the 8x4 framebuffer unpainted", logs.output[0])
+
+    def test_a_short_answer_is_re_requested_before_it_is_given_up_on(self) -> None:
+        self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 2))
+
+        self.client.framebufferUpdateRequest.assert_called_once_with()
+
+    def test_a_covered_framebuffer_warns_about_nothing(self) -> None:
+        outcome = self.refresh()
+
+        with mock.patch.object(client.log, "warning") as warned:
+            self.update(self.raw(0, 0, self.WIDTH, self.HEIGHT))
+
+        self.assertEqual(outcome, [self.client])
+        warned.assert_not_called()
 
 
 class TestStableScreen(TestCase):
