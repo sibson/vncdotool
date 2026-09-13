@@ -154,6 +154,13 @@ class _ScreenCoverage:
         self.retries = 0
         self.unpainted = Image.new("1", (width, height), 1)
 
+    @classmethod
+    def satisfied(cls) -> "_ScreenCoverage":
+        """Coverage for a refresh that was promised no area: an incremental
+        one, or no refresh at all.
+        """
+        return cls(0, 0)
+
     def paintRect(self, x: int, y: int, width: int, height: int) -> None:
         # Image.paste clips a box that runs off the mask.
         self.unpainted.paste(0, (x, y, x + width, y + height))
@@ -161,6 +168,11 @@ class _ScreenCoverage:
     @property
     def complete(self) -> bool:
         return self.unpainted.getbbox() is None
+
+    @property
+    def pending(self) -> bool:
+        """Whether a non-incremental refresh is still riding on this."""
+        return self.unpainted.size != (0, 0)
 
     def __str__(self) -> str:
         width, height = self.unpainted.size
@@ -186,7 +198,6 @@ class VNCDoToolClient(rfb.RFBClient):
     _raw_mode_format: rfb.PixelFormat | None = None
     _raw_mode = ""
     deferred: Deferred | None = None
-    _coverage: _ScreenCoverage | None = None
 
     MAX_REFRESH_RETRIES = 1
 
@@ -195,6 +206,10 @@ class VNCDoToolClient(rfb.RFBClient):
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._coverage = _ScreenCoverage.satisfied()
 
     def connectionMade(self) -> None:
         super().connectionMade()
@@ -315,7 +330,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _requestRefresh(self, incremental: bool) -> None:
         if incremental:
-            self._coverage = None
+            self._coverage = _ScreenCoverage.satisfied()
         else:
             self._coverage = _ScreenCoverage(self.width, self.height)
         self.framebufferUpdateRequest(incremental=incremental)
@@ -601,7 +616,7 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
-        self._markPainted(x, y, width, height)
+        self._coverage.paintRect(x, y, width, height)
         self.drawCursor()
 
     def copyRectangle(
@@ -611,12 +626,8 @@ class VNCDoToolClient(rfb.RFBClient):
             return
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
-        self._markPainted(x, y, width, height)
+        self._coverage.paintRect(x, y, width, height)
         self.drawCursor()
-
-    def _markPainted(self, x: int, y: int, width: int, height: int) -> None:
-        if self._coverage is not None:
-            self._coverage.paintRect(x, y, width, height)
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -625,13 +636,13 @@ class VNCDoToolClient(rfb.RFBClient):
                 # one that does before completing the refresh.
                 self.framebufferUpdateRequest()
                 return
-            if self._coverage is not None and not self._coverage.complete:
+            if not self._coverage.complete:
                 if self._coverage.retries < self.MAX_REFRESH_RETRIES:
                     self._coverage.retries += 1
                     self.framebufferUpdateRequest()
                     return
                 log.warning("%s", self._coverage)
-            self._coverage = None
+            self._coverage = _ScreenCoverage.satisfied()
             d = self.deferred
             self.deferred = None
             d.callback(self)
@@ -675,7 +686,7 @@ class VNCDoToolClient(rfb.RFBClient):
             new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
         self.width, self.height = width, height
-        if self._coverage is not None:
+        if self._coverage.pending:
             self._coverage = _ScreenCoverage(width, height)
 
 
