@@ -115,7 +115,7 @@ class _StableWatch:
         d: Deferred = Deferred()
         d.addCallback(self._update)
         self.client.deferred = d
-        self.client.framebufferUpdateRequest(incremental=incremental)
+        self.client._requestRefresh(incremental)
 
     def _update(self, _: object) -> None:
         if self.settled:
@@ -141,6 +141,46 @@ class _StableWatch:
         self.result.callback(self.client)
 
 
+class _FullRefresh:
+    """What a non-incremental refresh is still waiting to be sent.
+
+    RFC 6143 section 7.5.3 has the server answer a non-incremental
+    FramebufferUpdateRequest with the entire requested area, across as many
+    FramebufferUpdate messages as it likes, so one message arriving does not
+    mean the area has been sent.
+    """
+
+    def __init__(self, width: int, height: int) -> None:
+        self.asked = 0
+        self.restart(width, height)
+
+    @property
+    def complete(self) -> bool:
+        return self.unpainted is None or self.unpainted.getbbox() is None
+
+    def painted(self, x: int, y: int, width: int, height: int) -> None:
+        if self.unpainted is None or width <= 0 or height <= 0:
+            return
+        # Image.paste clips a box that runs off the mask, so a rectangle
+        # reaching past the framebuffer marks only what is on it.
+        self.unpainted.paste(0, (x, y, x + width, y + height))
+
+    def restart(self, width: int, height: int) -> None:
+        self.size = (width, height)
+        self.unpainted: Image.Image | None = (
+            Image.new("1", (width, height), 1) if width > 0 and height > 0 else None
+        )
+
+    def shortfall(self) -> str:
+        width, height = self.size
+        unpainted = sum(self.unpainted.histogram()[1:]) if self.unpainted else 0
+        return (
+            f"the server left {unpainted} of the {width}x{height} framebuffer "
+            f"unpainted after {self.asked + 1} full-screen update requests; "
+            f"capturing it as black"
+        )
+
+
 class VNCDoToolClient(rfb.RFBClient):
     requested_encodings: list[rfb.Encoding] | None = None
     requested_pixel_format: rfb.PixelFormat | None = None
@@ -155,6 +195,9 @@ class VNCDoToolClient(rfb.RFBClient):
     _raw_mode_format: rfb.PixelFormat | None = None
     _raw_mode = ""
     deferred: Deferred | None = None
+    _refresh: _FullRefresh | None = None
+
+    REFRESH_REREQUESTS = 1
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
@@ -276,8 +319,12 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
-        self.framebufferUpdateRequest(incremental=incremental)
+        self._requestRefresh(incremental)
         return d
+
+    def _requestRefresh(self, incremental: bool) -> None:
+        self._refresh = None if incremental else _FullRefresh(self.width, self.height)
+        self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
         self, fp: TFile, incremental: bool, *args: int, format: str | None = None
@@ -421,9 +468,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
         self.deferred = Deferred()
         self.deferred.addCallback(self._expectCompare, box, fuzz, blur)
-        self.framebufferUpdateRequest(
-            incremental=incremental
-        )
+        self._requestRefresh(incremental)
 
         return self.deferred
 
@@ -562,6 +607,7 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
+        self._painted(x, y, width, height)
         self.drawCursor()
 
     def copyRectangle(
@@ -571,7 +617,12 @@ class VNCDoToolClient(rfb.RFBClient):
             return
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
+        self._painted(x, y, width, height)
         self.drawCursor()
+
+    def _painted(self, x: int, y: int, width: int, height: int) -> None:
+        if self._refresh is not None:
+            self._refresh.painted(x, y, width, height)
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -580,6 +631,13 @@ class VNCDoToolClient(rfb.RFBClient):
                 # one that does before completing the refresh.
                 self.framebufferUpdateRequest()
                 return
+            if self._refresh is not None and not self._refresh.complete:
+                if self._refresh.asked < self.REFRESH_REREQUESTS:
+                    self._refresh.asked += 1
+                    self.framebufferUpdateRequest()
+                    return
+                log.warning(self._refresh.shortfall())
+            self._refresh = None
             d = self.deferred
             self.deferred = None
             d.callback(self)
@@ -623,6 +681,8 @@ class VNCDoToolClient(rfb.RFBClient):
             new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
         self.width, self.height = width, height
+        if self._refresh is not None:
+            self._refresh.restart(width, height)
 
 
 class KasmVNCDialect:
