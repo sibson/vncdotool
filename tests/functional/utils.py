@@ -136,6 +136,11 @@ class VNCServer(NamedTuple):
     # qemu's text-mode boot screen, a headless Xvnc -- where no shape is the
     # right answer.
     has_pointer: bool = False
+    # True where CursorPositionIndependent's own comparison can't be trusted
+    # for reasons that have nothing to do with what it means to fail --
+    # UltraVNC, which paints the real cursor on some but not all otherwise-
+    # identical connections. See specs/cursor.md.
+    cursor_position_unverifiable: bool = False
 
 
 # Both written by their container into a bind mount at every start; neither
@@ -320,6 +325,7 @@ ULTRAVNC = os_server(
     "the OS server setup runs in CI only, see tests/servers/ultravnc/README.md",
     password=OS_SERVER_PASSWORD,
     has_pointer=True,
+    cursor_position_unverifiable=True,
 )
 
 TIGHTVNC = os_server(
@@ -1029,7 +1035,7 @@ def register_server_tests(
         bases: Tuple[type, ...] = (_VNCServerTestMixin, base)
         if server.has_pointer:
             bases = (CursorShapeOffered,) + bases
-        if server not in CURSOR_TESTED_SERVERS:
+        if server not in CURSOR_TESTED_SERVERS and not server.cursor_position_unverifiable:
             bases = (CursorPositionIndependent,) + bases
         namespace[name] = type(
             name,

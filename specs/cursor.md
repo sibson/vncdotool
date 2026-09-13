@@ -63,7 +63,7 @@ differs per server.
 | selenoid | no | n/a, answers 0x0 |
 | x11vnc | **yes**, 18x18 | yes |
 | libvncserver-example | **yes**, 32x32 | yes |
-| **UltraVNC** | **yes** | **only if `-232` was offered too** |
+| **UltraVNC** | **yes** | **usually, if `-232` was offered too -- not reliably, see below** |
 | **TightVNC** | **yes** | only when this client moved the pointer |
 | **TigerVNC WinVNC** | **yes** | only when this client moved the pointer |
 
@@ -98,7 +98,21 @@ client that cannot draw cursors at all: it paints, and sends no shape. This
 is the same defect TigerVNC's viewer hit in TigerVNC#1342, closed
 `notourbug`. `[admin] ForceCursorShape=1` is the server-side override;
 `tests/servers/ultravnc/setup.ps1` deliberately leaves it alone, because
-setting it would configure the server around what `vncdo` does not offer.
+setting it would configure the server over what `vncdo` does not offer.
+
+Offering both is not a complete fix, though. Two back-to-back `vncdo`
+connections against the same UltraVNC instance in CI -- one moving the
+pointer and capturing, disconnecting, then a second doing the same at a
+different position -- showed the first capture clean and the second
+containing a real Windows arrow cursor baked into an ordinary Tight
+rectangle at the pointer's new position, `vncclient.cpp:3114`'s own
+revocation logic notwithstanding. Nothing in what `vncdo` offers differed
+between the two connections; whatever decided to paint anyway did so
+server-side. `CursorPositionIndependent` (`tests/functional/utils.py`) is
+not registered for `ULTRAVNC` (`cursor_position_unverifiable=True`)
+because of this -- the wire-level check that Cursor and PointerPos are
+both answered still runs and still passes. Root-causing the intermittency
+needs access to a real UltraVNC install this repo does not have.
 
 ### TightVNC and TigerVNC guess who moved it
 
