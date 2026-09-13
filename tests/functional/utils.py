@@ -83,11 +83,13 @@ FLEET_PROBE_TIMEOUT = 30.0
 # shape is drawn at the pointer minus its hotspot, so it reaches above and
 # left of the position as well as below and right.
 #
-# x=100 clears Windows' default desktop icon column (Recycle Bin at
-# roughly 0-65px): a real interactive desktop highlights whatever icon the
-# pointer lands on, which is content the server changed for reasons that
-# have nothing to do with Cursor.
-CURSOR_NEAR = (100, 20)
+# x=180 clears Windows' default desktop icon column, confirmed from a CI
+# capture to run roughly 0-95px wide (icon plus label) and six icons deep:
+# a real interactive desktop highlights whatever icon the pointer lands on,
+# which is content the server changed for reasons that have nothing to do
+# with Cursor. x=100 (48px of CURSOR_EXTENT short of clearing it) still
+# caught the edge of that highlight.
+CURSOR_NEAR = (180, 20)
 CURSOR_FAR = (150, 120)
 CURSOR_EXTENT = 48
 
