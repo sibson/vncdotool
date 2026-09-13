@@ -141,7 +141,7 @@ class _StableWatch:
         self.result.callback(self.client)
 
 
-class _FullRefresh:
+class _ScreenCoverage:
     """What a non-incremental refresh is still waiting to be sent.
 
     RFC 6143 section 7.5.3 has the server answer a non-incremental
@@ -151,12 +151,11 @@ class _FullRefresh:
     """
 
     def __init__(self, width: int, height: int) -> None:
-        self.rerequests = 0
+        self.retries = 0
         self.unpainted = Image.new("1", (width, height), 1)
 
     def paintRect(self, x: int, y: int, width: int, height: int) -> None:
-        # Image.paste clips a box that runs off the mask, so a rectangle
-        # reaching past the framebuffer marks only what is on it.
+        # Image.paste clips a box that runs off the mask.
         self.unpainted.paste(0, (x, y, x + width, y + height))
 
     @property
@@ -168,7 +167,7 @@ class _FullRefresh:
         unpainted = sum(self.unpainted.histogram()[1:])
         return (
             f"the server left {unpainted} of the {width}x{height} framebuffer "
-            f"unpainted after {self.rerequests + 1} full-screen update "
+            f"unpainted after {self.retries + 1} full-screen update "
             f"requests; capturing it as black"
         )
 
@@ -187,9 +186,9 @@ class VNCDoToolClient(rfb.RFBClient):
     _raw_mode_format: rfb.PixelFormat | None = None
     _raw_mode = ""
     deferred: Deferred | None = None
-    _refresh: _FullRefresh | None = None
+    _coverage: _ScreenCoverage | None = None
 
-    REFRESH_REREQUESTS = 1
+    MAX_REFRESH_RETRIES = 1
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
@@ -315,7 +314,10 @@ class VNCDoToolClient(rfb.RFBClient):
         return d
 
     def _requestRefresh(self, incremental: bool) -> None:
-        self._refresh = None if incremental else _FullRefresh(self.width, self.height)
+        if incremental:
+            self._coverage = None
+        else:
+            self._coverage = _ScreenCoverage(self.width, self.height)
         self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
@@ -613,8 +615,8 @@ class VNCDoToolClient(rfb.RFBClient):
         self.drawCursor()
 
     def _markPainted(self, x: int, y: int, width: int, height: int) -> None:
-        if self._refresh is not None:
-            self._refresh.paintRect(x, y, width, height)
+        if self._coverage is not None:
+            self._coverage.paintRect(x, y, width, height)
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -623,13 +625,13 @@ class VNCDoToolClient(rfb.RFBClient):
                 # one that does before completing the refresh.
                 self.framebufferUpdateRequest()
                 return
-            if self._refresh is not None and not self._refresh.complete:
-                if self._refresh.rerequests < self.REFRESH_REREQUESTS:
-                    self._refresh.rerequests += 1
+            if self._coverage is not None and not self._coverage.complete:
+                if self._coverage.retries < self.MAX_REFRESH_RETRIES:
+                    self._coverage.retries += 1
                     self.framebufferUpdateRequest()
                     return
-                log.warning("%s", self._refresh)
-            self._refresh = None
+                log.warning("%s", self._coverage)
+            self._coverage = None
             d = self.deferred
             self.deferred = None
             d.callback(self)
@@ -673,8 +675,8 @@ class VNCDoToolClient(rfb.RFBClient):
             new_screen.paste(self.screen, (0, 0))
         self.screen = new_screen
         self.width, self.height = width, height
-        if self._refresh is not None:
-            self._refresh = _FullRefresh(width, height)
+        if self._coverage is not None:
+            self._coverage = _ScreenCoverage(width, height)
 
 
 class KasmVNCDialect:
