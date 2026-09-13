@@ -333,10 +333,6 @@ small sanity subset where its polling differ produces messier rect patterns than
 Xvnc's damage tracking. `x11vnc-corre-bgrx8888` is the only fixture in the tree
 holding real CoRRE rectangles.
 
-A capture records the client options it ran under, `nocursor` among them,
-because a replay that does not discard the same rectangles decodes a different
-frame from the one captured.
-
 wayvnc displays the scenes but is not a golden source: `vnclog` carries no TLS
 options and wayvnc offers VeNCrypt and nothing else. The live encoding and
 pixel-format grids drive it directly instead.

@@ -13,6 +13,7 @@ from struct import pack
 from unittest import mock
 
 from vncdotool import client, rfb
+from vncdotool.cursor import CursorMode
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 
 # The default PixelFormat() maps to image_mode="RGBX", so every fixture
@@ -35,8 +36,7 @@ def make_client() -> client.VNCDoToolClient:
     cli.factory.password = None
     # A bare Mock's attributes are all truthy, so the pseudo-encoding flags
     # need pinning to real booleans.
-    cli.factory.nocursor = False
-    cli.factory.pseudocursor = False
+    cli.factory.cursor = CursorMode.OMIT
     cli.factory.pseudodesktop = False
     cli.factory.last_rect = False
     cli.factory.qemu_extended_key = False

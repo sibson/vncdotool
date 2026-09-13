@@ -19,6 +19,7 @@ from PIL import Image
 
 from tests.goldens import scenes
 from vncdotool import client, pixelformat
+from vncdotool.cursor import CursorMode
 
 
 @dataclass
@@ -107,8 +108,7 @@ def _make_client(pixel_format: str, jpeg_quality: Optional[int] = None) -> _Reco
     recorder.factory = mock.Mock()
     recorder.factory.shared = 0
     recorder.factory.password = None
-    recorder.factory.nocursor = False
-    recorder.factory.pseudocursor = False
+    recorder.factory.cursor = CursorMode.OMIT
     recorder.factory.pseudodesktop = False
     recorder.factory.last_rect = False
     recorder.factory.qemu_extended_key = False

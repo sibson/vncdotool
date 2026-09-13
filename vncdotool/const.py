@@ -105,8 +105,14 @@ class Encoding(IntEnumLookup):
     LIBVNCSERVER_222 = -222
     PSEUDO_DESKTOP_SIZE = -223
     PSEUDO_LAST_RECT = -224
+    # rfbproto names PointerPos twice and disagrees with itself: -225 in its
+    # registry of other encodings, -232 in the Tight capability table, whose
+    # own "-226 to -238 Tight options" row covers -232 as well. UltraVNC,
+    # TightVNC, libvncserver, TurboVNC and QEMU all send -232.
     POINTER_POS = -225
-    TIGHT_226 = -226  # ... -238
+    TIGHT_226 = -226  # ... -231
+    PSEUDO_POINTER_POS = -232
+    TIGHT_233 = -233  # ... -238
     PSEUDO_CURSOR = -239
     PSEUDO_X_CURSOR = -240
     TIGHT_241 = -241  # ... -246
