@@ -82,7 +82,12 @@ FLEET_PROBE_TIMEOUT = 30.0
 # larger than the biggest cursor the fleet sends (libvncserver's 32x32). A
 # shape is drawn at the pointer minus its hotspot, so it reaches above and
 # left of the position as well as below and right.
-CURSOR_NEAR = (20, 20)
+#
+# x=100 clears Windows' default desktop icon column (Recycle Bin at
+# roughly 0-65px): a real interactive desktop highlights whatever icon the
+# pointer lands on, which is content the server changed for reasons that
+# have nothing to do with Cursor.
+CURSOR_NEAR = (100, 20)
 CURSOR_FAR = (150, 120)
 CURSOR_EXTENT = 48
 

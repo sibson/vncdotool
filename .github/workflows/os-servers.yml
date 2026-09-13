@@ -106,6 +106,15 @@ jobs:
       - name: Wait for the server to serve a screen
         run: uv run python tests/functional/wait_for_servers.py os
 
+      # The three Windows VNC servers capture the runner's own interactive
+      # session, and that session's own hosted-compute-agent console covers
+      # nearly the whole desktop and never stops scrolling -- a moving
+      # target no fixed comparison box can dodge. Minimizing it once, before
+      # any capture runs, is what makes the desktop content-stable at all.
+      - name: Minimize all windows, so captures see a stable desktop
+        if: matrix.os == 'windows'
+        run: (New-Object -ComObject Shell.Application).MinimizeAll()
+
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 

@@ -69,7 +69,13 @@ differs per server.
 
 `tests/functional/test_cursor.py` and `cursor_report.py` keep this table
 honest; the Windows rows come from the `os-servers` workflow, which is the
-only place those three run.
+only place those three run, against a real interactive desktop rather than
+a container. That desktop is not otherwise quiet: the runner's own
+hosted-compute-agent console covers nearly the whole screen and scrolls
+continuously, and Explorer highlights whatever desktop icon the pointer
+lands on. `os-servers.yml` minimizes every window before a single capture
+runs, which is what makes the desktop content-stable at all; `CURSOR_NEAR`
+sits clear of the default icon column for the same reason.
 
 ### UltraVNC requires PointerPos
 
