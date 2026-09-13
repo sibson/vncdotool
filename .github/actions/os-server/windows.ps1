@@ -18,6 +18,20 @@ if (-not $Password) {
 "VNCDOTOOL_OS_SERVER_PASSWORD=$Password" |
     Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
+Write-Host '=== keeping the display awake'
+# A blanked display is served as (0, 0, 0) to every pixel, where this
+# desktop is (12, 12, 12). RFB traffic is not input, so nothing a test does
+# except a pointer event postpones the blank.
+foreach ($timeout in 'monitor-timeout-ac', 'monitor-timeout-dc') {
+    & powercfg /change $timeout 0
+    if ($LASTEXITCODE -ne 0) {
+        throw "powercfg /change $timeout 0 exited $LASTEXITCODE"
+    }
+}
+$DesktopKey = 'HKCU:\Control Panel\Desktop'
+Set-ItemProperty -Path $DesktopKey -Name ScreenSaveActive -Value '0'
+Set-ItemProperty -Path $DesktopKey -Name ScreenSaveTimeOut -Value '0'
+
 $Advanced = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
 Set-ItemProperty -Path $Advanced -Name HideIcons -Value 1 -Type DWord
 if ((Get-ItemProperty -Path $Advanced -Name HideIcons).HideIcons -ne 1) {
