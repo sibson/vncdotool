@@ -18,7 +18,7 @@ from tests.unit.utils import (
 class TestCursor(unittest.TestCase):
     def setUp(self) -> None:
         self.cli = make_client()
-        # Without --localcursor the shape is decoded and then discarded.
+        # Without --cursor local the shape is decoded and then discarded.
         self.cli.factory.cursor = CursorMode.LOCAL
 
     # 2x2 image at hotspot (1, 1). MASK_2X2 is MSB-first, one bit per

@@ -48,14 +48,22 @@ class TestCLI(TestCase):
             f"vncdo exited 0 for an unknown command, stderr:\n{result.stderr}",
         )
 
-    def test_nocursor_capture_succeeds(self) -> None:
-        """--nocursor is accepted and still produces a valid capture."""
-        png = screenshot_dir() / f"{_SERVER.name}-nocursor.png"
-        result = run_vncdo(_SERVER, "--nocursor", "move", "10", "10", "capture", str(png))
+    def test_cursor_none_capture_succeeds(self) -> None:
+        """--cursor none is accepted and still produces a valid capture."""
+        png = screenshot_dir() / f"{_SERVER.name}-cursor-none.png"
+        result = run_vncdo(
+            _SERVER, "--cursor", "none", "move", "10", "10", "capture", str(png)
+        )
         self.assertEqual(
             result.returncode,
             0,
-            f"vncdo --nocursor exited {result.returncode}, stderr:\n{result.stderr}",
+            f"vncdo --cursor none exited {result.returncode}, stderr:\n{result.stderr}",
         )
         data = png.read_bytes()
-        self.assertEqual(data[:8], PNG_MAGIC, "--nocursor capture is not a valid PNG")
+        self.assertEqual(data[:8], PNG_MAGIC, "--cursor none capture is not a valid PNG")
+
+    def test_a_removed_cursor_flag_names_its_replacement(self) -> None:
+        """The spelling that went away says what to use, rather than just failing."""
+        result = run_vncdo(_SERVER, "--nocursor", "capture", str(screenshot_dir() / "unused.png"))
+        self.assertNotEqual(result.returncode, 0, "--nocursor was accepted")
+        self.assertIn("use --cursor none", result.stderr)

@@ -933,7 +933,7 @@ class CursorShapeOffered:
     server: VNCServer
 
     def test_offering_cursor_yields_a_shape_that_can_be_drawn(self) -> None:
-        """A server with a pointer answers -239 with a shape `--localcursor` can paint.
+        """A server with a pointer answers -239 with a shape `--cursor local` can paint.
 
         A 0x0 rectangle does not count, nor does no rectangle at all: either
         way there is nothing for the client to draw.
@@ -962,7 +962,7 @@ class CursorShapeOffered:
             [r for r in cursors if r.width and r.height],
             f"{self.server.name}: offering Cursor (-239) got back no shape with a "
             f"non-zero size (cursor rectangles: {summary}). The pointer cannot be "
-            "drawn locally, so --localcursor has nothing to paint.",
+            "drawn locally, so --cursor local has nothing to paint.",
         )
 
 

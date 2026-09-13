@@ -6,12 +6,12 @@ OS-hosted servers get the same body through `CursorPositionIndependent`,
 opted into `register_server_tests()` for any server not in
 `CURSOR_TESTED_SERVERS` below -- which is what the os-servers workflow runs.
 
-x11vnc carries the `--localcursor` case: of the servers running a scene
+x11vnc carries the `--cursor local` case: of the servers running a scene
 player it is the only one answering the Cursor pseudo-encoding with a real
 shape, 18x18. libvncserver-example sends one too, at 32x32. tigervnc, its
 VeNCrypt variants and selenoid answer a degenerate 0x0 rectangle, which means
 hide the pointer (RFC 6143 7.6.1); wayvnc, qemu and qemu-tls answer nothing
-at all. On any of those `--localcursor` has no shape to draw.
+at all. On any of those `--cursor local` has no shape to draw.
 """
 
 from typing import Dict, Optional, Tuple
@@ -90,7 +90,7 @@ class CursorFreeCapture(CaptureHelper):
 
 
 class TestLocalCursor(CaptureHelper, FleetTestCase):
-    """x11vnc's `--localcursor` cases. Its pointer-independence case is
+    """x11vnc's `--cursor local` cases. Its pointer-independence case is
     TestCursorFree_x11vnc, registered below -- not repeated here.
     """
 
@@ -111,14 +111,14 @@ class TestLocalCursor(CaptureHelper, FleetTestCase):
         )
 
     def test_localcursor_composites_a_decoded_cursor(self) -> None:
-        """--localcursor draws a shape the default discards, at the pointer."""
+        """--cursor local draws a shape the default discards, at the pointer."""
         without = self.at("plain", CURSOR_NEAR)
-        with_cursor = self.at("localcursor", CURSOR_NEAR, "--localcursor")
+        with_cursor = self.at("localcursor", CURSOR_NEAR, "--cursor", "local")
 
         bbox = ImageChops.difference(without, with_cursor).getbbox()
         self.assertIsNotNone(
             bbox,
-            "--localcursor capture is pixel-identical to the default at the "
+            "--cursor local capture is pixel-identical to the default at the "
             "same pointer position; no cursor was decoded and composited",
         )
         # CURSOR_NEAR plus slack for the cursor's extent and hotspot offset.

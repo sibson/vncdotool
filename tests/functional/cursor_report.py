@@ -42,11 +42,11 @@ class Row(NamedTuple):
         if self.paints is None:
             return "not measured"
         if self.paints and self.drawable:
-            return "paints **and** sends a shape -- `--localcursor` double-draws"
+            return "paints **and** sends a shape -- `--cursor local` double-draws"
         if self.paints:
             return "paints and sends nothing usable -- the pointer stays in captures"
         if self.drawable:
-            return "stops painting, shape available -- `--localcursor` restores it"
+            return "stops painting, shape available -- `--cursor local` restores it"
         return "no pointer in the framebuffer and none offered"
 
 

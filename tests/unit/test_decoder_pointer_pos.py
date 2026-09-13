@@ -67,7 +67,7 @@ class TestPointerPos(unittest.TestCase):
         self.assertIsNone(self.cli.cursor_pos)
 
     def test_the_shape_is_drawn_where_the_server_says(self) -> None:
-        """--localcursor composites at the server's position, not the script's."""
+        """--cursor local composites at the server's position, not the script's."""
         handshake(self.cli, 400, 400)
         self.cli.factory.cursor = CursorMode.LOCAL
         self.cli.screen = Image.new("RGB", (400, 400))
