@@ -147,14 +147,28 @@ class _FullScreenReceived:
     FramebufferUpdate messages as it likes.
     """
 
+    MAX_RETRIES = 1
+
     def __init__(self, width: int, height: int) -> None:
         self.retries = 0
         self.unpainted = Image.new("1", (width, height), 1)
 
     @classmethod
+    def awaiting(cls, width: int, height: int) -> "_FullScreenReceived":
+        """For a non-incremental refresh, which is promised the whole area."""
+        return cls(width, height)
+
+    @classmethod
     def satisfied(cls) -> "_FullScreenReceived":
         """For a refresh promised no area: an incremental one, or none at all."""
         return cls(0, 0)
+
+    def retry(self) -> bool:
+        """Whether the server is worth asking again, counting this attempt."""
+        if self.retries >= self.MAX_RETRIES:
+            return False
+        self.retries += 1
+        return True
 
     def paintRect(self, x: int, y: int, width: int, height: int) -> None:
         # Image.paste clips a box that runs off the mask.
@@ -193,8 +207,6 @@ class VNCDoToolClient(rfb.RFBClient):
     _raw_mode_format: rfb.PixelFormat | None = None
     _raw_mode = ""
     deferred: Deferred | None = None
-
-    MAX_REFRESH_RETRIES = 1
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
@@ -327,7 +339,7 @@ class VNCDoToolClient(rfb.RFBClient):
         if incremental:
             self._fullscreen = _FullScreenReceived.satisfied()
         else:
-            self._fullscreen = _FullScreenReceived(self.width, self.height)
+            self._fullscreen = _FullScreenReceived.awaiting(self.width, self.height)
         self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
@@ -632,8 +644,7 @@ class VNCDoToolClient(rfb.RFBClient):
                 self.framebufferUpdateRequest()
                 return
             if not self._fullscreen.complete:
-                if self._fullscreen.retries < self.MAX_REFRESH_RETRIES:
-                    self._fullscreen.retries += 1
+                if self._fullscreen.retry():
                     self.framebufferUpdateRequest()
                     return
                 log.warning("%s", self._fullscreen)
@@ -682,7 +693,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen = new_screen
         self.width, self.height = width, height
         if self._fullscreen.pending:
-            self._fullscreen = _FullScreenReceived(width, height)
+            self._fullscreen = _FullScreenReceived.awaiting(width, height)
 
 
 class KasmVNCDialect:
