@@ -151,33 +151,25 @@ class _FullRefresh:
     """
 
     def __init__(self, width: int, height: int) -> None:
-        self.asked = 0
-        self.restart(width, height)
+        self.rerequests = 0
+        self.unpainted = Image.new("1", (width, height), 1)
 
-    @property
-    def complete(self) -> bool:
-        return self.unpainted is None or self.unpainted.getbbox() is None
-
-    def painted(self, x: int, y: int, width: int, height: int) -> None:
-        if self.unpainted is None or width <= 0 or height <= 0:
-            return
+    def paintRect(self, x: int, y: int, width: int, height: int) -> None:
         # Image.paste clips a box that runs off the mask, so a rectangle
         # reaching past the framebuffer marks only what is on it.
         self.unpainted.paste(0, (x, y, x + width, y + height))
 
-    def restart(self, width: int, height: int) -> None:
-        self.size = (width, height)
-        self.unpainted: Image.Image | None = (
-            Image.new("1", (width, height), 1) if width > 0 and height > 0 else None
-        )
+    @property
+    def complete(self) -> bool:
+        return self.unpainted.getbbox() is None
 
-    def shortfall(self) -> str:
-        width, height = self.size
-        unpainted = sum(self.unpainted.histogram()[1:]) if self.unpainted else 0
+    def __str__(self) -> str:
+        width, height = self.unpainted.size
+        unpainted = sum(self.unpainted.histogram()[1:])
         return (
             f"the server left {unpainted} of the {width}x{height} framebuffer "
-            f"unpainted after {self.asked + 1} full-screen update requests; "
-            f"capturing it as black"
+            f"unpainted after {self.rerequests + 1} full-screen update "
+            f"requests; capturing it as black"
         )
 
 
@@ -607,7 +599,7 @@ class VNCDoToolClient(rfb.RFBClient):
         else:
             self.screen.paste(update, (x, y))
 
-        self._painted(x, y, width, height)
+        self._markPainted(x, y, width, height)
         self.drawCursor()
 
     def copyRectangle(
@@ -617,12 +609,12 @@ class VNCDoToolClient(rfb.RFBClient):
             return
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
-        self._painted(x, y, width, height)
+        self._markPainted(x, y, width, height)
         self.drawCursor()
 
-    def _painted(self, x: int, y: int, width: int, height: int) -> None:
+    def _markPainted(self, x: int, y: int, width: int, height: int) -> None:
         if self._refresh is not None:
-            self._refresh.painted(x, y, width, height)
+            self._refresh.paintRect(x, y, width, height)
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -632,11 +624,11 @@ class VNCDoToolClient(rfb.RFBClient):
                 self.framebufferUpdateRequest()
                 return
             if self._refresh is not None and not self._refresh.complete:
-                if self._refresh.asked < self.REFRESH_REREQUESTS:
-                    self._refresh.asked += 1
+                if self._refresh.rerequests < self.REFRESH_REREQUESTS:
+                    self._refresh.rerequests += 1
                     self.framebufferUpdateRequest()
                     return
-                log.warning(self._refresh.shortfall())
+                log.warning("%s", self._refresh)
             self._refresh = None
             d = self.deferred
             self.deferred = None
@@ -682,7 +674,7 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen = new_screen
         self.width, self.height = width, height
         if self._refresh is not None:
-            self._refresh.restart(width, height)
+            self._refresh = _FullRefresh(width, height)
 
 
 class KasmVNCDialect:
