@@ -75,7 +75,7 @@ def zrle_rect(x: int, y: int, w: int, h: int, tile_bytes: bytes, stream: ZRLEStr
 
 class TestZRLE(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     GRID_4X4 = [
         (10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120),
@@ -86,14 +86,14 @@ class TestZRLE(unittest.TestCase):
 
     def test_zrle_raw_tile_is_pixels_in_row_order(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         raw_body = pack("!B", 0) + b"".join(_cpixel(*p) for p in self.GRID_4X4)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, raw_body)])
         )
 
-        assert_pixels(self, self.cli.screen, self.GRID_4X4)
+        assert_pixels(self, self.client.screen, self.GRID_4X4)
 
     def test_zrle_leftover_bytes_after_a_tile_is_a_protocol_error(self) -> None:
         """A server actually sending wider PIXELs than cpixel_bytes assumed
@@ -102,35 +102,35 @@ class TestZRLE(unittest.TestCase):
         rectangle that is only one tile, going unnoticed altogether.
         """
         width = height = 2
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         # A real 4-bytes-per-pixel encoder's raw tile, decoded as if it were
         # the usual 3: the low 3 bytes of each pixel look like valid CPIXELs,
         # leaving one whole pixel's worth of bytes over at the end.
         body = pack("!B", 0) + bytes(range(width * height * 4))
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_zrle_solid_tile_fills_the_tile(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         colour = (1, 2, 3)
         body = pack("!B", 1) + _cpixel(*colour)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+        assert_pixels(self, self.client.screen, [colour] * (width * height))
 
     def test_zrle_packed_palette_2_colours_uses_bit_indices(self) -> None:
         width, height = 8, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(255, 0, 0), (0, 255, 0)]
         indices = [0, 1, 0, 1, 1, 1, 0, 0]
@@ -139,15 +139,15 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + zrle_pack_indices(indices, width, bits=1)
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [palette[i] for i in indices])
+        assert_pixels(self, self.client.screen, [palette[i] for i in indices])
 
     def test_zrle_packed_palette_4_colours_uses_dibit_indices(self) -> None:
         width, height = 8, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(10, 0, 0), (20, 0, 0), (30, 0, 0), (40, 0, 0)]
         indices = [0, 1, 2, 3, 3, 2, 1, 0]
@@ -156,15 +156,15 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + zrle_pack_indices(indices, width, bits=2)
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [palette[i] for i in indices])
+        assert_pixels(self, self.client.screen, [palette[i] for i in indices])
 
     def test_zrle_packed_palette_16_colours_uses_nibble_indices(self) -> None:
         width, height = 16, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(i, i, i) for i in range(16)]
         indices = list(range(16))
@@ -173,11 +173,11 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + zrle_pack_indices(indices, width, bits=4)
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [palette[i] for i in indices])
+        assert_pixels(self, self.client.screen, [palette[i] for i in indices])
 
     def test_zrle_packed_palette_rows_are_individually_byte_padded(self) -> None:
         """RFC 6143 7.7.6: "padding bits are used to align each row to an
@@ -186,7 +186,7 @@ class TestZRLE(unittest.TestCase):
         that padding bleed into the next row's indices.
         """
         width, height = 5, 3
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(0, 0, 0), (255, 0, 0)]
         indices = [
@@ -199,29 +199,29 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + zrle_pack_indices(indices, width, bits=1)
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [palette[i] for i in indices])
+        assert_pixels(self, self.client.screen, [palette[i] for i in indices])
 
     def test_zrle_plain_rle_run_extends_past_255(self) -> None:
         # A single 64x5 tile (320 pixels) so one RLE run covers the whole
         # tile and needs a 255-continuation byte.
         width, height = 64, 5
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         colour = (9, 9, 9)
         body = pack("!B", 0x80) + zrle_run(_cpixel(*colour), width * height)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+        assert_pixels(self, self.client.screen, [colour] * (width * height))
 
     def test_zrle_palette_rle_mixes_single_and_run_pixels(self) -> None:
         width, height = 6, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(1, 0, 0), (0, 1, 0)]
         # index 0 once (run length 1, top bit clear), then index 1 for a
@@ -232,24 +232,24 @@ class TestZRLE(unittest.TestCase):
             + bytes((0x00,))
             + bytes((0x80 | 1, 4))
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
         expected = [palette[0]] + [palette[1]] * 5
-        assert_pixels(self, self.cli.screen, expected)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_zrle_tile_walks_row_by_row(self) -> None:
         """Three tiles across, two down: same trap as Hextile's equivalent
         test -- a 2x2 grid can't distinguish row-major from column-major.
         """
         width, height = 192, 128
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         colours = [(10, 0, 0), (0, 20, 0), (0, 0, 30), (40, 40, 0), (0, 50, 50), (60, 0, 60)]
         stream = ZRLEStream()
         tiles_body = b"".join(pack("!B", 1) + _cpixel(*c) for c in colours)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, tiles_body, stream)])
         )
 
@@ -258,11 +258,11 @@ class TestZRLE(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        assert_pixels(self, self.cli.screen, expected)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_zrle_rectangle_not_a_multiple_of_64_has_partial_edge_tiles(self) -> None:
         width = height = 80
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         top_left, top_right = (10, 20, 30), (40, 50, 60)
         bottom_left, bottom_right = (70, 80, 90), (100, 110, 120)
@@ -270,7 +270,7 @@ class TestZRLE(unittest.TestCase):
             pack("!B", 1) + _cpixel(*c)
             for c in (top_left, top_right, bottom_left, bottom_right)
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
@@ -285,7 +285,7 @@ class TestZRLE(unittest.TestCase):
                     expected.append(bottom_left)
                 else:
                     expected.append(bottom_right)
-        assert_pixels(self, self.cli.screen, expected)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_zrle_stream_persists_across_rectangles(self) -> None:
         """The decoder keeps one zlib stream for the connection: a second
@@ -294,18 +294,18 @@ class TestZRLE(unittest.TestCase):
         stream per rectangle (RFC 6143 7.7.6).
         """
         width = height = 2
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
         stream = ZRLEStream()
 
         first = (1, 1, 1)
         second = (2, 2, 2)
         first_rect = zrle_rect(0, 0, width, height, pack("!B", 1) + _cpixel(*first), stream)
         second_rect = zrle_rect(0, 0, width, height, pack("!B", 1) + _cpixel(*second), stream)
-        self.cli.dataReceived(framebuffer_update([first_rect]))
-        assert_pixels(self, self.cli.screen, [first] * (width * height))
+        self.client.dataReceived(framebuffer_update([first_rect]))
+        assert_pixels(self, self.client.screen, [first] * (width * height))
 
-        self.cli.dataReceived(framebuffer_update([second_rect]))
-        assert_pixels(self, self.cli.screen, [second] * (width * height))
+        self.client.dataReceived(framebuffer_update([second_rect]))
+        assert_pixels(self, self.client.screen, [second] * (width * height))
 
     def test_zrle_high_cpixel_placement_reads_three_bytes_at_the_high_end(self) -> None:
         """cpixel_offset generalises beyond the default fixture's low
@@ -314,18 +314,18 @@ class TestZRLE(unittest.TestCase):
         """
         pixel_format = rfb.PixelFormat(32, 24, False, True, 255, 255, 255, 8, 16, 24)
         width = height = 2
-        self.cli.dataReceived(b"RFB 003.003\n")
-        self.cli.dataReceived(pack("!I", rfb.AuthTypes.NONE))
+        self.client.dataReceived(b"RFB 003.003\n")
+        self.client.dataReceived(pack("!I", rfb.AuthTypes.NONE))
         server_init = pack("!HH16sI", width, height, pixel_format.to_bytes(), 0)
-        self.cli.dataReceived(server_init)
+        self.client.dataReceived(server_init)
 
         colour = (5, 6, 7)
         body = pack("!B", 1) + _cpixel(*colour)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+        assert_pixels(self, self.client.screen, [colour] * (width * height))
 
     def test_zrle_depth_32_still_narrows_to_three_bytes(self) -> None:
         """libvncserver-example declares depth 32 in ServerInit but its ZRLE
@@ -334,25 +334,25 @@ class TestZRLE(unittest.TestCase):
         """
         pixel_format = rfb.PixelFormat(32, 32, False, True, 255, 255, 255, 0, 8, 16)
         width = height = 2
-        self.cli.dataReceived(b"RFB 003.003\n")
-        self.cli.dataReceived(pack("!I", rfb.AuthTypes.NONE))
+        self.client.dataReceived(b"RFB 003.003\n")
+        self.client.dataReceived(pack("!I", rfb.AuthTypes.NONE))
         server_init = pack("!HH16sI", width, height, pixel_format.to_bytes(), 0)
-        self.cli.dataReceived(server_init)
+        self.client.dataReceived(server_init)
 
         colour = (11, 22, 33)
         body = pack("!B", 1) + _cpixel(*colour)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [colour] * (width * height))
+        assert_pixels(self, self.client.screen, [colour] * (width * height))
 
     def test_zrle_rle_palette_may_hold_more_than_16_colours(self) -> None:
         """The 16-colour cap is the packed form's (RFC 6143 7.7.6); the RLE
         form's own limit is the 127 its size field can hold.
         """
         width, height = 20, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(i, i, i) for i in range(20)]
         body = (
@@ -360,18 +360,18 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + bytes(range(20))  # each index once, top bit clear: 20 single pixels
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, palette)
+        assert_pixels(self, self.client.screen, palette)
 
     def test_zrle_packed_palette_ignores_an_undefined_index_in_row_padding(self) -> None:
         """A row's padding bits are not pixels, so an index the palette does
         not define is only an error where the row actually reaches it.
         """
         width, height = 3, 1
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         palette = [(i * 10, 0, 0) for i in range(5)]
         # 3 nibbles of indices in 2 bytes; the fourth nibble is padding, set
@@ -381,16 +381,16 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + bytes((0x01, 0x2F))
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        assert_pixels(self, self.cli.screen, [palette[0], palette[1], palette[2]])
+        assert_pixels(self, self.client.screen, [palette[0], palette[1], palette[2]])
 
     def test_zrle_packed_palette_index_past_the_palette_is_a_protocol_error(self) -> None:
         width, height = 3, 1
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         palette = [(i * 10, 0, 0) for i in range(5)]
         # The third nibble is a pixel, not padding, and index 9 is past a
@@ -400,17 +400,17 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + bytes((0x01, 0x9F))
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_zrle_rle_palette_index_past_the_palette_is_a_protocol_error(self) -> None:
         width, height = 4, 1
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         palette = [(1, 0, 0), (0, 1, 0)]
         body = (
@@ -418,40 +418,40 @@ class TestZRLE(unittest.TestCase):
             + b"".join(_cpixel(*c) for c in palette)
             + bytes((0x80 | 5, 3))  # index 5 into a 2-colour palette
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_zrle_palette_over_16_is_a_protocol_error(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         body = pack("!B", 17)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_zrle_truncated_tile_data_is_a_protocol_error(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         # Declares a raw tile but the compressed payload has nothing after
         # the subencoding byte.
         body = pack("!B", 0)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([zrle_rect(0, 0, width, height, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
 
 if __name__ == "__main__":

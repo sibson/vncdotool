@@ -17,7 +17,7 @@ from tests.unit.utils import (
 
 class TestCopyRect(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     GRID_4X4 = [
         (10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120),
@@ -28,20 +28,20 @@ class TestCopyRect(unittest.TestCase):
 
     def test_copyrect_copies_the_source_region_and_leaves_it_intact(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         raw_body = b"".join(_pixel(*p) for p in self.GRID_4X4)
         raw_rect = rect(0, 0, width, height, Encoding.RAW, raw_body)
         copy_body = pack("!HH", 0, 0)
         copy_rect = rect(2, 2, 2, 2, Encoding.COPY_RECTANGLE, copy_body)
-        self.cli.dataReceived(framebuffer_update([raw_rect, copy_rect]))
+        self.client.dataReceived(framebuffer_update([raw_rect, copy_rect]))
 
         expected = list(self.GRID_4X4)
         for sy in range(2):
             for sx in range(2):
                 expected[(2 + sy) * width + (2 + sx)] = self.GRID_4X4[sy * width + sx]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
 
 if __name__ == "__main__":

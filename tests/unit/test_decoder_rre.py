@@ -18,25 +18,25 @@ from tests.unit.utils import (
 
 class TestRRE(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     def test_rre_zero_subrects_fills_the_rectangle_with_the_background(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (1, 2, 3)
         body = pack("!I", 0) + _pixel(*bg)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.RRE, body)])
         )
 
         expected = [bg] * (width * height)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_rre_decodes_a_background_and_several_subrects(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
@@ -46,7 +46,7 @@ class TestRRE(unittest.TestCase):
             + pack("!4sHHHH", _pixel(*fg2), 3, 3, 1, 1)
         )
         body = pack("!I", 2) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.RRE, body)])
         )
 
@@ -55,14 +55,14 @@ class TestRRE(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_rre_subrect_coordinates_are_rectangle_local(self) -> None:
         # A decoder that read subrect coordinates as screen-absolute would
         # instead paint the wrong pixel or crash on an out-of-bounds fill.
         screen_width = screen_height = 4
-        handshake(self.cli, screen_width, screen_height)
+        handshake(self.client, screen_width, screen_height)
 
         base = (0, 0, 0)
         bg = (0, 0, 255)
@@ -74,19 +74,19 @@ class TestRRE(unittest.TestCase):
         rre_body = pack("!I", 1) + _pixel(*bg) + subrects
         rre_rect = rect(2, 2, 2, 2, Encoding.RRE, rre_body)
 
-        self.cli.dataReceived(framebuffer_update([base_rect, rre_rect]))
+        self.client.dataReceived(framebuffer_update([base_rect, rre_rect]))
 
         expected = [base] * (screen_width * screen_height)
         for y in range(2):
             for x in range(2):
                 expected[(2 + y) * screen_width + (2 + x)] = bg
         expected[2 * screen_width + 3] = fg  # rect-local (1, 0) -> screen (3, 2)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_rre_overlapping_subrects_paint_in_wire_order(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         first = (255, 0, 0)
@@ -96,7 +96,7 @@ class TestRRE(unittest.TestCase):
             + pack("!4sHHHH", _pixel(*second), 1, 1, 3, 3)
         )
         body = pack("!I", 2) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.RRE, body)])
         )
 
@@ -105,61 +105,61 @@ class TestRRE(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_rre_subrect_past_rectangle_edge_is_a_protocol_error(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
         subrects = pack("!4sHHHH", _pixel(*fg), 3, 3, 2, 2)  # x+w = 5 > width
         body = pack("!I", 1) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.RRE, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_rre_subrect_count_larger_than_rectangle_pixels_is_a_protocol_error(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         bg = (0, 0, 255)
         body = pack("!I", width * height + 1) + _pixel(*bg)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.RRE, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
 
 class TestCoRRE(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     def test_corre_zero_subrects_fills_the_rectangle_with_the_background(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (1, 2, 3)
         body = pack("!I", 0) + _pixel(*bg)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.CORRE, body)])
         )
 
         expected = [bg] * (width * height)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_corre_decodes_a_background_and_several_subrects(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
@@ -167,7 +167,7 @@ class TestCoRRE(unittest.TestCase):
         # CoRRE subrects are (4 + bypp) bytes: color, then x, y, w, h as u8.
         subrects = pack("!4sBBBB", _pixel(*fg), 1, 1, 2, 2) + pack("!4sBBBB", _pixel(*fg2), 0, 3, 4, 1)
         body = pack("!I", 2) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.CORRE, body)])
         )
 
@@ -176,12 +176,12 @@ class TestCoRRE(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_corre_subrect_coordinates_are_rectangle_local(self) -> None:
         screen_width = screen_height = 4
-        handshake(self.cli, screen_width, screen_height)
+        handshake(self.client, screen_width, screen_height)
 
         base = (0, 0, 0)
         bg = (0, 0, 255)
@@ -193,19 +193,19 @@ class TestCoRRE(unittest.TestCase):
         corre_body = pack("!I", 1) + _pixel(*bg) + subrects
         corre_rect = rect(2, 2, 2, 2, Encoding.CORRE, corre_body)
 
-        self.cli.dataReceived(framebuffer_update([base_rect, corre_rect]))
+        self.client.dataReceived(framebuffer_update([base_rect, corre_rect]))
 
         expected = [base] * (screen_width * screen_height)
         for y in range(2):
             for x in range(2):
                 expected[(2 + y) * screen_width + (2 + x)] = bg
         expected[2 * screen_width + 3] = fg  # rect-local (1, 0) -> screen (3, 2)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_corre_overlapping_subrects_paint_in_wire_order(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         first = (255, 0, 0)
@@ -215,7 +215,7 @@ class TestCoRRE(unittest.TestCase):
             + pack("!4sBBBB", _pixel(*second), 1, 1, 3, 3)
         )
         body = pack("!I", 2) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.CORRE, body)])
         )
 
@@ -224,38 +224,38 @@ class TestCoRRE(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_corre_subrect_past_rectangle_edge_is_a_protocol_error(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
         subrects = pack("!4sBBBB", _pixel(*fg), 3, 3, 2, 2)  # x+w = 5 > width
         body = pack("!I", 1) + _pixel(*bg) + subrects
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.CORRE, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_corre_subrect_count_larger_than_rectangle_pixels_is_a_protocol_error(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         bg = (0, 0, 255)
         body = pack("!I", width * height + 1) + _pixel(*bg)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([rect(0, 0, width, height, Encoding.CORRE, body)])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
 
 if __name__ == "__main__":

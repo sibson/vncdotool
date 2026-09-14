@@ -384,15 +384,15 @@ class TestVNCDoCLIClient(unittest.TestCase):
 
     @mock.patch('getpass.getpass')
     def test_vncRequestPassword_prompt(self, getpass):
-        cli = self.client
-        cli.factory.password = None
-        cli.sendPassword = mock.Mock()
-        cli.vncRequestPassword()
+        client = self.client
+        client.factory.password = None
+        client.sendPassword = mock.Mock()
+        client.vncRequestPassword()
 
         password = command.getpass.getpass.return_value
         assert command.getpass.getpass.called
-        assert cli.factory.password == password
-        cli.sendPassword.assert_called_once_with(password)
+        assert client.factory.password == password
+        client.sendPassword.assert_called_once_with(password)
 
 
 class TestExitStatus(unittest.TestCase):

@@ -27,7 +27,8 @@ from unittest import mock
 import PIL
 
 import vncdotool
-from vncdotool import client, pixelformat
+from vncdotool import pixelformat
+from vncdotool.client import VNCDoToolClient
 from vncdotool.cursor import CursorMode
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -42,7 +43,7 @@ class Fixture(NamedTuple):
     pixel_format: str
 
 
-class _Replay(client.VNCDoToolClient):
+class _Replay(VNCDoToolClient):
     """The inherited path reports protocol errors through the Mock factory, which drops them."""
 
     def vncProtocolError(self, reason: str) -> None:
@@ -50,24 +51,24 @@ class _Replay(client.VNCDoToolClient):
 
 
 def _make_client(pixel_format: str) -> _Replay:
-    cli = _Replay()
+    client = _Replay()
     # SetPixelFormat is client-to-server (RFC 6143 7.5.1), so the recorded
     # stream never says which layout the client asked for.
-    cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
-    cli.transport = mock.Mock()
-    cli.factory = mock.Mock()
+    client.requested_pixel_format = pixelformat.PIXEL_FORMATS[pixel_format]
+    client.transport = mock.Mock()
+    client.factory = mock.Mock()
     for name in ("shared", "pseudodesktop", "last_rect", "qemu_extended_key"):
-        setattr(cli.factory, name, False)
-    cli.factory.cursor = CursorMode.OMIT
-    cli.factory.password = None
-    return cli
+        setattr(client.factory, name, False)
+    client.factory.cursor = CursorMode.OMIT
+    client.factory.password = None
+    return client
 
 
 def _replay(fixture: Fixture) -> None:
-    cli = _make_client(fixture.pixel_format)
-    cli.dataReceived(fixture.init)
+    client = _make_client(fixture.pixel_format)
+    client.dataReceived(fixture.init)
     for step in fixture.steps:
-        cli.dataReceived(step)
+        client.dataReceived(step)
 
 
 def load_fixture(name: str) -> Fixture:

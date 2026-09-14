@@ -42,7 +42,7 @@ def hextile_rect(x: int, y: int, w: int, h: int, tiles: list[bytes]) -> bytes:
 
 class TestHextile(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     GRID_4X4 = [
         (10, 20, 30), (40, 50, 60), (70, 80, 90), (100, 110, 120),
@@ -53,34 +53,34 @@ class TestHextile(unittest.TestCase):
 
     def test_hextile_raw_tile_is_pixels_in_row_order(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         raw_body = b"".join(_pixel(*p) for p in self.GRID_4X4)
         tile = hextile_tile(HextileEncoding.RAW, raw=raw_body)
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, self.GRID_4X4)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, self.GRID_4X4)
 
     def test_hextile_background_only_tile_fills_the_tile(self) -> None:
         width = height = 4
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (1, 2, 3)
         tile = hextile_tile(HextileEncoding.BACKGROUND_SPECIFIED, background=_pixel(*bg))
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
         expected = [bg] * (width * height)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_uncoloured_subrects_use_the_tile_foreground(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
@@ -96,7 +96,7 @@ class TestHextile(unittest.TestCase):
             count=1,
             subrects=hextile_subrect(1, 2, 3, 2),
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
@@ -105,12 +105,12 @@ class TestHextile(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_coloured_subrects_carry_their_own_pixel(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         fg1 = (255, 0, 0)
@@ -130,7 +130,7 @@ class TestHextile(unittest.TestCase):
             count=2,
             subrects=subrects,
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
@@ -139,12 +139,12 @@ class TestHextile(unittest.TestCase):
             for y in range(height)
             for x in range(width)
         ]
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_tile_with_no_colours_specified_reuses_the_previous_tile(self) -> None:
         width, height = 32, 16
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
@@ -165,7 +165,7 @@ class TestHextile(unittest.TestCase):
             count=1,
             subrects=hextile_subrect(3, 3, 1, 1),
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [first_tile, second_tile])])
         )
 
@@ -176,8 +176,8 @@ class TestHextile(unittest.TestCase):
                     expected[y * width + x] = fg
                 if x == 16 + 3 and y == 3:
                     expected[y * width + x] = fg
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_walks_tiles_row_by_row(self) -> None:
         """Three tiles across and two down: a two-by-two grid cannot tell a
@@ -185,29 +185,29 @@ class TestHextile(unittest.TestCase):
         four positions in the same order.
         """
         width, height = 48, 32
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         colours = [(10, 0, 0), (0, 20, 0), (0, 0, 30), (40, 40, 0), (0, 50, 50), (60, 0, 60)]
         tiles = [
             hextile_tile(HextileEncoding.BACKGROUND_SPECIFIED, background=_pixel(*colour))
             for colour in colours
         ]
-        self.cli.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
+        self.client.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
 
         expected = [
             colours[(y // 16) * 3 + (x // 16)]
             for y in range(height)
             for x in range(width)
         ]
-        assert_pixels(self, self.cli.screen, expected)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_colours_do_not_carry_across_a_raw_tile(self) -> None:
         """rfbproto: a background may not be carried over if the previous tile
         was raw. So the third tile here has no colour to paint with.
         """
         width, height = 48, 16
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         raw_pixels = b"".join(_pixel(1, 2, 3) for _ in range(16 * 16))
         tiles = [
@@ -218,17 +218,17 @@ class TestHextile(unittest.TestCase):
             hextile_tile(HextileEncoding.RAW) + raw_pixels,
             hextile_tile(HextileEncoding(0)),
         ]
-        self.cli.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
+        self.client.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_hextile_a_tile_declaring_no_subrects_needs_no_foreground(self) -> None:
         """AnySubrects with a count of zero is redundant but well-formed, and
         an encoder that always sets the bit emits it.
         """
         width = height = 16
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         background = (255, 0, 0)
         tiles = [
@@ -237,15 +237,15 @@ class TestHextile(unittest.TestCase):
                 background=_pixel(*background), count=0,
             )
         ]
-        self.cli.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
+        self.client.dataReceived(framebuffer_update([hextile_rect(0, 0, width, height, tiles)]))
 
-        assert_pixels(self, self.cli.screen, [background] * (width * height))
+        assert_pixels(self, self.client.screen, [background] * (width * height))
 
     def test_hextile_rectangle_not_a_multiple_of_16_has_partial_edge_tiles(self) -> None:
         # A decoder that assumes square 16x16 tiles will misplace or crash
         # on the last row/column.
         width = height = 20
-        handshake(self.cli, width, height)
+        handshake(self.client, width, height)
 
         top_left = (10, 20, 30)
         top_right = (40, 50, 60)
@@ -257,7 +257,7 @@ class TestHextile(unittest.TestCase):
             hextile_tile(HextileEncoding.BACKGROUND_SPECIFIED, background=_pixel(*bottom_left)),
             hextile_tile(HextileEncoding.BACKGROUND_SPECIFIED, background=_pixel(*bottom_right)),
         ]
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, tiles)])
         )
 
@@ -272,12 +272,12 @@ class TestHextile(unittest.TestCase):
                     expected.append(bottom_left)
                 else:
                     expected.append(bottom_right)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_rectangle_position_is_screen_relative_but_tiles_are_rectangle_local(self) -> None:
         screen_width = screen_height = 8
-        handshake(self.cli, screen_width, screen_height)
+        handshake(self.client, screen_width, screen_height)
 
         base = (0, 0, 0)
         bg = (0, 0, 255)
@@ -299,20 +299,20 @@ class TestHextile(unittest.TestCase):
         )
         hex_rect = hextile_rect(2, 2, 2, 2, [tile])
 
-        self.cli.dataReceived(framebuffer_update([base_rect, hex_rect]))
+        self.client.dataReceived(framebuffer_update([base_rect, hex_rect]))
 
         expected = [base] * (screen_width * screen_height)
         for y in range(2):
             for x in range(2):
                 expected[(2 + y) * screen_width + (2 + x)] = bg
         expected[2 * screen_width + 3] = fg  # rect-local (1, 0) -> screen (3, 2)
-        self.assertIsNotNone(self.cli.screen)
-        assert_pixels(self, self.cli.screen, expected)
+        self.assertIsNotNone(self.client.screen)
+        assert_pixels(self, self.client.screen, expected)
 
     def test_hextile_subrect_past_tile_edge_is_a_protocol_error(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         bg = (0, 0, 255)
         fg = (255, 0, 0)
@@ -329,25 +329,25 @@ class TestHextile(unittest.TestCase):
             count=1,
             subrects=hextile_subrect(7, 0, 2, 1),
         )
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
     def test_hextile_first_tile_without_background_is_a_protocol_error(self) -> None:
         width = height = 8
-        handshake(self.cli, width, height)
-        self.cli.vncProtocolError = mock.Mock()
+        handshake(self.client, width, height)
+        self.client.vncProtocolError = mock.Mock()
 
         tile = hextile_tile(HextileEncoding(0))
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([hextile_rect(0, 0, width, height, [tile])])
         )
 
-        self.cli.vncProtocolError.assert_called_once()
-        self.cli.transport.loseConnection.assert_called_once()
+        self.client.vncProtocolError.assert_called_once()
+        self.client.transport.loseConnection.assert_called_once()
 
 
 if __name__ == "__main__":
