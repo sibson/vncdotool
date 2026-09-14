@@ -35,9 +35,7 @@ from .utils import (
 
 
 class CaptureHelper:
-    """`at()`/`env()`, shared by CursorFreeCapture and TestLocalCursor's own cases.
-
-    Deliberately not a TestCase, or `unittest discover` would collect this
+    """Deliberately not a TestCase, or `unittest discover` would collect this
     shared base as its own serverless case.
     """
 
