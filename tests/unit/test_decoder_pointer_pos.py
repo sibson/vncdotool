@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import unittest
+from unittest import mock
 
 from PIL import Image, ImageChops
 
@@ -38,7 +39,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli.cursor_pos, (150, 120))
+        self.assertEqual((self.cli.x, self.cli.y), (150, 120))
 
     def test_rectangle_consumes_no_payload(self) -> None:
         """A following rectangle in the same update still decodes."""
@@ -47,7 +48,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS, cursor_rect(1, 1)]))
 
-        self.assertEqual(self.cli.cursor_pos, (150, 120))
+        self.assertEqual((self.cli.x, self.cli.y), (150, 120))
         self.assertEqual(self.cli.cfocus, (1, 1))
 
     def test_position_is_not_a_screen_change(self) -> None:
@@ -64,7 +65,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.mouseMove(10, 20)
 
-        self.assertEqual(self.cli.cursor_pos, (10, 20))
+        self.assertEqual((self.cli.x, self.cli.y), (10, 20))
 
     def test_the_shape_is_drawn_where_the_server_says(self) -> None:
         """--localcursor composites at the server's position, not the script's."""
@@ -112,13 +113,19 @@ class TestPointerPos(unittest.TestCase):
             difference = ImageChops.difference(capture.convert("RGB"), expected)
         self.assertIsNone(difference.getbbox(), "capture holds a stale cursor")
 
-    def test_a_click_still_goes_where_the_script_put_it(self) -> None:
+    def test_a_click_goes_where_the_pointer_is(self) -> None:
+        """A pointer the desktop moved takes the next click with it, as a
+        real mouse does; clicking where the script last aimed would put it
+        somewhere the pointer is not.
+        """
         handshake(self.cli, 400, 400)
         self.cli.mouseMove(10, 20)
-
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+        self.cli.pointerEvent = mock.Mock()
 
-        self.assertEqual((self.cli.x, self.cli.y), (10, 20))
+        self.cli.mouseDown(1)
+
+        self.cli.pointerEvent.assert_called_once_with(150, 120, buttonmask=1)
 
 
 if __name__ == "__main__":

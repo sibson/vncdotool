@@ -139,16 +139,9 @@ enabled, neither of its two `drawCursor` paths matches.
 ## The pointer is an overlay, not framebuffer content
 
 `self.screen` holds the server's pixels and nothing else. Under `--cursor
-local` the shape and the position are kept as client state — `cursor`,
-`cmask`, `cfocus`, `cursor_pos` — and `_snapshot()` composites them onto a
-copy at the moment an image is asked for. `updateCursor` and
-`updatePointerPos` record; they do not draw.
-
-`cursor_pos` is where the pointer is, full stop: `mouseMove` sets it and so
-does `updatePointerPos`, whichever moved it last. `self.x`/`self.y` are a
-different quantity — where the script last aimed, and so where a later
-`click` goes — which is why `updatePointerPos` leaves them alone when the
-desktop warps the pointer out from under them.
+local` the shape is kept as client state — `cursor`, `cmask`, `cfocus` — and
+`_snapshot()` composites it onto a copy at the moment an image is asked for.
+`updateCursor` and `updatePointerPos` record; they do not draw.
 
 It used to paste into `self.screen` and nothing restored what the previous
 pointer covered. `updateRectangle` hid most of it by drawing straight after
@@ -163,6 +156,27 @@ comparisons as well as the captures is what makes a reference image usable:
 an `expect ref.png` in the same mode has to be comparing against something
 that contains one. A script that wants pointer-free comparisons has the
 default mode, which is the reason the default is `none`.
+
+## One pointer, one position
+
+`self.x`/`self.y` is where the pointer is, and it is the only answer to that
+question. `mouseMove` sets it, `updatePointerPos` sets it, whichever moved
+the pointer last. `_snapshot` draws there and `mouseDown`/`mouseUp` click
+there.
+
+An earlier revision tracked the server's reported position separately, so
+that a click after the desktop warped the pointer went where the script had
+last aimed rather than where the pointer now was. That is not how a mouse
+works. A click that lands somewhere the pointer is not is invisible — the
+capture beside it shows the pointer in the wrong place, and nothing on
+screen says where the click went. The pointer is the position; a script
+that needs one somewhere else moves it there first.
+
+The cost is that on a desktop where something else moves the pointer — a
+person at the physical keyboard, another client sharing the session — a
+`click` following a `move` can land where that other thing left it. That is
+the same race a human shares a mouse with, and it is visible in a capture,
+which the alternative was not.
 
 ## Why the default is `none`
 

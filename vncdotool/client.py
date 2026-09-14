@@ -211,7 +211,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
-    cursor_pos = (x, y)
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -378,8 +377,8 @@ class VNCDoToolClient(rfb.RFBClient):
         if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
             return snapshot
 
-        x = self.cursor_pos[0] - self.cfocus[0]
-        y = self.cursor_pos[1] - self.cfocus[1]
+        x = self.x - self.cfocus[0]
+        y = self.y - self.cfocus[1]
         if box:
             x -= box[0]
             y -= box[1]
@@ -518,7 +517,6 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
-        self.cursor_pos = (x, y)
         self.pointerEvent(x, y, self.buttons)
         return self
 
@@ -699,13 +697,8 @@ class VNCDoToolClient(rfb.RFBClient):
         self.cfocus = x, y
 
     def updatePointerPos(self, x: int, y: int) -> None:
-        """The server moved the pointer to (x, y).
-
-        Only where the cursor is drawn changes. self.x/self.y stay the
-        script's, so a later mouseDown still clicks where the script last
-        put the pointer rather than wherever the desktop moved it to.
-        """
-        self.cursor_pos = (x, y)
+        """The server moved the pointer to (x, y)."""
+        self.x, self.y = x, y
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         if not (
