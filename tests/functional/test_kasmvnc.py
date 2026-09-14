@@ -1,11 +1,3 @@
-"""What KasmVNC does with a PointerEvent, and what --dialect kasmvnc does about it.
-
-Kept out of test_server_compat_docker.py, which CI runs twice: once as the
-smoke step that fails early, then again with the rest of the suite. These
-cases spend their time waiting out timeouts, which is the opposite of what
-the smoke step is for.
-"""
-
 import subprocess
 import tempfile
 from pathlib import Path

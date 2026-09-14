@@ -76,15 +76,14 @@ QEMU_ENCODINGS = {"raw", "hextile", "zrle", "tight"}
 QEMU_SETTLE_SECONDS = "1"
 
 
-# The screen a shell was told to draw stays up until something draws over
-# it, so the seven encodings comparing against one screen can share a single
-# drawing of it. Holding one screen at a time keeps that true whatever order
-# the cases run in: a screen this does not hold is drawn again.
+# One drawing serves every encoding compared against a screen: a QEMU screen
+# stays up until something draws over it. Only the newest is held, because
+# each case captures the live screen again in its own encoding.
 _DRAWN: Dict[str, Image.Image] = {}
 
 
 def draw_on_qemu(test: TestCase, screen: str) -> Image.Image:
-    """Put one of QEMU_SCREENS up, and return the Raw capture of it."""
+    """The Raw capture of one of QEMU_SCREENS, drawing it if it is not already up."""
     if screen not in _DRAWN:
         argv: List[str] = []
         for command in QEMU_SCREENS[screen]:
