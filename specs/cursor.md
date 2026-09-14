@@ -140,11 +140,12 @@ enabled, neither of its two `drawCursor` paths matches.
 
 `self.screen` holds the server's pixels and nothing else. Under `--cursor
 local` the shape is kept as client state — `cursor`, `cmask`, `cfocus` — and
-`renderScreen()` composites it onto a copy at the moment an image is asked for.
+`renderScreen()` and `renderRegion()` composite it onto a copy at the moment
+an image is asked for.
 `updateCursor` and `updatePointerPos` record; they do not draw.
 
 Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
-`renderScreen()`, so all four see the same image. Compositing for the
+the same pair, so all four see the same image. Compositing for the
 comparisons as well as the captures is what makes a reference image usable:
 `vncdo --cursor local capture ref.png` writes the pointer into `ref.png`, and
 an `expect ref.png` in the same mode has to be comparing against something

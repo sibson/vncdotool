@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from functools import partial
 from pathlib import Path
 from struct import pack
 from typing import IO, Any, Callable, Iterator, TypeVar, Union, cast
@@ -82,13 +83,13 @@ class _StableWatch:
         seconds: float,
         fuzz: int,
         blur: int,
-        box: tuple[int, int, int, int] | None = None,
+        render: Callable[[], Image.Image],
     ) -> None:
         self.client = client
         self.seconds = seconds
         self.fuzz = fuzz
         self.blur = blur
-        self.box = box
+        self.render = render
         self.baseline: Image.Image | None = None
         self.result: Deferred = Deferred()
         self.timer: Any = None
@@ -96,7 +97,7 @@ class _StableWatch:
 
     def start(self) -> Deferred:
         if self.client.screen is not None:
-            self.baseline = self.client.renderScreen(self.box)
+            self.baseline = self.render()
             self._restart()
             self._request(incremental=True)
         else:
@@ -111,7 +112,7 @@ class _StableWatch:
     def _update(self, _: object) -> None:
         if self.settled:
             return
-        frame = self.client.renderScreen(self.box)
+        frame = self.render()
         if self.baseline is None or self._changed(frame):
             self.baseline = frame
             self._restart()
@@ -355,14 +356,23 @@ class VNCDoToolClient(rfb.RFBClient):
         if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
             raise RegionError(f"region {box} is not inside the {width}x{height} screen")
 
-    def renderScreen(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
-        """The framebuffer as a capture or a comparison sees it.
+    def renderScreen(self) -> Image.Image:
+        """The display as a capture or a comparison sees it.
 
         Returns a new image of the framebuffer as it already stands, with the
-        ``--cursor local`` pointer drawn on it, cropped to ``box`` if given.
-        Nothing is asked of the server; call :meth:`refreshScreen` first for
-        anything newer than the last update to arrive.
+        ``--cursor local`` pointer drawn on it. Nothing is asked of the
+        server; call :meth:`refreshScreen` first for anything newer than the
+        last update to arrive.
         """
+        return self._render()
+
+    def renderRegion(self, x: int, y: int, w: int, h: int) -> Image.Image:
+        """A region of the display, as :meth:`renderScreen` gives the whole."""
+        box = (x, y, x + w, y + h)
+        self._requireOnScreen(box)
+        return self._render(box)
+
+    def _render(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
         rendered = self.screen.crop(box) if box else self.screen.copy()
 
         if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
@@ -387,7 +397,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug("captureSave %s", fp)
         if box:
             self._requireOnScreen(box)
-        self.renderScreen(box).save(fp, format=format)
+        self._render(box).save(fp, format=format)
 
         return self
 
@@ -440,7 +450,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug("stableScreen %f", seconds)
         return _StableWatch(
-            self, seconds, self._fuzz(fuzz), self._blur(blur)
+            self, seconds, self._fuzz(fuzz), self._blur(blur), self.renderScreen
         ).start()
 
     def stableRegion(
@@ -455,10 +465,13 @@ class VNCDoToolClient(rfb.RFBClient):
     ) -> Deferred:
         """Wait until a region of the display stops changing"""
         log.debug("stableRegion %f (%s, %s)", seconds, x, y)
-        box = (x, y, x + w, y + h)
-        self._requireOnScreen(box)
+        self._requireOnScreen((x, y, x + w, y + h))
         return _StableWatch(
-            self, seconds, self._fuzz(fuzz), self._blur(blur), box
+            self,
+            seconds,
+            self._fuzz(fuzz),
+            self._blur(blur),
+            partial(self.renderRegion, x, y, w, h),
         ).start()
 
     def _expectFramebuffer(
@@ -495,7 +508,7 @@ class VNCDoToolClient(rfb.RFBClient):
         incremental = False
         if self.screen:
             incremental = True
-            if imagematch.matches(self.renderScreen(box), self.expected_image, fuzz, blur):
+            if imagematch.matches(self._render(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()

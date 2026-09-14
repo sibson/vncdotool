@@ -366,6 +366,20 @@ class TestVNCDoToolClient(TestCase):
         with self.assertRaises(client.RegionError):
             cli.captureRegion(io.BytesIO(), -1, 0, 10, 10)
 
+    def test_renderRegionCropsToTheRegion(self):
+        cli = self._screenOf((100, 100))
+        self.assertEqual(cli.renderRegion(90, 90, 10, 10).size, (10, 10))
+
+    def test_renderRegionRejectsARegionOffTheScreen(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.renderRegion(95, 95, 10, 10)
+
+    def test_renderScreenIsAFreshImage(self):
+        """_StableWatch holds one across the updates that paste into screen."""
+        cli = self._screenOf((100, 100))
+        self.assertIsNot(cli.renderScreen(), cli.screen)
+
     def test_captureRegionAllowsARegionFlushWithTheEdge(self):
         cli = self._screenOf((100, 100))
         fp = io.BytesIO()
