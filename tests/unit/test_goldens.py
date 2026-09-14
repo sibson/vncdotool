@@ -13,7 +13,8 @@ from unittest import mock
 
 from PIL import Image
 
-from vncdotool import client, imagematch, pixelformat
+from vncdotool import imagematch, pixelformat
+from vncdotool.client import VNCDoToolClient
 from vncdotool.cursor import CursorMode
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "goldens"
@@ -60,23 +61,23 @@ class Fixture:
     def steps(self) -> List[Path]:
         return sorted(self.path.glob("step-*.bin.gz"))
 
-    def client(self) -> client.VNCDoToolClient:
-        cli = client.VNCDoToolClient()
-        cli.transport = mock.Mock()
-        cli.factory = mock.Mock()
-        cli.factory.shared = 0
-        cli.factory.password = None
-        cli.factory.cursor = CursorMode.OMIT
-        cli.factory.pseudodesktop = False
-        cli.factory.last_rect = False
-        cli.factory.qemu_extended_key = False
-        cli.requested_pixel_format = pixelformat.PIXEL_FORMATS[self.conditions["pixel_format"]]
+    def client(self) -> VNCDoToolClient:
+        client = VNCDoToolClient()
+        client.transport = mock.Mock()
+        client.factory = mock.Mock()
+        client.factory.shared = 0
+        client.factory.password = None
+        client.factory.cursor = CursorMode.OMIT
+        client.factory.pseudodesktop = False
+        client.factory.last_rect = False
+        client.factory.qemu_extended_key = False
+        client.requested_pixel_format = pixelformat.PIXEL_FORMATS[self.conditions["pixel_format"]]
         # The replay runs the handshake, so it offers what it is configured to
         # offer. A lossy fixture was captured by a client asking for JPEG, and
         # the decoder refuses a JPEG rectangle nobody asked for.
-        cli.requested_jpeg_quality = self.conditions.get("jpeg_quality")
-        cli.dataReceived(gzip.decompress((self.path / "init.bin.gz").read_bytes()))
-        return cli
+        client.requested_jpeg_quality = self.conditions.get("jpeg_quality")
+        client.dataReceived(gzip.decompress((self.path / "init.bin.gz").read_bytes()))
+        return client
 
 
 def fixtures() -> List[Fixture]:
@@ -137,13 +138,13 @@ class GoldenReplay:
 
     def test_decodes_to_its_oracle(self) -> None:
         fixture = self.fixture
-        cli = fixture.client()
+        client = fixture.client()
         for step in fixture.steps():
-            cli.dataReceived(gzip.decompress(step.read_bytes()))
+            client.dataReceived(gzip.decompress(step.read_bytes()))
             key = step.name.removesuffix(".bin.gz").split("-", 2)[2]
             expected = Image.open(SCENES_DIR / f"{key}.png")
-            self.assertIsNotNone(cli.screen, f"{step.name}: no framebuffer after the update")
-            mismatch = fixture.mismatch(cli.screen, expected)
+            self.assertIsNotNone(client.screen, f"{step.name}: no framebuffer after the update")
+            mismatch = fixture.mismatch(client.screen, expected)
             if mismatch is not None:
                 self.fail(f"{fixture.name} {step.name}: {mismatch}")
 

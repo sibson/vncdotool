@@ -12,7 +12,8 @@ import unittest
 from struct import pack
 from unittest import mock
 
-from vncdotool import client, rfb
+from vncdotool import rfb
+from vncdotool.client import VNCDoToolClient
 from vncdotool.cursor import CursorMode
 from vncdotool.const import AuthTypes, Encoding, MsgS2C
 
@@ -28,28 +29,28 @@ def _pixel(r: int, g: int, b: int) -> bytes:
     return bytes((r, g, b, 0))
 
 
-def make_client() -> client.VNCDoToolClient:
-    cli = client.VNCDoToolClient()
-    cli.transport = mock.Mock()
-    cli.factory = mock.Mock()
-    cli.factory.shared = 0
-    cli.factory.password = None
+def make_client() -> VNCDoToolClient:
+    client = VNCDoToolClient()
+    client.transport = mock.Mock()
+    client.factory = mock.Mock()
+    client.factory.shared = 0
+    client.factory.password = None
     # A bare Mock's attributes are all truthy, so the pseudo-encoding flags
     # need pinning to real booleans.
-    cli.factory.cursor = CursorMode.OMIT
-    cli.factory.pseudodesktop = False
-    cli.factory.last_rect = False
-    cli.factory.qemu_extended_key = False
-    cli.setEncodings = mock.Mock()
-    return cli
+    client.factory.cursor = CursorMode.OMIT
+    client.factory.pseudodesktop = False
+    client.factory.last_rect = False
+    client.factory.qemu_extended_key = False
+    client.setEncodings = mock.Mock()
+    return client
 
 
-def handshake(cli: client.VNCDoToolClient, width: int, height: int) -> None:
+def handshake(client: VNCDoToolClient, width: int, height: int) -> None:
     """Drive an RFB 3.3 / AuthTypes.NONE handshake + ServerInit through dataReceived."""
-    cli.dataReceived(b"RFB 003.003\n")
-    cli.dataReceived(pack("!I", AuthTypes.NONE))
+    client.dataReceived(b"RFB 003.003\n")
+    client.dataReceived(pack("!I", AuthTypes.NONE))
     server_init = pack("!HH16sI", width, height, PIXEL_FORMAT.to_bytes(), 0)
-    cli.dataReceived(server_init)
+    client.dataReceived(server_init)
 
 
 def rect(x: int, y: int, w: int, h: int, encoding: Encoding, body: bytes = b"") -> bytes:
