@@ -819,6 +819,12 @@ class TestFullScreenRefresh(TestCase):
         ) + struct.pack("!HH", srcx, srcy)
 
     @staticmethod
+    def desktop_size(width: int, height: int) -> bytes:
+        return struct.pack(
+            "!HHHHi", 0, 0, width, height, rfb.Encoding.PSEUDO_DESKTOP_SIZE
+        )
+
+    @staticmethod
     def cursor(width: int, height: int) -> bytes:
         return (
             struct.pack("!HHHHi", 0, 0, width, height, rfb.Encoding.PSEUDO_CURSOR)
@@ -868,6 +874,24 @@ class TestFullScreenRefresh(TestCase):
 
         self.assertEqual(outcome, [self.client])
         self.assertIn("16 of the 8x4 framebuffer unpainted", logs.output[0])
+
+    def test_pseudo_rectangles_alone_do_not_complete_an_unpainted_refresh(self) -> None:
+        """TightVNC answers the first request on a fresh connection this way."""
+        outcome = self.refresh()
+
+        self.update(self.desktop_size(self.WIDTH, self.HEIGHT), self.cursor(2, 2))
+        self.update(self.cursor(2, 2))
+
+        self.assertEqual(outcome, [], "completed on a framebuffer nothing painted")
+        self.assertEqual(self.client.framebufferUpdateRequest.call_count, 2)
+
+    def test_the_refresh_completes_once_the_paint_follows_the_pseudo_rectangles(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.desktop_size(self.WIDTH, self.HEIGHT), self.cursor(2, 2))
+        self.update(self.raw(0, 0, self.WIDTH, self.HEIGHT))
+
+        self.assertEqual(outcome, [self.client])
 
     def test_an_incremental_refresh_completes_on_the_first_change(self) -> None:
         outcome = self.refresh(incremental=True)
