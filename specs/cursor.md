@@ -136,6 +136,28 @@ comment above TigerVNC's admits as much: "Unfortunately we can't know for
 sure." Offering `-232` makes TightVNC's branch unreachable: with both
 enabled, neither of its two `drawCursor` paths matches.
 
+## The pointer is an overlay, not framebuffer content
+
+`self.screen` holds the server's pixels and nothing else. Under `--cursor
+local` the shape and the position are kept as client state — `cursor`,
+`cmask`, `cfocus`, `cursor_pos` — and `_visibleScreen()` composites them onto
+a copy at the moment an image is asked for. `updateCursor` and
+`updatePointerPos` record; they do not draw.
+
+It used to paste into `self.screen` and nothing restored what the previous
+pointer covered. `updateRectangle` hid most of it by drawing straight after
+pasting fresh server pixels over its own rectangle, but a pointer drawn
+outside that rectangle stayed: `--cursor local` plus `capture --incremental`,
+or a live `expect`, could see two.
+
+Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
+`_visibleScreen()`, so all four see the same image. Compositing for the
+comparisons as well as the captures is what makes a reference image usable:
+`vncdo --cursor local capture ref.png` writes the pointer into `ref.png`, and
+an `expect ref.png` in the same mode has to be comparing against something
+that contains one. A script that wants pointer-free comparisons has the
+default mode, which is the reason the default is `none`.
+
 ## Why the default is `none`
 
 The pointer is nondeterministic content. Where it is depends on wherever the
@@ -172,10 +194,8 @@ is not obtainable and the claim above is unfalsifiable.
 
 It preserves today's pixels and needs no deprecation story. But it keeps
 pointer-dependent content inside every `expect` comparison, which is the
-problem being solved, and it makes every capture depend on the destructive
-`drawCursor` paste (`specs/decoder-architecture.md`). On the servers that
-never paint a pointer it changes nothing at all, so it does not even buy
-consistency.
+problem being solved. On the servers that never paint a pointer it changes
+nothing at all, so it does not even buy consistency.
 
 ## Rejected: three separate flags
 

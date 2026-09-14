@@ -124,7 +124,7 @@ class TestVNCDoToolClient(TestCase):
 
         self.assertIsNone(cli.cursor)
         self.assertIsNone(cli.cmask)
-        cli.drawCursor()
+        cli._visibleScreen()
 
     def test_requested_encodings_replace_the_default_list(self):
         cli = self.client
@@ -198,10 +198,11 @@ class TestVNCDoToolClient(TestCase):
 
     def test_captureSave(self) -> None:
         cli = self.client
-        cli.screen = mock.Mock()
-        fname = 'foo.png'
-        r = cli._captureSave(cli.screen, fname)
-        cli.screen.save.assert_called_once_with(fname, format=None)
+        cli.screen = Image.new("RGB", (2, 2), "red")
+        buffer = io.BytesIO()
+        r = cli._captureSave(None, buffer, format="PNG")
+        with Image.open(buffer) as saved:
+            self.assertEqual(saved.convert("RGB").getpixel((0, 0)), (255, 0, 0))
         assert r == cli
 
     @mock.patch('PIL.Image.open')

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import io
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 from vncdotool.const import Encoding
 from vncdotool.cursor import CursorMode
@@ -16,6 +17,8 @@ from tests.unit.utils import (
 )
 
 POINTER_POS = rect(150, 120, 0, 0, Encoding.PSEUDO_POINTER_POS, b"")
+MOVED_POINTER_POS = rect(10, 20, 0, 0, Encoding.PSEUDO_POINTER_POS, b"")
+BLACK_PIXEL_AT_ORIGIN = rect(0, 0, 1, 1, Encoding.RAW, _pixel(0, 0, 0))
 
 IMAGE_2X2 = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
 MASK_2X2 = bytes([0b11000000, 0b11000000])
@@ -73,7 +76,41 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertEqual(self.cli._visibleScreen().getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertNotEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
+
+    def test_the_shape_is_absent_without_localcursor(self) -> None:
+        handshake(self.cli, 400, 400)
+        self.cli.screen = Image.new("RGB", (400, 400))
+        self.cli.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
+
+        self.assertIsNone(
+            ImageChops.difference(
+                self.cli._visibleScreen(), Image.new("RGB", (400, 400))
+            ).getbbox()
+        )
+
+    def test_an_incremental_capture_holds_one_cursor(self) -> None:
+        """A move leaves nothing behind for a later capture to pick up."""
+        handshake(self.cli, 400, 400)
+        self.cli.factory.cursor = CursorMode.LOCAL
+        self.cli.screen = Image.new("RGB", (400, 400))
+        self.cli.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
+
+        fp = io.BytesIO()
+        self.cli.captureScreen(fp, incremental=True, format="PNG")
+        # One update moving the pointer and repainting a rectangle that does
+        # not cover where it was.
+        self.cli.dataReceived(
+            framebuffer_update([MOVED_POINTER_POS, BLACK_PIXEL_AT_ORIGIN])
+        )
+
+        expected = Image.new("RGB", (400, 400))
+        for i, pixel in enumerate(IMAGE_2X2):
+            expected.putpixel((10 + i % 2, 20 + i // 2), pixel)
+        with Image.open(fp) as capture:
+            difference = ImageChops.difference(capture.convert("RGB"), expected)
+        self.assertIsNone(difference.getbbox(), "capture holds a stale cursor")
 
     def test_a_click_still_goes_where_the_script_put_it(self) -> None:
         handshake(self.cli, 400, 400)

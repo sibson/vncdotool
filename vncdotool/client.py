@@ -106,11 +106,7 @@ class _StableWatch:
         return self.result
 
     def _frame(self) -> Image.Image:
-        screen = self.client.screen
-        assert screen is not None
-        # updateRectangle pastes into self.screen, so an un-copied reference
-        # would change underfoot and never compare as different.
-        return screen.crop(self.box) if self.box else screen.copy()
+        return self.client._visibleScreen(self.box)
 
     def _request(self, incremental: bool) -> None:
         d: Deferred = Deferred()
@@ -365,16 +361,37 @@ class VNCDoToolClient(rfb.RFBClient):
         if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
             raise RegionError(f"region {box} is not inside the {width}x{height} screen")
 
+    def _visibleScreen(
+        self, box: tuple[int, int, int, int] | None = None
+    ) -> Image.Image:
+        """The framebuffer as a capture or a comparison sees it."""
+        assert self.screen is not None
+        # Fresh every call: a caller may hold the result across the updates
+        # that paste into self.screen.
+        visible = self.screen.crop(box) if box else self.screen.copy()
+
+        if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
+            return visible
+
+        at_x, at_y = self.cursor_pos or (self.x, self.y)
+        x = at_x - self.cfocus[0]
+        y = at_y - self.cfocus[1]
+        if box:
+            x -= box[0]
+            y -= box[1]
+        visible.paste(self.cursor, (x, y), self.cmask)
+
+        return visible
+
     def _captureSave(
         self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
     ) -> TClient:
         log.debug("captureSave %s", fp)
-        assert self.screen is not None
         if args:
             self._requireOnScreen(args)  # type: ignore[arg-type]
-            capture = self.screen.crop(args)  # type: ignore[arg-type]
+            capture = self._visibleScreen(args)  # type: ignore[arg-type]
         else:
-            capture = self.screen
+            capture = self._visibleScreen()
         capture.save(fp, format=format)
 
         return self
@@ -483,7 +500,7 @@ class VNCDoToolClient(rfb.RFBClient):
         incremental = False
         if self.screen:
             incremental = True
-            if imagematch.matches(self.screen.crop(box), self.expected_image, fuzz, blur):
+            if imagematch.matches(self._visibleScreen(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()
@@ -632,7 +649,6 @@ class VNCDoToolClient(rfb.RFBClient):
             self.screen.paste(update, (x, y))
 
         self._fullscreen.paintRect(x, y, width, height)
-        self.drawCursor()
 
     def copyRectangle(
         self, srcx: int, srcy: int, x: int, y: int, width: int, height: int
@@ -642,7 +658,6 @@ class VNCDoToolClient(rfb.RFBClient):
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
         self._fullscreen.paintRect(x, y, width, height)
-        self.drawCursor()
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -677,7 +692,6 @@ class VNCDoToolClient(rfb.RFBClient):
         )
         self.cmask = Image.frombytes("1", (width, height), mask)
         self.cfocus = x, y
-        self.drawCursor()
 
     def updatePointerPos(self, x: int, y: int) -> None:
         """The server moved the pointer to (x, y).
@@ -687,19 +701,6 @@ class VNCDoToolClient(rfb.RFBClient):
         put the pointer rather than wherever the desktop moved it to.
         """
         self.cursor_pos = (x, y)
-        self.drawCursor()
-
-    def drawCursor(self) -> None:
-        if not self.cursor:
-            return
-
-        if not self.screen:
-            return
-
-        at_x, at_y = self.cursor_pos or (self.x, self.y)
-        x = at_x - self.cfocus[0]
-        y = at_y - self.cfocus[1]
-        self.screen.paste(self.cursor, (x, y), self.cmask)
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         if not (
