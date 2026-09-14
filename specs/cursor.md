@@ -156,19 +156,10 @@ default mode, which is the reason the default is `none`.
 `self.x`/`self.y` is where the pointer is, and it is the only answer to that
 question. `mouseMove` sets it, `updatePointerPos` sets it, whichever moved
 the pointer last. `_render` draws there and `mouseDown`/`mouseUp` click
-there.
-
-Tracking the server's reported position separately would let a click land
-where the script last aimed rather than where the pointer is. That is not
-how a mouse works, and such a click is invisible: the capture beside it
-shows the pointer somewhere else, and nothing on screen says where the click
-went. A script that wants a click elsewhere moves the pointer there first.
-
-The cost is that on a desktop where something else moves the pointer — a
-person at the physical keyboard, another client sharing the session — a
-`click` following a `move` can land where that other thing left it. That is
-the same race a human shares a mouse with, and it is visible in a capture,
-which the alternative was not.
+there. So on a desktop where something else moves the pointer — a person at
+the physical keyboard, another client sharing the session — a `click`
+following a `move` lands where that other thing left it, and a script that
+wants it elsewhere moves the pointer there first.
 
 ## Why the default is `none`
 
