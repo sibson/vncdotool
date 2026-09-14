@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import io
+import time
 import unittest
 from unittest import mock
 
 from PIL import Image, ImageChops
 
+from vncdotool.client import VNCDoToolClient
 from vncdotool.const import Encoding
 from vncdotool.cursor import CursorMode
 
@@ -28,6 +30,11 @@ MASK_2X2 = bytes([0b11000000, 0b11000000])
 def cursor_rect(hotspot_x: int = 0, hotspot_y: int = 0) -> bytes:
     body = b"".join(_pixel(*p) for p in IMAGE_2X2) + MASK_2X2
     return rect(hotspot_x, hotspot_y, 2, 2, Encoding.PSEUDO_CURSOR, body)
+
+
+def settled(client: VNCDoToolClient) -> None:
+    """Age the client's last move out of POINTER_POS_SETTLE."""
+    client._moved_at = time.monotonic() - client.POINTER_POS_SETTLE
 
 
 class TestPointerPos(unittest.TestCase):
@@ -74,6 +81,7 @@ class TestPointerPos(unittest.TestCase):
         self.client.screen = Image.new("RGB", (400, 400))
         self.client.mouseMove(10, 20)
         self.client.dataReceived(framebuffer_update([cursor_rect()]))
+        settled(self.client)
 
         self.client.dataReceived(framebuffer_update([POINTER_POS]))
 
@@ -120,12 +128,54 @@ class TestPointerPos(unittest.TestCase):
         """
         handshake(self.client, 400, 400)
         self.client.mouseMove(10, 20)
+        settled(self.client)
         self.client.dataReceived(framebuffer_update([POINTER_POS]))
         self.client.pointerEvent = mock.Mock()
 
         self.client.mouseDown(1)
 
         self.client.pointerEvent.assert_called_once_with(150, 120, buttonmask=1)
+
+    def test_a_report_racing_our_own_move_is_ignored(self) -> None:
+        """The position the client asked for wins over one that predates it."""
+        handshake(self.client, 400, 400)
+        self.client.mouseMove(10, 20)
+
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+
+        self.assertEqual((self.client.x, self.client.y), (10, 20))
+
+    def test_a_click_racing_our_own_move_goes_where_the_script_aimed(self) -> None:
+        handshake(self.client, 400, 400)
+        self.client.mouseMove(10, 20)
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+        self.client.pointerEvent = mock.Mock()
+
+        self.client.mouseDown(1)
+
+        self.client.pointerEvent.assert_called_once_with(10, 20, buttonmask=1)
+
+    def test_the_shape_is_drawn_where_the_script_aimed_while_a_move_settles(self) -> None:
+        handshake(self.client, 400, 400)
+        self.client.factory.cursor = CursorMode.LOCAL
+        self.client.screen = Image.new("RGB", (400, 400))
+        self.client.dataReceived(framebuffer_update([cursor_rect()]))
+        self.client.mouseMove(10, 20)
+
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+
+        self.assertEqual(self.client.renderScreen().getpixel((10, 20)), IMAGE_2X2[0])
+
+    def test_a_settled_move_stops_guarding(self) -> None:
+        """The window is measured from the move, not held open by the report."""
+        handshake(self.client, 400, 400)
+        self.client.mouseMove(10, 20)
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+        settled(self.client)
+
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+
+        self.assertEqual((self.client.x, self.client.y), (150, 120))
 
 
 if __name__ == "__main__":
