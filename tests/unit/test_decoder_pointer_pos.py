@@ -32,77 +32,77 @@ def cursor_rect(hotspot_x: int = 0, hotspot_y: int = 0) -> bytes:
 
 class TestPointerPos(unittest.TestCase):
     def setUp(self) -> None:
-        self.cli = make_client()
+        self.client = make_client()
 
     def test_position_is_recorded(self) -> None:
-        handshake(self.cli, 400, 400)
+        handshake(self.client, 400, 400)
 
-        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual((self.cli.x, self.cli.y), (150, 120))
+        self.assertEqual((self.client.x, self.client.y), (150, 120))
 
     def test_rectangle_consumes_no_payload(self) -> None:
         """A following rectangle in the same update still decodes."""
-        handshake(self.cli, 400, 400)
-        self.cli.factory.cursor = CursorMode.LOCAL
+        handshake(self.client, 400, 400)
+        self.client.factory.cursor = CursorMode.LOCAL
 
-        self.cli.dataReceived(framebuffer_update([POINTER_POS, cursor_rect(1, 1)]))
+        self.client.dataReceived(framebuffer_update([POINTER_POS, cursor_rect(1, 1)]))
 
-        self.assertEqual((self.cli.x, self.cli.y), (150, 120))
-        self.assertEqual(self.cli.cfocus, (1, 1))
+        self.assertEqual((self.client.x, self.client.y), (150, 120))
+        self.assertEqual(self.client.cfocus, (1, 1))
 
     def test_position_is_not_a_screen_change(self) -> None:
         """Nothing was painted, so the rectangle must not satisfy a refresh."""
-        handshake(self.cli, 400, 400)
+        handshake(self.client, 400, 400)
 
-        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli.rectanglePos, [])
+        self.assertEqual(self.client.rectanglePos, [])
 
     def test_a_move_by_the_script_supersedes_the_server(self) -> None:
-        handshake(self.cli, 400, 400)
-        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+        handshake(self.client, 400, 400)
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.cli.mouseMove(10, 20)
+        self.client.mouseMove(10, 20)
 
-        self.assertEqual((self.cli.x, self.cli.y), (10, 20))
+        self.assertEqual((self.client.x, self.client.y), (10, 20))
 
     def test_the_shape_is_drawn_where_the_server_says(self) -> None:
         """--localcursor composites at the server's position, not the script's."""
-        handshake(self.cli, 400, 400)
-        self.cli.factory.cursor = CursorMode.LOCAL
-        self.cli.screen = Image.new("RGB", (400, 400))
-        self.cli.mouseMove(10, 20)
-        self.cli.dataReceived(framebuffer_update([cursor_rect()]))
+        handshake(self.client, 400, 400)
+        self.client.factory.cursor = CursorMode.LOCAL
+        self.client.screen = Image.new("RGB", (400, 400))
+        self.client.mouseMove(10, 20)
+        self.client.dataReceived(framebuffer_update([cursor_rect()]))
 
-        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli.render().getpixel((150, 120)), IMAGE_2X2[0])
-        self.assertNotEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertEqual(self.client.renderScreen().getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertNotEqual(self.client.screen.getpixel((150, 120)), IMAGE_2X2[0])
 
     def test_the_shape_is_absent_without_localcursor(self) -> None:
-        handshake(self.cli, 400, 400)
-        self.cli.screen = Image.new("RGB", (400, 400))
-        self.cli.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
+        handshake(self.client, 400, 400)
+        self.client.screen = Image.new("RGB", (400, 400))
+        self.client.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
 
         self.assertIsNone(
             ImageChops.difference(
-                self.cli.render(), Image.new("RGB", (400, 400))
+                self.client.renderScreen(), Image.new("RGB", (400, 400))
             ).getbbox()
         )
 
     def test_an_incremental_capture_holds_one_cursor(self) -> None:
         """A move leaves nothing behind for a later capture to pick up."""
-        handshake(self.cli, 400, 400)
-        self.cli.factory.cursor = CursorMode.LOCAL
-        self.cli.screen = Image.new("RGB", (400, 400))
-        self.cli.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
+        handshake(self.client, 400, 400)
+        self.client.factory.cursor = CursorMode.LOCAL
+        self.client.screen = Image.new("RGB", (400, 400))
+        self.client.dataReceived(framebuffer_update([cursor_rect(), POINTER_POS]))
 
         fp = io.BytesIO()
-        self.cli.captureScreen(fp, incremental=True, format="PNG")
+        self.client.captureScreen(fp, incremental=True, format="PNG")
         # One update moving the pointer and repainting a rectangle that does
         # not cover where it was.
-        self.cli.dataReceived(
+        self.client.dataReceived(
             framebuffer_update([MOVED_POINTER_POS, BLACK_PIXEL_AT_ORIGIN])
         )
 
@@ -118,14 +118,14 @@ class TestPointerPos(unittest.TestCase):
         real mouse does; clicking where the script last aimed would put it
         somewhere the pointer is not.
         """
-        handshake(self.cli, 400, 400)
-        self.cli.mouseMove(10, 20)
-        self.cli.dataReceived(framebuffer_update([POINTER_POS]))
-        self.cli.pointerEvent = mock.Mock()
+        handshake(self.client, 400, 400)
+        self.client.mouseMove(10, 20)
+        self.client.dataReceived(framebuffer_update([POINTER_POS]))
+        self.client.pointerEvent = mock.Mock()
 
-        self.cli.mouseDown(1)
+        self.client.mouseDown(1)
 
-        self.cli.pointerEvent.assert_called_once_with(150, 120, buttonmask=1)
+        self.client.pointerEvent.assert_called_once_with(150, 120, buttonmask=1)
 
 
 if __name__ == "__main__":
