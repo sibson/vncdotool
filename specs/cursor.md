@@ -140,9 +140,15 @@ enabled, neither of its two `drawCursor` paths matches.
 
 `self.screen` holds the server's pixels and nothing else. Under `--cursor
 local` the shape and the position are kept as client state — `cursor`,
-`cmask`, `cfocus`, `cursor_pos` — and `_visibleScreen()` composites them onto
-a copy at the moment an image is asked for. `updateCursor` and
+`cmask`, `cfocus`, `cursor_pos` — and `_snapshot()` composites them onto a
+copy at the moment an image is asked for. `updateCursor` and
 `updatePointerPos` record; they do not draw.
+
+`cursor_pos` is where the pointer is, full stop: `mouseMove` sets it and so
+does `updatePointerPos`, whichever moved it last. `self.x`/`self.y` are a
+different quantity — where the script last aimed, and so where a later
+`click` goes — which is why `updatePointerPos` leaves them alone when the
+desktop warps the pointer out from under them.
 
 It used to paste into `self.screen` and nothing restored what the previous
 pointer covered. `updateRectangle` hid most of it by drawing straight after
@@ -151,7 +157,7 @@ outside that rectangle stayed: `--cursor local` plus `capture --incremental`,
 or a live `expect`, could see two.
 
 Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
-`_visibleScreen()`, so all four see the same image. Compositing for the
+`_snapshot()`, so all four see the same image. Compositing for the
 comparisons as well as the captures is what makes a reference image usable:
 `vncdo --cursor local capture ref.png` writes the pointer into `ref.png`, and
 an `expect ref.png` in the same mode has to be comparing against something

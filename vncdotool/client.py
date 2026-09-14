@@ -68,6 +68,10 @@ class RegionError(VNCDoException):
     """A region to compare or capture is not on the screen"""
 
 
+class NoFramebufferError(VNCDoException):
+    """Asked for the screen before a server sent any of it"""
+
+
 class _StableWatch:
     """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
 
@@ -106,7 +110,7 @@ class _StableWatch:
         return self.result
 
     def _frame(self) -> Image.Image:
-        return self.client._visibleScreen(self.box)
+        return self.client._snapshot(self.box)
 
     def _request(self, incremental: bool) -> None:
         d: Deferred = Deferred()
@@ -207,9 +211,7 @@ class VNCDoToolClient(rfb.RFBClient):
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
-    # Where the server last said the pointer is, or None when the script's
-    # own (x, y) is still the best answer.
-    cursor_pos: tuple[int, int] | None = None
+    cursor_pos = (x, y)
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -328,7 +330,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Save a region of the current display to filename"""
         log.debug("captureRegion %s", fp)
         self._requireOnScreen((x, y, x + w, y + h))
-        return self._capture(fp, incremental, x, y, x + w, y + h)
+        return self._capture(fp, incremental, (x, y, x + w, y + h))
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
@@ -343,11 +345,14 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
-        self, fp: TFile, incremental: bool, *args: int, format: str | None = None
+        self,
+        fp: TFile,
+        incremental: bool,
+        box: tuple[int, int, int, int] | None = None,
+        format: str | None = None,
     ) -> Deferred:
         d = self.refreshScreen(incremental)
-        kwargs = {"format": format} if format else {}
-        d.addCallback(self._captureSave, fp, *args, **kwargs)
+        d.addCallback(self._captureSave, fp, box, format=format)
         return d
 
     def _requireOnScreen(self, box: tuple[int, int, int, int]) -> None:
@@ -361,38 +366,38 @@ class VNCDoToolClient(rfb.RFBClient):
         if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
             raise RegionError(f"region {box} is not inside the {width}x{height} screen")
 
-    def _visibleScreen(
-        self, box: tuple[int, int, int, int] | None = None
-    ) -> Image.Image:
+    def _snapshot(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
         """The framebuffer as a capture or a comparison sees it."""
-        assert self.screen is not None
+        if self.screen is None:
+            raise NoFramebufferError("no framebuffer update has arrived yet")
+
         # Fresh every call: a caller may hold the result across the updates
         # that paste into self.screen.
-        visible = self.screen.crop(box) if box else self.screen.copy()
+        snapshot = self.screen.crop(box) if box else self.screen.copy()
 
         if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
-            return visible
+            return snapshot
 
-        at_x, at_y = self.cursor_pos or (self.x, self.y)
-        x = at_x - self.cfocus[0]
-        y = at_y - self.cfocus[1]
+        x = self.cursor_pos[0] - self.cfocus[0]
+        y = self.cursor_pos[1] - self.cfocus[1]
         if box:
             x -= box[0]
             y -= box[1]
-        visible.paste(self.cursor, (x, y), self.cmask)
+        snapshot.paste(self.cursor, (x, y), self.cmask)
 
-        return visible
+        return snapshot
 
     def _captureSave(
-        self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
+        self: TClient,
+        data: object,
+        fp: TFile,
+        box: tuple[int, int, int, int] | None = None,
+        format: str | None = None,
     ) -> TClient:
         log.debug("captureSave %s", fp)
-        if args:
-            self._requireOnScreen(args)  # type: ignore[arg-type]
-            capture = self._visibleScreen(args)  # type: ignore[arg-type]
-        else:
-            capture = self._visibleScreen()
-        capture.save(fp, format=format)
+        if box:
+            self._requireOnScreen(box)
+        self._snapshot(box).save(fp, format=format)
 
         return self
 
@@ -500,7 +505,7 @@ class VNCDoToolClient(rfb.RFBClient):
         incremental = False
         if self.screen:
             incremental = True
-            if imagematch.matches(self._visibleScreen(box), self.expected_image, fuzz, blur):
+            if imagematch.matches(self._snapshot(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()
@@ -513,7 +518,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
-        self.cursor_pos = None
+        self.cursor_pos = (x, y)
         self.pointerEvent(x, y, self.buttons)
         return self
 

@@ -124,7 +124,7 @@ class TestVNCDoToolClient(TestCase):
 
         self.assertIsNone(cli.cursor)
         self.assertIsNone(cli.cmask)
-        cli._visibleScreen()
+        cli._snapshot()
 
     def test_requested_encodings_replace_the_default_list(self):
         cli = self.client
@@ -181,7 +181,7 @@ class TestVNCDoToolClient(TestCase):
         fname = 'foo.png'
 
         d = cli.captureScreen(fname)
-        d.addCallback.assert_called_once_with(cli._captureSave, fname)
+        d.addCallback.assert_called_once_with(cli._captureSave, fname, None, format=None)
         assert cli.framebufferUpdateRequest.called
 
     @mock.patch("vncdotool.client.Deferred")
@@ -193,7 +193,7 @@ class TestVNCDoToolClient(TestCase):
         cli.vncConnectionMade()
         buffer = io.BytesIO()
         d = cli.captureScreen(buffer, format="png")
-        d.addCallback.assert_called_once_with(cli._captureSave, buffer, format="png")
+        d.addCallback.assert_called_once_with(cli._captureSave, buffer, None, format="png")
         assert cli.framebufferUpdateRequest.called
 
     def test_captureSave(self) -> None:
@@ -369,7 +369,7 @@ class TestVNCDoToolClient(TestCase):
     def test_captureRegionAllowsARegionFlushWithTheEdge(self):
         cli = self._screenOf((100, 100))
         fp = io.BytesIO()
-        cli._captureSave(None, fp, 90, 90, 100, 100, format="png")
+        cli._captureSave(None, fp, (90, 90, 100, 100), format="png")
         assert client.Image.open(fp).size == (10, 10)
 
     @mock.patch('PIL.Image.frombytes')

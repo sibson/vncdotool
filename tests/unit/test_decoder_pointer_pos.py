@@ -64,7 +64,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.mouseMove(10, 20)
 
-        self.assertIsNone(self.cli.cursor_pos)
+        self.assertEqual(self.cli.cursor_pos, (10, 20))
 
     def test_the_shape_is_drawn_where_the_server_says(self) -> None:
         """--localcursor composites at the server's position, not the script's."""
@@ -76,7 +76,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli._visibleScreen().getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertEqual(self.cli._snapshot().getpixel((150, 120)), IMAGE_2X2[0])
         self.assertNotEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
 
     def test_the_shape_is_absent_without_localcursor(self) -> None:
@@ -86,7 +86,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.assertIsNone(
             ImageChops.difference(
-                self.cli._visibleScreen(), Image.new("RGB", (400, 400))
+                self.cli._snapshot(), Image.new("RGB", (400, 400))
             ).getbbox()
         )
 
