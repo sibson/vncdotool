@@ -221,11 +221,9 @@ class NullTransport:
 
 
 class VNCLoggingClient(VNCDoToolClient):
-    """Specialization of a :class:`VNCDoToolClient` that will save screen captures."""
+    """Specialization of a :class:`VNCDoToolClient` that decodes the logged session."""
 
-    capture_file: str | None = None
     capture: CaptureWriter | None = None
-    recorder: Callable[[str], int] | None = None
 
     def vncProtocolError(self, reason: str) -> None:
         # NullTransport.loseConnection() is a no-op, so the parser has to be
@@ -241,14 +239,6 @@ class VNCLoggingClient(VNCDoToolClient):
             self.capture.note_encoding(encoding)
         super()._handleRectangle(block)
 
-    def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
-        if self.capture_file:
-            assert self.screen is not None
-            self.screen.save(self.capture_file)
-            assert self.recorder is not None
-            self.recorder("expect %s\n" % self.capture_file)
-            self.capture_file = None
-
 
 class VNCLoggingClientProxy(portforward.ProxyClient):
     """Accept data from a server and forward to logger and downstream client.
@@ -260,14 +250,12 @@ class VNCLoggingClientProxy(portforward.ProxyClient):
     """
 
     vnclog: VNCLoggingClient | None = None
-    ncaptures = 0
     peer: VNCLoggingServerProxy
 
     def startLogging(self, peer: VNCLoggingServerProxy) -> None:
         self.vnclog = VNCLoggingClient()
         self.vnclog.transport = NullTransport()
         self.vnclog.factory = self.peer.factory
-        self.vnclog.recorder = peer.recorder
         self.vnclog.capture = peer.capture
         # XXX double call to connectionMade?
         self.vnclog.connectionMade()
