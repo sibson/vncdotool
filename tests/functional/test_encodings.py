@@ -76,14 +76,24 @@ QEMU_ENCODINGS = {"raw", "hextile", "zrle", "tight"}
 QEMU_SETTLE_SECONDS = "1"
 
 
+# The screen a shell was told to draw stays up until something draws over
+# it, so the seven encodings comparing against one screen can share a single
+# drawing of it. Holding one screen at a time keeps that true whatever order
+# the cases run in: a screen this does not hold is drawn again.
+_DRAWN: Dict[str, Image.Image] = {}
+
+
 def draw_on_qemu(test: TestCase, screen: str) -> Image.Image:
     """Put one of QEMU_SCREENS up, and return the Raw capture of it."""
-    argv: List[str] = []
-    for command in QEMU_SCREENS[screen]:
-        argv += ["type", command, "key", "enter"]
-    argv += ["stable", QEMU_SETTLE_SECONDS]
-    oracle, _ = capture(test, QEMU, "raw", *argv)
-    return oracle
+    if screen not in _DRAWN:
+        argv: List[str] = []
+        for command in QEMU_SCREENS[screen]:
+            argv += ["type", command, "key", "enter"]
+        argv += ["stable", QEMU_SETTLE_SECONDS]
+        oracle, _ = capture(test, QEMU, "raw", *argv)
+        _DRAWN.clear()
+        _DRAWN[screen] = oracle
+    return _DRAWN[screen]
 
 
 class RendersTheScene:
@@ -150,8 +160,8 @@ class RenderMatchesRaw:
 
 def qemu_cases() -> Iterator[TestCase]:
     """One case per encoding against each firmware screen."""
-    for encoding in sorted(decoders.ENCODING_NAMES):
-        for screen in sorted(QEMU_SCREENS):
+    for screen in sorted(QEMU_SCREENS):
+        for encoding in sorted(decoders.ENCODING_NAMES):
             name = f"TestMatchesRaw_qemu_{encoding}_screen_{screen}"
             case = type(
                 name, (RenderMatchesRaw, FleetTestCase),
