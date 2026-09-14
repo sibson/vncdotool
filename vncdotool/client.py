@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+from functools import partial
 from pathlib import Path
 from struct import pack
 from typing import IO, Any, Callable, Iterator, TypeVar, Union, cast
@@ -82,13 +83,13 @@ class _StableWatch:
         seconds: float,
         fuzz: int,
         blur: int,
-        box: tuple[int, int, int, int] | None = None,
+        render: Callable[[], Image.Image],
     ) -> None:
         self.client = client
         self.seconds = seconds
         self.fuzz = fuzz
         self.blur = blur
-        self.box = box
+        self.render = render
         self.baseline: Image.Image | None = None
         self.result: Deferred = Deferred()
         self.timer: Any = None
@@ -96,7 +97,7 @@ class _StableWatch:
 
     def start(self) -> Deferred:
         if self.client.screen is not None:
-            self.baseline = self._frame()
+            self.baseline = self.render()
             self._restart()
             self._request(incremental=True)
         else:
@@ -105,23 +106,13 @@ class _StableWatch:
             self._request(incremental=False)
         return self.result
 
-    def _frame(self) -> Image.Image:
-        screen = self.client.screen
-        assert screen is not None
-        # updateRectangle pastes into self.screen, so an un-copied reference
-        # would change underfoot and never compare as different.
-        return screen.crop(self.box) if self.box else screen.copy()
-
     def _request(self, incremental: bool) -> None:
-        d: Deferred = Deferred()
-        d.addCallback(self._update)
-        self.client.deferred = d
-        self.client._requestRefresh(incremental)
+        self.client.refreshScreen(incremental).addCallback(self._update)
 
     def _update(self, _: object) -> None:
         if self.settled:
             return
-        frame = self._frame()
+        frame = self.render()
         if self.baseline is None or self._changed(frame):
             self.baseline = frame
             self._restart()
@@ -211,9 +202,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
-    # Where the server last said the pointer is, or None when the script's
-    # own (x, y) is still the best answer.
-    cursor_pos: tuple[int, int] | None = None
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
@@ -332,7 +320,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Save a region of the current display to filename"""
         log.debug("captureRegion %s", fp)
         self._requireOnScreen((x, y, x + w, y + h))
-        return self._capture(fp, incremental, x, y, x + w, y + h)
+        return self._capture(fp, incremental, (x, y, x + w, y + h))
 
     def refreshScreen(self, incremental: bool = False) -> Deferred:
         d = self.deferred = Deferred()
@@ -347,11 +335,14 @@ class VNCDoToolClient(rfb.RFBClient):
         self.framebufferUpdateRequest(incremental=incremental)
 
     def _capture(
-        self, fp: TFile, incremental: bool, *args: int, format: str | None = None
+        self,
+        fp: TFile,
+        incremental: bool,
+        box: tuple[int, int, int, int] | None = None,
+        format: str | None = None,
     ) -> Deferred:
         d = self.refreshScreen(incremental)
-        kwargs = {"format": format} if format else {}
-        d.addCallback(self._captureSave, fp, *args, **kwargs)
+        d.addCallback(self._captureSave, fp, box, format=format)
         return d
 
     def _requireOnScreen(self, box: tuple[int, int, int, int]) -> None:
@@ -365,17 +356,48 @@ class VNCDoToolClient(rfb.RFBClient):
         if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
             raise RegionError(f"region {box} is not inside the {width}x{height} screen")
 
+    def renderScreen(self) -> Image.Image:
+        """The display as a capture or a comparison sees it.
+
+        Returns a new image of the framebuffer as it already stands, with the
+        ``--cursor local`` pointer drawn on it. Nothing is asked of the
+        server; call :meth:`refreshScreen` first for anything newer than the
+        last update to arrive.
+        """
+        return self._render()
+
+    def renderRegion(self, x: int, y: int, w: int, h: int) -> Image.Image:
+        """A region of the display, as :meth:`renderScreen` gives the whole."""
+        box = (x, y, x + w, y + h)
+        self._requireOnScreen(box)
+        return self._render(box)
+
+    def _render(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
+        rendered = self.screen.crop(box) if box else self.screen.copy()
+
+        if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
+            return rendered
+
+        x = self.x - self.cfocus[0]
+        y = self.y - self.cfocus[1]
+        if box:
+            x -= box[0]
+            y -= box[1]
+        rendered.paste(self.cursor, (x, y), self.cmask)
+
+        return rendered
+
     def _captureSave(
-        self: TClient, data: object, fp: TFile, *args: int, format: str | None = None
+        self: TClient,
+        data: object,
+        fp: TFile,
+        box: tuple[int, int, int, int] | None = None,
+        format: str | None = None,
     ) -> TClient:
         log.debug("captureSave %s", fp)
-        assert self.screen is not None
-        if args:
-            self._requireOnScreen(args)  # type: ignore[arg-type]
-            capture = self.screen.crop(args)  # type: ignore[arg-type]
-        else:
-            capture = self.screen
-        capture.save(fp, format=format)
+        if box:
+            self._requireOnScreen(box)
+        self._render(box).save(fp, format=format)
 
         return self
 
@@ -428,7 +450,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """
         log.debug("stableScreen %f", seconds)
         return _StableWatch(
-            self, seconds, self._fuzz(fuzz), self._blur(blur)
+            self, seconds, self._fuzz(fuzz), self._blur(blur), self.renderScreen
         ).start()
 
     def stableRegion(
@@ -443,10 +465,13 @@ class VNCDoToolClient(rfb.RFBClient):
     ) -> Deferred:
         """Wait until a region of the display stops changing"""
         log.debug("stableRegion %f (%s, %s)", seconds, x, y)
-        box = (x, y, x + w, y + h)
-        self._requireOnScreen(box)
+        self._requireOnScreen((x, y, x + w, y + h))
         return _StableWatch(
-            self, seconds, self._fuzz(fuzz), self._blur(blur), box
+            self,
+            seconds,
+            self._fuzz(fuzz),
+            self._blur(blur),
+            partial(self.renderRegion, x, y, w, h),
         ).start()
 
     def _expectFramebuffer(
@@ -483,7 +508,7 @@ class VNCDoToolClient(rfb.RFBClient):
         incremental = False
         if self.screen:
             incremental = True
-            if imagematch.matches(self.screen.crop(box), self.expected_image, fuzz, blur):
+            if imagematch.matches(self._render(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()
@@ -496,7 +521,6 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
-        self.cursor_pos = None
         self.pointerEvent(x, y, self.buttons)
         return self
 
@@ -632,7 +656,6 @@ class VNCDoToolClient(rfb.RFBClient):
             self.screen.paste(update, (x, y))
 
         self._fullscreen.paintRect(x, y, width, height)
-        self.drawCursor()
 
     def copyRectangle(
         self, srcx: int, srcy: int, x: int, y: int, width: int, height: int
@@ -642,7 +665,6 @@ class VNCDoToolClient(rfb.RFBClient):
         region = self.screen.crop((srcx, srcy, srcx + width, srcy + height))
         self.screen.paste(region, (x, y))
         self._fullscreen.paintRect(x, y, width, height)
-        self.drawCursor()
 
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
@@ -677,29 +699,10 @@ class VNCDoToolClient(rfb.RFBClient):
         )
         self.cmask = Image.frombytes("1", (width, height), mask)
         self.cfocus = x, y
-        self.drawCursor()
 
     def updatePointerPos(self, x: int, y: int) -> None:
-        """The server moved the pointer to (x, y).
-
-        Only where the cursor is drawn changes. self.x/self.y stay the
-        script's, so a later mouseDown still clicks where the script last
-        put the pointer rather than wherever the desktop moved it to.
-        """
-        self.cursor_pos = (x, y)
-        self.drawCursor()
-
-    def drawCursor(self) -> None:
-        if not self.cursor:
-            return
-
-        if not self.screen:
-            return
-
-        at_x, at_y = self.cursor_pos or (self.x, self.y)
-        x = at_x - self.cfocus[0]
-        y = at_y - self.cfocus[1]
-        self.screen.paste(self.cursor, (x, y), self.cmask)
+        """The server moved the pointer to (x, y)."""
+        self.x, self.y = x, y
 
     def updateDesktopSize(self, width: int, height: int) -> None:
         if not (

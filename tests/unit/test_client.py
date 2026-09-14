@@ -124,7 +124,7 @@ class TestVNCDoToolClient(TestCase):
 
         self.assertIsNone(cli.cursor)
         self.assertIsNone(cli.cmask)
-        cli.drawCursor()
+        cli.renderScreen()
 
     def test_requested_encodings_replace_the_default_list(self):
         cli = self.client
@@ -181,7 +181,7 @@ class TestVNCDoToolClient(TestCase):
         fname = 'foo.png'
 
         d = cli.captureScreen(fname)
-        d.addCallback.assert_called_once_with(cli._captureSave, fname)
+        d.addCallback.assert_called_once_with(cli._captureSave, fname, None, format=None)
         assert cli.framebufferUpdateRequest.called
 
     @mock.patch("vncdotool.client.Deferred")
@@ -193,15 +193,16 @@ class TestVNCDoToolClient(TestCase):
         cli.vncConnectionMade()
         buffer = io.BytesIO()
         d = cli.captureScreen(buffer, format="png")
-        d.addCallback.assert_called_once_with(cli._captureSave, buffer, format="png")
+        d.addCallback.assert_called_once_with(cli._captureSave, buffer, None, format="png")
         assert cli.framebufferUpdateRequest.called
 
     def test_captureSave(self) -> None:
         cli = self.client
-        cli.screen = mock.Mock()
-        fname = 'foo.png'
-        r = cli._captureSave(cli.screen, fname)
-        cli.screen.save.assert_called_once_with(fname, format=None)
+        cli.screen = Image.new("RGB", (2, 2), "red")
+        buffer = io.BytesIO()
+        r = cli._captureSave(None, buffer, format="PNG")
+        with Image.open(buffer) as saved:
+            self.assertEqual(saved.convert("RGB").getpixel((0, 0)), (255, 0, 0))
         assert r == cli
 
     @mock.patch('PIL.Image.open')
@@ -365,10 +366,24 @@ class TestVNCDoToolClient(TestCase):
         with self.assertRaises(client.RegionError):
             cli.captureRegion(io.BytesIO(), -1, 0, 10, 10)
 
+    def test_renderRegionCropsToTheRegion(self):
+        cli = self._screenOf((100, 100))
+        self.assertEqual(cli.renderRegion(90, 90, 10, 10).size, (10, 10))
+
+    def test_renderRegionRejectsARegionOffTheScreen(self):
+        cli = self._screenOf((100, 100))
+        with self.assertRaises(client.RegionError):
+            cli.renderRegion(95, 95, 10, 10)
+
+    def test_renderScreenIsAFreshImage(self):
+        """_StableWatch holds one across the updates that paste into screen."""
+        cli = self._screenOf((100, 100))
+        self.assertIsNot(cli.renderScreen(), cli.screen)
+
     def test_captureRegionAllowsARegionFlushWithTheEdge(self):
         cli = self._screenOf((100, 100))
         fp = io.BytesIO()
-        cli._captureSave(None, fp, 90, 90, 100, 100, format="png")
+        cli._captureSave(None, fp, (90, 90, 100, 100), format="png")
         assert client.Image.open(fp).size == (10, 10)
 
     @mock.patch('PIL.Image.frombytes')

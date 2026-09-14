@@ -699,6 +699,7 @@ or test depending on its wording cites a commit permalink rather than `master`.
   `self.screen` and nothing erases the previous position, so stale pointers
   persist where the server does not resend. Pre-existing, and the boundary
   between decoder and client is drawn so fixing it later touches no decoder.
+  Fixed since, in `specs/cursor.md`; it touched no decoder.
 - No fix for `VNCDoToolClient.updateCursor`, where a zero-width or zero-height cursor sets
   `self.cursor = None` and then falls through to `Image.frombytes` with a zero
   dimension instead of returning. Worth a separate issue; it is a client bug, not

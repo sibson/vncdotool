@@ -136,6 +136,32 @@ comment above TigerVNC's admits as much: "Unfortunately we can't know for
 sure." Offering `-232` makes TightVNC's branch unreachable: with both
 enabled, neither of its two `drawCursor` paths matches.
 
+## The pointer is an overlay, not framebuffer content
+
+`self.screen` holds the server's pixels and nothing else. Under `--cursor
+local` the shape is kept as client state — `cursor`, `cmask`, `cfocus` — and
+`renderScreen()` and `renderRegion()` composite it onto a copy at the moment
+an image is asked for.
+`updateCursor` and `updatePointerPos` record; they do not draw.
+
+Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
+the same pair, so all four see the same image. Compositing for the
+comparisons as well as the captures is what makes a reference image usable:
+`vncdo --cursor local capture ref.png` writes the pointer into `ref.png`, and
+an `expect ref.png` in the same mode has to be comparing against something
+that contains one. A script that wants pointer-free comparisons has the
+default mode, which is the reason the default is `none`.
+
+## One pointer, one position
+
+`self.x`/`self.y` is where the pointer is, and it is the only answer to that
+question. `mouseMove` sets it, `updatePointerPos` sets it, whichever moved
+the pointer last. `renderScreen` draws there and `mouseDown`/`mouseUp` click
+there. So on a desktop where something else moves the pointer — a person at
+the physical keyboard, another client sharing the session — a `click`
+following a `move` lands where that other thing left it, and a script that
+wants it elsewhere moves the pointer there first.
+
 ## Why the default is `none`
 
 The pointer is nondeterministic content. Where it is depends on wherever the
@@ -172,10 +198,8 @@ is not obtainable and the claim above is unfalsifiable.
 
 It preserves today's pixels and needs no deprecation story. But it keeps
 pointer-dependent content inside every `expect` comparison, which is the
-problem being solved, and it makes every capture depend on the destructive
-`drawCursor` paste (`specs/decoder-architecture.md`). On the servers that
-never paint a pointer it changes nothing at all, so it does not even buy
-consistency.
+problem being solved. On the servers that never paint a pointer it changes
+nothing at all, so it does not even buy consistency.
 
 ## Rejected: three separate flags
 
