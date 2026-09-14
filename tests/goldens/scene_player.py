@@ -37,9 +37,21 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # Without this, key and button events never reach the container's
-        # `xev -root` sink.
-        screen.root.change_attributes(event_mask=X.KeyPressMask | X.ButtonPressMask)
+        # Keys are selected on the root window, not on this one, or they stop
+        # here instead of propagating to the container's `xev -root` sink.
+        # ButtonPressMask is left out: X grants it to at most one client per
+        # window, xev holds it, and naming it would fail the whole request.
+        #
+        # python-xlib prints, rather than raises, an error no handler was
+        # given for, and calls the handler it was given with (error, request).
+        failures = []
+        screen.root.change_attributes(
+            event_mask=X.KeyPressMask,
+            onerror=lambda failure, request: failures.append(failure),
+        )
+        self.display.sync()
+        if failures:
+            raise SystemExit(f"scene_player: cannot watch the root window for keys: {failures[0]}")
         self.gc = self.window.create_gc()
         self.window.map()
         self.paint()
