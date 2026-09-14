@@ -167,17 +167,8 @@ jobs:
         if: always()
         run: docker compose -f tests/servers/docker-compose.yml ps
 
-      - name: Smoke test the fleet
-        run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_docker.py'
-
-      # Naming the modules keeps the smoke module out of this run; discovery
-      # offers no way to exclude one.
       - name: Run functional tests
-        run: |
-          modules=$(ls tests/functional/test_*.py \
-            | grep -v '/test_server_compat_docker\.py$' \
-            | sed 's|/|.|g; s|\.py$||')
-          uv run coverage run --parallel-mode -m unittest -v $modules
+        run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t .
 
       # Nothing but a failed image comparison creates this directory, so its
       # existence -- not `failure()`, which any other broken test also
