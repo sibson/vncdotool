@@ -59,7 +59,8 @@ differs per server.
 | server | paints the pointer | stops when offered `-239` |
 |---|---|---|
 | tigervnc, +auth/vencrypt variants | no | n/a, answers 0x0 |
-| wayvnc, qemu, qemu-tls | no | n/a, answers nothing |
+| qemu, qemu-tls | no | n/a, answers nothing |
+| wayvnc | for the first ~70ms after a move, then removes it | n/a, answers nothing |
 | selenoid | no | n/a, answers 0x0 |
 | x11vnc | **yes**, 18x18 | yes |
 | libvncserver-example | **yes**, 32x32 | yes |
@@ -196,6 +197,51 @@ it is serving: the same fleet reproduced the stale report several times an
 hour while the pointer sat over a window setting its own 16x16 cursor, and
 not once after a restart put an 18x18 root-window cursor back under it.
 `tests/unit/test_decoder_pointer_pos.py` is the instrument.
+
+## What the capture waits for
+
+`test_cursor.py`'s `at_each()` moves the pointer, pauses `CURSOR_SETTLE`, and
+captures, once per position over one connection. That pause is there for
+wayvnc and for nothing else.
+
+Measured on the docker fleet, Docker Desktop on macOS, the near/far pair
+taken over one `vncdo` connection and compared over `cursor_box()` exactly as
+`assert_pointer_position_is_invisible` does:
+
+| pause | wayvnc pairs carrying a pointer |
+|---|---|
+| omitted | 12/20 |
+| 0.05 | 20/20 |
+| 0.06 | 20/20 |
+| 0.08 | 0/20 |
+| 0.1 | 0/20 |
+| 0.2 | 0/20 |
+| 0.5 | 0/20 |
+
+Taking each capture over its own connection gave the same edge: dirty
+through 0.06, clean from 0.08. The artifact is a real arrow at the pointer,
+10x16 and pixel-identical run to run, so wayvnc composites the pointer on the
+move and takes it back out again between 60ms and 80ms later. `CURSOR_SETTLE`
+is 0.2 to leave room on slower hardware. Every other fleet server --
+tigervnc and its three variants, x11vnc, libvncserver-example, qemu,
+qemu-tls -- was clean 10/10 with the pause omitted entirely.
+
+The pause is not the detection window for a server that starts painting
+again, which is what a settle before a capture looks like it must be for.
+With x11vnc and libvncserver-example forced back into painting by
+`--cursor server`, the pointer is in the framebuffer before the capture's own
+refresh returns: over 30 moves each, the first full capture after the move
+already carried it, at a median 16ms and 61ms respectively -- which is the
+capture round trip itself, 20ms and 59ms measured with nothing moving. The
+same near/far comparison run over the CLI caught the painted pointer 15/15 at
+every pause tried, including none, on both servers. A capture cannot observe
+the framebuffer without asking for it, and the asking already costs more than
+the paint.
+
+`CursorShapeOffered` and `CursorPositionIndependent` (`utils.py`) keep their
+own 0.5s pauses: both also run against the Windows servers of the
+`os-servers` workflow, on a real interactive desktop that none of this
+measured.
 
 ## Why the default is `none`
 
