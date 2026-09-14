@@ -1,8 +1,5 @@
 """The critical user journey: connect, send input, capture a screen.
 
-Run first and cheaply, so `vncdo` breaking outright fails here rather than
-part-way through the suites that take minutes.
-
 Screenshots captured here are kept rather than thrown away: each one is
 written to the screenshots directory (``tests/servers/screenshots`` by
 default, override with ``VNCDOTOOL_SCREENSHOT_DIR``) so that a failing or
