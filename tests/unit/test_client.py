@@ -124,7 +124,7 @@ class TestVNCDoToolClient(TestCase):
 
         self.assertIsNone(cli.cursor)
         self.assertIsNone(cli.cmask)
-        cli._snapshot()
+        cli._render()
 
     def test_requested_encodings_replace_the_default_list(self):
         cli = self.client

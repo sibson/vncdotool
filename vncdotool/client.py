@@ -68,10 +68,6 @@ class RegionError(VNCDoException):
     """A region to compare or capture is not on the screen"""
 
 
-class NoFramebufferError(VNCDoException):
-    """Asked for the screen before a server sent any of it"""
-
-
 class _StableWatch:
     """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
 
@@ -110,7 +106,7 @@ class _StableWatch:
         return self.result
 
     def _frame(self) -> Image.Image:
-        return self.client._snapshot(self.box)
+        return self.client._render(self.box)
 
     def _request(self, incremental: bool) -> None:
         d: Deferred = Deferred()
@@ -365,26 +361,23 @@ class VNCDoToolClient(rfb.RFBClient):
         if box[0] < 0 or box[1] < 0 or box[2] > width or box[3] > height:
             raise RegionError(f"region {box} is not inside the {width}x{height} screen")
 
-    def _snapshot(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
+    def _render(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
         """The framebuffer as a capture or a comparison sees it."""
-        if self.screen is None:
-            raise NoFramebufferError("no framebuffer update has arrived yet")
-
         # Fresh every call: a caller may hold the result across the updates
         # that paste into self.screen.
-        snapshot = self.screen.crop(box) if box else self.screen.copy()
+        rendered = self.screen.crop(box) if box else self.screen.copy()
 
         if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
-            return snapshot
+            return rendered
 
         x = self.x - self.cfocus[0]
         y = self.y - self.cfocus[1]
         if box:
             x -= box[0]
             y -= box[1]
-        snapshot.paste(self.cursor, (x, y), self.cmask)
+        rendered.paste(self.cursor, (x, y), self.cmask)
 
-        return snapshot
+        return rendered
 
     def _captureSave(
         self: TClient,
@@ -396,7 +389,7 @@ class VNCDoToolClient(rfb.RFBClient):
         log.debug("captureSave %s", fp)
         if box:
             self._requireOnScreen(box)
-        self._snapshot(box).save(fp, format=format)
+        self._render(box).save(fp, format=format)
 
         return self
 
@@ -504,7 +497,7 @@ class VNCDoToolClient(rfb.RFBClient):
         incremental = False
         if self.screen:
             incremental = True
-            if imagematch.matches(self._snapshot(box), self.expected_image, fuzz, blur):
+            if imagematch.matches(self._render(box), self.expected_image, fuzz, blur):
                 return self
 
         self.deferred = Deferred()

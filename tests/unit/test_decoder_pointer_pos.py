@@ -77,7 +77,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.cli.dataReceived(framebuffer_update([POINTER_POS]))
 
-        self.assertEqual(self.cli._snapshot().getpixel((150, 120)), IMAGE_2X2[0])
+        self.assertEqual(self.cli._render().getpixel((150, 120)), IMAGE_2X2[0])
         self.assertNotEqual(self.cli.screen.getpixel((150, 120)), IMAGE_2X2[0])
 
     def test_the_shape_is_absent_without_localcursor(self) -> None:
@@ -87,7 +87,7 @@ class TestPointerPos(unittest.TestCase):
 
         self.assertIsNone(
             ImageChops.difference(
-                self.cli._snapshot(), Image.new("RGB", (400, 400))
+                self.cli._render(), Image.new("RGB", (400, 400))
             ).getbbox()
         )
 
