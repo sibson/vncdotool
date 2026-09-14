@@ -140,11 +140,11 @@ enabled, neither of its two `drawCursor` paths matches.
 
 `self.screen` holds the server's pixels and nothing else. Under `--cursor
 local` the shape is kept as client state — `cursor`, `cmask`, `cfocus` — and
-`_render()` composites it onto a copy at the moment an image is asked for.
+`render()` composites it onto a copy at the moment an image is asked for.
 `updateCursor` and `updatePointerPos` record; they do not draw.
 
 Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
-`_render()`, so all four see the same image. Compositing for the
+`render()`, so all four see the same image. Compositing for the
 comparisons as well as the captures is what makes a reference image usable:
 `vncdo --cursor local capture ref.png` writes the pointer into `ref.png`, and
 an `expect ref.png` in the same mode has to be comparing against something
@@ -155,7 +155,7 @@ default mode, which is the reason the default is `none`.
 
 `self.x`/`self.y` is where the pointer is, and it is the only answer to that
 question. `mouseMove` sets it, `updatePointerPos` sets it, whichever moved
-the pointer last. `_render` draws there and `mouseDown`/`mouseUp` click
+the pointer last. `render` draws there and `mouseDown`/`mouseUp` click
 there. So on a desktop where something else moves the pointer — a person at
 the physical keyboard, another client sharing the session — a `click`
 following a `move` lands where that other thing left it, and a script that
