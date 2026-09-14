@@ -170,9 +170,8 @@ jobs:
       - name: Smoke test the fleet
         run: uv run coverage run --parallel-mode -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_docker.py'
 
-      # Discovery would collect the smoke module again, and unittest can
-      # exclude a module only by not being handed it, so the modules are
-      # named rather than discovered.
+      # Naming the modules keeps the smoke module out of this run; discovery
+      # offers no way to exclude one.
       - name: Run functional tests
         run: |
           modules=$(ls tests/functional/test_*.py \
