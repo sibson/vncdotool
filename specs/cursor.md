@@ -143,12 +143,6 @@ local` the shape is kept as client state — `cursor`, `cmask`, `cfocus` — and
 `_render()` composites it onto a copy at the moment an image is asked for.
 `updateCursor` and `updatePointerPos` record; they do not draw.
 
-It used to paste into `self.screen` and nothing restored what the previous
-pointer covered. `updateRectangle` hid most of it by drawing straight after
-pasting fresh server pixels over its own rectangle, but a pointer drawn
-outside that rectangle stayed: `--cursor local` plus `capture --incremental`,
-or a live `expect`, could see two.
-
 Capture, `expect`/`expectRegion` and `stable`/`stableRegion` all read through
 `_render()`, so all four see the same image. Compositing for the
 comparisons as well as the captures is what makes a reference image usable:
@@ -164,13 +158,11 @@ question. `mouseMove` sets it, `updatePointerPos` sets it, whichever moved
 the pointer last. `_render` draws there and `mouseDown`/`mouseUp` click
 there.
 
-An earlier revision tracked the server's reported position separately, so
-that a click after the desktop warped the pointer went where the script had
-last aimed rather than where the pointer now was. That is not how a mouse
-works. A click that lands somewhere the pointer is not is invisible — the
-capture beside it shows the pointer in the wrong place, and nothing on
-screen says where the click went. The pointer is the position; a script
-that needs one somewhere else moves it there first.
+Tracking the server's reported position separately would let a click land
+where the script last aimed rather than where the pointer is. That is not
+how a mouse works, and such a click is invisible: the capture beside it
+shows the pointer somewhere else, and nothing on screen says where the click
+went. A script that wants a click elsewhere moves the pointer there first.
 
 The cost is that on a desktop where something else moves the pointer — a
 person at the physical keyboard, another client sharing the session — a

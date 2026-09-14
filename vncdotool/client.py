@@ -96,7 +96,7 @@ class _StableWatch:
 
     def start(self) -> Deferred:
         if self.client.screen is not None:
-            self.baseline = self._frame()
+            self.baseline = self.client._render(self.box)
             self._restart()
             self._request(incremental=True)
         else:
@@ -104,9 +104,6 @@ class _StableWatch:
             # start the window once a frame has arrived.
             self._request(incremental=False)
         return self.result
-
-    def _frame(self) -> Image.Image:
-        return self.client._render(self.box)
 
     def _request(self, incremental: bool) -> None:
         d: Deferred = Deferred()
@@ -117,7 +114,7 @@ class _StableWatch:
     def _update(self, _: object) -> None:
         if self.settled:
             return
-        frame = self._frame()
+        frame = self.client._render(self.box)
         if self.baseline is None or self._changed(frame):
             self.baseline = frame
             self._restart()
@@ -363,8 +360,6 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def _render(self, box: tuple[int, int, int, int] | None = None) -> Image.Image:
         """The framebuffer as a capture or a comparison sees it."""
-        # Fresh every call: a caller may hold the result across the updates
-        # that paste into self.screen.
         rendered = self.screen.crop(box) if box else self.screen.copy()
 
         if self.factory.cursor is not CursorMode.LOCAL or not self.cursor:
