@@ -76,9 +76,6 @@ QEMU_ENCODINGS = {"raw", "hextile", "zrle", "tight"}
 QEMU_SETTLE_SECONDS = "1"
 
 
-# One drawing serves every encoding compared against a screen: a QEMU screen
-# stays up until something draws over it. Only the newest is held, because
-# each case captures the live screen again in its own encoding.
 _DRAWN: Dict[str, Image.Image] = {}
 
 
