@@ -37,9 +37,15 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # Without this, key and button events never reach the container's
-        # `xev -root` sink.
-        screen.root.change_attributes(event_mask=X.KeyPressMask | X.ButtonPressMask)
+        # Register the player to receive key presses.
+        failures = []
+        screen.root.change_attributes(
+            event_mask=X.KeyPressMask,
+            onerror=lambda failure, request: failures.append(failure),
+        )
+        self.display.sync()
+        if failures:
+            raise SystemExit(f"scene_player: cannot watch the root window for keys: {failures[0]}")
         self.gc = self.window.create_gc()
         self.window.map()
         self.paint()
