@@ -37,7 +37,7 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # Without this the player never sees a key and the scene never changes.
+        # Register the player to receive key presses.
         failures = []
         screen.root.change_attributes(
             event_mask=X.KeyPressMask,
