@@ -31,6 +31,6 @@ Xkasmvnc :0 \
     -AlwaysShared &
 XVNC_PID=$!
 
-DISPLAY=:0 python3 -m tests.goldens.scene_player &
+/scene-player.sh &
 
 wait "$XVNC_PID"
