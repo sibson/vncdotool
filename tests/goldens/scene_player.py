@@ -37,13 +37,12 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # Keys are selected on the root window, not on this one, or they stop
-        # here instead of propagating to the container's `xev -root` sink.
-        # ButtonPressMask is left out: X grants it to at most one client per
-        # window, xev holds it, and naming it would fail the whole request.
+        # A KeyPress stops at the first window that selected for it, so
+        # selecting on the player's own window instead of the root would
+        # starve the container's `xev -root` sink.
         #
-        # python-xlib prints, rather than raises, an error no handler was
-        # given for, and calls the handler it was given with (error, request).
+        # python-xlib prints an error no handler was given for rather than
+        # raising it, so a rejected selection would otherwise be silent.
         failures = []
         screen.root.change_attributes(
             event_mask=X.KeyPressMask,

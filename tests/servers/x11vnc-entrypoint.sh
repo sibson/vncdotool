@@ -43,9 +43,9 @@ for _ in $(seq 1 30); do
     sleep 0.5
 done
 
-# Behind that wait: python-xlib raises rather than retrying a refused
-# connection, and nothing restarts the player, so losing that race leaves a
-# black screen for the life of the container.
+# python-xlib raises rather than retrying a refused connection, and nothing
+# restarts the player: started ahead of the wait above, it leaves a black
+# screen for the life of the container.
 DISPLAY=:0 python3 -m tests.goldens.scene_player &
 
 exec x11vnc -display :0 -forever -shared -nopw -rfbport 5900 -quiet
