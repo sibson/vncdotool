@@ -144,7 +144,7 @@ class _FullScreenReceived:
     def __init__(self, width: int, height: int) -> None:
         self.retries = 0
         self.painted = False
-        self.unpainted = Image.new("1", (width, height), 1)
+        self.remaining = Image.new("1", (width, height), 1)
 
     @classmethod
     def awaiting(cls, width: int, height: int) -> "_FullScreenReceived":
@@ -158,9 +158,7 @@ class _FullScreenReceived:
 
     def retry(self) -> bool:
         """Whether the server is worth asking again, counting this attempt."""
-        if self.untouched:
-            # A Cursor pseudo-rectangle carries a shape and a hotspot, not a
-            # screen region, so an update can arrive having painted nothing.
+        if self.pending and not self.painted:
             return True
         if self.retries >= self.MAX_RETRIES:
             return False
@@ -170,25 +168,20 @@ class _FullScreenReceived:
     def paintRect(self, x: int, y: int, width: int, height: int) -> None:
         self.painted = True
         # Image.paste clips a box that runs off the mask.
-        self.unpainted.paste(0, (x, y, x + width, y + height))
+        self.remaining.paste(0, (x, y, x + width, y + height))
 
     @property
     def complete(self) -> bool:
-        return self.unpainted.getbbox() is None
+        return self.remaining.getbbox() is None
 
     @property
     def pending(self) -> bool:
         """Whether a non-incremental refresh is still riding on this."""
-        return self.unpainted.size != (0, 0)
-
-    @property
-    def untouched(self) -> bool:
-        """Whether a refresh promised the whole area has had none of it painted."""
-        return self.pending and not self.painted
+        return self.remaining.size != (0, 0)
 
     def __str__(self) -> str:
-        width, height = self.unpainted.size
-        unpainted = sum(self.unpainted.histogram()[1:])
+        width, height = self.remaining.size
+        unpainted = sum(self.remaining.histogram()[1:])
         return (
             f"the server left {unpainted} of the {width}x{height} framebuffer "
             f"unpainted after {self.retries + 1} full-screen update "
