@@ -14,7 +14,7 @@ hide the pointer (RFC 6143 7.6.1); wayvnc, qemu and qemu-tls answer nothing
 at all. On any of those `--localcursor` has no shape to draw.
 """
 
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PIL import Image, ImageChops
 
@@ -35,9 +35,7 @@ from .utils import (
 
 
 class CaptureHelper:
-    """`at()`/`env()`, shared by CursorFreeCapture and TestLocalCursor's own cases.
-
-    Deliberately not a TestCase, or `unittest discover` would collect this
+    """Deliberately not a TestCase, or `unittest discover` would collect this
     shared base as its own serverless case.
     """
 
@@ -53,17 +51,35 @@ class CaptureHelper:
             self.fail(f"{self.server.name} has not written {QEMU_TLS_CA}")
         return {"SSL_CERT_FILE": str(QEMU_TLS_CA)}
 
-    def at(self, tag: str, position: Tuple[int, int], *flags: str) -> Image.Image:
-        png = screenshot_dir() / f"{self.server.name}-cursor-{tag}.png"
-        args = (*flags, "move", str(position[0]), str(position[1]), "pause", "0.5")
-        result = run_vncdo(self.server, *args, "capture", str(png), env=self.env())
+    def at_each(
+        self, positions: Dict[str, Tuple[int, int]], *flags: str
+    ) -> Dict[str, Image.Image]:
+        """Capture at every position over one connection, one image per tag.
+
+        `flags` are vncdo's own options rather than commands, so they apply
+        to every capture here: positions wanting different flags need
+        separate calls.
+        """
+        args: List[str] = list(flags)
+        pngs = {}
+        for tag, (x, y) in positions.items():
+            pngs[tag] = screenshot_dir() / f"{self.server.name}-cursor-{tag}.png"
+            args += ["move", str(x), str(y), "pause", "0.5", "capture", str(pngs[tag])]
+        result = run_vncdo(self.server, *args, env=self.env())
         self.assertEqual(
             result.returncode, 0,
             f"{self.server.name}: `vncdo {' '.join(args)}` exited "
             f"{result.returncode}, stderr:\n{result.stderr}",
         )
-        with Image.open(png) as image:
-            return image.convert("RGB").copy()
+
+        shots = {}
+        for tag, png in pngs.items():
+            with Image.open(png) as image:
+                shots[tag] = image.convert("RGB").copy()
+        return shots
+
+    def at(self, tag: str, position: Tuple[int, int], *flags: str) -> Image.Image:
+        return self.at_each({tag: position}, *flags)[tag]
 
 
 class CursorFreeCapture(CaptureHelper):
@@ -77,7 +93,7 @@ class CursorFreeCapture(CaptureHelper):
         """
         assert_pointer_position_is_invisible(
             self, self.server.name,
-            {"near": self.at("near", CURSOR_NEAR), "far": self.at("far", CURSOR_FAR)},
+            self.at_each({"near": CURSOR_NEAR, "far": CURSOR_FAR}),
         )
 
 
