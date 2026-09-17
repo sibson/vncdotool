@@ -222,7 +222,10 @@ def build_command_list(
     while args:
         cmd = args.pop(0)
         if cmd == "key":
-            key = args.pop(0)
+            try:
+                key = args.pop(0)
+            except (IndexError, ValueError):
+                raise CommandParseError(cmd)
             factory.deferred.addCallback(client.keyPress, key)
         elif cmd in ("kdown", "keydown"):
             key = args.pop(0)
@@ -231,10 +234,16 @@ def build_command_list(
             key = args.pop(0)
             factory.deferred.addCallback(client.keyUp, key)
         elif cmd in ("move", "mousemove"):
-            x, y = int(args.pop(0)), int(args.pop(0))
+            try:
+                x, y = int(args.pop(0)), int(args.pop(0))
+            except (IndexError, ValueError):
+                raise CommandParseError(cmd)
             factory.deferred.addCallback(client.mouseMove, x, y)
         elif cmd == "click":
-            button = int(args.pop(0))
+            try:
+                button = int(args.pop(0))
+            except (IndexError, ValueError):
+                raise CommandParseError(cmd)
             factory.deferred.addCallback(client.mousePress, button)
         elif cmd in ("mdown", "mousedown"):
             button = int(args.pop(0))
@@ -250,7 +259,10 @@ def build_command_list(
                 if delay:
                     factory.deferred.addCallback(client.pause, delay)
         elif cmd == "typefile":
-            filename = args.pop(0)
+            try:
+                filename = args.pop(0)
+            except (IndexError, ValueError):
+                raise CommandParseError(cmd)
             with open(filename) if filename != "-" else sys.stdin as f:
                 content = f.read()
                 for key in content:
