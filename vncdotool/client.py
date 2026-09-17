@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import socket
+import time
 from functools import partial
 from pathlib import Path
 from struct import pack
@@ -209,6 +210,12 @@ class VNCDoToolClient(rfb.RFBClient):
 
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
+
+    # A server can report a pointer position from before the move it has
+    # already acted on. How long one is given to catch up before its reports
+    # are believed again.
+    POINTER_POS_SETTLE = 1.0
+    _moved_at: float | None = None
 
     def __init__(self) -> None:
         super().__init__()
@@ -525,6 +532,7 @@ class VNCDoToolClient(rfb.RFBClient):
         """Move the mouse pointer to position (x, y)"""
         log.debug("mouseMove %d,%d", x, y)
         self.x, self.y = x, y
+        self._moved_at = time.monotonic()
         self.pointerEvent(x, y, self.buttons)
         return self
 
@@ -705,7 +713,10 @@ class VNCDoToolClient(rfb.RFBClient):
         self.cfocus = x, y
 
     def updatePointerPos(self, x: int, y: int) -> None:
-        """The server moved the pointer to (x, y)."""
+        """The server moved the pointer to (x, y), unless we just did."""
+        if self._moved_at is not None and time.monotonic() - self._moved_at < self.POINTER_POS_SETTLE:
+            return
+
         self.x, self.y = x, y
 
     def updateDesktopSize(self, width: int, height: int) -> None:

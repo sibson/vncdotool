@@ -162,6 +162,41 @@ the physical keyboard, another client sharing the session — a `click`
 following a `move` lands where that other thing left it, and a script that
 wants it elsewhere moves the pointer there first.
 
+### Except for a report that predates the move
+
+A `-232` arriving within `POINTER_POS_SETTLE` of this client's own
+`mouseMove` is discarded. x11vnc polls the X pointer rather than reading back
+the event it just acted on, so between acting on a move and its next poll it
+still holds the old position — and `cursor_position()` in
+`x11vnc/src/cursor.c` reads that disagreement as a third-party warp and
+reports the pre-move position. Believing it walks the pointer backwards: the
+arrow is drawn where the pointer no longer is, and the next `click` goes
+there too.
+
+Neither the disagreement nor an agreement can settle this on its own.
+Suppressing the echo to whoever moved the pointer is deliberate in both
+servers whose source says so — libvncserver's `rfbDefaultPtrAddEvent`
+("The cursor was moved by this client, so don't send CursorPos") and
+x11vnc's own `last_pointer_client` case — so waiting for the server to
+confirm our position would wait on a message a correct server will not send.
+Only elapsed time separates a report that raced our move from one that
+followed it, which is what TigerVNC's `pointerEventTime` comparison
+(`common/rfb/VNCSConnectionST.cxx:401`) is also reduced to.
+
+A report that agrees with the move is discarded along with the rest, and
+costs nothing: `self.x`/`self.y` already holds that position. What the window
+does give up is a genuine third-party move inside it, and a script moving the
+pointer continuously — `mouseDrag` steps every 0.2s — restamps the window
+faster than it expires, so `-232` is suppressed for the whole drag. A script
+issuing a move every 0.2s has its own answer for where the pointer is.
+
+`tests/functional/test_cursor.py` cannot be relied on to catch a regression
+here. Whether x11vnc's poll lags at all varies with the state of the desktop
+it is serving: the same fleet reproduced the stale report several times an
+hour while the pointer sat over a window setting its own 16x16 cursor, and
+not once after a restart put an 18x18 root-window cursor back under it.
+`tests/unit/test_decoder_pointer_pos.py` is the instrument.
+
 ## Why the default is `none`
 
 The pointer is nondeterministic content. Where it is depends on wherever the
