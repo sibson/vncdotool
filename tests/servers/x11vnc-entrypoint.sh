@@ -43,6 +43,6 @@ for _ in $(seq 1 30); do
     sleep 0.5
 done
 
-DISPLAY=:0 python3 -m tests.goldens.scene_player &
+/scene-player.sh &
 
 exec x11vnc -display :0 -forever -shared -nopw -rfbport 5900 -quiet

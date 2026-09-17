@@ -28,6 +28,9 @@ COPY goldens/scene_player.py /tests/goldens/scene_player.py
 COPY goldens/click_targets.py /tests/goldens/click_targets.py
 COPY goldens/scenes/ /tests/goldens/scenes/
 
+COPY servers/scene-player.sh /scene-player.sh
+RUN chmod +x /scene-player.sh
+
 EXPOSE 5900
 
 # Liveness only; readiness is `tests/functional/wait_for_servers.py docker`.
@@ -57,6 +60,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY servers/tigervnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# `pgrep -f` searches the health check's own `sh -c` command line. An
+# unbracketed pattern matches that, and passes with the player dead.
+HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
+    CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "[s]cene_player" >/dev/null
+
 ENTRYPOINT ["/entrypoint.sh"]
 
 
@@ -74,10 +82,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY servers/x11vnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# The event sink is the second thing this container promises, and the one
-# that loses a startup race.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "xev -root" >/dev/null
+    CMD ss -H -ltn 'sport = :5900' | grep -q . \
+        && pgrep -f "[x]ev -root" >/dev/null \
+        && pgrep -f "[s]cene_player" >/dev/null
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -174,7 +182,9 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/selenoid-stub-webdriver.py
 # 5900 here is only the Xvnc behind the bridge, so the base healthcheck would
 # pass before Selenoid is listening on 4444.
 HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
-    CMD ss -H -ltn 'sport = :4444' | grep -q . && ss -H -ltn 'sport = :5900' | grep -q .
+    CMD ss -H -ltn 'sport = :4444' | grep -q . \
+        && ss -H -ltn 'sport = :5900' | grep -q . \
+        && pgrep -f "[s]cene_player" >/dev/null
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -198,6 +208,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY servers/kasmvnc-entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
+
+HEALTHCHECK --interval=2s --timeout=2s --start-period=5s --retries=30 \
+    CMD ss -H -ltn 'sport = :5900' | grep -q . && pgrep -f "[s]cene_player" >/dev/null
 
 ENTRYPOINT ["/entrypoint.sh"]
 

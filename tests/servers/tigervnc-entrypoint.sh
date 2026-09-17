@@ -61,6 +61,6 @@ Xvnc :0 \
     -localhost=0 &
 XVNC_PID=$!
 
-DISPLAY=:0 python3 -m tests.goldens.scene_player &
+/scene-player.sh &
 
 wait "$XVNC_PID"
