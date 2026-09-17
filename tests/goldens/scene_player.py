@@ -37,9 +37,7 @@ class ScenePlayer:
             override_redirect=True,
             event_mask=X.ExposureMask | X.ButtonPressMask,
         )
-        # A KeyPress stops at the first window that selected for it, so
-        # selecting on the player's own window instead of the root would
-        # starve the container's `xev -root` sink.
+        # Without this the player never sees a key and the scene never changes.
         failures = []
         screen.root.change_attributes(
             event_mask=X.KeyPressMask,
