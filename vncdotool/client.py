@@ -211,10 +211,9 @@ class VNCDoToolClient(rfb.RFBClient):
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
 
-    # x11vnc polls the X pointer rather than reading back the event it just
-    # acted on, so for a moment its poll still returns the pre-move position
-    # and cursor_position() (x11vnc/src/cursor.c) reports that as a
-    # third-party warp.
+    # A server can report a pointer position from before the move it has
+    # already acted on. How long one is given to catch up before its reports
+    # are believed again.
     POINTER_POS_SETTLE = 1.0
     _moved_at: float | None = None
 
