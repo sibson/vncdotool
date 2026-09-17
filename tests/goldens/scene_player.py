@@ -40,9 +40,6 @@ class ScenePlayer:
         # A KeyPress stops at the first window that selected for it, so
         # selecting on the player's own window instead of the root would
         # starve the container's `xev -root` sink.
-        #
-        # python-xlib prints an error no handler was given for rather than
-        # raising it, so a rejected selection would otherwise be silent.
         failures = []
         screen.root.change_attributes(
             event_mask=X.KeyPressMask,
