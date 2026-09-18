@@ -1,5 +1,6 @@
 ## 2.0.0.dev0 (UNRELEASED)
 - Document `client.name`, the server's desktop name from the handshake, in `docs/library.md` -- it was already a plain attribute, just never written down (@sibson, #210)
+- Fix `key slash` sending the BackSlash keysym instead of ForwardSlash (@sibson, #535)
 - Add `vncdo --dialect NAME` (`kasmvnc`, `vmware`) for servers that deviate from RFB; `--dialect kasmvnc` keeps the session alive through a pointer event (@sibson)
 - KasmVNC is now listed as Broken: without `--dialect kasmvnc`, `move`, `click` and `drag` end the session against it (@sibson)
 - [WARNING] Captures omit the mouse pointer by default -- x11vnc, libvncserver and the Windows servers used to paint it in. `vncdo --cursor {none,server,local}` chooses (`server` restores the old behaviour); `api.connect(cursor=)` is the only way a library caller could set this at all, since `ThreadedVNCClientProxy` has no `__setattr__`. `--localcursor`/`--nocursor` still work, as aliases for `local`/`none`. See `specs/cursor.md` (@sibson, #206)

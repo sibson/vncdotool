@@ -185,6 +185,12 @@ class TestVNCDoToolClient(TestCase):
         client.keyEvent.assert_any_call(Key.AltLeft, down=0)
         client.keyEvent.assert_any_call(Key.Delete, down=0)
 
+    def test_keyPress_slash_sends_forward_slash(self):
+        client = self.client
+        client.keyPress('slash')
+        client.keyEvent.assert_any_call(Key.ForwardSlash, down=1)
+        client.keyEvent.assert_any_call(Key.ForwardSlash, down=0)
+
     @mock.patch('vncdotool.client.Deferred')
     def test_captureScreen(self, Deferred):
         client = self.client
