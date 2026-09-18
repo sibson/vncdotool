@@ -1,10 +1,11 @@
 # Triage outcomes
 
-Every triaged issue lands in exactly one of A–G. If two seem to fit, prefer the
-one that carries more evidence: a duplicate you can also reproduce is still A,
-with the duplicate link in the comment. Add `duplicate` to A's labels in that
-case — the outcome governs the workflow, the labels describe the issue, and an
-issue that is genuinely both should say so.
+Every triaged issue lands in exactly one of A–G (D2 is a stricter variant of
+D, not an eighth choice). If two seem to fit, prefer the one that carries more
+evidence: a duplicate you can also reproduce is still A, with the duplicate
+link in the comment. Add `duplicate` to A's labels in that case — the outcome
+governs the workflow, the labels describe the issue, and an issue that is
+genuinely both should say so.
 
 Apply labels from the skill's fixed set as-is — don't recreate or restyle them,
 and don't invent new ones. Remember `feature` is this repo's `enhancement`.
@@ -95,6 +96,29 @@ Labels: `probably-fixed`, `needs-info` (the clock should run). Do not close.
 > `<what changed>`. You were on `<their version>`, which predates it.
 >
 > Could you confirm on `<latest>`? If it still happens I'll dig in properly.
+
+## D2 — Fixed in passing
+
+A stricter D: a merged PR or the CHANGELOG *explicitly* names this issue —
+"closes #NNN", "fixes #NNN", or a CHANGELOG line citing the number directly —
+but GitHub never auto-closed it, usually because the PR's own closing syntax
+pointed at a different issue and this one was only named in prose (a PR body
+saying "closes #264" in its text closes nothing on GitHub) or the CHANGELOG
+line cites several numbers at once. That citation is not enough on its own:
+verify the mechanism against current `main` yourself — read the code the fix
+touches, run what you can (existing unit/functional coverage counts) — before
+treating "the PR says so" as settled. If you can't find an explicit citation,
+this is a D, not a D2: an adjacent or inferred fix, however confident, doesn't
+qualify, and neither does a fix you found only by reasoning about what the
+code now does.
+
+Labels: `probably-fixed`. Close with `state_reason: completed`.
+
+> Fixed by `<sha/PR>` (`<subject>`) — `<the explicit citation, quoted>`.
+> Verified against current `main`: `<what you read or ran>`.
+>
+> Closing since this is a confirmed fix rather than an inferred one. Reopen
+> if it turns out not to cover your case.
 
 ## E — Duplicate
 

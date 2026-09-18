@@ -66,10 +66,15 @@ mildly annoyed to get the notification. Earn it.
 
 You may comment, apply labels from the set below, create a branch, and open a PR.
 
-You may not close an issue. Never call `issue_write` with `state` or
-`state_reason` — not for duplicates, not for obsolete reports, not for anything.
-Deciding a report is dead is the maintainer's call, and the whole value of this
-skill rests on that boundary being reliable. Never push to `main`.
+You may not close an issue, with one narrow exception: Outcome D2, "fixed in
+passing" (`references/decision-table.md`) — a merged PR or the CHANGELOG
+*explicitly* names this issue as closed, GitHub never auto-linked it, and
+you've verified the mechanism against current `main` yourself. Every other
+closing decision — a merely-probable fix, a duplicate, an obsolete report —
+stays the maintainer's call; never call `issue_write` with `state` or
+`state_reason` for those. The exception is narrow on purpose: an inferred or
+adjacent fix (Outcome D) is not D2 just because it looks close enough. Never
+push to `main`.
 
 You may not review, approve, or comment on someone else's open PR. When one
 addresses the issue you're triaging, your assessment of it goes in the issue
