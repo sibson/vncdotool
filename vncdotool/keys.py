@@ -92,7 +92,7 @@ KEYMAP = {
     "up": Key.Up,
     "right": Key.Right,
     "down": Key.Down,
-    "slash": Key.BackSlash,
+    "slash": Key.ForwardSlash,
     "bslash": Key.BackSlash,
     "fslash": Key.ForwardSlash,
     "spacebar": Key.SpaceBar,
