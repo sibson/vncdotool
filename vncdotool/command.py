@@ -405,6 +405,7 @@ def build_proxy(options: argparse.Namespace) -> VNCLoggingServerFactory:
     factory = VNCLoggingServerFactory(options.host, int(options.port))
     factory.password_required = options.password_required
     factory.server_address = options.server
+    factory.address_family = options.address_family
     port = reactor.listenTCP(options.listen, factory)
     reactor.exit_status = 0
     factory.listen_port = port.getHost().port
@@ -587,8 +588,6 @@ def vnclog() -> None:
     setup_logging(options)
 
     options.address_family, options.host, options.port = parse_server(options.server)
-    if options.address_family is websocket.WEBSOCKET:
-        parser.error("vnclog records a TCP or Unix-socket server; ws:// is vncdo-only")
 
     output = None
     # The error names only --one-shot; --capture-raw implies it.

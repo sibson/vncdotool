@@ -1,4 +1,5 @@
 ## 2.0.0.dev0 (UNRELEASED)
+- `vnclog -s ws://...`/`wss://...` now works, including `--capture-raw`, for recording a session against a server only reachable over a WebSocket -- Proxmox's console among them. `vnclog` previously refused any `ws://` address outright (@sibson, #138)
 - Document `client.name`, the server's desktop name from the handshake, in `docs/library.md` -- it was already a plain attribute, just never written down (@sibson, #210)
 - Add `vncdo --dialect NAME` (`kasmvnc`, `vmware`) for servers that deviate from RFB; `--dialect kasmvnc` keeps the session alive through a pointer event (@sibson)
 - KasmVNC is now listed as Broken: without `--dialect kasmvnc`, `move`, `click` and `drag` end the session against it (@sibson)
