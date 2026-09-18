@@ -53,6 +53,10 @@ client.keyPress('enter')
 client.expectScreen('login_success.png', maxrms=10)
 ```
 
+After connecting, `client.name` holds the desktop name the server declared
+during the handshake, as `bytes` -- decode it yourself, e.g.
+`client.name.decode()`.
+
 It is possible to set a per-client timeout in seconds to prevent calls from blocking indefinitely.
 
 ```python
