@@ -13,7 +13,7 @@ import time
 from functools import partial
 from pathlib import Path
 from struct import pack
-from typing import IO, Any, Callable, Iterator, TypeVar, Union, cast
+from typing import IO, Any, Callable, Iterator, Sequence, TypeVar, Union, cast
 
 from twisted.internet import reactor
 from twisted.internet.defer import Deferred, inlineCallbacks, returnValue
@@ -68,6 +68,10 @@ class ProtocolError(VNCDoException):
 
 class RegionError(VNCDoException):
     """A region to compare or capture is not on the screen"""
+
+
+class DesktopResizeError(VNCDoException):
+    """A server would not resize its desktop, or never said whether it had"""
 
 
 class _StableWatch:
@@ -208,8 +212,16 @@ class VNCDoToolClient(rfb.RFBClient):
     cursor: Image.Image | None = None
     cmask: Image.Image | None = None
 
+    screens: tuple[rfb.Screen, ...] = ()
+    _resize: Deferred | None = None
+    _resize_timeout: Any = None
+    _resize_target: tuple[int, int] | None = None
+    _resize_sent: bool = False
+    _saw_extended_desktop_size: bool = False
+
     SPECIAL_KEYS_US = '~!@#$%^&*()_+{}|:"<>?'
     MAX_DESKTOP_SIZE = 0x10000
+    RESIZE_TIMEOUT = 10.0
 
     # A server can report a pointer position from before the move it has
     # already acted on. How long one is given to catch up before its reports
@@ -229,6 +241,8 @@ class VNCDoToolClient(rfb.RFBClient):
 
     def connectionLost(self, reason: Failure = connectionDone) -> None:
         super().connectionLost(reason)
+        if self._resize is not None:
+            self._resizeFailed("connection lost before the server answered")
         self.factory.clientConnectionLost(self, reason)
 
     def _decodeKey(self, key: str) -> list[int]:
@@ -551,6 +565,89 @@ class VNCDoToolClient(rfb.RFBClient):
 
         returnValue(self)
 
+    def resizeScreen(self, width: int, height: int) -> Deferred:
+        """Ask the server to change its desktop to `width` x `height`.
+
+        The result fires once the server has said whether it did, and fails
+        with :class:`DesktopResizeError` if it refused or never offered the
+        ExtendedDesktopSize pseudo-encoding at all.
+        """
+        log.debug("resize %dx%d", width, height)
+        if not (
+            0 < width < self.MAX_DESKTOP_SIZE and 0 < height < self.MAX_DESKTOP_SIZE
+        ):
+            raise ValueError((width, height))
+        if self._resize is not None:
+            raise DesktopResizeError("a resize is already in flight")
+
+        d = self._resize = Deferred()
+        self._resize_target = (width, height)
+        self._resize_sent = False
+        self._resize_timeout = reactor.callLater(
+            self.RESIZE_TIMEOUT, self._resizeFailed, "server never answered"
+        )
+        if rfb.Encoding.PSEUDO_EXTENDED_DESKTOP_SIZE in self.negotiated_encodings:
+            self._sendResize()
+        else:
+            self.framebufferUpdateRequest(incremental=False)
+        return d
+
+    def _sendResize(self) -> None:
+        assert self._resize_target is not None
+        width, height = self._resize_target
+        self._resize_sent = True
+        if (self.width, self.height) == (width, height):
+            self._resizeSucceeded()
+            return
+        first = self.screens[0] if self.screens else rfb.Screen(0, 0, 0, 0, 0, 0)
+        layout = [rfb.Screen(first.id, 0, 0, width, height, first.flags)]
+        self.setDesktopSize(width, height, layout)
+        self.framebufferUpdateRequest(incremental=True)
+
+    def _resizeSucceeded(self) -> None:
+        d, self._resize = self._resize, None
+        self._resize_target = None
+        self._cancelResizeTimeout()
+        if d is not None:
+            d.callback(self)
+
+    def _resizeFailed(self, reason: str) -> None:
+        d, self._resize = self._resize, None
+        self._resize_target = None
+        self._cancelResizeTimeout()
+        if d is not None:
+            d.errback(Failure(DesktopResizeError(reason)))
+
+    def _cancelResizeTimeout(self) -> None:
+        timeout, self._resize_timeout = self._resize_timeout, None
+        if timeout is not None and timeout.active():
+            timeout.cancel()
+
+    def updateExtendedDesktopSize(
+        self,
+        reason: rfb.DesktopSizeReason,
+        result: rfb.DesktopSizeResult,
+        width: int,
+        height: int,
+        screens: Sequence[rfb.Screen],
+    ) -> None:
+        self._saw_extended_desktop_size = True
+        if reason != rfb.DesktopSizeReason.THIS_CLIENT:
+            self.screens = tuple(screens)
+            super().updateExtendedDesktopSize(reason, result, width, height, screens)
+            if self._resize is not None and not self._resize_sent:
+                self._sendResize()
+            return
+
+        super().updateExtendedDesktopSize(reason, result, width, height, screens)
+        if result != rfb.DesktopSizeResult.SUCCESS:
+            self._resizeFailed(
+                f"server refused the resize: {rfb.DesktopSizeResult.lookup(result)!r}"
+            )
+            return
+        self.screens = tuple(screens)
+        self._resizeSucceeded()
+
     def _rawModeFor(self, pixel_format: rfb.PixelFormat) -> str:
         # Called once per rectangle. A PixelFormat is a frozen dataclass, so
         # hashing one for a cache lookup costs more than the identity check
@@ -612,6 +709,7 @@ class VNCDoToolClient(rfb.RFBClient):
             encodings.append(rfb.Encoding.PSEUDO_POINTER_POS)
         if self.factory.pseudodesktop:
             encodings.append(rfb.Encoding.PSEUDO_DESKTOP_SIZE)
+            encodings.append(rfb.Encoding.PSEUDO_EXTENDED_DESKTOP_SIZE)
         if self.factory.last_rect:
             encodings.append(rfb.Encoding.PSEUDO_LAST_RECT)
         if self.factory.qemu_extended_key:
@@ -678,12 +776,17 @@ class VNCDoToolClient(rfb.RFBClient):
         self.screen.paste(region, (x, y))
         self._fullscreen.paintRect(x, y, width, height)
 
+    def beginUpdate(self) -> None:
+        self._saw_extended_desktop_size = False
+
     def commitUpdate(self, rectangles: list[tuple[int, int, int, int]] | None = None) -> None:
         if self.deferred:
             if not rectangles or self.screen is None:
                 # No rectangle in this update painted self.screen; wait for
                 # one that does before completing the refresh.
-                self.framebufferUpdateRequest()
+                self.framebufferUpdateRequest(
+                    incremental=self._saw_extended_desktop_size
+                )
                 return
             if not self._fullscreen.complete:
                 if self._fullscreen.retry():
