@@ -506,8 +506,6 @@ class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
 
-    # host doubles as the full ws(s):// URL when address_family is
-    # WEBSOCKET, and port then goes unused.
     address_family: websocket.AddressFamily = socket.AF_INET
 
     cursor = CursorMode.OMIT
