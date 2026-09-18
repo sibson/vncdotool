@@ -273,8 +273,8 @@ A bare `/issue-triage` ends with a list of issues that have gone quiet. Two ways
 in, and the second matters more than the first:
 
 - It carries `needs-info`, the newest comment is a triage comment, and that
-  comment is more than 30 days old.
-- **The newest comment is an unanswered question from a maintainer, more than 30
+  comment is more than 90 days old.
+- **The newest comment is an unanswered question from a maintainer, more than 90
   days old, whatever the labels say.** Most of this backlog predates any
   labelling scheme, so the first rule alone sees nothing: #284 has had a
   maintainer's "which VNC server are you connecting to?" sitting unanswered
