@@ -12,7 +12,10 @@ import unittest
 from struct import pack
 from unittest import TestCase, mock
 
-from vncdotool import pixelformat
+from twisted.internet.defer import Deferred
+from twisted.python.failure import Failure
+
+from vncdotool import pixelformat, websocket
 from vncdotool.const import AuthTypes, Encoding, MsgC2S, MsgS2C, QemuClientMessage
 from vncdotool.loggingproxy import (
     TYPE_LEN,
@@ -215,6 +218,55 @@ class TestMessageSplitAcrossReads(ProxyPair):
         self.server_proxy.dataReceived(message[7:])
 
         self.server_proxy.handle_keyEvent.assert_called_once_with(65, 1)
+
+
+class TestOutboundConnectDispatch(TestCase):
+    def setUp(self) -> None:
+        self.factory = VNCLoggingServerFactory("localhost", 5900)
+        self.server_proxy = VNCLoggingServerProxy()
+        self.server_proxy.transport = mock.Mock()
+        self.server_proxy.factory = self.factory
+
+    def test_a_plain_host_dials_over_tcp(self) -> None:
+        with mock.patch("vncdotool.loggingproxy.reactor") as mock_reactor:
+            self.server_proxy._connectOutbound()
+
+        mock_reactor.connectTCP.assert_called_once()
+        host, port, client = mock_reactor.connectTCP.call_args.args
+        self.assertEqual((host, port), ("localhost", 5900))
+        self.assertIs(client.server, self.server_proxy)
+
+    def test_a_websocket_url_dials_through_websocket_connect(self) -> None:
+        self.factory.address_family = websocket.WEBSOCKET
+        self.factory.host = "ws://example.com/vnc"
+
+        with mock.patch("vncdotool.loggingproxy.reactor") as mock_reactor, \
+                mock.patch("vncdotool.loggingproxy.websocket.connect") as mock_connect:
+            self.server_proxy._connectOutbound()
+
+        mock_reactor.connectTCP.assert_not_called()
+        mock_connect.assert_called_once()
+        reactor_arg, client, url = mock_connect.call_args.args
+        self.assertIs(reactor_arg, mock_reactor)
+        self.assertEqual(url, "ws://example.com/vnc")
+        self.assertIs(client.server, self.server_proxy)
+
+    def test_a_websocket_connect_failure_reaches_clientConnectionFailed(self) -> None:
+        self.factory.address_family = websocket.WEBSOCKET
+        self.factory.host = "ws://example.com/vnc"
+
+        with mock.patch("vncdotool.loggingproxy.reactor"), \
+                mock.patch("vncdotool.loggingproxy.websocket.connect") as mock_connect:
+            deferred = Deferred()
+            mock_connect.return_value = deferred
+            self.server_proxy._connectOutbound()
+
+            client = mock_connect.call_args.args[1]
+            client.clientConnectionFailed = mock.Mock()
+            failure = Failure(ConnectionRefusedError("refused"))
+            deferred.errback(failure)
+
+        client.clientConnectionFailed.assert_called_once_with(None, failure)
 
 
 # Messages the proxy deliberately does not decode: they fall to the `else:

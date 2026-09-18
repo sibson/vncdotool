@@ -49,7 +49,7 @@ number but two live proxies may not.
 
 | Host | Started by |
 |------|------------|
-| 5993, 5994, 5995 | `test_proxy.py` |
+| 5992, 5993, 5994, 5995 | `test_proxy.py` |
 | 5996, 5997 | `test_roundtrip.py` |
 | 5998 | `test_proxy.py` and `test_bandwidth.py`, never at once |
 | 5999 | `tests/goldens/capture.py` |

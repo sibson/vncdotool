@@ -10,6 +10,7 @@ import time
 from struct import unpack, unpack_from
 from typing import IO, Callable, Iterable, Sequence, cast
 
+from twisted.internet import reactor
 from twisted.internet.error import ReactorNotRunning
 from twisted.internet.interfaces import IAddress, ITCPTransport, ITransport
 from twisted.internet.protocol import Protocol, connectionDone
@@ -18,6 +19,7 @@ from twisted.python.failure import Failure
 from zope.interface import implementer
 
 from . import __version__ as VNCDOTOOL_VERSION
+from . import websocket
 from .capture import CaptureWriter, HandshakeScrubber
 from .const import AuthTypes, Encoding, MsgC2S, QemuClientMessage
 from .client import VNCDoToolClient
@@ -324,6 +326,16 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
         # practice, but IAddress itself doesn't promise it.
         return getattr(self.transport.getPeer(), "host", None)
 
+    def _connectOutbound(self) -> None:
+        self.transport.pauseProducing()
+        client = self.clientProtocolFactory()
+        client.setServer(self)
+        if self.factory.address_family is websocket.WEBSOCKET:
+            conn = websocket.connect(reactor, client, self.factory.host)
+            conn.addErrback(lambda reason: client.clientConnectionFailed(None, reason))
+        else:
+            reactor.connectTCP(self.factory.host, self.factory.port, client)
+
     def connectionMade(self) -> None:
         # Taken on accept rather than on first byte, so a second concurrent
         # connection is refused rather than interleaved into the session.
@@ -337,7 +349,7 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
             return
 
         log.info("new connection from %s", self._peerHost())
-        super().connectionMade()
+        self._connectOutbound()
         RFBServer.connectionMade(self)
         self.mouse: tuple[int | None, int | None] = (None, None)
         self.last_event = time.time()
@@ -493,6 +505,8 @@ class VNCLoggingServerProxy(portforward.ProxyServer, RFBServer):
 class VNCLoggingServerFactory(portforward.ProxyFactory):
     protocol = VNCLoggingServerProxy
     shared = True
+
+    address_family: websocket.AddressFamily = socket.AF_INET
 
     cursor = CursorMode.OMIT
     pseudodesktop = True

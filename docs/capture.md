@@ -19,10 +19,13 @@ You do not need a checkout of this repository to make one. A released,
    ```
 
 2. Start the recording proxy, pointed at the server you're seeing the bug
-   against, naming the `.zip` to write:
+   against, naming the `.zip` to write. `-s` takes a `ws://`/`wss://` URL
+   too, for a server reachable only through a WebSocket -- Proxmox's own
+   console, for one:
 
    ```
    vnclog --capture-raw ./my-bug-capture.zip --listen 5902 -s YOURSERVER::5900
+   vnclog --capture-raw ./my-bug-capture.zip --listen 5902 -s wss://YOURSERVER/vnc/session
    ```
 
 3. Point your VNC client at the proxy instead of the real server --
