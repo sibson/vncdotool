@@ -855,10 +855,6 @@ class TestFullScreenRefresh(TestCase):
         self.assertEqual(outcome, [self.client])
 
     def test_the_refresh_keeps_retrying_while_each_update_makes_progress(self) -> None:
-        """TightVNC's own capture can dribble content across several updates
-        under CI load, each painting a new slice rather than the whole
-        screen at once -- see the flake traced in #540.
-        """
         outcome = self.refresh()
 
         self.update(self.raw(0, 0, self.WIDTH, 1))

@@ -160,15 +160,7 @@ class _FullScreenReceived:
         return sum(self.remaining.histogram()[1:])
 
     def retry(self) -> bool:
-        """Whether the server is worth asking again, counting this attempt.
-
-        Unlimited while nothing has painted: a fresh connection's
-        DesktopSize/PointerPos/Cursor lead-in paints nothing, and TightVNC
-        sends exactly that on every new connection before its first real
-        content. Once painting has started, a request is worth repeating
-        only while the last answer shrank what's left -- a round that
-        paints nothing new means the server has nothing more to offer.
-        """
+        """Whether the server is worth asking again, counting this attempt."""
         if self.painted:
             unpainted = self._unpainted()
             if unpainted >= self._unpainted_at_last_request:
