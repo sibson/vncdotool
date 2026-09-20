@@ -105,6 +105,12 @@ def _wrapping_factory_class() -> type:
             # the peer's echo of it as an invalid close code 1005.
             self.sendClose(code=self.CLOSE_STATUS_CODE_NORMAL)
 
+        # portforward.ProxyClient registers a peer's transport as a producer.
+        # Twisted calls producer.stopProducing() from connectionLost before
+        # calling the protocol's own, so a producer missing one crashes
+        # before that ever runs.
+        stopProducing = loseConnection
+
         def onClose(self, wasClean: bool, code: int | None, reason: str | None) -> None:
             # The wrapper hands the wrapped protocol None, where every other
             # Twisted transport hands it a Failure.

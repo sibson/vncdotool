@@ -11,8 +11,9 @@ from unittest import TestCase
 
 from vncdotool.const import AuthTypes
 
-from .utils import HOST, TIGERVNC_AUTH, VNCEV, VNCLOG, port_open, run_vncdo
+from .utils import HOST, QEMU, TIGERVNC_AUTH, VNCEV, VNCLOG, port_open, run_vncdo
 
+CAPTURE_WS_PROXY_PORT = 5992
 PROXY_PORT = 5993
 CAPTURE_PROXY_PORT = 5994
 CAPTURE_AUTH_PROXY_PORT = 5995
@@ -246,3 +247,37 @@ class TestVNCLOGCaptureVNCAuth(TestCase):
 
         self.assertIn("keydown z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")
         self.assertIn("keyup z", session_vdo, f"vnclog recorded:\n{session_vdo!r}")
+
+
+class TestVNCLOGCaptureWebSocket(TestCase):
+    """`vnclog --capture-raw FILE.zip -s ws://...` against the qemu fleet service."""
+
+    def setUp(self) -> None:
+        if not port_open(HOST, QEMU.port):
+            self.fail(
+                f"qemu not reachable on {HOST}:{QEMU.port} -- "
+                "start the servers first with `make servers-up`"
+            )
+        self.capture = Path(tempfile.mkdtemp()) / "capture.zip"
+        self.proxy = _start_vnclog(CAPTURE_WS_PROXY_PORT, QEMU.address, "--capture-raw", str(self.capture))
+
+    def tearDown(self) -> None:
+        _stop_proxy(self.proxy)
+
+    def test_capture_writes_scrubbed_streams_and_meta(self) -> None:
+        proxied = QEMU._replace(port=CAPTURE_WS_PROXY_PORT, address=None)
+        screenshot = Path(tempfile.mkdtemp()) / "screen.png"
+        result = run_vncdo(proxied, "key", "z", "capture", str(screenshot))
+        self.assertEqual(result.returncode, 0, f"vncdo via proxy failed: {result.stderr}")
+
+        with _await_capture(self.capture) as archive:
+            self.assertEqual(
+                sorted(archive.namelist()), ["c2s.bin", "meta.json", "s2c.bin", "session.vdo"]
+            )
+            s2c = archive.read("s2c.bin")
+            c2s = archive.read("c2s.bin")
+            meta = json.loads(archive.read("meta.json"))
+
+        self.assertTrue(s2c.startswith(b"RFB "), f"s2c.bin did not start with the server greeting: {s2c[:16]!r}")
+        self.assertTrue(c2s.startswith(b"RFB "), f"c2s.bin did not start with the client's version reply: {c2s[:16]!r}")
+        self.assertTrue(meta["encodings_seen"], "no rectangles were tallied")
