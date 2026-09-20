@@ -140,12 +140,11 @@ class _FullScreenReceived:
     FramebufferUpdate messages as it likes.
     """
 
-    MAX_RETRIES = 1
-
     def __init__(self, width: int, height: int) -> None:
-        self.retries = 0
         self.painted = False
+        self.requests = 1
         self.remaining = Image.new("1", (width, height), 1)
+        self._unpainted_at_last_request = self._unpainted()
 
     @classmethod
     def awaiting(cls, width: int, height: int) -> "_FullScreenReceived":
@@ -157,13 +156,25 @@ class _FullScreenReceived:
         """For a refresh promised no area: an incremental one, or none at all."""
         return cls(0, 0)
 
+    def _unpainted(self) -> int:
+        return sum(self.remaining.histogram()[1:])
+
     def retry(self) -> bool:
-        """Whether the server is worth asking again, counting this attempt."""
-        if self.pending and not self.painted:
-            return True
-        if self.retries >= self.MAX_RETRIES:
-            return False
-        self.retries += 1
+        """Whether the server is worth asking again, counting this attempt.
+
+        Unlimited while nothing has painted: a fresh connection's
+        DesktopSize/PointerPos/Cursor lead-in paints nothing, and TightVNC
+        sends exactly that on every new connection before its first real
+        content. Once painting has started, a request is worth repeating
+        only while the last answer shrank what's left -- a round that
+        paints nothing new means the server has nothing more to offer.
+        """
+        if self.painted:
+            unpainted = self._unpainted()
+            if unpainted >= self._unpainted_at_last_request:
+                return False
+            self._unpainted_at_last_request = unpainted
+        self.requests += 1
         return True
 
     def paintRect(self, x: int, y: int, width: int, height: int) -> None:
@@ -182,10 +193,9 @@ class _FullScreenReceived:
 
     def __str__(self) -> str:
         width, height = self.remaining.size
-        unpainted = sum(self.remaining.histogram()[1:])
         return (
-            f"the server left {unpainted} of the {width}x{height} framebuffer "
-            f"unpainted after {self.retries + 1} full-screen update "
+            f"the server left {self._unpainted()} of the {width}x{height} "
+            f"framebuffer unpainted after {self.requests} full-screen update "
             f"requests; capturing it as black"
         )
 
