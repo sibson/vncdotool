@@ -854,6 +854,18 @@ class TestFullScreenRefresh(TestCase):
 
         self.assertEqual(outcome, [self.client])
 
+    def test_the_refresh_keeps_retrying_while_each_update_makes_progress(self) -> None:
+        outcome = self.refresh()
+
+        self.update(self.raw(0, 0, self.WIDTH, 1))
+        self.update(self.raw(0, 1, self.WIDTH, 1))
+        self.assertEqual(outcome, [], "gave up while the server was still making progress")
+
+        self.update(self.raw(0, 2, self.WIDTH, 1))
+        self.update(self.raw(0, 3, self.WIDTH, 1))
+
+        self.assertEqual(outcome, [self.client])
+
     def test_rectangles_overlapping_do_not_add_up_to_coverage(self) -> None:
         outcome = self.refresh()
 
