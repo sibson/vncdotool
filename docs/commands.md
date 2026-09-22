@@ -119,6 +119,24 @@ The region is the size of that image, so only X and Y are given. FUZZ, the
 default bound and the timeout behaviour are as for `expect`, and an
 off-screen region fails as for `rcapture`, exit 30. Needs [Pillow](https://pillow.readthedocs.io/).
 
+## resize WIDTH HEIGHT
+
+Ask the server to make its desktop WIDTH by HEIGHT, and wait until it says
+whether it did.
+
+Only servers offering the ExtendedDesktopSize pseudo-encoding can be asked,
+and one that offers it is still free to refuse every request. A server that
+refuses fails with a message naming the reason, exit 30. Asking for the size
+the desktop already has sends nothing and succeeds. A server that never
+answers at all waits forever, the same as `expect`/`stable` without
+`--timeout`.
+
+A single screen covering the whole framebuffer is requested, so a multi-head
+layout collapses to one head.
+
+`--disable-desktop-resizing` turns the encoding off, and with it this
+command.
+
 ## rstable SECONDS X Y W H [FUZZ]
 
 Wait until the W by H region of the screen at X,Y stops changing. SECONDS,
