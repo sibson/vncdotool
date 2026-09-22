@@ -443,9 +443,8 @@ description, round trip and screenshot gallery as Tier 1 via
 `tests/functional/utils.py`.
 
 *Windows / UltraVNC: works, full recipe:*
-- `choco install ultravnc`; `winvnc.exe` lands at the fixed path
-  `C:\Program Files\uvnc bvba\UltraVNC\winvnc.exe` (never search
-  `Program Files` recursively: minutes-slow on runner images).
+- `choco install ultravnc`; the install and service-config paths, and why
+  not to search for them, are in `tests/servers/ultravnc/README.md`.
 - UltraVNC refuses all connections until a password is set, regardless of
   `AuthRequired`: there is no no-auth shortcut. The `ultravnc.ini`
   `passwd=` hex uses the classic VNC password-*file* obfuscation (DES
