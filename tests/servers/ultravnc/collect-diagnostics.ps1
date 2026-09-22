@@ -13,7 +13,8 @@
 [CmdletBinding()]
 param(
     [string]$Destination = 'diagnostics',
-    [string]$InstallDir = 'C:\Program Files\uvnc bvba\UltraVNC'
+    [string]$InstallDir = 'C:\Program Files\uvnc\UltraVNC',
+    [string]$ProgramDataDir = 'C:\ProgramData\UltraVNC'
 )
 
 Set-StrictMode -Version Latest
@@ -21,9 +22,12 @@ $ErrorActionPreference = 'Continue'
 
 New-Item -ItemType Directory -Force -Path $Destination | Out-Null
 
-Copy-Item (Join-Path $InstallDir 'ultravnc.ini') $Destination -ErrorAction SilentlyContinue
+Copy-Item (Join-Path $InstallDir 'ultravnc.ini') (Join-Path $Destination 'ultravnc.ini.installdir') -ErrorAction SilentlyContinue
 Get-ChildItem $InstallDir -Filter *.log -ErrorAction SilentlyContinue |
     Copy-Item -Destination $Destination -ErrorAction SilentlyContinue
+
+# See the $ProgramDataDir comment in setup.ps1.
+Copy-Item (Join-Path $ProgramDataDir 'ultravnc.ini') (Join-Path $Destination 'ultravnc.ini.programdata') -ErrorAction SilentlyContinue
 
 Get-Service -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -match 'uvnc|winvnc' -or $_.DisplayName -match 'UltraVNC' } |

@@ -27,10 +27,16 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_c
 Each of these cost a CI round to find, so they are worth keeping written
 down:
 
-* **The install path is fixed; don't search for it.** Chocolatey always
-  installs to `C:\Program Files\uvnc bvba\UltraVNC`. A recursive scan of
+* **The install path is fixed; don't search for it.** Chocolatey's ultravnc
+  package installs to `C:\Program Files\uvnc\UltraVNC`. A recursive scan of
   `C:\Program Files` for `winvnc.exe` takes over five minutes on the loaded
   runner image.
+
+* **The running service's config isn't at the install path.** It's
+  `C:\ProgramData\UltraVNC` -- a bare, unversioned subfolder, unrelated to
+  the install path's vendor-prefixed one. `uvnc_service`'s own startup
+  (`UltraVNCService.cpp`) resolves it there and only migrates the install
+  directory's ini there if that file doesn't already exist.
 
 * **The Chocolatey feed is flaky.** It intermittently returns a response
   that isn't valid XML, which choco reports as "Unable to find package"

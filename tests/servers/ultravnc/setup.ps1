@@ -16,14 +16,9 @@ if (-not $Password) {
 }
 Assert-HostedRunner
 
-# Chocolatey always installs UltraVNC here. Do not go looking for winvnc.exe
-# under C:\Program Files instead: a recursive scan of that tree takes over
-# five minutes on the loaded runner image.
-$InstallDir = 'C:\Program Files\uvnc bvba\UltraVNC'
+$InstallDir = 'C:\Program Files\uvnc\UltraVNC'
 $WinVnc = Join-Path $InstallDir 'winvnc.exe'
-# Some UltraVNC builds read the ini from ProgramData rather than from the
-# install directory, so it gets written to both.
-$ProgramDataDir = 'C:\ProgramData\uvnc bvba\UltraVNC'
+$ProgramDataDir = 'C:\ProgramData\UltraVNC'
 
 Write-Host '--- installing UltraVNC'
 Install-WithRetry -Package 'ultravnc' -Evidence $WinVnc
