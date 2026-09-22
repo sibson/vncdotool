@@ -74,6 +74,11 @@ class DesktopResizeError(VNCDoException):
     """A server would not resize its desktop, or never said whether it had"""
 
 
+class ConnectionLostError(VNCDoException):
+    """The connection dropped while a capture, expect, refresh or stable
+    watch was still waiting on the server"""
+
+
 class _StableWatch:
     """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
 
@@ -112,7 +117,15 @@ class _StableWatch:
         return self.result
 
     def _request(self, incremental: bool) -> None:
-        self.client.refreshScreen(incremental).addCallback(self._update)
+        self.client.refreshScreen(incremental).addCallbacks(self._update, self._disconnected)
+
+    def _disconnected(self, failure: Failure) -> None:
+        if self.settled:
+            return
+        self.settled = True
+        if self.timer is not None and self.timer.active():
+            self.timer.cancel()
+        self.result.errback(failure)
 
     def _update(self, _: object) -> None:
         if self.settled:
@@ -253,6 +266,9 @@ class VNCDoToolClient(rfb.RFBClient):
         super().connectionLost(reason)
         if self._resize is not None:
             self._resizeFailed("connection lost before the server answered")
+        if self.deferred is not None:
+            d, self.deferred = self.deferred, None
+            d.errback(Failure(ConnectionLostError("connection lost while waiting for a screen update")))
         self.factory.clientConnectionLost(self, reason)
 
     def _decodeKey(self, key: str) -> list[int]:
