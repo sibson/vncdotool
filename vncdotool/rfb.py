@@ -306,6 +306,8 @@ class RFBClient(Protocol):
 
     def _handleFramebufferUpdate(self, block: bytes) -> None:
         (self.rectangles,) = unpack("!xH", block)
+        if _LOG.isEnabledFor(logging.DEBUG):
+            log.msg(f"Received FramebufferUpdate of {self.rectangles} rectangles", logLevel=logging.DEBUG)
         self.rectanglePos: list[tuple[int, int, int, int]] = []
         self.beginUpdate()
         self._doConnection()
@@ -361,6 +363,14 @@ class RFBClient(Protocol):
             pixels, output_format = paste
             x, y, width, height = rect
             expected = width * height * output_format.bypp
+            if _LOG.isEnabledFor(logging.DEBUG) and pixels:
+                first = bytes(pixels[:output_format.bypp])
+                solid = bytes(pixels) == first * (width * height)
+                log.msg(
+                    f"Decoded rectangle {width}x{height}+{x}+{y}: "
+                    + (f"solid {first.hex()}" if solid else "mixed"),
+                    logLevel=logging.DEBUG,
+                )
             if len(pixels) != expected:
                 self.abortConnection(
                     f"decoder produced {len(pixels)} bytes for a "
@@ -522,6 +532,11 @@ class RFBClient(Protocol):
             width = self.width - x
         if height is None:
             height = self.height - y
+        if _LOG.isEnabledFor(logging.DEBUG):
+            log.msg(
+                f"Sent FramebufferUpdateRequest incremental={int(incremental)} {width}x{height}+{x}+{y}",
+                logLevel=logging.DEBUG,
+            )
         self.transport.write(pack("!BBHHHH", MsgC2S.FRAMEBUFFER_UPDATE_REQUEST, incremental, x, y, width, height))
 
     def keyEvent(self, key: Key | int, down: bool = True) -> None:

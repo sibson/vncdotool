@@ -571,9 +571,11 @@ def capture_screenshot(
     path: Path,
     timeout: Optional[float] = None,
     env: Optional[Mapping[str, str]] = None,
+    wire_log: Optional[Path] = None,
 ) -> Path:
     """Capture through the CLI, which is what carries a server's extra_args."""
-    result = run_vncdo(server, "capture", str(path), timeout=timeout, env=env)
+    options = ("-v", "-v", "--logfile", str(wire_log)) if wire_log else ()
+    result = run_vncdo(server, "capture", str(path), timeout=timeout, env=env, options=options)
     if result.returncode != 0:
         raise AssertionError(
             f"{server.name}: vncdo capture exited {result.returncode}, "
@@ -591,6 +593,39 @@ def has_expected_content(server: VNCServer, colours: Optional[int]) -> bool:
     if not server.renders_desktop:
         return True
     return colours != 1
+
+
+# Diagnostic only (diag/tightvnc-flat-wire): what a flat capture was made of.
+_WIRE_SUMMARY_LINE = re.compile(
+    r"Sent FramebufferUpdateRequest|Received FramebufferUpdate|Received \w+ \(|"
+    r"Decoded rectangle|Tight compression control|WARNING|ERROR|framebuffer unpainted"
+)
+WIRE_SUMMARY_MAX_LINES = 80
+
+
+def print_wire_summary(server: VNCServer, log: Path, label: str) -> None:
+    """Print the request/update/rectangle trail of a `-v -v` capture log."""
+    if not log.exists():
+        print(f"{server.name}: [wire {label}] no log at {log}")
+        return
+    lines = [
+        line.strip() for line in log.read_text(errors="replace").splitlines()
+        if _WIRE_SUMMARY_LINE.search(line)
+    ]
+    rectangles = parse_wire_log(log)
+    by_encoding: Dict[str, int] = {}
+    for rect in rectangles:
+        by_encoding[rect.encoding] = by_encoding.get(rect.encoding, 0) + 1
+    solid = sum(1 for line in lines if "Decoded rectangle" in line and ": solid " in line)
+    mixed = sum(1 for line in lines if "Decoded rectangle" in line and line.endswith(": mixed"))
+    print(
+        f"{server.name}: [wire {label}] {len(rectangles)} rectangles {by_encoding}, "
+        f"decoded solid={solid} mixed={mixed}"
+    )
+    for line in lines[:WIRE_SUMMARY_MAX_LINES]:
+        print(f"{server.name}: [wire {label}] {line}")
+    if len(lines) > WIRE_SUMMARY_MAX_LINES:
+        print(f"{server.name}: [wire {label}] ... {len(lines) - WIRE_SUMMARY_MAX_LINES} more lines")
 
 
 def normalize_size(server: VNCServer) -> None:
@@ -620,6 +655,7 @@ def wait_until_ready(
     """
     deadline = time.monotonic() + deadline_seconds
     attempt = 0
+    saw_flat = False
     while time.monotonic() < deadline:
         attempt += 1
         if not port_open(HOST, server.port):
@@ -629,10 +665,19 @@ def wait_until_ready(
             normalize_size(server)
             with probe_context(server) as env, tempfile.TemporaryDirectory() as tmp:
                 probe = Path(tmp) / f"{server.name}-ready.png"
-                capture_screenshot(server, probe, timeout=attempt_timeout, env=env)
+                wire_log = Path(tmp) / f"{server.name}-ready.wire.log"
+                capture_screenshot(server, probe, timeout=attempt_timeout, env=env, wire_log=wire_log)
                 with Image.open(probe) as image:
                     colours = distinct_colours(image)
                     size = image.size
+                    flat_colour = image.convert("RGB").getpixel((0, 0)) if colours == 1 else None
+                if not has_expected_content(server, colours):
+                    saw_flat = True
+                    print(f"{server.name}: [wire ready-{attempt}] flat colour {flat_colour}, size {size}")
+                    print_wire_summary(server, wire_log, f"ready-{attempt}")
+                elif saw_flat:
+                    print(f"{server.name}: [wire ready-{attempt}] {colours} colours after a flat attempt, size {size}")
+                    print_wire_summary(server, wire_log, f"ready-{attempt}")
         except Exception as exc:  # noqa: BLE001 - any failure means try again
             print(f"{server.name}: not ready yet (attempt {attempt}: {exc})")
             time.sleep(RETRY_DELAY)
@@ -849,8 +894,10 @@ class _VNCServerTestMixin:
         server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
+        wire_log = screenshot_dir() / f"{self.server.name}-capture.wire.log"
+        wire_log.unlink(missing_ok=True)
 
-        self.run_vncdo_ok("capture", str(png))
+        self.run_vncdo_ok("capture", str(png), options=("-v", "-v", "--logfile", str(wire_log)))
 
         data = png.read_bytes()
         print(f"{self.server.name}: screenshot written to {png}")
@@ -870,6 +917,9 @@ class _VNCServerTestMixin:
                     f"{self.server.name}: capture is not the size the server serves",
                 )
             distinct = distinct_colours(image)
+
+        if not has_expected_content(self.server, distinct):
+            print_wire_summary(self.server, wire_log, "test_capture")
 
         if not self.server.renders_desktop:
             print(

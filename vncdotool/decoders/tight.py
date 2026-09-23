@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import logging
 import zlib
 from functools import lru_cache
 from typing import ClassVar, Generator, List, Optional, Tuple
@@ -11,6 +12,8 @@ from ..const import JPEG_QUALITY_ENCODINGS, Encoding
 from ..pixelformat import TPIXEL_FORMAT, PixelFormat, tpixel_bytes
 from .base import WholeRectDecoder
 from .errors import DecodeError
+
+log = logging.getLogger(__name__)
 
 STREAMS = 4
 
@@ -83,6 +86,7 @@ class TightDecoder(WholeRectDecoder):
             if comp_ctl & (1 << stream_id):
                 self._streams[stream_id] = None
         comp_ctl >>= 4
+        log.debug("Tight compression control 0x%x", comp_ctl)
 
         if comp_ctl == FILL:
             pixel = yield tpixel_bytes(pixel_format)
