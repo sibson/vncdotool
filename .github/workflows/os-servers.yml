@@ -115,6 +115,12 @@ jobs:
         if: matrix.os == 'windows'
         run: (New-Object -ComObject Shell.Application).MinimizeAll()
 
+      - name: "[diagnostic] Sample how often a fresh capture is flat"
+        if: matrix.os == 'windows'
+        continue-on-error: true
+        timeout-minutes: 6
+        run: uv run python tests/functional/sample_flat_captures.py os 20
+
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
 
