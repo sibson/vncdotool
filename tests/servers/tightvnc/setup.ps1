@@ -38,8 +38,7 @@ $settings = @{
     UseVncAuthentication    = 1
     UseControlAuthentication = 0
     AcceptHttpConnections    = 0
-    # A plain desktop is a steadier thing to diff two captures of.
-    RemoveWallpaper         = 1
+    RemoveWallpaper         = 0
     # Two separate settings: LoopbackOnly refuses anything that is not
     # loopback, AllowLoopback permits loopback at all. Without the second the
     # server answers "Sorry, loopback connections are not enabled" and closes.

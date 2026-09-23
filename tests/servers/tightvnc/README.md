@@ -26,6 +26,11 @@ uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_c
   the second gets "Sorry, loopback connections are not enabled" on every
   connection, which looks like a firewall problem and is not one.
 
+* **The wallpaper stays.** `RemoveWallpaper` hides it when a viewer
+  connects and restores it when the last one leaves, and every `vncdo` call
+  is a new connection, so each capture lands on a full-desktop repaint and
+  can come back a single flat colour.
+
 * **The password blob is the same one UltraVNC stores.** Both use the classic
   vncauth.c obfuscation, so `../vnc_passwd.py` computes it for both. TightVNC
   stores the eight bytes raw where UltraVNC's ini adds a ninth null.
