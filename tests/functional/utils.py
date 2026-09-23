@@ -141,6 +141,7 @@ class VNCServer(NamedTuple):
     # UltraVNC, which paints the real cursor on some but not all otherwise-
     # identical connections. See specs/cursor.md.
     cursor_position_unverifiable: bool = False
+    flat_capture_attempts: int = 1
 
 
 # Both written by their container into a bind mount at every start; neither
@@ -338,6 +339,7 @@ TIGHTVNC = os_server(
     port=5901,
     password=OS_SERVER_PASSWORD,
     has_pointer=True,
+    flat_capture_attempts=3,
 )
 
 TIGERVNC_WIN = os_server(
@@ -849,39 +851,46 @@ class _VNCServerTestMixin:
         server with a desktop rendered behind it.
         """
         png = screenshot_dir() / f"{self.server.name}.png"
+        attempts = self.server.flat_capture_attempts
 
-        self.run_vncdo_ok("capture", str(png))
+        for attempt in range(1, attempts + 1):
+            self.run_vncdo_ok("capture", str(png))
 
-        data = png.read_bytes()
-        print(f"{self.server.name}: screenshot written to {png}")
+            data = png.read_bytes()
+            print(f"{self.server.name}: screenshot written to {png}")
 
-        self.assertTrue(data, f"{self.server.name}: captured screenshot is empty")
-        self.assertEqual(
-            data[:8],
-            PNG_MAGIC,
-            f"{self.server.name}: captured file is not a valid PNG",
-        )
-
-        with Image.open(png) as image:
-            if self.server.size is not None:
-                self.assertEqual(
-                    image.size,
-                    self.server.size,
-                    f"{self.server.name}: capture is not the size the server serves",
-                )
-            distinct = distinct_colours(image)
-
-        if not self.server.renders_desktop:
-            print(
-                f"{self.server.name}: {distinct} colours captured; content is not "
-                "asserted, this server has no rendered desktop behind it"
+            self.assertTrue(data, f"{self.server.name}: captured screenshot is empty")
+            self.assertEqual(
+                data[:8],
+                PNG_MAGIC,
+                f"{self.server.name}: captured file is not a valid PNG",
             )
-            return
 
-        self.assertTrue(
-            has_expected_content(self.server, distinct),
-            f"{self.server.name}: capture is a single flat colour, "
-            "no screen content was decoded",
+            with Image.open(png) as image:
+                if self.server.size is not None:
+                    self.assertEqual(
+                        image.size,
+                        self.server.size,
+                        f"{self.server.name}: capture is not the size the server serves",
+                    )
+                distinct = distinct_colours(image)
+
+            if not self.server.renders_desktop:
+                print(
+                    f"{self.server.name}: {distinct} colours captured; content is not "
+                    "asserted, this server has no rendered desktop behind it"
+                )
+                return
+
+            if has_expected_content(self.server, distinct):
+                return
+            if attempt < attempts:
+                print(f"{self.server.name}: capture {attempt} of {attempts} is flat, capturing again")
+
+        self.fail(
+            f"{self.server.name}: capture is a single flat colour"
+            + (f" on all {attempts} attempts" if attempts > 1 else "")
+            + ", no screen content was decoded"
         )
 
 
