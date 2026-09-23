@@ -115,14 +115,42 @@ jobs:
         if: matrix.os == 'windows'
         run: (New-Object -ComObject Shell.Application).MinimizeAll()
 
-      - name: "[diagnostic] Sample TightVNC flat captures: counter vs clock, same-connection re-ask"
+      - name: "[diagnostic] Sample TightVNC flat captures: cold, idle keep-warm, polling keep-warm"
         if: matrix.os == 'windows'
         continue-on-error: true
         timeout-minutes: 12
-        run: uv run python tests/functional/sample_flat_captures.py tightvnc
+        run: uv run python tests/functional/sample_flat_captures.py keepwarm
+
+      - name: "[diagnostic] Start a TightVNC keep-warm viewer for the functional tests"
+        if: matrix.os == 'windows'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          $poll = if ($env:KEEP_WARM_POLL) { $env:KEEP_WARM_POLL } else { '0' }
+          $p = Start-Process -FilePath .venv\Scripts\python.exe `
+            -ArgumentList 'tests/functional/keep_warm.py', '--poll', $poll, '--max-seconds', '1200' `
+            -RedirectStandardOutput keep-warm.log -RedirectStandardError keep-warm.err `
+            -WindowStyle Hidden -PassThru
+          $p.Id | Out-File keep-warm.pid
+          Start-Sleep -Seconds 2
+          "keep-warm pid=$($p.Id) poll=$poll exited=$($p.HasExited)"
+          Get-Content keep-warm.log, keep-warm.err -ErrorAction SilentlyContinue
 
       - name: Run OS server functional tests
         run: uv run python -m unittest discover -v -s tests/functional -t . -p 'test_server_compat_native.py'
+
+      - name: "[diagnostic] Stop the TightVNC keep-warm viewer"
+        if: always() && matrix.os == 'windows'
+        timeout-minutes: 1
+        run: |
+          if (Test-Path keep-warm.pid) {
+            $id = [int](Get-Content keep-warm.pid)
+            $p = Get-Process -Id $id -ErrorAction SilentlyContinue
+            "keep-warm pid=$id alive_before_stop=$([bool]$p)"
+            Stop-Process -Id $id -Force -ErrorAction SilentlyContinue
+          }
+          Get-Content keep-warm.log, keep-warm.err -ErrorAction SilentlyContinue
+          exit 0
 
       # A measurement, not a diagnostic: the cursor tests write their
       # evidence pass or fail.

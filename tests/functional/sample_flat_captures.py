@@ -11,6 +11,8 @@ Usage: sample_flat_captures.py [os|docker|all] [N]
 """
 
 import io
+import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -25,6 +27,7 @@ sys.path[:0] = [str(_HERE), str(_HERE.parents[1])]
 
 from utils import (  # noqa: E402
     VNCServer,
+    _terminate,
     capture_screenshot,
     connect,
     distinct_colours,
@@ -237,10 +240,89 @@ def main_tightvnc() -> int:
     return 0
 
 
+KEEP_WARM_SAMPLES = 30
+KEEP_WARM_SETTLE = 2.0
+
+
+def start_keep_warm(log_path: Path, poll: float) -> subprocess.Popen:
+    argv = [sys.executable, str(_HERE / "keep_warm.py"), "--poll", str(poll), "--max-seconds", "600"]
+    with open(log_path, "w") as out:
+        process = subprocess.Popen(argv, stdout=out, stderr=subprocess.STDOUT)
+    time.sleep(KEEP_WARM_SETTLE)
+    return process
+
+
+def stop_keep_warm(label: str, process: subprocess.Popen, log_path: Path) -> None:
+    alive = process.poll() is None
+    _terminate(process)
+    print(f"[{label}] keep-warm alive_at_end={alive} exit={process.returncode}", flush=True)
+    for line in log_path.read_text(errors="replace").splitlines()[-15:]:
+        print(f"[{label}]   {line}", flush=True)
+
+
+def run_phase(label: str, server: VNCServer, tmp: Path, start: float) -> List[Sample]:
+    taken: List[Sample] = []
+    previous_end: Optional[float] = None
+    for index in range(KEEP_WARM_SAMPLES):
+        sample = take_sample(server, index, start, previous_end, tmp / label)
+        previous_end = time.monotonic()
+        taken.append(sample)
+        print(describe(sample).replace("[sample]", f"[{label}]"), flush=True)
+    return taken
+
+
+def summarise_phase(label: str, taken: List[Sample]) -> str:
+    flats = [s for s in taken if s.flat]
+    return (
+        f"[summary {label}] N={len(taken)} flat={len(flats)} errors={sum(1 for s in taken if s.error)} "
+        f"colours={sorted({s.colour for s in flats})} indices={[s.index for s in flats]}"
+    )
+
+
+def main_keep_warm() -> int:
+    server = next(s for s in select_servers("os") if s.name == "tightvnc")
+    summaries: List[str] = []
+    poll_for_tests = "0"
+    taken: List[Sample] = []
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        start = time.monotonic()
+        phases = [("phase1-cold", None), ("phase2-idle", 0.0), ("phase3-poll1s", 1.0)]
+        for label, poll in phases:
+            if label == "phase3-poll1s" and not any(s.flat for s in taken):
+                print("[phase3-poll1s] skipped: phase2 had no flat captures", flush=True)
+                break
+            (tmp / label).mkdir()
+            print(f"[{label}] {KEEP_WARM_SAMPLES} back-to-back vncdo captures, keep-warm poll={poll}", flush=True)
+            keep_warm = None if poll is None else start_keep_warm(tmp / f"{label}.keep-warm.log", poll)
+            try:
+                taken = run_phase(label, server, tmp, start)
+            finally:
+                if keep_warm is not None:
+                    stop_keep_warm(label, keep_warm, tmp / f"{label}.keep-warm.log")
+            summaries.append(summarise_phase(label, taken))
+            print(summaries[-1], flush=True)
+            for sample in [s for s in taken if s.flat][:1]:
+                print_wire_summary(server, sample.wire_log, f"{label}-{sample.index:02d}")
+            if poll:
+                poll_for_tests = str(poll)
+        print(f"[sample] done in {time.monotonic() - start:.1f}s", flush=True)
+    for line in summaries:
+        print(line, flush=True)
+    github_env = os.environ.get("GITHUB_ENV")
+    if github_env:
+        with open(github_env, "a") as env:
+            env.write(f"KEEP_WARM_POLL={poll_for_tests}\n")
+    print(f"[sample] keep-warm for the functional tests: poll={poll_for_tests}", flush=True)
+    return 0
+
+
 def main(argv: List[str]) -> int:
     group = argv[1] if len(argv) > 1 else "os"
     if group == "tightvnc":
         return main_tightvnc()
+    if group == "keepwarm":
+        return main_keep_warm()
     count = int(argv[2]) if len(argv) > 2 else DEFAULT_SAMPLES
     servers = select_servers(group)
     print(f"[sample] {count} captures each of {[s.name for s in servers]}, round-robin", flush=True)
