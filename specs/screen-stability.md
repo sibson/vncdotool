@@ -171,10 +171,12 @@ which is the property callers actually use when moving between `vncdo` and the
 library. `waitStableScreen` reads better in isolation and breaks that mapping.
 
 State for one call lives in a `_StableWatch`, not on the client: a baseline
-frame, a timer and a settled flag outgrow the single `self.deferred` slot
-`_expectCompare` threads its state through. The flag is load-bearing: after
-the window fires, a commit can still arrive against the last armed deferred,
-and without it the watch would re-arm and request forever.
+frame, a timer and the caller's `settled` Deferred outgrow the single
+`self.deferred` slot `_expectCompare` threads its state through.
+
+`_update` returns early once `settled.called` is true. A commit can still
+arrive against the last armed deferred after the window fires, and without that
+early return the watch would re-arm and request forever.
 
 ## Out of scope
 

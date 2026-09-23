@@ -74,6 +74,11 @@ class DesktopResizeError(VNCDoException):
     """A server would not resize its desktop, or never said whether it had"""
 
 
+class ConnectionLostError(VNCDoException):
+    """The connection dropped while a capture, expect, refresh or stable
+    watch was still waiting on the server"""
+
+
 class _StableWatch:
     """Bookkeeping for one :meth:`VNCDoToolClient.stableScreen` call.
 
@@ -96,9 +101,8 @@ class _StableWatch:
         self.blur = blur
         self.render = render
         self.baseline: Image.Image | None = None
-        self.result: Deferred = Deferred()
+        self.settled: Deferred = Deferred()
         self.timer: Any = None
-        self.settled = False
 
     def start(self) -> Deferred:
         if self.client.screen is not None:
@@ -109,13 +113,20 @@ class _StableWatch:
             # Nothing to compare against yet; ask for the whole screen and
             # start the window once a frame has arrived.
             self._request(incremental=False)
-        return self.result
+        return self.settled
 
     def _request(self, incremental: bool) -> None:
-        self.client.refreshScreen(incremental).addCallback(self._update)
+        self.client.refreshScreen(incremental).addCallbacks(self._update, self._disconnected)
+
+    def _disconnected(self, failure: Failure) -> None:
+        if self.settled.called:
+            return
+        if self.timer is not None and self.timer.active():
+            self.timer.cancel()
+        self.settled.errback(failure)
 
     def _update(self, _: object) -> None:
-        if self.settled:
+        if self.settled.called:
             return
         frame = self.render()
         if self.baseline is None or self._changed(frame):
@@ -134,8 +145,7 @@ class _StableWatch:
             self.timer = reactor.callLater(self.seconds, self._settle)
 
     def _settle(self) -> None:
-        self.settled = True
-        self.result.callback(self.client)
+        self.settled.callback(self.client)
 
 
 class _FullScreenReceived:
@@ -253,6 +263,9 @@ class VNCDoToolClient(rfb.RFBClient):
         super().connectionLost(reason)
         if self._resize is not None:
             self._resizeFailed("connection lost before the server answered")
+        if self.deferred is not None:
+            d, self.deferred = self.deferred, None
+            d.errback(Failure(ConnectionLostError("connection lost while waiting for a screen update")))
         self.factory.clientConnectionLost(self, reason)
 
     def _decodeKey(self, key: str) -> list[int]:

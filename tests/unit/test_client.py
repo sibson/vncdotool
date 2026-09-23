@@ -9,6 +9,7 @@ from twisted.internet.task import Clock
 from vncdotool import pixelformat, rfb
 from vncdotool.client import (
     AuthenticationError,
+    ConnectionLostError,
     DesktopResizeError,
     JPEG_QUALITY_ENCODINGS,
     KasmVNCClient,
@@ -54,6 +55,54 @@ class TestVNCDoToolClient(TestCase):
         self.client.connectionLost()
 
         self.client.factory.clientConnectionLost.assert_called_once()
+
+    def test_connectionLost_fails_a_pending_refreshScreen(self) -> None:
+        fired: list = []
+        self.client.refreshScreen().addErrback(fired.append)
+
+        self.client.connectionLost(mock.Mock())
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, ConnectionLostError)
+
+    def test_connectionLost_fails_a_pending_captureScreen(self) -> None:
+        client = self.client
+        client._packet = bytearray(self.MSG_HANDSHAKE)
+        client._handleInitial()
+        client._handleServerInit(self.MSG_INIT)
+        client.vncConnectionMade()
+
+        fired: list = []
+        client.captureScreen(io.BytesIO()).addErrback(fired.append)
+
+        client.connectionLost(mock.Mock())
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, ConnectionLostError)
+
+    @mock.patch("PIL.Image.open")
+    def test_connectionLost_fails_a_pending_expectScreen(self, image_open) -> None:
+        client = self.client
+        client._packet = bytearray(self.MSG_HANDSHAKE)
+        client._handleInitial()
+        client._handleServerInit(self.MSG_INIT)
+        client.vncConnectionMade()
+        image_open.return_value.size = (11, 22)
+
+        fired: list = []
+        client.expectScreen("something.png").addErrback(fired.append)
+
+        client.connectionLost(mock.Mock())
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, ConnectionLostError)
+
+    def test_connectionLost_leaves_no_pending_deferred_behind(self) -> None:
+        self.client.refreshScreen().addErrback(lambda f: None)
+
+        self.client.connectionLost(mock.Mock())
+
+        assert self.client.deferred is None
 
     def test_vncConnectionMade(self):
         client = self.client
@@ -1089,6 +1138,19 @@ class TestStableScreen(TestCase):
         self.clock.advance(0.2)
 
         assert settled == []
+
+    def test_a_lost_connection_fails_the_result_rather_than_hanging(self) -> None:
+        fired: list = []
+        self.client.stableScreen(1.0, 0).addErrback(fired.append)
+
+        self.client.connectionLost(mock.Mock())
+
+        (failure,) = fired
+        self.assertIsInstance(failure.value, ConnectionLostError)
+        assert not self.clock.getDelayedCalls()
+
+        self.clock.advance(10)
+        assert len(fired) == 1
 
 
 class TestResize(TestCase):
