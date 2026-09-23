@@ -1140,10 +1140,6 @@ class TestStableScreen(TestCase):
         assert settled == []
 
     def test_a_lost_connection_fails_the_result_rather_than_hanging(self) -> None:
-        """`stableScreen`'s caller holds `_StableWatch.result`, a Deferred
-        separate from `client.deferred` -- failing the latter alone would
-        leave this one unfired.
-        """
         fired: list = []
         self.client.stableScreen(1.0, 0).addErrback(fired.append)
 

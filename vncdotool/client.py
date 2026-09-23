@@ -101,9 +101,8 @@ class _StableWatch:
         self.blur = blur
         self.render = render
         self.baseline: Image.Image | None = None
-        self.result: Deferred = Deferred()
+        self.settled: Deferred = Deferred()
         self.timer: Any = None
-        self.settled = False
 
     def start(self) -> Deferred:
         if self.client.screen is not None:
@@ -114,21 +113,20 @@ class _StableWatch:
             # Nothing to compare against yet; ask for the whole screen and
             # start the window once a frame has arrived.
             self._request(incremental=False)
-        return self.result
+        return self.settled
 
     def _request(self, incremental: bool) -> None:
         self.client.refreshScreen(incremental).addCallbacks(self._update, self._disconnected)
 
     def _disconnected(self, failure: Failure) -> None:
-        if self.settled:
+        if self.settled.called:
             return
-        self.settled = True
         if self.timer is not None and self.timer.active():
             self.timer.cancel()
-        self.result.errback(failure)
+        self.settled.errback(failure)
 
     def _update(self, _: object) -> None:
-        if self.settled:
+        if self.settled.called:
             return
         frame = self.render()
         if self.baseline is None or self._changed(frame):
@@ -147,8 +145,7 @@ class _StableWatch:
             self.timer = reactor.callLater(self.seconds, self._settle)
 
     def _settle(self) -> None:
-        self.settled = True
-        self.result.callback(self.client)
+        self.settled.callback(self.client)
 
 
 class _FullScreenReceived:
