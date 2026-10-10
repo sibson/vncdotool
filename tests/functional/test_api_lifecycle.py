@@ -56,8 +56,7 @@ def setUpModule() -> None:
 
 
 def tearDownModule() -> None:
-    # Exactly once per process: without it the interpreter hangs on the
-    # non-daemon worker threads Twisted runs under the reactor.
+    # Exactly once per process: a Twisted reactor cannot be restarted.
     api.shutdown()
 
 
