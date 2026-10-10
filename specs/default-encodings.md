@@ -53,12 +53,8 @@ one before it does not:
 - **Raw** — mandatory, and explicit here so the list reads as the full
   preference order rather than relying on the server's fallback.
 
-ZRLE was off the list until #483 was fixed: `cpixel_bytes()` mis-sized its
-CPIXELs against libvncserver-example, which declares `depth=32` and sends
-3-byte CPIXELs regardless.
-
-Dropped: CoRRE and RRE. CoRRE is Raw in practice. RRE sends more than Hextile (0.458x against 0.350x), and
-both are old enough that a server offering RRE almost certainly offers
+Dropped: CoRRE and RRE. CoRRE is Raw in practice. RRE sends more than
+Hextile (0.458x against 0.350x), and both are old enough that a server offering RRE almost certainly offers
 Hextile too, so listing RRE would only change what happens on a server that
 has RRE and nothing else — which the fleet has no example of.
 
