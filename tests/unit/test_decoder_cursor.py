@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest import mock
 
 from vncdotool.const import Encoding
 from vncdotool.cursor import CursorMode
@@ -37,6 +38,16 @@ class TestCursor(unittest.TestCase):
         assert_pixels(self, self.client.cursor, self.IMAGE_2X2)
         self.assertEqual(self.client.cfocus, (1, 1))
         self.assertEqual(self.client.rectanglePos, [(1, 1, 2, 2)])
+
+    def test_a_cursor_larger_than_the_framebuffer_is_refused_before_buffering(self) -> None:
+        self.client.vncProtocolError = mock.Mock()
+        handshake(self.client, 4, 4)
+
+        self.client.dataReceived(
+            framebuffer_update([rect(0, 0, 0xFFFF, 0xFFFF, Encoding.PSEUDO_CURSOR, b"")])
+        )
+
+        self.client.vncProtocolError.assert_called_once()
 
 
 if __name__ == "__main__":

@@ -299,6 +299,57 @@ The protocol layer's response to malformed data is to wait forever (#322, #284,
 #262, #146). The pump gives one place to catch a `DecodeError` and turn it into a
 diagnosed disconnect. This is a larger user-facing win than the split itself.
 
+### Bounding what a server declares
+
+R6 also means a server cannot make the client buffer or allocate in
+proportion to a number it chose. Two kinds of bound do that, and only one of
+them can live in a base class.
+
+**Rectangle dimensions are checked by the base.** Every base class whose
+rectangle fields are a width and a height calls `requireFits` before the
+decoder runs: `PixelDecoder` through `rectBuffer`, `WholeRectDecoder` and
+`ClientDecoder` in `decode`, and Raw, which overrides `decode`, itself.
+Anything a decoder then sizes from the rectangle (Raw's read, Tight's Fill,
+a cursor's pixels and mask) is bounded by the framebuffer without the decoder
+doing anything. `ControlDecoder` and `ExtendedDesktopSizeDecoder` are
+exempt: their fields are a new desktop size, a hotspot, or a reason code, not
+a rectangle that must fit the current framebuffer.
+
+**Everything else is per-decoder**, checked before the read or the
+allocation it would size:
+
+| Decoder | Server-declared count | Bound |
+|---|---|---|
+| RRE, CoRRE | U32 subrectangle count | at most `width * height` |
+| Hextile | U8 subrectangle count, raw tile | 255, and a 16x16 tile |
+| ZRLE | U32 compressed length | the deflate bound of the tile data a rectangle can need |
+| ZRLE | inflated size | `max_length` to `decompress`, at that same ceiling |
+| ZRLE | RLE run length | the pixels left in the tile, before the run is expanded |
+| ZRLE | palette size | 127 (16 packed) |
+| Tight | compressed and JPEG length | the 22-bit compact length, 4 MiB |
+| Tight | inflated size | exactly `height * row_size`, through `_decompress` |
+| Tight | JPEG image size | the rectangle's, read from the header before decoding |
+| Tight | palette size | 256 |
+| ExtendedDesktopSize | U8 screen count | 255 screens of 16 bytes |
+
+A yield cap in the pump was considered and rejected. A ceiling derived from
+`width * height * bypp` is wrong for half the decoders: RRE legitimately reads
+`count * (bypp + 8)`, a ZRLE block can exceed its pixels by the deflate
+overhead, a 1x1 JPEG is hundreds of bytes, a cursor adds its mask, and
+ExtendedDesktopSize's rectangle fields are not dimensions at all. So each
+decoder would have to declare its own ceiling, which is as forgettable as the
+check it replaces. And it would catch only reads: of the five unbounded cases
+the audit that added this section found, a yield cap covers two (ZRLE's
+declared length and the cursor's dimensions); a zlib bomb, an RLE run and a
+JPEG header all allocate in memory after every read has been satisfied. It
+would also cost a comparison and per-rectangle state on every yield, which on
+Hextile is thirty per rectangle.
+
+A shared bounded-inflate helper was rejected too. Tight knows the exact size a
+block must inflate to and rejects any other; ZRLE knows only a ceiling. The
+bound in both is one argument, `max_length`, and a helper would no more force
+a new decoder to use it than `zlib` does.
+
 ## Module layout
 
 ```
