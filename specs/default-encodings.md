@@ -1,7 +1,8 @@
 # Offering more than Raw by default
 
-`vncdo` offers `tight,hextile,raw` unless `--encodings` says otherwise. This
-is the measurement behind that list and the reasoning behind its order.
+`vncdo` offers `DEFAULT_ENCODING_NAMES` (`vncdotool/decoders/__init__.py`)
+unless `--encodings` says otherwise. This is the measurement behind that list
+and the reasoning behind its order.
 
 ## What the encodings actually cost
 
@@ -45,20 +46,18 @@ one before it does not:
 
 - **Tight** — best bandwidth and the cheapest compressed decode. Confirmed
   emitted by tigervnc, x11vnc and libvncserver-example.
+- **ZRLE** — Tight's bandwidth at a far higher decode cost, and in RFB 3.8
+  core, so it is the natural second ask for a server without Tight.
 - **Hextile** — older and in wider reach than Tight, and the last stop before
   giving up on compression.
 - **Raw** — mandatory, and explicit here so the list reads as the full
   preference order rather than relying on the server's fallback.
 
-Dropped: ZRLE, CoRRE and RRE. ZRLE has the same bandwidth as Tight and is in
-RFB 3.8 core, which would make it the natural second ask for a server without
-Tight — but `cpixel_bytes()` mis-sizes its CPIXELs against any server that
-declares a `depth` its encoder does not actually honour (#483), and
-libvncserver-example is exactly that server: `depth=32` declared, 3-byte
-CPIXELs sent regardless. Tight already dominates ZRLE on bandwidth and decode
-cost (below), and TPIXEL's width is fixed rather than depth-derived, so Tight
-does not share the bug. ZRLE goes back on the list once #483 is fixed. CoRRE
-is Raw in practice. RRE sends more than Hextile (0.458x against 0.350x), and
+ZRLE was off the list until #483 was fixed: `cpixel_bytes()` mis-sized its
+CPIXELs against libvncserver-example, which declares `depth=32` and sends
+3-byte CPIXELs regardless.
+
+Dropped: CoRRE and RRE. CoRRE is Raw in practice. RRE sends more than Hextile (0.458x against 0.350x), and
 both are old enough that a server offering RRE almost certainly offers
 Hextile too, so listing RRE would only change what happens on a server that
 has RRE and nothing else — which the fleet has no example of.

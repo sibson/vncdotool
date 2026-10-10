@@ -180,8 +180,8 @@ CA to trust one:
 
 ## Encodings
 
-By default vncdo asks the server for raw pixels: every server can send
-them, and they cost the most bandwidth. `--encodings` offers others, most
+By default vncdo offers the lossless encodings it decodes, most compact
+first; `vncdo --help` lists them. `--encodings` replaces that list, most
 preferred first, and the server picks from what you offered:
 
 ```
