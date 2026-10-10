@@ -64,16 +64,30 @@ class ZRLEDecoder(PixelDecoder):
     def decodePixels(
         self, target: RectBuffer, pixel_format: PixelFormat
     ) -> Iterator[int]:
-        length_block = yield 4
-        (compressed_bytes,) = unpack("!L", length_block)
-        block = yield compressed_bytes
-
-        data = self._zlib_stream.decompress(block)
-        end = len(data)
-        pos = 0
         cbytes = cpixel_bytes(pixel_format)
         coffset = cpixel_offset(pixel_format)
         bypp = target.bypp
+        tiles = -(-target.width // TILE) * -(-target.height // TILE)
+        max_data = tiles * (1 + 127 * cbytes) + target.width * target.height * (cbytes + 1)
+        max_compressed = max_data + (max_data >> 12) + (max_data >> 14) + 64
+
+        length_block = yield 4
+        (compressed_bytes,) = unpack("!L", length_block)
+        if compressed_bytes > max_compressed:
+            raise DecodeError(
+                f"ZRLE rectangle declares {compressed_bytes} compressed bytes, "
+                f"more than a {target.width}x{target.height} rectangle can need"
+            )
+        block = yield compressed_bytes
+
+        data = self._zlib_stream.decompress(block, max_data + 1)
+        if len(data) > max_data:
+            raise DecodeError(
+                f"ZRLE rectangle inflates past the {max_data} bytes a "
+                f"{target.width}x{target.height} rectangle can need"
+            )
+        end = len(data)
+        pos = 0
 
         def short(tx: int, ty: int) -> DecodeError:
             return DecodeError(
@@ -153,14 +167,14 @@ class ZRLEDecoder(PixelDecoder):
                             pos += 1
                             run_minus_one += part
                         run = run_minus_one + 1
+                        if run > pixels_in_tile - num_pixels:
+                            raise DecodeError(
+                                f"ZRLE RLE tile at ({tx},{ty}) has a run of {run} "
+                                f"pixels with {pixels_in_tile - num_pixels} left"
+                            )
                         pixel_data += pixel * run
                         num_pixels += run
 
-                    if num_pixels != pixels_in_tile:
-                        raise DecodeError(
-                            f"ZRLE RLE tile at ({tx},{ty}) decoded {num_pixels} "
-                            f"pixels, wanted {pixels_in_tile}"
-                        )
                     target.blit(tx, ty, tw, th, bytes(pixel_data))
                 elif palette_size == 0:
                     need = pixels_in_tile * cbytes

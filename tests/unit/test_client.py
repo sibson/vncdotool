@@ -6,7 +6,7 @@ import unittest
 from PIL import Image
 from twisted.internet.task import Clock
 
-from vncdotool import pixelformat, rfb
+from vncdotool import decoders, pixelformat, rfb
 from vncdotool.client import (
     AuthenticationError,
     ConnectionLostError,
@@ -112,9 +112,7 @@ class TestVNCDoToolClient(TestCase):
         factory = client.factory
         factory.clientConnectionMade.assert_called_once_with(client)
         self.client.setEncodings.assert_called_once_with([
-            rfb.Encoding.TIGHT,
-            rfb.Encoding.HEXTILE,
-            rfb.Encoding.RAW,
+            *decoders.DEFAULT_ENCODINGS,
             rfb.Encoding.PSEUDO_CURSOR,
             rfb.Encoding.PSEUDO_POINTER_POS,
             rfb.Encoding.PSEUDO_DESKTOP_SIZE,

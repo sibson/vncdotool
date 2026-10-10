@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import tracemalloc
 import unittest
 import zlib
 from struct import pack
@@ -452,6 +453,57 @@ class TestZRLE(unittest.TestCase):
 
         self.client.vncProtocolError.assert_called_once()
         self.client.transport.loseConnection.assert_called_once()
+
+
+class TestZRLEBounds(unittest.TestCase):
+    BUDGET = 1 << 20
+
+    def setUp(self) -> None:
+        self.client = make_client()
+        self.client.vncProtocolError = mock.Mock()
+
+    def receive_within_budget(self, wire: bytes) -> None:
+        tracemalloc.start()
+        try:
+            tracemalloc.reset_peak()
+            self.client.dataReceived(wire)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertLess(peak, self.BUDGET, f"decoding peaked at {peak} bytes")
+
+    def test_a_declared_length_past_any_legal_rectangle_is_refused_before_buffering(self) -> None:
+        width, height = 16, 4
+        handshake(self.client, width, height)
+
+        self.client.dataReceived(
+            framebuffer_update([rect(0, 0, width, height, Encoding.ZRLE, pack("!L", 0xFFFFFFFF))])
+        )
+
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_a_block_inflating_past_the_rectangle_is_refused_without_inflating_it(self) -> None:
+        width, height = 16, 4
+        handshake(self.client, width, height)
+        compressed = zlib.compress(b"\x00" * (64 << 20), 9)
+        self.assertLess(len(compressed), self.BUDGET)
+
+        self.receive_within_budget(
+            framebuffer_update([rect(0, 0, width, height, Encoding.ZRLE, pack("!L", len(compressed)) + compressed)])
+        )
+
+        self.client.vncProtocolError.assert_called_once()
+
+    def test_a_run_past_the_tile_is_refused_before_it_is_expanded(self) -> None:
+        width = height = 64
+        handshake(self.client, width, height)
+        body = pack("!B", 0x80) + _cpixel(1, 2, 3) + b"\xff" * 16000 + b"\x00"
+
+        self.receive_within_budget(
+            framebuffer_update([zrle_rect(0, 0, width, height, body)])
+        )
+
+        self.client.vncProtocolError.assert_called_once()
 
 
 if __name__ == "__main__":
