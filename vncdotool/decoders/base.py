@@ -119,6 +119,7 @@ class ClientDecoder(Decoder):
     def decode(
         self, client: Any, rect: Rect, pixel_format: PixelFormat
     ) -> Generator[int, bytes, Outcome]:
+        client.requireFits(rect[2], rect[3])
         yield from self.decodeForClient(client, rect, pixel_format)
         return CHANGED
 
