@@ -171,16 +171,18 @@ class TightDecoder(WholeRectDecoder):
     def _decodeJpeg(block: bytes, width: int, height: int) -> bytes:
         try:
             image = Image.open(io.BytesIO(block))
+            if image.size != (width, height):
+                raise DecodeError(
+                    f"Tight JPEG rectangle carries a {image.width}x{image.height} image "
+                    f"for a {width}x{height} rectangle"
+                )
             # TurboVNC's -subsamp gray sends 1 component, not 3 (section 4).
             rgb = image.convert("RGB")
+        except DecodeError:
+            raise
         except Exception as exc:
             # Pillow raises DecompressionBombError, not OSError, on an implausible header.
             raise DecodeError(f"Tight JPEG rectangle did not decode: {exc}") from None
-        if rgb.size != (width, height):
-            raise DecodeError(
-                f"Tight JPEG rectangle carries a {rgb.width}x{rgb.height} image "
-                f"for a {width}x{height} rectangle"
-            )
         return rgb.tobytes()
 
     def _decompress(self, stream_id: int, block: bytes, size: int) -> bytes:

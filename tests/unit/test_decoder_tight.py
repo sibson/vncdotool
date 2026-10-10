@@ -14,8 +14,9 @@ import tracemalloc
 import unittest
 import zlib
 from typing import Optional, Sequence, Tuple
+from unittest import mock
 
-from PIL import Image
+from PIL import Image, ImageFile
 
 from vncdotool.const import Encoding
 from vncdotool.decoders import DecodeError
@@ -455,19 +456,32 @@ class TestJpeg(unittest.TestCase):
 
         self.assertIn("JPEG", str(caught.exception))
 
-    def test_a_header_declaring_an_implausible_size_is_refused(self) -> None:
+    def declaring(self, width: int, height: int) -> bytes:
         payload = bytearray(self.payload)
         offset = 2
         while payload[offset + 1] not in (0xC0, 0xC1, 0xC2):
             self.assertEqual(payload[offset], 0xFF, "lost the JFIF marker chain")
             offset += 2 + ((payload[offset + 2] << 8) | payload[offset + 3])
         # A start-of-frame segment is length, precision, then height and width, two bytes each.
-        payload[offset + 5:offset + 9] = (65500).to_bytes(2, "big") * 2
+        payload[offset + 5:offset + 9] = height.to_bytes(2, "big") + width.to_bytes(2, "big")
+        return bytes(payload)
 
+    def test_a_header_declaring_an_implausible_size_is_refused(self) -> None:
         with self.assertRaises(DecodeError) as caught:
-            decode_rect(jpeg_rect(bytes(payload)), self.WIDTH, self.HEIGHT, offering_jpeg())
+            decode_rect(jpeg_rect(self.declaring(65500, 65500)), self.WIDTH, self.HEIGHT, offering_jpeg())
 
         self.assertIn("JPEG", str(caught.exception))
+
+    def test_a_header_larger_than_the_rectangle_is_refused_before_decoding(self) -> None:
+        payload = self.declaring(8000, 8000)
+
+        with mock.patch.object(
+            ImageFile.ImageFile, "load", autospec=True, side_effect=ImageFile.ImageFile.load
+        ) as load, self.assertRaises(DecodeError) as caught:
+            decode_rect(jpeg_rect(payload), self.WIDTH, self.HEIGHT, offering_jpeg())
+
+        self.assertIn("8000x8000 image", str(caught.exception))
+        load.assert_not_called()
 
     def test_a_one_component_jpeg_becomes_grey_rgb(self) -> None:
         # TurboVNC under -subsamp gray sends a 1-component JPEG (specs/tight-wire.md section 4).
