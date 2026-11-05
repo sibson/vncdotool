@@ -12,15 +12,18 @@ It uses a separate thread to run the Twisted reactor and communicates with the m
     Using clients from more than one application thread, or sharing one
     client between threads, is not supported -- see [issue #192](https://github.com/sibson/vncdotool/issues/192).
 
-!!! warning
+!!! note
 
-    While the Twisted reactor runs as a *daemon* thread, the reactor itself will start additional *worker threads*, which are *no daemon threads*.
-    Therefore the Reactor must be shut down explicitly by calling `vncdotool.api.shutdown`.
-    Otherwise your application will not terminate as those worker threads remain running in the background.
+    Call `vncdotool.api.shutdown()` once, when your application has finished
+    with VNC, to stop the reactor and its worker threads cleanly.
+    Leaving a client's `with` block, or calling `disconnect()`, does not stop
+    the reactor: a reactor cannot be restarted, so stopping it there would
+    leave the process unable to connect again.
 
-    This also applied when using the API as a context manager:
-    As the reactor cannot be restarted, it is a design decision to not shut it down as the end of the context.
-    That would prevent the API from being used multiple times in the same process.
+    Skipping `shutdown()` does not keep your application from exiting -- the
+    reactor and its worker threads are all daemon threads.
+    Versions before 1.4.0 started those worker threads as non-daemon threads,
+    and an application that did not call `shutdown()` hung at exit.
 
 To use the synchronous API you can do the following:
 
@@ -80,7 +83,7 @@ The synchronous API can be used to automate the starting of a Virtual Machine or
 
 ```python
 vmtool.start('myvirtualmachine.img')
-client.connect('vmaddress::5950')
+client = api.connect('vmaddress::5950')
 client.expectScreen('booted.png')
 for k in 'username':
     client.keyPress(k)
@@ -92,4 +95,6 @@ client.expectScreen('loggedin.png')
 client.disconnect()
 
 # continue with your testing session or other work
+
+api.shutdown()
 ```
