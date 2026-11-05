@@ -46,6 +46,7 @@ $settings = @{
     LoopbackOnly            = 1
     AllowLoopback           = 1
     AlwaysShared            = 1
+    UseD3D                  = 0
 }
 foreach ($name in $settings.Keys) {
     New-ItemProperty -Path $RegPath -Name $name -Value $settings[$name] `
