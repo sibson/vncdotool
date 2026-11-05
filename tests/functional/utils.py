@@ -92,6 +92,7 @@ FLEET_PROBE_TIMEOUT = 30.0
 CURSOR_NEAR = (180, 20)
 CURSOR_FAR = (150, 120)
 CURSOR_EXTENT = 48
+CURSOR_SETTLE = 0.2
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 # getcolors() returns None above this many distinct colours, which is itself
