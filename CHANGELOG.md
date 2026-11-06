@@ -1,4 +1,5 @@
 ## 2.0.0.dev0 (UNRELEASED)
+- Fix a threaded API call returning the result of an earlier call that had timed out, before its own command finished; every later call then stayed one result behind (@NikitaMGrimm, #553)
 - Fix `capture`, `expect` and `stable` hanging forever instead of failing when the connection drops mid-call; they now raise `ConnectionLostError` (@sibson)
 - `vnclog -s ws://...`/`wss://...` now works, including `--capture-raw`, for recording a session against a server only reachable over a WebSocket -- Proxmox's console among them. `vnclog` previously refused any `ws://` address outright (@sibson, #138)
 - Document `client.name`, the server's desktop name from the handshake, in `docs/library.md` -- it was already a plain attribute, just never written down (@sibson, #210)
