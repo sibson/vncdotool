@@ -5,9 +5,11 @@ Priority: optional
 Build-Depends:
  debhelper-compat (= 13),
  dh-sequence-python3,
+ git,
  help2man,
  pybuild-plugin-pyproject,
  python3-all,
+ python3-autobahn,
  python3-cryptography,
  python3-hatchling,
  python3-pil,

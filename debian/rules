@@ -1,6 +1,7 @@
 #!/usr/bin/make -f
 
 export PYBUILD_NAME=vncdotool
+export PYBUILD_TEST_ARGS=tests/unit
 
 %:
 	dh $@ --buildsystem=pybuild
@@ -14,5 +15,3 @@ override_dh_installman:
 			"python3 debian/vncdotool/usr/bin/$$script"; \
 	done
 	dh_installman debian/man/*.1
-
-override_dh_auto_test:
