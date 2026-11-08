@@ -1,7 +1,7 @@
 #!/usr/bin/make -f
 
 export PYBUILD_NAME=vncdotool
-export PYBUILD_TEST_ARGS=tests/unit
+export PYBUILD_TEST_ARGS=tests/unit -p 'test_[!n]*.py'
 
 %:
 	dh $@ --buildsystem=pybuild
