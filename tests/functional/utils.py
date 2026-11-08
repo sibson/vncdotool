@@ -662,9 +662,6 @@ def assert_cli_installed() -> None:
         )
 
 
-assert_cli_installed()
-
-
 def vncdo_argv(server: VNCServer, *args: str, options: Sequence[str] = ()) -> List[str]:
     argv = [VNCDO, "-s", server.address or f"{HOST}::{server.port}"]
     if server.password is not None:

@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Mapping
 
 REPO = Path(__file__).resolve().parents[2]
 FLEET_TAG_SCRIPT = REPO / "tests" / "servers" / "fleet-tag.sh"
@@ -48,10 +49,10 @@ def git(repo: Path, *args: str) -> str:
     return result.stdout
 
 
-def run_script(repo: Path) -> subprocess.CompletedProcess:
+def run_script(repo: Path, env: Mapping[str, str] = CLEAN_ENV) -> subprocess.CompletedProcess:
     return subprocess.run(
         [str(repo / "tests" / "servers" / "fleet-tag.sh")],
-        cwd=repo, env=CLEAN_ENV, capture_output=True, text=True,
+        cwd=repo, env=env, capture_output=True, text=True,
     )
 
 
@@ -167,7 +168,12 @@ class FleetTagTestCase(unittest.TestCase):
 class RepositoryDockerfileTests(unittest.TestCase):
     def test_the_checked_in_dockerfile_yields_a_tag(self) -> None:
         """Every COPY form the real Dockerfile uses is one the awk can read."""
-        result = run_script(REPO)
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        store = Path(tmp.name)
+        git(store, "init", "-q")
+
+        result = run_script(REPO, env={**CLEAN_ENV, "GIT_DIR": str(store / ".git"), "GIT_WORK_TREE": str(REPO)})
 
         self.assertEqual(result.returncode, 0, f"fleet-tag.sh failed:\n{result.stderr}")
         self.assertRegex(result.stdout.strip(), r"^[0-9a-f]{40}$")
