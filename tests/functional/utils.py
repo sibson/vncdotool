@@ -348,10 +348,8 @@ def assert_cli_installed() -> None:
         )
 
 
-assert_cli_installed()
-
-
 def vncdo_argv(server: VNCServer, *args: str) -> List[str]:
+    assert_cli_installed()
     argv = [VNCDO, "-s", f"{HOST}::{server.port}"]
     if server.password is not None:
         argv += ["-p", server.password]
@@ -389,6 +387,7 @@ def capture_through_vnclog(
     testcase: TestCase, server: VNCServer, port: int, *args: str
 ) -> Capture:
     """Run `vncdo *args` against `server` through a vnclog proxy on `port`."""
+    assert_cli_installed()
     with tempfile.TemporaryDirectory() as tmp:
         archive = Path(tmp) / "capture.zip"
         proxy = subprocess.Popen(
@@ -437,6 +436,7 @@ def start_replay_server(
     """Start `vncdo-replay --server ARCHIVE --listen PORT --forever`, cleanup registered.
 
     Fails fast, with its stderr, if the process exits before listening."""
+    assert_cli_installed()
     server = subprocess.Popen(
         [VNCDO_REPLAY, "--server", str(archive), "--listen", str(port), "--forever"],
         stdout=subprocess.PIPE,
