@@ -559,6 +559,18 @@ class TestBuildTool(unittest.TestCase):
 
         assert raised.exception.code == command.ExitStatus.USAGE
 
+    def test_missing_command_argument_exits_usage(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.build_tool(self.options, ['key'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
+    def test_invalid_command_argument_exits_usage(self, reactor, connect) -> None:
+        with self.assertRaises(SystemExit) as raised:
+            command.build_tool(self.options, ['click', 'notabutton'])
+
+        assert raised.exception.code == command.ExitStatus.USAGE
+
 
 @mock.patch('vncdotool.command.factory_connect')
 @mock.patch('vncdotool.command.reactor', new_callable=FakeReactor)

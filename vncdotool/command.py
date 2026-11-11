@@ -392,6 +392,9 @@ def build_tool(options: argparse.Namespace, args: list[str]) -> VNCDoCLIFactory:
     except CommandParseError as exc:
         print(exc, file=sys.stderr)
         sys.exit(ExitStatus.USAGE)
+    except (IndexError, ValueError) as exc:
+        print(f"invalid command arguments: {exc}", file=sys.stderr)
+        sys.exit(ExitStatus.USAGE)
 
     # no outcome decided yet; set before connecting so a synchronous
     # connection failure has somewhere to record itself
