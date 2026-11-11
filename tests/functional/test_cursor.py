@@ -21,6 +21,7 @@ from PIL import Image, ImageChops
 from .utils import (
     CURSOR_FAR,
     CURSOR_NEAR,
+    CURSOR_SETTLE,
     CURSOR_TESTED_SERVERS,
     QEMU_TLS,
     QEMU_TLS_CA,
@@ -64,7 +65,7 @@ class CaptureHelper:
         pngs = {}
         for tag, (x, y) in positions.items():
             pngs[tag] = screenshot_dir() / f"{self.server.name}-cursor-{tag}.png"
-            args += ["move", str(x), str(y), "pause", "0.5", "capture", str(pngs[tag])]
+            args += ["move", str(x), str(y), "pause", str(CURSOR_SETTLE), "capture", str(pngs[tag])]
         result = run_vncdo(self.server, *args, env=self.env())
         self.assertEqual(
             result.returncode, 0,
