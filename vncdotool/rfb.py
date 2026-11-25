@@ -271,6 +271,11 @@ class RFBClient(Protocol):
         (self.width, self.height, pixformat, namelen) = unpack("!HH16sI", block)
         self.pixel_format = PixelFormat.from_bytes(pixformat)
         log.msg(f"Native {self.pixel_format} bytes={self.pixel_format.bypp}")
+        try:
+            self.requirePayload(namelen)
+        except decoders.DecodeError as exc:
+            self.abortConnection(f"cannot read the desktop name: {exc}")
+            return
         self.expect(self._handleServerName, namelen)
 
     def _handleServerName(self, block: bytes) -> None:
