@@ -15,6 +15,8 @@ running before any test method does -- no test depends on being first.
 
 import queue
 import socket
+import subprocess
+import sys
 import threading
 import time
 import unittest
@@ -56,8 +58,7 @@ def setUpModule() -> None:
 
 
 def tearDownModule() -> None:
-    # Exactly once per process: without it the interpreter hangs on the
-    # non-daemon worker threads Twisted runs under the reactor.
+    # Exactly once per process: a Twisted reactor cannot be restarted.
     api.shutdown()
 
 
@@ -178,6 +179,16 @@ class TestApiLifecycle(unittest.TestCase):
 
         self.assertIn("exception", outcome, f"expected an exception, got: {outcome}")
         self.assertIsInstance(outcome["exception"], ConnectError)
+
+    def test_process_exits_without_shutdown(self) -> None:
+        script = f"from vncdotool import api\nwith api.connect('{HOST}::{_closed_port()}'):\n    pass\n"
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", script], capture_output=True, text=True, timeout=HANG_GUARD_TIMEOUT
+            )
+        except subprocess.TimeoutExpired:
+            self.fail(f"a process that skipped api.shutdown() did not exit within {HANG_GUARD_TIMEOUT}s")
+        self.assertEqual(result.returncode, 0, result.stderr)
 
 
 class _SilentProtocol(Protocol):
