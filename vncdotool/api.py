@@ -51,7 +51,6 @@ class ThreadedVNCClientProxy:
         self, factory: type[VNCDoToolFactory], timeout: float | None = 60 * 60
     ) -> None:
         self.factory = factory
-        self.queue: queue.Queue[Any] = queue.Queue()
         self.timeout = timeout
         self.protocol: VNCDoToolClient | None = None
 
@@ -95,24 +94,26 @@ class ThreadedVNCClientProxy:
         if not callable(method):
             return getattr(self.protocol, attr)
 
-        def threaded_call(
-            protocol: VNCDoToolClient, *args: Any, **kwargs: Any
-        ) -> Deferred:
-            def result_callback(result: V) -> V:
-                self.queue.put(result)
-                return result
-
-            d = maybeDeferred(method, protocol, *args, **kwargs)
-            d.addBoth(result_callback)
-            return d
-
-        def errback_not_connected(
-            reason: Failure, *args: Any, **kwargs: Any
-        ) -> Failure:
-            self.queue.put(reason)
-            return reason
-
         def callable_threaded_proxy(*args: Any, **kwargs: Any) -> Any:
+            results: queue.Queue[Any] = queue.Queue()
+
+            def threaded_call(
+                protocol: VNCDoToolClient, *args: Any, **kwargs: Any
+            ) -> Deferred:
+                def result_callback(result: V) -> V:
+                    results.put(result)
+                    return result
+
+                d = maybeDeferred(method, protocol, *args, **kwargs)
+                d.addBoth(result_callback)
+                return d
+
+            def errback_not_connected(
+                reason: Failure, *args: Any, **kwargs: Any
+            ) -> Failure:
+                results.put(reason)
+                return reason
+
             reactor.callFromThread(
                 self.factory.deferred.addCallbacks,  # ensure we're connected
                 threaded_call,
@@ -121,7 +122,7 @@ class ThreadedVNCClientProxy:
                 kwargs,
             )
             try:
-                result = self.queue.get(timeout=self.timeout)
+                result = results.get(timeout=self.timeout)
             except queue.Empty:
                 raise TimeoutError("Timeout while waiting for client response")
 

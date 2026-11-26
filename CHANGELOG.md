@@ -1,5 +1,6 @@
 ## 2.0.0.dev0 (UNRELEASED)
 - The unit suite runs from a source tarball with vncdotool installed anywhere: it no longer needs the console scripts beside the interpreter or a git checkout, so a distribution build such as pybuild can run it (@sibson, #556)
+- Fix a threaded API call returning the result of an earlier call that had timed out, before its own command finished; every later call then stayed one result behind (@NikitaMGrimm, #553)
 - Fix `capture`, `expect` and `stable` hanging forever instead of failing when the connection drops mid-call; they now raise `ConnectionLostError` (@sibson)
 - `vnclog -s ws://...`/`wss://...` now works, including `--capture-raw`, for recording a session against a server only reachable over a WebSocket -- Proxmox's console among them. `vnclog` previously refused any `ws://` address outright (@sibson, #138)
 - `docs/library.md` no longer says an application hangs at exit without `api.shutdown()` -- true only before 1.4.0 -- and its VM example calls `api.connect` and `api.shutdown()` instead of a nonexistent `client.connect` (@sibson, #255, #273)
