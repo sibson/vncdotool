@@ -43,7 +43,8 @@ mildly annoyed to get the notification. Earn it.
 - `/issue-triage` — a batch of the least-recently-updated open issues not yet
   triaged (default 5), followed by the overdue report. "Not yet triaged" means
   carrying none of `confirmed`, `has-repro`, `needs-info`, `probably-fixed`,
-  `duplicate`, `documentation`, `question`, `needs-integration-test`. The four
+  `duplicate`, `documentation`, `question`, `needs-integration-test`,
+  `tracking`. The four
   labels that predate this process — `bug`, `feature`, `help wanted`,
   `good first issue` — record the reporter's framing, not an investigation:
   nearly every open issue already carries `bug` or `feature`, and an issue
@@ -84,10 +85,14 @@ bot is not.
 
 Labels, and only these: `bug`, `confirmed`, `has-repro`, `needs-info`,
 `probably-fixed`, `duplicate`, `documentation`, `question`,
-`needs-integration-test`, `feature`, `help wanted`, `good first issue`. Note
-`feature` — this repo's word for what other projects label `enhancement`. If
-none fits, that is a finding to report, not a licence to invent one. The first
-run should verify the eight process labels (everything except `bug`, `feature`,
+`needs-integration-test`, `tracking`, `feature`, `help wanted`,
+`good first issue`. Note `feature` — this repo's word for what other projects
+label `enhancement`. `tracking` marks a maintainer-owned issue that stays open
+on purpose (a periodic check, a survey awaiting replies, a follow-up parked
+until something external changes); only the maintainer applies it, and a
+tracking issue is skipped by the batch and never re-commented. If none fits,
+that is a finding to report, not a licence to invent one. The first run should
+verify the nine process labels (everything except `bug`, `feature`,
 `help wanted`, `good first issue`) exist on the repo — a missing one is a setup
 gap to report to the maintainer, not something to create or improvise around.
 
